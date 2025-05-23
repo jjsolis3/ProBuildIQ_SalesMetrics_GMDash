@@ -1,0 +1,172 @@
+﻿@model SalesMetrics.Models.InvoiceDetailViewModel
+
+@if (!Model.LineItems.Any())
+{
+    <div class="text-danger">No order details found.</div>
+}
+else
+{
+    <div class="p-4">
+        <div class="card shadow">
+            <div class="card-header d-flex justify-content-between">
+                <div>
+                    <h3>Invoice #@Model.Header.InvoiceNumber</h3>
+                    <p class="mb-1 text-sm">Issued: @Model.Header.InvoiceDate.ToString("MM/dd/yyyy")</p>
+                    <p class="mb-0 text-sm">Due: @Model.Header.DeliveryDate.ToString("MM/dd/yyyy")</p>
+                </div>
+                <div class="text-end">
+                    <img src="~/assets/images/logo-dark.png" alt="SalesMetrics Logo" height="32">
+                    @* <img src="~/assets/images/logo.png" style="height:40px;" /> *@
+                    <p class="mb-1 text-sm">Seamless Flooring</p>
+                    <p class="mb-0 text-sm">info@seamless.com | (877) 373-3858</p>
+                </div>
+            </div>
+
+            <div class="card-body">
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div style="background-color: darkorange;">
+                            <h6 class="text-light" style="margin-left: 10px;">Issued For: </h6>
+                        </div>
+                        <table class="table table-borderless table-sm">
+                            <tr>
+                                <td class="fw-bold">Name: </td>
+                                <td class="fs-6">@Model.Header.CustomerName</td>
+                            </tr>
+                            <tr>
+                                <td class="fw-bold">Customer #: </td>
+                                <td class="fs-6">@Model.Header.CustomerNumber</td>
+                            </tr>
+                            <tr>
+                                <td class="fw-bold">PO #: </td>
+                                <td class="fs-6">@Model.Header.CustomerPO</td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <div style="background-color: darkorange;">
+                            <h6 class="text-light" style="margin-left: 10px;">Details: </h6>
+                        </div>
+                        <table class="table table-borderless table-sm">
+                            <tr>
+                                <td class="fw-bold">Order #: </td>
+                                <td class="fs-6">@Model.Header.OrderNumber</td>
+                            </tr>
+                            <tr>
+                                <td class="fw-bold">Aging: </td>
+                                <td class="fs-6">@Model.Header.InvoiceAging</td>
+                            </tr>
+                            <tr>
+                                <td class="fw-bold">Outstanding: </td>
+                                <td class="fs-6">@(Model.Header.OutstandingAmount.ToString("C") ?? "$0.00")</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped border">
+                        <thead class="table-light">
+                            <tr>
+                                <th>#</th>
+                                <th>Description</th>
+                                <th>Qty</th>
+                                <th>UOM</th>
+                                <th>Product Class</th>
+                                <th class="text-end">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @{
+                                int index = 1;
+                                foreach (var item in Model.LineItems)
+                                {
+                                    <tr>
+                                        <td>@index</td>
+                                        <td>@item.Description</td>
+                                        <td>@item.Quantity</td>
+                                        <td>@item.UOM</td>
+                                        <td>@item.ProdClass</td>
+                                        <td class="text-end">@(item.ProductTotal?.ToString("C") ?? "$0.00")</td>
+                                    </tr>
+                                    index++;
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                @if (Model.Notes.Any())
+                {
+                    <div class="mt-3">
+                        <h6>Notes:</h6>
+                        <ul class="list-unstyled">
+                            @foreach (var note in Model.Notes)
+                            {
+                                <li><i class="bi bi-info-circle me-2 text-primary"></i>@note.Comment</li>
+                            }
+                        </ul>
+                    </div>
+                }
+
+                <div class="mt-4 d-flex justify-content-between">
+                    <div>
+                        <p class="mb-0 text-muted fs-6">Sales by: Seamless Staff</p>
+                    </div>
+                    <div>
+                        <table class="table table-borderless text-end">
+                            <tr>
+                                <td class="fw-bold" ><h5>Total:</h5></td>
+                                <td><h5>@Model.LineItems.Sum(i => i.ProductTotal ?? 0).ToString("C")</h5></td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+
+                @* <div class="mt-5 d-flex justify-content-between">
+                    <div class="text-center border-top pt-2 w-50">Customer Signature</div>
+                    <div class="text-center border-top pt-2 w-50">Authorized Signature</div>
+                </div> *@
+            </div>
+        </div>
+        <div class="no-print mt-4 text-end">
+            <button class="btn btn-outline-secondary" onclick="printWorkOrder()">🖨️ Print</button>
+        </div>
+    </div>
+
+    <script>
+        function printWorkOrder() {
+            const content = document.querySelector('#invoiceDetailContent').innerHTML;
+            const printWindow = window.open('', '_blank', 'width=900,height=1000');
+            printWindow.document.write(`
+                <html>
+                <head>
+                    <title>Print Invoice</title>
+                    <link href="/assets/css/bootstrap.min.css" rel="stylesheet" />
+                    <style>
+                        @@page {
+                            margin: 0;
+                        }
+                        body {
+                            font-family: Arial, sans-serif;
+                            margin: 30px 0 0;
+                            padding: 0;
+                        }
+                        .no-print {
+                            display: none;
+                        }
+                        .table th, .table td { vertical-align: middle; }
+                        .card { border: 1px solid #ddd; padding: 15px; margin: 0; }
+                        .card-header { border-bottom: 1px solid #ccc; margin-bottom: 15px; }
+                        .text-end { text-align: right; }
+                    </style>
+                </head>
+                <body onload="window.print(); window.close();">
+                    ${content}
+                </body>
+                </html>
+            `);
+            printWindow.document.close();
+        }
+    </script>
+}

@@ -1,0 +1,23 @@
+﻿<div id="loadingOverlay" style="
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(255, 255, 255, 0.95);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+">
+    <div class="spinner-border text-primary" role="status" style="width: 4rem; height: 4rem; color:orangered">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+    <div style="margin-top: 1rem; font-size: 1.25rem; font-weight: 500; color: darkorange;">
+        Loading SalesMetric Data...
+    </div>
+    <div class="progress mt-3" style="width: 300px; height: 10px; color: darkorange">
+        <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" style="width: 100%"></div>
+    </div>
+</div>

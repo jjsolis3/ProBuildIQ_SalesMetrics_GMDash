@@ -1,0 +1,159 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>@ViewBag.Title  | SalesMetrics - CRM & Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta content="Sales CRM and Management Dashboard" name="description" />
+    <meta content="774EntFX" name="author" />
+    <!-- App favicon -->
+    <link rel="shortcut icon" href="~/assets/images/favicon.ico">
+    <!-- dark layout js -->
+    <script src="~/assets/js/pages/layout.js"></script>
+
+    @RenderSection("styles", required: false)
+    
+    <!-- Bootstrap Css -->
+    <link href="~/assets/css/bootstrap.min.css" id="bootstrap-style" rel="stylesheet" type="text/css" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <!-- Icons Css -->
+    <link href="~/assets/css/icons.min.css" rel="stylesheet" type="text/css" />
+    <!-- simplebar css -->
+    <link href="~/assets/libs/simplebar/simplebar.min.css" rel="stylesheet">
+    <!-- App Css-->
+    <link href="~/assets/css/app.min.css" id="app-style" rel="stylesheet" type="text/css" />
+    <style>
+        .dropdown-menu .dropdown-item.active {
+            background-color: #e9ecef; /* Light gray */
+            color: #000 !important; /* Force black text */
+            font-weight: 600;
+        }
+
+        #loadingOverlay {
+            animation: fadeIn 0.3s ease-in-out;
+        }  
+
+        @@keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+    </style>
+
+</head>
+<body>
+    <div id="layout-wrapper">
+        <!-- Loading Overlay -->
+        @{
+            var currentController = ViewContext.RouteData.Values["controller"]?.ToString();
+            var currentAction = ViewContext.RouteData.Values["action"]?.ToString();
+
+            var showOverlay =
+                (currentController == "Dashboard" && currentAction == "Index") ||
+                (currentController == "Sales" && currentAction == "Properties") ||
+                (currentController == "Dashboard" && currentAction == "Index") ||
+                (currentController == "Orders" && currentAction == "Orders") ||
+                (currentController == "Tasks" && currentAction == "Task") ||
+                (currentController == "Tasks" && currentAction == "AdminTask") ||
+                (currentController == "Yardi" && currentAction == "YardiProperties");
+        }
+
+        @if (showOverlay)
+        {
+            @Html.Partial("~/Views/Shared/loading.cshtml")
+        }
+
+        
+        @Html.Partial("~/Views/Shared/menu.cshtml")
+
+        <div class="main-content">
+            
+            <div class="page-content">
+                <div class="container-fluid">
+
+                    @Html.Partial("~/Views/Shared/pagetitle.cshtml")
+
+                    @RenderBody()
+                </div> 
+            </div>
+            @Html.Partial("~/Views/Shared/footer.cshtml")
+
+        </div>
+        <!-- end main content-->
+    </div>
+
+    <!-- Session Expired Modal -->
+    <div class="modal fade" id="sessionExpiredModal" tabindex="-1" aria-labelledby="sessionExpiredLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content text-center">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title" id="sessionExpiredLabel">Session Expired</h5>
+                </div>
+                <div class="modal-body">
+                    <p>Your session has expired due to inactivity. You will be redirected to the login page.</p>
+                    <i class="fas fa-hourglass-end fa-2x text-danger mt-2"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Journal Entry Modal -->
+    @await Html.PartialAsync("_JournalCreateModal", new SalesMetrics.Models.Journal.JournalEntry())
+
+    <!-- JAVASCRIPT -->
+    <script src="~/assets/libs/jquery/jquery.min.js"></script>
+    <script src="~/assets/libs/bootstrap/js/bootstrap.bundle.min.js"></script>
+    <script src="~/assets/libs/metismenu/metisMenu.min.js"></script>
+    <script src="~/assets/libs/simplebar/simplebar.min.js"></script>
+    <script src="~/assets/libs/node-waves/waves.min.js"></script>
+
+    <!-- App JS -->
+    <script src="~/assets/js/app.js"></script>
+
+    <!-- SweetAlert -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    @RenderSection("scripts", required: false)
+
+    <script>
+        const minDisplayTime = 850; // 3 seconds (or 4000 for 4s)
+        const startTime = Date.now();
+
+        $(window).on('load', function () {
+            const timeElapsed = Date.now() - startTime;
+            const timeLeft = minDisplayTime - timeElapsed;
+
+            setTimeout(() => {
+                $('#loadingOverlay').fadeOut(600);
+            }, timeLeft > 0 ? timeLeft : 0);
+        });
+    </script>
+    <script>
+        let sessionTimeout = 14 * 60 * 1000; // 15 minutes
+        let sessionTimer;
+
+        function resetSessionTimer() {
+            clearTimeout(sessionTimer);
+            sessionTimer = setTimeout(showSessionExpiredModal, sessionTimeout);
+        }
+
+        function showSessionExpiredModal() {
+            $('#sessionExpiredModal').modal('show');
+            setTimeout(() => {
+                window.location.href = "/Auth/Logout";
+            }, 30000); // redirect after 5 seconds
+        }
+
+        document.addEventListener("DOMContentLoaded", resetSessionTimer);
+        document.addEventListener("mousemove", resetSessionTimer);
+        document.addEventListener("keypress", resetSessionTimer);
+        document.addEventListener("click", resetSessionTimer);
+    </script>
+
+
+</body>
+</html>

@@ -1,0 +1,402 @@
+﻿@{
+    ViewBag.Title = "Work Orders";
+    ViewBag.pTitle = "View All Work Orders";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+@section styles {
+    <link href="~/assets/libs/datatables.net-searchpanes-bs5/css/searchPanes.bootstrap5.min.css" rel="stylesheet" />
+    <link href="~/assets/libs/select2/css/select2.min.css" rel="stylesheet" />
+}
+
+<style>
+    div.dataTables_wrapper {
+        overflow: hidden;
+    }
+
+    div.dataTables_scrollBody {
+        border: 1px solid #ddd;
+        border-top: none;
+    }
+
+    table.dataTable thead th {
+        background-color: darkorange !important;
+        color: white !important;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+
+    div.dataTables_length {
+        margin-right: 1.5rem;
+    }
+
+    div.dataTables_filter {
+        max-width: 300px;
+        margin-left: auto;
+    }
+
+    #filterDate {
+        text-align: center;
+        border-radius: 0.25rem;
+        font-size: 0.875rem;
+        padding: 0.25rem 0.5rem;
+        height: calc(1.8125rem + 2px); /* matches .form-control-sm */
+    }
+
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <label for="filterDate" class="form-label mb-1">Filter by Delivery Date:</label>
+        <input type="text" id="filterDate" class="form-control form-control-sm" style="max-width: 200px;" />
+    </div>
+</div>
+
+<div class="table-responsive">
+    <table id="orderTable" class="table table-bordered table-striped nowrap" style="width:100%">
+        <thead>
+            <tr>
+                <th>Order ID</th>
+                <th>Mgmt Co</th>
+                <th>Property</th>
+                <th>City</th>
+                <th>Order Type</th>
+                <th>Qty</th>
+                <th>Unit #</th>
+                <th>Unit Type</th>
+                <th>Delivery</th>
+                <th>Move-In</th>
+                <th>Class</th>
+                <th>Description</th>
+                <th>Ordered By</th>
+                <th>Location</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (Model != null)
+            {
+                foreach (var o in Model)
+                {
+                    <tr>
+                        <td>
+                            <a href="javascript:void(0)" class="view-order" data-id="@o.OrderID">@o.OrderID</a>
+                        </td>
+                        <td>@o.ManagementName</td>
+                        <td>
+                            <a href="javascript:void(0)" class="view-property" data-name="@o.PropertyName">@o.PropertyName</a>
+                        </td>
+                        <td>@o.City</td>
+                        <td>@o.OrderType</td>
+                        <td>@o.Qty</td>
+                        <td>@o.UnitNumber</td>
+                        <td>@o.UnitType</td>
+                        <td>@o.DeliveryDate</td>
+                        <td>@o.MoveInDate</td>
+                        <td>@o.ProductClass</td>
+                        <td>@o.ProductDescription</td>
+                        <td>@o.OrderedBy</td>
+                        <td>@o.LocationName</td>
+                        <td></td>
+                    </tr>
+                }
+            }
+            else
+            {
+                <tr><td colspan="14">No property data found.</td></tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@* Task Modal for Work Orders *@
+<div class="modal fade" id="workOrderTaskModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <form id="workOrderTaskForm" asp-controller="Tasks" asp-action="CreateFromWorkOrder" method="post">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Create Task from Work Order</h5>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Title</label>
+                        <input type="text" class="form-control" name="Title" />
+                    </div>
+                    <div class="form-group">
+                        <label>Description</label>
+                        <textarea name="Description" class="form-control"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Due Date</label>
+                        <input type="datetime-local" class="form-control" name="DueDate" />
+                    </div>
+                    <div class="form-group">
+                        <label>Task Type</label>
+                        <select class="form-control" name="Type">
+                            <option>Follow Up</option>
+                            <option>Site Visit</option>
+                            <option>Quality Check</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Property</label>
+                        <input type="text" class="form-control" name="Property" readonly />
+                    </div>
+                    <div class="form-group">
+                        <label>Status</label>
+                        <select class="form-control" name="Status">
+                            <option value="Pending">Pending</option>
+                            <option value="Assigned">Assigned</option>
+                            <option value="In Progress">In Progress</option>
+                            <option value="Completed">Completed</option>
+                        </select>
+                    </div>
+                    <input type="hidden" name="AssignedTo" id="assignedToWorkOrder" />
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary">Save Task</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Work Order Details Modal -->
+<div class="modal fade" id="workOrderDetailModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Work Order Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="workOrderDetailContent">
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+@section Scripts {
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.5/css/jquery.dataTables.min.css" />
+    <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.dataTables.min.css" />
+
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.5/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.colVis.min.js"></script>
+
+    <!-- ✅ Required for export buttons -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.print.min.js"></script>
+
+    <script src="~/assets/libs/datatables.net-searchpanes/js/dataTables.searchPanes.min.js"></script>
+    <script src="~/assets/libs/datatables.net-searchpanes-bs5/js/searchPanes.bootstrap5.min.js"></script>
+    <script src="~/assets/libs/datatables.net-select/js/dataTables.select.min.js"></script>
+
+    <script src="~/assets/libs/select2/js/select2.full.min.js"></script>
+    <script src="~/assets/libs/datatables.net-scroller/js/datatables.scroller.min.js"></script>
+
+    <link href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
+    <script>
+        flatpickr("#filterDate", {
+            dateFormat: "m/d/Y", // <-- display as MM/dd/yyyy
+            defaultDate: new Date(),
+            onChange: function (selectedDates, dateStr) {
+                if (dateStr) {
+                    // Format for backend as yyyy-MM-dd
+                    const backendDate = flatpickr.formatDate(selectedDates[0], "Y-m-d");
+                    loadOrdersTable(backendDate);
+                }
+            }
+        });
+    </script>
+
+    <script>
+        var table;
+
+        function loadOrdersTable(selectedDate) {
+            if (table) {
+                table.destroy();
+                $('#orderTable tbody').empty();
+            }
+
+            table = $('#orderTable').DataTable({
+                ajax: {
+                    url: '/Orders/GetWorkOrdersByDate',
+                    data: { date: selectedDate },
+                    dataSrc: 'data'
+                },
+                columns: [
+                    {
+                        data: 'orderID',
+                        render: function (data) {
+                            return `<a href="javascript:void(0)" class="view-order" data-id="${data}">${data}</a>`;
+                        }
+                    },
+                    { data: 'managementName' },
+                    {
+                        data: 'propertyName',
+                        render: function (data, type, row) {
+                            return `<a href="/Sales/PropertyDetails?id=${row.propertyId}" class="view-property" data-name="${data}">${data}</a>`;
+                        }
+                    },
+                    { data: 'city' },
+                    { data: 'orderType' },
+                    { data: 'qty' },
+                    { data: 'unitNumber' },
+                    { data: 'unitType' },
+                    { data: 'deliveryDate' },
+                    { data: 'moveInDate' },
+                    { data: 'productClass' },
+                    { data: 'productDescription' },
+                    { data: 'orderedBy' },
+                    { data: 'locationName' },
+                    { data: null,
+                        render: function (data, type, row) {
+                            return `<button class="btn btn-sm btn-primary create-task"
+                                             data-property="${row.propertyName}"
+                                             data-orderid="${row.orderID}">
+                                         Create Task
+                                    </button>`;
+                        },
+                        orderable: false, // No sorting on this button
+                        searchable: false // No search filtering either
+                    }
+
+                ],
+                scrollX: true,
+                scrollY: '500px',
+                scrollCollapse: true,
+                pageLength: 50,
+                dom: `
+                  <"top mb-2"P>
+                  <"top d-flex justify-content-between align-items-center mb-3" lBf>
+                  rt
+                  <"bottom d-flex justify-content-between align-items-center mt-3" ip>
+                `,
+                buttons: [
+                    {
+                        extend: 'colvis',
+                        text: '<i class="bi bi-eye"></i> Show/Hide Columns',
+                        className: 'btn btn-outline-primary rounded-pill shadow-sm me-2'
+                    },
+                    {
+                        extend: 'excelHtml5',
+                        text: '<i class="bi bi-file-earmark-excel"></i> Excel',
+                        className: 'btn btn-outline-success rounded-pill shadow-sm me-2'
+                    },
+                    {
+                        extend: 'pdfHtml5',
+                        text: '<i class="bi bi-file-earmark-pdf"></i> PDF',
+                        className: 'btn btn-outline-danger rounded-pill shadow-sm'
+                    }
+                ],
+                searchPanes: {
+                    cascadePanes: true,
+                    viewTotal: true,
+                    layout: 'columns-4',
+                    initCollapsed: true
+                },
+                columnDefs: [
+                    { searchPanes: { show: true }, targets: [1, 2, 3, 10] },
+                    { searchPanes: { show: false }, targets: '_all' }
+                ]
+            });
+
+            // ✅ Only attach events after the table is ready
+            table.on('searchPanes.statesLoaded', function () {
+                updateFilterCount();
+            });
+
+            table.on('searchPanes.selectionChanged', function () {
+                updateFilterCount();
+            });
+        }
+
+        function updateFilterCount() {
+            const count = table.searchPanes.getSelections().reduce((total, pane) => total + pane.rows.length, 0);
+            $('#filtersCount').text(count);
+        }
+
+        $(document).ready(function () {
+            // The table will be loaded automatically via Flatpickr's defaultDate + onChange
+            const defaultDate = new Date().toISOString().split('T')[0];
+            loadOrdersTable(defaultDate);
+        });
+    </script>
+    <script>
+        $(document).ready(function () {
+            $('#orderTable').on('click', '.create-task', function () {
+                const property = $(this).data('property');
+                const orderId = $(this).data('orderid');
+
+                const title = `Follow-up for Order ${orderId}`;
+                const description = `Follow-up task for ${property} (Order ID: ${orderId})`;
+                const dueDate = new Date();
+                dueDate.setHours(dueDate.getHours() + 24);
+
+                $('#workOrderTaskModal input[name="Title"]').val(title);
+                $('#workOrderTaskModal textarea[name="Description"]').val(description);
+                $('#workOrderTaskModal input[name="DueDate"]').val(dueDate.toISOString().slice(0, 16));
+                $('#workOrderTaskModal input[name="Property"]').val(property);
+
+                $('#assignedToWorkOrder').val('@Context.Session.GetString("UserId")');
+
+                $('#workOrderTaskModal').modal('show');
+            });
+
+            $('#workOrderTaskForm').on('submit', function (e) {
+                e.preventDefault(); // prevent full page reload
+
+                const form = $(this);
+                const formData = form.serialize();
+
+                $.post(form.attr('action'), formData)
+                    .done(function (data) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Task Created!',
+                            text: 'The task was successfully created from the property.'
+                        });
+
+                        $('#taskModal').modal('hide'); // close modal
+                        form[0].reset(); // clear form
+                    })
+                    .fail(function (xhr) {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Oops!',
+                            text: 'Something went wrong. Please try again.'
+                        });
+                    });
+            });
+        });
+    </script>
+    <script>
+        $(document).ready(function () {
+            // Handle Order ID click
+            $('#orderTable').on('click', '.view-order', function () {
+                const orderId = $(this).data('id');
+
+                // Load modal body via AJAX
+                $('#workOrderDetailContent').html('<div class="text-center py-5"><div class="spinner-border text-primary"></div></div>');
+                $('#workOrderDetailModal').modal('show');
+
+                $.get(`/Orders/WorkOrderDetailsPartial`, { orderId: orderId }, function (html) {
+                    $('#workOrderDetailContent').html(html);
+                }).fail(function () {
+                    $('#workOrderDetailContent').html('<div class="alert alert-danger">Failed to load work order details.</div>');
+                });
+            });
+        });
+    </script>
+}

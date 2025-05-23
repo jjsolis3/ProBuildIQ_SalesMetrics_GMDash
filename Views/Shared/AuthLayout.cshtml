@@ -1,0 +1,37 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>@ViewBag.Title | SalesMetrics - Admin & Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta content="SalesMetrics CRM Admin & Dashboard" name="description" />
+    <meta content="774EntFX" name="author" />
+    <!-- App favicon -->
+    <link rel="shortcut icon" href="~/assets/images/favicon.ico" asp-append-version="true">
+    <!-- dark layout js -->
+    <script src="~/assets/js/pages/layout.js"></script>
+    @RenderSection("styles", required: false)
+    <!-- Bootstrap Css -->
+    <link href="~/assets/css/bootstrap.min.css" id="bootstrap-style" rel="stylesheet" type="text/css" asp-append-version="true">
+    <!-- Icons Css -->
+    <link href="~/assets/css/icons.min.css" rel="stylesheet" type="text/css" asp-append-version="true">
+    <!-- simplebar css -->
+    <link href="~/assets/libs/simplebar/simplebar.min.css" rel="stylesheet" asp-append-version="true">
+    <!-- App Css-->
+    <link href="~/assets/css/app.min.css" id="app-style" rel="stylesheet" type="text/css" asp-append-version="true">
+
+</head>
+<body>
+   
+                    @RenderBody()
+             
+
+    <!-- JAVASCRIPT -->
+    <script src="~/assets/libs/jquery/jquery.min.js"></script>
+    <script src="~/assets/libs/bootstrap/js/bootstrap.bundle.min.js"></script>
+    <script src="~/assets/libs/metismenu/metisMenu.min.js"></script>
+    <script src="~/assets/libs/simplebar/simplebar.min.js"></script>
+    <script src="~/assets/libs/node-waves/waves.min.js"></script>
+    @RenderSection("scripts", required: false)
+</body>
+</html>

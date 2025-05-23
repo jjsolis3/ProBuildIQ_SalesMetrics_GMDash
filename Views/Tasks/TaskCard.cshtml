@@ -1,0 +1,87 @@
+﻿@{
+    ViewBag.Title = "Task Card Layout";
+    ViewBag.pTitle = "Tasks";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+@model TaskPageViewModel
+
+@Html.ValidationSummary(true, "", new { @class = "text-danger" })
+
+@if (Model.Tasks != null && Model.Tasks.Any())
+{
+    foreach (var group in Model.Tasks.GroupBy(t => t.Status))
+    {
+        <h4>@group.Key</h4>
+        <div class="row">
+            @foreach (var task in group)
+            {
+                <div class="col-md-4 mb-3">
+                    <div class="card shadow-sm">
+                        <div class="card-body">
+                            <h5 class="card-title">@task.Title</h5>
+                            <p class="card-text">@task.Description</p>
+                            <p class="mb-1"><strong>Type:</strong> @task.Type</p>
+                            <p class="mb-1"><strong>Property:</strong> @task.Property</p>
+                            <p class="mb-1"><strong>Location:</strong> @task.Location</p>
+                            <small class="text-muted">Due: @(task.DueDate?.ToString("g") ?? "N/A")</small>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+}
+else
+{
+    <div class="alert alert-info">No tasks found.</div>
+}
+
+
+<button class="btn btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#createTaskModal">
+    + New Task
+</button>
+
+<!-- Modal -->
+@await Html.PartialAsync("_CreateTaskModal", new TaskModalViewModel
+{
+    Task = new TaskCreateViewModel(),
+    Users = Model.Users
+});
+
+@section scripts {
+
+    <!-- bs custom file input plugin -->
+    <script src="~/assets/libs/bs-custom-file-input/bs-custom-file-input.min.js"></script>
+
+    <script src="~/assets/js/pages/form-element.init.js"></script>
+
+    <!-- Date JS -->
+    <script src="~/assets/libs/bootstrap-datetime-picker/js/bootstrap-datetimepicker.min.js"></script>
+    <script src="~/assets/js/pages/form-datetimepicker.init.js"></script>
+
+    <!-- SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
+    @if (TempData["Success"] != null)
+    {
+        <script>
+            Swal.fire({
+                icon: 'success',
+                title: 'Success!',
+                text: '@TempData["Success"]'
+            });
+        </script>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <script>
+            Swal.fire({
+                icon: 'error',
+                title: 'Oops...',
+                text: '@TempData["Error"]'
+            });
+        </script>
+    }    
+}

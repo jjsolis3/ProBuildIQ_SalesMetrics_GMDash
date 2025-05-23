@@ -1,0 +1,358 @@
+﻿@using SalesMetrics.Services.Helpers
+@{
+    ViewBag.Title = "Tasks - Admin View";
+    ViewBag.pTitle = "Tasks";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+@model TaskPageViewModel
+
+@Html.ValidationSummary(true, "", new { @class = "text-danger" })
+
+@section styles {
+    <link href="~/assets/libs/datatables.net-bs5/css/dataTables.bootstrap5.min.css" rel="stylesheet" />
+    <link href="~/assets/libs/datatables.net-buttons-bs5/css/buttons.bootstrap5.min.css" rel="stylesheet" />
+    <link href="~/assets/libs/datatables.net-responsive-bs5/css/responsive.bootstrap5.min.css" rel="stylesheet" />
+    <link href="~/assets/libs/datatables.net-rowreorder-bs5/css/rowReorder.bootstrap5.min.css" rel="stylesheet" />
+    <link href="~/assets/libs/datatables.net-buttons-bs5/css/buttons.bootstrap5.min.css" rel="stylesheet" />
+
+    <link href="~/assets/libs/datatables.net-searchpanes-bs5/css/searchPanes.bootstrap5.min.css" rel="stylesheet" />
+    <link href="~/assets/libs/select2/css/select2.min.css" rel="stylesheet" />
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <button class="btn btn-success rounded-pill me-2 shadow-sm" data-bs-toggle="modal" data-bs-target="#createTaskModal">
+            <i class="bi bi-plus-lg"></i> New Task
+        </button>
+        <button id="btnColVis" class="btn btn-outline-primary rounded-pill shadow-sm me-2 d-none">
+            <i class="bi bi-eye"></i> Show/Hide Columns
+        </button>
+        <button id="btnExport" class="btn btn-outline-secondary rounded-pill shadow-sm me-2 d-none">
+            <i class="bi bi-clipboard"></i> Export
+        </button>
+    </div>
+</div>
+
+<div style="overflow-x: auto; width: 100%;">
+@*<div class="table-responsive">*@
+    @if (Model.Tasks != null && Model.Tasks.Any())
+    {
+        <table id="taskTable" class="table table-hover table-bordered table-striped" style="width:100%">
+            <thead class="table-dark">
+                <tr>
+                    <th>Title</th>
+                    <th>Description</th>
+                    <th>Type</th>
+                    <th>Property</th>
+                    <th>Location</th>
+                    <th>Due Date</th>
+                    <th>Status</th>
+                    <th>Assigned To</th>
+                    <th>Created By</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var task in Model.Tasks)
+                {
+                    <tr id="task-row-@task.TaskID">
+                        <td>@task.Title</td>
+                        <td>@task.Description</td>
+                        <td>@task.Type</td>
+                        <td>@task.Property</td>
+                        <td>@task.Location</td>
+                        <td data-order="@task.DueDate?.ToString("yyyy-MM-ddTHH:mm:ss")">
+                            @(task.DueDate?.ToString("g") ?? "N/A")
+                        </td>
+                        <td>
+                            <select class="form-select form-select-sm status-dropdown" data-task-id="@task.TaskID">
+                                <option selected disabled>@task.Status</option>
+                                <option value="Assigned">Assigned</option>
+                                <option value="Pending">Pending</option>
+                                <option value="In Progress">In Progress</option>
+                                <option value="In Review">In Review</option>
+                                <option value="Completed">Completed</option>
+                                <option value="Cancelled">Cancelled</option>
+                            </select>
+                        </td>
+                        <td>
+                            @{
+                                var assignedUser = Model.Users?.FirstOrDefault(u => u.UserID == task.AssignedTo);
+                            }
+
+                            @*(assignedUser != null ? $"{assignedUser.FirstName} {assignedUser.LastName}" : $"{task.AssignedTo}")*@
+                            @(assignedUser != null ? $"{assignedUser.FirstName} {assignedUser.LastName}" : "Unassigned")
+
+                        </td>
+                        <td>@task.CreatedBy</td>
+                        <td>
+                            <button class="btn btn-sm btn-info" data-bs-toggle="modal" data-bs-target="#editTaskModal" data-task-id="@task.TaskID">
+                                <i class="fa fa-edit fs-14"></i>
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+    else
+    {
+        <table id="taskTable" class="table d-none"></table>
+        <div class="alert alert-info">No tasks found.</div>
+    }
+</div>
+
+<!-- Create Modal -->
+@await Html.PartialAsync("_CreateTaskModal", new TaskModalViewModel
+{
+    Task = new TaskCreateViewModel(),
+    Users = Model.Users ?? new List<User>(),
+    LoggedInUserId = Convert.ToInt32(ViewBag.UserId),
+    RoleId = Convert.ToInt32(ViewBag.RoleId),
+    TaskTypes = TaskTypeHelper.GetTaskTypes("AdminTask")
+})
+
+<!-- Edit Modal (to be loaded dynamically) -->
+<div id="editTaskModal" class="modal fade" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-body text-center">
+                <div class="spinner-border text-primary m-5" role="status"></div>
+                <p>Loading...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section scripts {
+
+    <!-- bs custom file input plugin -->
+    <script src="~/assets/libs/bs-custom-file-input/bs-custom-file-input.min.js"></script>
+    <script src="~/assets/js/pages/form-element.init.js"></script>
+
+    <!-- Date JS -->
+    <script src="~/assets/libs/bootstrap-datetime-picker/js/bootstrap-datetimepicker.min.js"></script>
+    <script src="~/assets/js/pages/form-datetimepicker.init.js"></script>
+
+    <!-- SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <script src="~/assets/libs/datatables.net/js/jquery.dataTables.min.js"></script>
+    <script src="~/assets/libs/datatables.net-bs5/js/dataTables.bootstrap5.min.js"></script>
+
+    <!-- DataTables Buttons Extension -->
+    <script src="~/assets/libs/datatables.net-buttons/js/dataTables.buttons.min.js"></script>
+    <script src="~/assets/libs/datatables.net-buttons-bs5/js/buttons.bootstrap5.min.js"></script>
+
+    <!-- Export Functionality -->
+    <script src="~/assets/libs/jszip/jszip.min.js"></script>
+    <script src="~/assets/libs/pdfmake/build/pdfmake.min.js"></script>
+    <script src="~/assets/libs/pdfmake/build/vfs_fonts.js"></script>
+    <script src="~/assets/libs/datatables.net-buttons/js/buttons.html5.min.js"></script>
+    <script src="~/assets/libs/datatables.net-buttons/js/buttons.print.min.js"></script>
+
+    <script src="~/assets/libs/datatables.net-buttons/js/buttons.colVis.min.js"></script>
+    <script src="~/assets/libs/datatables.net-responsive/js/dataTables.responsive.min.js"></script>
+    <script src="~/assets/libs/datatables.net-responsive-bs5/js/responsive.bootstrap5.min.js"></script>
+    <script src="~/assets/libs/datatables.net-scroller/js/dataTables.scroller.min.js"></script>
+    <script src="~/assets/libs/datatables.net-rowreorder/js/dataTables.rowReorder.min.js"></script>
+    <script src="~/assets/libs/datatables.net-rowreorder-bs5/js/rowReorder.bootstrap5.min.js"></script>
+
+    <script src="~/assets/libs/datatables.net-searchpanes/js/dataTables.searchPanes.min.js"></script>
+    <script src="~/assets/libs/datatables.net-searchpanes-bs5/js/searchPanes.bootstrap5.min.js"></script>
+    <script src="~/assets/libs/datatables.net-select/js/dataTables.select.min.js"></script>
+
+    <script src="~/assets/libs/select2/js/select2.full.min.js"></script>
+
+    <script>
+        $(document).ready(function () {
+            var table = $('#taskTable').DataTable({
+                order: [[5, 'desc'], [7, 'asc']],
+                responsive: true,
+                rowReorder: true,
+                scrollX: true,
+                dom: `
+                    <"top mb-2"P>
+                    <"top d-flex justify-content-between align-items-center mb-3" lBf>
+                    rt
+                    <"bottom d-flex justify-content-between align-items-center mt-3" ip>
+                `,
+                searchPanes: {
+                    cascadePanes: true,
+                    viewTotal: true,
+                    layout: 'columns-3',
+                    initCollapsed: true
+                },
+                buttons: [
+                    {
+                        extend: 'colvis',
+                        text: '<i class="bi bi-eye"></i> Show/Hide Columns',
+                        className: 'btn btn-outline-primary rounded-pill shadow-sm me-2'
+                    },
+                    {
+                        extend: 'excelHtml5',
+                        text: '<i class="bi bi-file-earmark-excel"></i> Excel',
+                        className: 'btn btn-outline-success rounded-pill shadow-sm me-3',
+                        exportOptions: {
+                            columns: [0, 1, 2, 3, 4, 5, 6, 7, 8], // Only export up to status
+                            format: {
+                                body: function (data, row, column, node) {
+                                    // If it's the status column (index 6), return selected text from <select>
+                                    if (column === 6) {
+                                        const $select = $('<div>' + data + '</div>').find('select');
+                                        return $select.length ? $select.find('option:selected').text() : data;
+                                    }
+                                    // Otherwise, return plain text (strip HTML)
+                                    return $('<div>').html(data).text();
+                                }
+                            }
+                        }
+                    },
+                    {
+                        extend: 'pdfHtml5',
+                        text: '<i class="bi bi-file-earmark-pdf"></i> PDF',
+                        className: 'btn btn-outline-danger rounded-pill shadow-sm me-3',
+                        orientation: 'landscape', // ✅ Set landscape mode
+                        pageSize: 'A4', // Optional: you can also set other sizes
+                        exportOptions: {
+                            columns: [0, 1, 2, 3, 4, 5, 6, 7, 8], // ✅ Exclude the last column (Actions)
+                            format: {
+                                body: function (data, row, column, node) {
+                                    if (column === 6) { // Status column
+                                        const $select = $('<div>' + data + '</div>').find('select');
+                                        return $select.length ? $select.find('option:selected').text() : data;
+                                    }
+                                    return $('<div>').html(data).text(); // Clean up HTML if needed
+                                }
+                            }
+                        },
+                        customize: function (doc) {
+                            // Optional: Make fonts smaller so it fits better
+                            doc.styles.tableHeader.fontSize = 11;
+                            doc.defaultStyle.fontSize = 10;
+                        }
+                    },
+                    // 🔥 New Active Tasks button
+                    {
+                        text: '<i class="bi bi-list-task"></i> Active Tasks',
+                        className: 'btn btn-outline-success rounded-pill shadow-sm me-3',
+                        action: function () {
+                            window.location.href = '/Tasks/AdminTask?filter=active';
+                        }
+                    },
+                    // 🔥 New Completed Tasks button
+                    {
+                        text: '<i class="bi bi-check2-circle"></i> Completed Tasks',
+                        className: 'btn btn-outline-secondary rounded-pill shadow-sm me-3',
+                        action: function () {
+                            window.location.href = '/Tasks/AdminTask?filter=completed';
+                        }
+                    },
+                    // 🔥 New Show All button
+                    {
+                        text: '<i class="bi bi-card-list"></i> Show All',
+                        className: 'btn btn-outline-dark rounded-pill shadow-sm',
+                        action: function () {
+                            window.location.href = '/Tasks/AdminTask?filter=all';
+                        }
+                    }
+                ],
+                columnDefs: [
+                    { searchPanes: { show: true }, targets: [7, 2, 6] },
+                    { searchPanes: { show: false }, targets: '_all' }
+                ],
+                processing: true,
+                initComplete: function () {
+                    $('#taskTable_wrapper .dt-buttons').appendTo('#taskButtons');
+                }
+            });
+
+            // ⚠️ When columns change (like description being hidden), fix alignment
+            $(window).on('resize', function () {
+                table.columns.adjust();
+            });
+
+        });
+    </script>
+
+    @if (TempData["Success"] != null)
+    {
+        <script>
+            Swal.fire({
+                icon: 'success',
+                title: 'Success!',
+                text: '@TempData["Success"]'
+            });
+        </script>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <script>
+            Swal.fire({
+                toast: true,
+                position: 'top-end',
+                icon: 'success',
+                title: 'Task status updated',
+                showConfirmButton: false,
+                timer: 2000
+            });
+        </script>
+    }
+
+    @if (TempData["Warning"] != null)
+    {
+        <script>
+            Swal.fire({
+                icon: 'warning',
+                title: 'Notice',
+                text: '@TempData["Warning"]'
+            });
+        </script>
+    }
+
+    <script>
+        // Inline Status Update
+        $(".status-dropdown").change(function () {
+            var taskId = $(this).data("task-id");
+            var newStatus = $(this).val();
+
+            $.ajax({
+                type: "POST",
+                url: "/Tasks/UpdateStatus",
+                contentType: "application/json",
+                data: JSON.stringify({ TaskId: taskId, NewStatus: newStatus }),
+                success: function (response) {
+                    if (response.success) {
+                        Swal.fire("Updated!", "Task status updated.", "success");
+                    } else {
+                        Swal.fire("Error", response.message, "error");
+                    }
+                },
+                error: function () {
+                    Swal.fire("Oops", "Something went wrong while updating status.", "error");
+                }
+            });
+        });
+
+        // Load Edit Modal
+        $('#editTaskModal').on('show.bs.modal', function (event) {
+            var button = $(event.relatedTarget);
+            var taskId = button.data('task-id');
+            var modal = $(this);
+
+            var returnUrl = encodeURIComponent(window.location.pathname); // capture current page path
+
+            $.get(`/Tasks/EditModalPartial/${taskId}?returnUrl=${returnUrl}`)
+                .done(function (html) {
+                    $('#editTaskModal .modal-content').html(html);
+                })
+                .fail(function (jqXHR, textStatus, errorThrown) {
+                    $('#editTaskModal .modal-content').html('<div class="p-4 text-danger">Error loading modal: ' + jqXHR.responseText + '</div>');
+                    console.error("AJAX Load Error:", textStatus, errorThrown);
+                });
+        });
+    </script>
+
+}

@@ -1,0 +1,32 @@
+﻿@model SalesMetrics.Models.Journal.JournalEntry
+
+@{
+    ViewData["Title"] = "Edit Journal Entry";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container mt-4">
+    <h2 class="text-orange">✏️ Edit Journal Entry</h2>
+
+    <form asp-action="Edit" method="post">
+        <input type="hidden" asp-for="Journal_ID" />
+
+        <div class="mb-3">
+            <label asp-for="Title" class="form-label">Title</label>
+            <input asp-for="Title" class="form-control" />
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="NoteText" class="form-label">Note</label>
+            <textarea asp-for="NoteText" class="form-control" rows="6"></textarea>
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="EntryDate" class="form-label">Entry Date</label>
+            <input asp-for="EntryDate" type="datetime-local" class="form-control" value="@Model.EntryDate"/>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Update Entry</button>
+        <a asp-action="Index" class="btn btn-secondary ms-2">Cancel</a>
+    </form>
+</div>

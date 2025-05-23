@@ -1,0 +1,94 @@
+﻿@{
+    ViewBag.Title = "Help Portal";
+    ViewBag.pTitle = "Sales Metrics CRM";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+
+    var salesData = ViewBag.SalesData as Dictionary<string, object>;
+}
+
+@section styles {
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 40px;
+            max-width: 97%;
+            color: #333;
+        }
+
+        .headers {
+            color: #1e5a99;
+        }
+
+        .ul {
+            margin-top: 0;
+        }
+
+        .section {
+            margin-bottom: 40px;
+        }
+    </style>
+}
+
+    <h1>SalesMetrics CRM – Help & Documentation</h1>
+
+    <div class="section">
+        <h2 class="headers">1. Overview</h2>
+        <ul>
+            <li><strong>Purpose:</strong> Track AR, sales performance, customer visits, and rep productivity.</li>
+            <li><strong>Users:</strong> Sales Reps, Admins, Managers.</li>
+            <li><strong>Goals:</strong> Streamline account follow-ups, improve scheduling, and provide visibility through actionable dashboards.</li>
+        </ul>
+    </div>
+
+    <div class="section">
+        <h2>2. Technology Stack</h2>
+        <ul>
+            <li>ASP.NET Core 9 (C#)</li>
+            <li>Razor Views, Bootstrap, jQuery DataTables</li>
+            <li>SQL Server (SalesMetrics DB + ERP connections)</li>
+            <li>Google Calendar & Tasks API (OAuth2)</li>
+            <li>IIS on Windows Server 2022</li>
+        </ul>
+    </div>
+
+    <div class="section">
+        <h2>3. Core Features</h2>
+        <ul>
+            <li><strong>Dashboard:</strong> KPIs, weekly order charts, AR aging, and delinquent customers</li>
+            <li><strong>Tasks:</strong> Modal form creation, inline editing, Kanban view, calendar/task sync</li>
+            <li><strong>Work Orders:</strong> Grouped by day, task creation per order</li>
+            <li><strong>Properties:</strong> ERP-assigned and Yardi properties with task creation</li>
+            <li><strong>Details Page:</strong> Full customer metrics, invoice & work order history</li>
+        </ul>
+    </div>
+
+    <div class="section">
+        <h2>4. Deployment</h2>
+        <ul>
+            <li>Published as win-x64, framework-dependent</li>
+            <li>IIS App Pool: No Managed Code, AlwaysRunning enabled</li>
+            <li>2AM automatic app pool recycling</li>
+            <li>HTTPS enforced via URL Rewrite or HTTP Redirect</li>
+        </ul>
+    </div>
+
+    <div class="section">
+        <h2>5. Work in Progress</h2>
+        <ul>
+            <li>Two-way sync with Google Tasks (Gmail > SalesMetrics)</li>
+            <li>AR table: Task creation button per entry</li>
+            <li>Admin report/export tools</li>
+            <li>Email triggers and notifications</li>
+        </ul>
+    </div>
+
+    <div class="section">
+        <h2>6. Admin & Troubleshooting</h2>
+        <ul>
+            <li>Check IIS stdout logs for crash analysis</li>
+            <li>Use Google API feedback in Task creation</li>
+            <li>Role-based filtering: Admins can view/assign for others</li>
+            <li>Session stores SalesmanID and Location for context-aware behavior</li>
+        </ul>
+    </div>

@@ -1,0 +1,101 @@
+﻿@{
+    ViewBag.Title = "Task Form";
+    ViewBag.pTitle = "New Task";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+@Html.ValidationSummary(true, "", new { @class = "text-danger" })
+@{
+}
+<!-- Modal -->
+<div class="modal fade" id="createTaskModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form asp-action="Create" method="post">
+                <div class="modal-header">
+                    <h5 class="modal-title">Create Task</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="Title" class="form-label">Title</label>
+                        <input type="text" class="form-control" name="Title" required />
+                    </div>
+                    <div class="mb-3">
+                        <label for="Description" class="form-label">Description</label>
+                        <textarea class="form-control" name="Description"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="DueDate" class="form-label">Due Date</label>
+                        <input type="date" class="form-control" name="DueDate" required />
+                    </div>
+                    <div class="mb-3">
+                        <label for="Status" class="form-label">Status</label>
+                        <select class="form-select" name="Status">
+                            <option value="Pending">Pending</option>
+                            <option value="In Progress">In Progress</option>
+                            <option value="Completed">Completed</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="AssignedTo" class="form-label">Assign To</label>
+                        <select class="form-select" name="AssignedTo">
+                            @foreach (var user in ViewBag.Users)
+                            {
+                                <option value="@user.UserID">@user.FirstName @user.LastName</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary">Create Task</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section scripts {
+
+    <!-- bs custom file input plugin -->
+    <script src="~/assets/libs/bs-custom-file-input/bs-custom-file-input.min.js"></script>
+
+    <script src="~/assets/js/pages/form-element.init.js"></script>
+
+    <!-- Flatpickr CSS -->
+    <link href="~/assets/libs/flatpickr/flatpickr.min.css" rel="stylesheet" />
+
+    <!-- Flatpickr JS -->
+    <script src="~/assets/libs/flatpickr/flatpickr.min.js"></script>
+
+    <!-- SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            if (typeof flatpickr !== 'undefined') {
+                flatpickr("#DueDate", {
+                    enableTime: true,
+                    dateFormat: "Y-m-d H:i"
+                });
+            } else {
+                console.error("❌ Flatpickr library failed to load.");
+            }
+        });
+
+        function submitTaskForm() {
+            // Show success popup
+            Swal.fire({
+                title: 'Success!',
+                text: 'Task has been created successfully.',
+                icon: 'success',
+                confirmButtonText: 'OK'
+            });
+
+            // Let the form submit
+            return true;
+        }
+    </script>
+
+}

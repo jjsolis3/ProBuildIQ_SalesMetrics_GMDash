@@ -1,0 +1,179 @@
+﻿@model TaskPageViewModel
+
+@{
+    ViewBag.Title = "Task Kanban";
+    ViewBag.pTitle = "Tasks";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+@section styles {
+    <link rel="stylesheet" href="~/assets/libs/dragula/dragula.min.css" />
+    <style>
+        .tasks-box {
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .tasks.ex-over {
+            background-color: #f0f8ff;
+            border: 2px dashed #0d6efd;
+            transition: all 0.2s ease;
+        }
+    </style>
+}
+
+<div class="row">
+    <div class="col-xl-9">
+        <div class="tasks-board mb-3" id="kanbanboard">
+            @if (Model.Tasks != null && Model.Tasks.Any())
+            {
+                // Define all status options here
+                var allStatuses = new[] { "Assigned", "Pending", "In Progress", "In Review", "Completed" }; 
+
+                @foreach (var status in allStatuses)
+                {
+                    var group = Model.Tasks.Where(t => t.Status == status);
+                    <div class="tasks-list" data-status="@status">
+
+                        <div class="d-flex mb-3">
+                            <div class="flex-grow-1">
+                                <h6 class="fs-14 text-uppercase fw-semibold mb-0">
+                                    @status <small class="badge bg-success align-bottom ms-1 totaltask-badge">0</small>
+                                </h6>
+                            </div>
+                            <div class="flex-shrink-0">
+                                <div class="avatar-2xs bg-success text-white text-center rounded-2">
+                                    <i class="mdi mdi-plus-thick align-middle lh-lg"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="tasks-wrapper px-3 mx-n3" data-simplebar>
+                            <div class="tasks" data-status="@status">
+                                @foreach (var task in group)
+                                {
+                                    <div class="card tasks-box" draggable="true" data-task-id="@task.TaskID">
+                                        <div class="card-body">
+                                            <div class="d-flex justify-content-between mb-2">
+                                                <div>
+                                                    <span class="badge badge-label-info">@task.Type</span>
+                                                </div>
+                                                <div class="dropdown">
+                                                    <a href="javascript:void(0);" class="text-muted" id="dropdownMenulink" data-bs-toggle="dropdown" aria-expanded="false">
+                                                        <i class="ri-more-fill"></i>
+                                                    </a>
+                                                    <ul class="dropdown-menu" aria-labelledby="dropdownMenulink">
+                                                        <li>
+                                                            <a class="dropdown-item" href="#">
+                                                                <i class="ri-eye-fill align-bottom me-2 text-muted"></i> View
+                                                            </a>
+                                                        </li>
+                                                        <li>
+                                                            <a class="dropdown-item edit-task" href="javascript:void(0);" data-id="@task.TaskID">
+                                                                <i class="ri-edit-2-line align-bottom me-2 text-muted"></i> Edit
+                                                            </a>
+                                                        </li>
+                                                        <li>
+                                                            <a class="dropdown-item" href="#deleteRecordModal" data-bs-toggle="modal"><i class="ri-delete-bin-5-line align-bottom me-2 text-muted"></i> Delete
+                                                            </a>
+                                                        </li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                            <div class="mb-3">
+                                                <h5 class="card-title">@task.Title</h5>
+                                                <p class="text-muted">@task.Description</p>
+                                                <div class="mb-2">
+                                                    <small class="text-muted">Due: @(task.DueDate?.ToString("g") ?? "N/A")</small>
+                                                    <small class="text-muted">Assigned to: @(task.AssignedTo?.ToString() ?? "")</small>
+
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                        <div class="my-3">
+                            <button class="btn btn-label-info w-100 add-task-btn" data-bs-toggle="modal" data-bs-target="#createTaskModal">Add Task</button>
+                        </div>
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="alert alert-info">No tasks found.</div>
+            }
+        </div>
+    </div>
+
+
+</div>
+
+<button class="btn btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#createTaskModal">
+    + New Task
+</button>
+
+<!-- Modal -->
+@await Html.PartialAsync("_CreateTaskModal", new TaskModalViewModel
+{
+    Task = new TaskCreateViewModel(),
+    Users = Model.Users
+})
+
+<!-- Scripts -->
+@section scripts {
+    <!-- dragula init js -->
+    <script src="~/assets/libs/dragula/dragula.min.js"></script>
+
+    <!-- dom autoscroll -->
+    <script src="~/assets/libs/dom-autoscroller/dom-autoscroller.min.js"></script>
+
+    <!-- apexcharts -->
+    <script src="~/assets/libs/apexcharts/apexcharts.min.js"></script>
+
+    <!--taks-kanban-->
+    <script src="~/assets/js/pages/kanban.init.js"></script>
+
+    <script src="~/assets/libs/bs-custom-file-input/bs-custom-file-input.min.js"></script>
+    <script src="~/assets/js/pages/form-element.init.js"></script>
+       
+
+    <script>
+        $(document).on("click", ".edit-task", function (e) {
+            e.preventDefault();
+            const taskId = $(this).data("id");
+
+            $.get(`/Tasks/EditModalPartial?id=${taskId}`, function (html) {
+                $("body").append(html); // Dynamically add the modal
+                $("#editTaskModal").modal("show");
+            });
+        });
+
+        // Optional: remove modal after close
+        $(document).on('hidden.bs.modal', '#editTaskModal', function () {
+            $(this).remove();
+        });
+    </script>
+
+    @if (TempData["Success"] != null)
+    {
+        <script>
+            @* Swal.fire({ icon: 'success', title: 'Success!', text: '@TempData["Success"]' }); *@
+            Swal.fire({
+                toast: true,
+                position: 'top-end',
+                icon: 'success',
+                title: 'Task updated!',
+                showConfirmButton: false,
+                timer: 2000
+            });
+
+        </script>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <script>
+            Swal.fire({ icon: 'error', title: 'Oops...', text: '@TempData["Error"]' });
+        </script>
+    }
+}

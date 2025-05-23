@@ -1,0 +1,300 @@
+﻿@using System.Text.Json
+@using SalesMetrics.Services.Helpers
+
+@{
+    ViewBag.Title = "Schedule";
+    ViewBag.pTitle = "Tasks";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+@model List<SalesMetrics.Models.TaskCalendarViewModel>
+
+@section styles {
+    <link href="~/assets/libs/bootstrap-datepicker/css/bootstrap-datepicker.min.css" rel="stylesheet">
+    <!-- FullCalendar CSS -->
+    <link href="~/assets/libs/fullcalendar/main.min.css" rel="stylesheet" />
+
+    <style>
+        .fc .fc-event {
+            background-color: #198754 !important;
+            border: none;
+            color: white !important;
+            font-weight: 500;
+            transition: all 0.2s ease; /* Smooth hover transition */
+        }
+
+            /* Fix the hover text issue */
+            .fc .fc-event:hover {
+                filter: brightness(1.1);
+                color: #212529 !important; /* Dark text on hover */
+                border: 2px solid orange; /* Optional: slight border on hover */
+            }
+
+        .fc-daygrid-event-dot {
+            background-color: white !important;
+        }
+
+        /* Status-based coloring */
+        .fc-event.bg-cancelled {
+            background-color: darkred !important;
+            color: #fff;
+        }
+
+        .fc-event.bg-completed {
+            background-color: gray !important;
+            color: #fff;
+        }
+
+        .fc-event.bg-pending {
+            background-color: #ffc107 !important;
+            color: #000;
+        }
+
+        .fc-event.bg-primary {
+            background-color: #0d6efd !important;
+            color: #fff;
+        }
+
+        .btn.bg-orange {
+            background-color: #FF6720 !important;
+            color: #fff;
+        }
+
+        .text-orange {
+            color: darkorange;
+        }
+
+        @@keyframes bounceEffect {
+            0% { transform: scale(1); }
+            25% { transform: scale(1.2); }
+            50% { transform: scale(0.9); }
+            75% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        .bounce-highlight {
+            animation: bounceEffect 1s ease;
+            box-shadow: 0 0 10px 2px orange;
+            border: 2px solid darkorange;
+        }
+    </style>
+    
+}
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="row">
+
+                    <!-- Calendar -->
+                    <div class="col-xl-9">
+                        <div class="calendar-container" style="max-height: 75vh; overflow: auto;">
+
+                            <!-- 🔥 Filter Row (Dropdown + Toggle) -->
+                            <div class="row mb-3 align-items-center">
+
+                                @if ((int)ViewBag.RoleId == 1 || (int)ViewBag.RoleId == 3)
+                                {
+                                    <!-- Admin/SalesAdmin: User Filter -->
+                                    <div class="col-auto">
+                                        <label for="userFilter" class="form-label fw-bold mb-1">Filter by User:</label>
+                                        <select id="userFilter" class="form-select fw-bold" style="min-width: 200px;">
+                                            <option value="">All Users</option>
+                                            @foreach (var user in (List<User>)ViewBag.FilterUsers)
+                                            {
+                                                <option class="fw-bold" value="@($"{user.FirstName} {user.LastName}")">@($"{user.FirstName} {user.LastName}")</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="col-auto d-flex mt-4">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" id="hideCompletedToggle">
+                                            <label class="form-check-label ms-2" for="hideCompletedToggle">Hide Completed Tasks</label>
+                                        </div>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <!-- Sales Rep: Hide Completed Tasks Toggle -->
+                                    <div class="col-auto d-flex align-items-center">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" id="hideCompletedToggle">
+                                            <label class="form-check-label ms-2" for="hideCompletedToggle">Hide Completed Tasks</label>
+                                        </div>
+                                    </div>
+                                }
+
+                            </div>
+
+                            <!-- 🔥 Calendar -->
+                            <div id="calendar"></div>
+
+                        </div>
+                    </div>
+
+                    <!-- Task Detail Card -->
+                    <div class="col-xl-3" id="task-detail-pane">
+                        <div class="card shadow border-0 h-100">
+                            <div class="card-body d-flex flex-column">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h4 class="fw-bold text-dark mb-0">
+                                        <i class="bi bi-info-circle-fill me-1 text-orange"></i> Task Details
+                                    </h4>
+                                </div>
+                                <div>
+                                    <h5 class="fw-bold text-dark mb-3" id="task-title">
+                                        Task Title
+                                    </h5>
+                                </div>
+
+                                <ul class="list-group list-group-flush flex-grow-1">
+                                    <li class="list-group-item px-0 d-flex justify-content-between">
+                                        <span class="fw-semibold">Type: </span>
+                                        <span class="fw-bold" id="task-type">-</span>
+                                    </li>
+                                    <li class="list-group-item px-0 d-flex justify-content-between">
+                                        <span class="fw-semibold">Status: </span>
+                                        <span class="fw-bold" id="task-status">-</span>
+                                    </li>
+                                    <li class="list-group-item px-0 d-flex justify-content-between">
+                                        <span class="fw-semibold">Property: </span>
+                                        <span class="fw-bold" id="task-property">-</span>
+                                    </li>
+                                    <li class="list-group-item px-0 d-flex justify-content-between">
+                                        <span class="fw-semibold">Due Date: </span>
+                                        <span class="fw-bold" id="task-date">-</span>
+                                    </li>
+                                    <li class="list-group-item px-0 d-flex justify-content-between">
+                                        <span class="fw-semibold">Assigned To: </span>
+                                        <span class="fw-bold bg-info-subtle" id="task-assignedTo">-</span>
+                                    </li>
+                                    <li class="list-group-item px-0 d-flex justify-content-between">
+                                        <h6 class="fw-bold mb-2">Description: </h6>
+                                        <span class="text-body fw-bold mb-0 center" id="task-desc">Click on a task to view details.</span>
+                                    </li>
+                                    <li class="list-group-item px-0 d-flex justify-content-between">
+                                        <h6 class="fw-semibold mb-2">Notes: </h6>
+                                        <div id="task-notes" class="mb-2" style="max-height: 350px; overflow-y: auto;">
+                                            <!-- Notes will be loaded here -->
+                                        </div>
+                                    </li>
+                                </ul>
+
+                                <div class="mt-1">
+                                    <h6 class="fw-bold text-dark mb-2">Notes</h6>
+                                    
+                                    <textarea class="form-control mb-2" id="new-note-input" rows="2" placeholder="Add a new note..."></textarea>
+                                    <button class="btn btn-sm btn-outline-primary w-100" id="add-note-btn">Add Note</button>
+                                </div>
+
+                                <div class="mt-3">
+                                    <button id="edit-task-btn" class="btn bg-orange" style="display:none;">
+                                        <i class="bi bi-pencil-square"></i> Edit Task
+                                    </button>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+                    <!-- END Task Details -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Add New Event Modal -->
+        @{
+            var dueDate = DateTime.Now.AddHours(2);
+            var endDate = dueDate.AddHours(1); // or .AddHours(2).AddMinutes(30)
+            ViewBag.ReturnUrl = Url.Action("Schedule", "Tasks"); // 👈 return back to Schedule
+        }
+        @await Html.PartialAsync("_CreateTaskModal", new TaskModalViewModel
+        {
+            Task = new TaskCreateViewModel
+            {
+                DueDate = dueDate,
+                TaskEndDate = endDate
+            },
+            Users = ViewBag.AllUsers as List<User> ?? new List<User>(),
+            RoleId = ViewBag.RoleId != null ? Convert.ToInt32(ViewBag.RoleId) : 0,
+            LoggedInUserId = ViewBag.UserId != null ? Convert.ToInt32(ViewBag.UserId) : 0,
+            TaskTypes = TaskTypeHelper.GetTaskTypes("Schedule")
+        })
+
+        
+    </div> <!-- end col -->
+</div> <!-- end row -->
+@section scripts {
+    <!-- Bootstrap Datepicker -->
+    <script src="~/assets/libs/bootstrap-datepicker/js/bootstrap-datepicker.min.js"></script>
+
+    <!-- FullCalendar Bundle -->
+    <script src="~/assets/libs/fullcalendar/main.min.js"></script>
+
+    <!-- SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <!-- Our Calendar Page Script -->
+    <script src="~/assets/js/pages/app-calendar.js"></script>
+
+    <!-- Add the same SweetAlert pop-up code -->
+    @if (TempData["Success"] != null)
+    {
+        <script>
+            Swal.fire({
+                icon: 'success',
+                title: 'Success!',
+                text: '@TempData["Success"]'
+            }).then(() => {
+                const calendarEl = document.getElementById('calendar');
+                const calendar = FullCalendar.getCalendar(calendarEl);
+
+                // 🔥 Refresh calendar
+                calendar.refetchEvents();
+
+                // 🔥 After small delay, highlight the latest added event
+                setTimeout(() => {
+                    const events = window.salesMetricsCalendar.getEvents();
+                    if (events.length > 0) {
+                        // Assume latest event is the last in array (depends on your server order)
+                        const lastEvent = events[events.length - 1];
+
+                        const eventEls = document.querySelectorAll(`[data-event-id="${lastEvent.id}"]`);
+                        eventEls.forEach(el => {
+                            el.classList.add('bounce-highlight'); // Add bounce class
+                            setTimeout(() => el.classList.remove('bounce-highlight'), 2000); // Remove after 2 seconds
+                        });
+                    }
+                }, 1000); // wait for FullCalendar to rerender
+            });
+        </script>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <script>
+            Swal.fire({
+                icon: 'error',
+                title: 'Error!',
+                text: '@TempData["Error"]'
+            });
+        </script>
+    }
+
+    @if (TempData["Warning"] != null)
+    {
+        <script>
+            Swal.fire({
+                icon: 'warning',
+                title: 'Warning!',
+                text: '@TempData["Warning"]'
+            });
+        </script>
+    }
+
+    <script>
+        document.getElementById('hideCompletedToggle')?.addEventListener('change', function () {
+            window.salesMetricsCalendar.refetchEvents();
+        });
+    </script>
+}

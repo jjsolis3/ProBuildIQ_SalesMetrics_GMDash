@@ -1,0 +1,30 @@
+﻿@model SalesMetrics.Models.Journal.JournalEntry
+
+@{
+    ViewData["Title"] = "New Journal Entry";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container mt-4">
+    <h2 class="text-orange">➕ New Journal Entry</h2>
+
+    <form asp-action="Create" method="post">
+        <div class="mb-3">
+            <label asp-for="Title" class="form-label">Title</label>
+            <input asp-for="Title" class="form-control" placeholder="What's this note about?" />
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="NoteText" class="form-label">Note</label>
+            <textarea asp-for="NoteText" class="form-control" rows="6" placeholder="Write your thoughts..."></textarea>
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="EntryDate" class="form-label">Entry Date</label>
+            <input asp-for="EntryDate" type="datetime-local" class="form-control" />
+        </div>
+
+        <button type="submit" class="btn btn-success">Save Entry</button>
+        <a asp-action="Index" class="btn btn-secondary ms-2">Cancel</a>
+    </form>
+</div>

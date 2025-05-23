@@ -1,0 +1,159 @@
+﻿@*
+    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
+*@
+@{
+    var salesData = ViewBag.SalesData as Dictionary<string, object>;
+}
+
+<div class="row">
+    <div class="col-4">
+        <div class="page-title-box d-flex align-items-center justify-content-between">
+            <div>
+                <h4 class="fs-16 fw-semibold mb-1 mb-md-2">
+                    @ViewBag.Greeting, <span class="text-primary">@ViewBag.Username!</span>
+                </h4>
+                <p class="text-muted mb-0">Here's what's happening with your sales today.</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-2"></div>
+    <div class="col-4">
+        <div class="row mb-2">
+            <p class="mb-0 text-muted">Select Date Range for Dashboard Data</p>
+            <div class="col-sm-7">
+                <select class="form-select" id="quickRangeSelector">
+                    <option value="0" selected="@(ViewBag.SelectedRangeType == 0 ? "selected" : null)">Current Month</option>
+                    <option value="1" selected="@(ViewBag.SelectedRangeType == 1 ? "selected" : null)">Last Month</option>
+                    <option value="2" selected="@(ViewBag.SelectedRangeType == 2 ? "selected" : null)">Start of Last Quarter</option>
+                    <option value="3" selected="@(ViewBag.SelectedRangeType == 3 ? "selected" : null)">Start of This Year</option>
+                    <option value="4" selected="@(ViewBag.SelectedRangeType == 4 ? "selected" : null)">Start of Last Year</option>
+                </select>
+            </div>
+            <div class="col-sm-5 d-flex align-items-center">
+                <button id="applyQuickRange" class="btn btn-primary w-100">Apply</button>
+            </div>
+        </div>
+    </div>
+    <div class="col-2 align-items-center">
+        <div class="col-sm-12 mt-1 ">
+            <p id="selectedRangeLabel" class="text-dark fs-5 text-center">
+                Selected Range: <br /><strong>@ViewBag.StartDate</strong> to <strong>@ViewBag.EndDate</strong>
+            </p>
+        </div>
+    </div>
+</div>
+
+<!-- Top Row: Total Sales, Total Due, MTD, YTD -->
+<div class="row">
+    <!-- MTD Ranking -->
+    <div class="col-md-3">
+        <div class="card shadow">
+            <div class="card-header">
+                <h5 class="mb-0">MTD Ranking <span class="badge bg-info ms-2">@ViewBag.MTDRange</span></h5>
+            </div>
+            <div class="card-body table-responsive p-2">
+                @{
+                    var mtd = ViewBag.MTDRanking as List<SalesMetrics.Models.SalesRanking>;
+                    int mtdRank = 1;
+                }
+                <table class="table table-sm table-bordered mb-0">
+                    <thead>
+                        <tr><th>#</th><th>Salesperson</th><th>Amount</th></tr>
+                    </thead>
+                    <tbody>
+                        @if (mtd != null && mtd.Any())
+                        {
+                            foreach (var person in mtd)
+                            {
+                                <tr>
+                                    <td>@mtdRank</td>
+                                    <td>@person.SalespersonName</td>
+                                    <td>@person.MTDSales.ToString("C")</td>
+                                </tr>
+                                mtdRank++;
+                            }
+                        }
+                        else
+                        {
+                            <tr><td colspan="3" class="text-center">No data</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- YTD Ranking -->
+    <div class="col-md-3">
+        <div class="card shadow">
+            <div class="card-header">
+                <h5 class="mb-0">YTD Ranking <span class="badge bg-info ms-2">@ViewBag.YTDRange</span></h5>
+            </div>
+            <div class="card-body table-responsive p-2">
+                @{
+                    var ytd = ViewBag.YTDRanking as List<SalesMetrics.Models.SalesRanking>;
+                    int ytdRank = 1;
+                }
+                <table class="table table-sm table-bordered mb-0">
+                    <thead>
+                        <tr><th>#</th><th>Salesperson</th><th>Amount</th></tr>
+                    </thead>
+                    <tbody>
+                        @if (ytd != null && ytd.Any())
+                        {
+                            foreach (var person in ytd)
+                            {
+                                <tr>
+                                    <td>@ytdRank</td>
+                                    <td>@person.SalespersonName</td>
+                                    <td>@person.YTDSales.ToString("C")</td>
+                                </tr>
+                                ytdRank++;
+                            }
+                        }
+                        else
+                        {
+                            <tr><td colspan="3" class="text-center">No data</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Columns 1 -->
+    <div class="col-md-3">
+        <!-- Total Sales -->
+        <div class="col-md-12 mt-3">
+            <div class="shadow-lg p-3 rounded" style="background-color: darkorange">
+                <p class="text-white text-truncate mb-2">Total Sales</p>
+                <h3 class="mb-0 text-white">$@Convert.ToDecimal(salesData["TotalSales"]).ToString("N2")</h3>
+            </div>
+        </div>
+        <!-- Total Invoices -->
+        <div class="col-md-12 mt-3">
+            <div class="shadow-lg p-3 rounded" style="background-color: darkorange">
+                <p class="text-white text-truncate mb-2">Total Invoices</p>
+                <h3 class="mb-0 text-white">@Convert.ToInt32(salesData["TotalInvoices"]).ToString("N0")</h3>
+            </div>
+        </div>
+    </div>
+
+    <!-- Columns 2 -->
+    <div class="col-md-3">
+        <!-- Total Due -->
+        <div class="col-md-12 mt-3">
+            <div class="shadow-lg p-3 rounded" style="background-color: darkorange">
+                <p class="text-white text-truncate mb-2">Total Due</p>
+                <h3 class="mb-0 text-white">$@Convert.ToDecimal(salesData["AmountDue"]).ToString("N2")</h3>
+            </div>
+        </div>
+        <!-- Active Properties -->
+        <div class="col-md-12 mt-3">
+            <div class="shadow-lg p-3 rounded" style="background-color: darkorange">
+                <p class="text-white text-truncate mb-2">Active Properties</p>
+                <h3 class="mb-0 text-white">@Convert.ToInt32(salesData["PropertyCount"]).ToString("N0")</h3>
+            </div>
+        </div>
+    </div>
+</div>

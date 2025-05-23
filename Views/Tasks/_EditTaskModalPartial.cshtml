@@ -1,0 +1,170 @@
+﻿@model SalesMetrics.Models.TaskModalViewModel
+
+@{
+    var postAction = Model.RoleId == 1 || Model.RoleId == 3 ? "UpdateFromAdmin" : "Update";
+}
+
+<form id="editTaskForm" asp-action="@postAction" asp-controller="Tasks" method="post">
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="Task.TaskID" value="@Model.Task.TaskID" />
+    <input type="hidden" name="ReturnUrl" value="@ViewBag.ReturnUrl" />
+
+    <div class="modal-header">
+        <h5 class="modal-title">Edit Task</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">
+        <div class="mb-3">
+            <label class="form-label">Title</label>
+            <input name="Task.Title" class="form-control" value="@Model.Task.Title" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Description</label>
+            <textarea name="Task.Description" class="form-control">@Model.Task.Description</textarea>
+        </div>
+
+        <div class="row">
+            <div class="mb-3 col-6">
+                <label class="form-label">Task Date</label>
+                <input type="date" class="form-control" name="Task.DueDateDate" id="dueDate" value="@Model.Task.DueDate.ToString("yyyy-MM-dd")" />
+            </div>
+            <div class="mb-3 col-6">
+                <label class="form-label">Start Time</label>
+                @* <input type="time" class="form-control" id="dueTime" value="@Model.Task.DueDate.ToString("HH:mm")" /> *@
+                <select class="form-select" id="dueTime" name="Task.DueDateTime">
+                    @{
+                        var taskTime = Model.Task.DueDate.ToString("HH:mm");
+                        for (int hour = 0; hour < 24; hour++)
+                        {
+                            foreach (int minute in new[] { 0, 30 })
+                            {
+                                var timeStr = new TimeSpan(hour, minute, 0).ToString(@"hh\:mm");
+                                <option value="@timeStr" selected="@(taskTime == timeStr)">
+                                    @DateTime.Today.AddHours(hour).AddMinutes(minute).ToString("hh:mm tt")
+                                </option>
+                            }
+                        }
+                    }
+                </select>
+
+            </div>
+            @* <span asp-validation-for="Task.DueDate" class="text-danger"></span> *@
+        </div>
+
+        <!-- Hidden field that will receive the combined datetime -->
+        <input type="hidden" name="Task.DueDate" id="dueDateTimeHidden" />
+
+        <div class="row">
+            <div class="mb-3 col-6">
+                <label class="form-label">Status</label>
+                <select name="Task.Status" class="form-select">
+                    @{
+                        var status = Model.Task.Status;
+                    }
+
+                    <option value="Assigned" selected="@(status == "Assigned")">Assigned</option>
+                    <option value="Pending" selected="@(status == "Pending")">Pending</option>
+                    <option value="In Progress" selected="@(status == "In Progress")">In Progress</option>
+                    <option value="In Review" selected="@(status == "In Review")">In Review</option>
+                    <option value="Completed" selected="@(status == "Completed")">Completed</option>
+                    <option value="Cancelled" selected="@(status == "Cancelled")">Cancelled</option>
+                </select>
+                <span asp-validation-for="Task.Status" class="text-danger"></span>
+            </div>
+            <div class="mb-3 col-6">
+                <label class="form-label">Task Type</label>
+                <select name="Task.Type" class="form-select">
+                    @{
+                        var taskType = Model.Task.Type;
+                    }
+                    <option value="Measure" selected="@(taskType == "Measure")">Measure</option>
+                    <option value="Follow Up" selected="@(taskType == "Follow Up")">Follow Up</option>
+                    <option value="QC" selected="@(taskType == "QC")">Quality Check</option>
+                    <option value="Other" selected="@(taskType == "Other")">Other</option>
+                </select>
+                <span asp-validation-for="Task.Type" class="text-danger"></span>
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Property</label>
+            <input name="Task.Property" class="form-control" value="@Model.Task.Property" />
+            <span asp-validation-for="Task.Property" class="text-danger"></span>
+        </div>
+        
+        @if (Model.RoleId == 1 || Model.RoleId == 3)
+        {
+            <div class="mb-3">
+                <label class="form-label">Assigned To</label>
+                <select name="Task.AssignedTo" class="form-select">
+                    @{
+                        var assignedTo = Model.Task.AssignedTo;
+                    }
+                         
+                    <option disabled  selected="@(assignedTo == 0)" value="">-- Select User --</option>
+                    @* <option disabled selected value="">-- Select User --</option> *@
+                    <option value="@Model.LoggedInUserId">Myself</option>
+                    @foreach (var user in Model.Users)
+                    {
+                        @*< option value="@user.UserID" @(user.UserID == Model.Task.AssignedTo ? "selected" : "")>
+                            @user.FirstName @user.LastName
+                        </option> *@
+                        <option value="@user.UserID" selected="@(assignedTo == user.UserID)">@user.FirstName @user.LastName</option>
+                    }
+                </select>
+                <span asp-validation-for="Task.AssignedTo" class="text-danger"></span>
+            </div>
+        }
+        else
+        {
+            <input type="hidden" name="Task.AssignedTo" value="@Model.LoggedInUserId" />
+            <p class="form-control-plaintext text-muted">Assigned to You</p>
+        }
+
+    </div>
+
+    @* <script>
+        document.querySelector('form').addEventListener('submit', function (e) {
+            const date = document.getElementById('dueDate').value;
+            const time = document.getElementById('dueTime').value;
+
+            if (date && time) {
+                const combined = `${date} ${time}`; // "yyyy-MM-dd HH:mm"
+                document.getElementById('dueDateTimeHidden').value = combined;
+                Console.WriteLine("🕒 Received DueDate: " + updatedTask.DueDate.ToString("yyyy-MM-dd HH:mm:ss"));
+
+            }
+        });
+    </script> *@
+    @* <script>
+        const form = document.getElementById('editTaskForm');
+
+        form.addEventListener('submit', function (e) {
+            e.preventDefault(); // prevent immediate submission
+
+            const date = document.getElementById('dueDate').value;
+            const time = document.getElementById('dueTime').value;
+
+            if (date && time) {
+                const combined = new Date(`${date}T${time}`);
+                const isoString = combined.toISOString();
+                document.getElementById('dueDateTimeHidden').value = isoString;
+
+                // small delay to ensure value is set before submit
+                setTimeout(() => form.submit(), 10);
+            } else {
+                // fallback to now if missing
+                document.getElementById('dueDateTimeHidden').value = new Date().toISOString();
+                setTimeout(() => form.submit(), 10);
+            }
+        });
+    </script> *@
+
+
+
+    <div class="modal-footer">
+        <button type="submit" class="btn btn-success">Save Changes</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+    </div>
+</form>

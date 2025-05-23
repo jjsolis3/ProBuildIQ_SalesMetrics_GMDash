@@ -1,0 +1,143 @@
+﻿@model SalesMetrics.Models.RegisterViewModel
+
+@{
+    ViewBag.Title = "register";
+    Layout = "~/Views/Shared/AuthLayout.cshtml";
+}
+
+<div class="container-fluid authentication-bg overflow-hidden">
+    <div class="bg-overlay"></div>
+    <div class="row align-items-center justify-content-center min-vh-100">
+        <div class="col-6"> @* col-md-6 col-lg-4 col-xxl-3"> *@
+            <div class="card mb-0">
+                <div class="card-body">
+                    <div class="text-center">
+                        <div>
+                            <a href="index.html" class="logo-dark">
+                                <img src="~/assets/images/logo-dark.png" alt="" height="50" class="auth-logo logo-dark mx-auto">
+                            </a>
+                            <a href="index.html" class="logo-light">
+                                <img src="~/assets/images/logo-light.png" alt="" height="50" class="auth-logo logo-light mx-auto">
+                            </a>
+                        </div>
+
+                        <h4 class="font-size-18 mt-4">Register account</h4>
+                    </div>
+                    <div class="p-2 mt-5">
+                        <form asp-action="Register" asp-controller="Auth" method="post">
+                            <div class="row">
+                                <div class="col-6">
+                                    <div class="input-group auth-form-group-custom mb-3">
+                                        <span class="input-group-text bg-primary bg-opacity-10 fs-16 " id="basic-addon1"><i class="mdi mdi-card-account-details-outline auti-custom-input-icon"></i></span>
+                                        <input asp-for="FirstName" type="text" class="form-control" id="userfirstname" placeholder="Enter First name" aria-label="Firstname" aria-describedby="basic-addon1" />
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="input-group auth-form-group-custom mb-3">
+                                        <span class="input-group-text bg-primary bg-opacity-10 fs-16" id="basic-addon2"><i class="mdi mdi-card-account-details-outline auti-custom-input-icon"></i></span>
+                                        <input asp-for="LastName" type="text" class="form-control" id="userlastname" placeholder="Enter Last name" aria-label="Lastname" aria-describedby="basic-addon2">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-6">
+                                    <div class="input-group auth-form-group-custom mb-3">
+                                        <span class="input-group-text bg-primary bg-opacity-10 fs-16 " id="basic-addon3"><i class="mdi mdi-account-outline auti-custom-input-icon"></i></span>
+                                        <input asp-for="Username" type="text" class="form-control" id="username" placeholder="Enter username" aria-label="Username" aria-describedby="basic-addon3" />
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="input-group auth-form-group-custom mb-3">
+                                        <span class="input-group-text bg-primary bg-opacity-10 fs-16" id="basic-addon4"><i class="mdi mdi-lock-outline auti-custom-input-icon"></i></span>
+                                        <input asp-for="Password" type="text" class="form-control" id="userpassword" placeholder="Enter password" aria-label="Password" aria-describedby="basic-addon4">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="input-group auth-form-group-custom mb-3">
+                                <span class="input-group-text bg-primary bg-opacity-10 fs-16 " id="basic-addon5"><i class="mdi mdi-email-outline auti-custom-input-icon"></i></span>
+                                <input asp-for="Email" type="email" class="form-control" id="useremail" placeholder="Enter email" aria-label="email" aria-describedby="basic-addon5">
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-6">
+                                    <div class="input-group auth-form-group-custom mb-3">
+                                        <span class="input-group-text bg-primary bg-opacity-10 fs-16 " id="basic-addon6"><i class="mdi mdi-account-group-outline auti-custom-input-icon"></i></span>
+                                        <select asp-for="RoleId" class="form-control" required>
+                                            <option value="">Select Role</option>
+                                            <option value="1">ADMIN</option>
+                                            <option value="2">SALES</option>
+                                            <option value="3">SALES ADMIN</option>
+                                            <option value="4">OFFICE</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="input-group auth-form-group-custom mb-3">
+                                        <span class="input-group-text bg-primary bg-opacity-10 fs-16 " id="basic-addon6"><i class="mdi mdi-office-building-outline auti-custom-input-icon"></i></span>
+                                        <select asp-for="LocationId" class="form-control" required>
+                                            <option value="">Select Office</option>
+                                            <option value="1">Los Angeles</option>
+                                            <option value="2">Las Vegas</option>
+                                            <option value="3">Chino</option>
+                                            <option value="4">Phoenix</option>
+                                            <option value="5">San Diego</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-6">
+                                    <div class="input-group auth-form-group-custom mb-3">
+                                        <span class="input-group-text bg-primary bg-opacity-10 fs-16 " id="basic-addon4"><i class="mdi mdi-account-outline auti-custom-input-icon"></i></span>
+                                        <input asp-for="SalesmanId" class="form-control" placeholder="Salesman ID (optional)" />
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="input-group auth-form-group-custom mb-3">
+                                        <span class="input-group-text bg-primary bg-opacity-10 fs-16 " id="basic-addon4"><i class="mdi mdi-account-outline auti-custom-input-icon"></i></span>
+                                        <input asp-for="SalesmanNumber" class="form-control" placeholder="Salesman Number (optional)" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mb-5">
+                                <div class="form-check float-start">
+                                    <input type="checkbox" class="form-check-input" id="customControlInline">
+                                    <label class="form-check-label" for="customControlInline">I agree to all Terms and Condition</label>
+                                </div>
+                            </div>
+
+                            <div class="text-center pt-3">
+                                <button class="btn btn-primary w-xl waves-effect waves-light fs-4" type="submit">Register</button>
+                            </div>
+
+                            <div class="mt-4 text-center">
+                                <div class="signin-other-title position-relative">
+                                    <h5 class="mb-0 title">or</h5>
+                                </div>
+                                <div class="mt-4 pt-1 hstack gap-3">
+                                    <div class="vstack gap-2">
+                                        <button type="button" class="btn btn-label-danger d-block"><i class="ri-google-fill fs-18 align-middle me-2"></i>Sign in with google</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="mt-5 text-center">
+                        <p>
+                            ©
+                            <script>document.write(new Date().getFullYear())</script> ProBuildIQ SalesMetrics. Crafted by 774FxEnt
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+@section scripts{
+
+    <script src="~/assets/js/app.js"></script>
+}
+

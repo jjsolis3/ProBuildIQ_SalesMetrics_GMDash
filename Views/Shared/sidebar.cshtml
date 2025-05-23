@@ -1,0 +1,138 @@
+﻿@{
+    var roleId = Context.Session.GetString("RoleId");
+}
+
+<!-- ========== Left Sidebar Start ========== -->
+<div class="sidebar-left">
+
+    <div data-simplebar class="h-100">
+
+        <!--- Sidebar-menu -->
+        <div id="sidebar-menu">
+            <!-- Left Menu Start -->
+            <ul class="left-menu list-unstyled" id="side-menu">
+                @if(roleId == "1" || roleId == "4")
+                {
+                    <li class="menu-title">📊 GENERAL MGR</li>
+                    <li class="ms-3">
+                        <a href="/GM/Index">
+                            <i class="fas fa-chart-line"></i>
+                            <span>Executive Dashboard</span>
+                        </a>
+                    </li>
+                }
+                <!-- DASHBOARD -->
+                <li class="menu-title">📈 DASHBOARD</li>
+                <li class="ms-3">
+                    <a href="/Dashboard/Index">
+                        <i class="fas fa-chart-line"></i>
+                        <span>Dashboard</span>
+                    </a>
+                </li>
+                <!-- SALES ACTIVITIES -->
+                <li class="menu-title">📋 TASKS</li>
+                @if (roleId == "1" || roleId == "3")
+                {   
+                    <li class="ms-3">
+                        <a href="/Tasks/AdminTask">
+                            <i class="fa fa-clipboard-check"></i>
+                            <span>View All Tasks</span>
+                        </a>
+                    </li>
+                }
+                <li class="ms-3">
+                    <a href="/Tasks/Task">
+                        <i class="fa fa-tasks"></i>
+                        <span>My Tasks</span>
+                    </a>
+                </li>
+                <li class="ms-3">
+                    <a href="/Tasks/Schedule">
+                        <i class="fa fa-calendar"></i>
+                        <span>Calendar</span>
+                    </a>
+                </li>
+                <li class="ms-3">
+                    <a href="/Journal/Index">
+                        <i class="fa fa-book"></i>
+                        <span>My Journal</span>
+                    </a>
+                </li>
+                @if (roleId == "1")
+                {
+                    <li class="ms-3">
+                        <a href="/Tasks/TaskKanban">
+                            <i class="fa fa-clipboard-list"></i>
+                            <span>Task Manger</span>
+                        </a>
+                    </li>
+                }
+                <li class="menu-title">🗓️ JOB SCHEDULE</li>
+                <li class="ms-3">
+                    <a href="/Orders/Orders">
+                        <i class="fa fa-truck"></i>
+                        <span>Work Orders</span>
+                    </a>
+                </li>
+
+                <!-- SALES PROPERTIES -->
+                <li class="menu-title">🏢 PROPERTIES</li>
+                <li class="ms-3">
+                    <a href="/Sales/Properties">
+                        <i class="fa fa-building"></i>
+                        <span>Properties</span>
+                    </a>
+                </li>
+
+                <!-- PROSPECTING (YARDI) -->
+                <li class="menu-title">💼 PROSPECTING</li>
+                <li class="ms-3">
+                    <a href="/Yardi/YardiProperties">
+                        <i class="fa fa-building"></i>
+                        <span>Yardi Properties</span>
+                    </a>
+                </li>                
+
+                <!-- User / Profile -->
+                <li class="menu-title">👤 Account</li>
+                <li class="ms-3">
+                    <a href="/Accounts/Profile">
+                        <i class="fa fa-user"></i>
+                        <span>Profile</span>
+                    </a>
+                </li>
+                @if (roleId == "1")
+                {
+                    <!-- Reporting & Analytics -->
+                    <li class="menu-title">📈 Reports</li>
+                    <li class="ms-3">
+                        <a href="#">
+                            <i class="fa fa-chart-line"></i>
+                            <span>Reports</span>
+                        </a>
+                    </li>
+                }
+                @if (roleId == "1")
+                {
+                    <!-- Admin / Settings -->
+                    <li class="menu-title">⚙️ Admin / Settings</li>
+                    <li class="ms-3">
+                        <a href="/Accounts/Index">
+                            <i class="fa fa-user-cog"></i>
+                            <span>Access Controls</span>
+                        </a>
+                    </li>
+                    <li class="ms-3">
+                        <a href="/Yardi/Upload">
+                            <i class="fa fa-upload"></i>
+                            <span>Yardi Upload</span>
+                        </a>
+                    </li>
+                }
+
+            </ul>
+        </div>
+        <!-- Sidebar -->
+    </div>
+</div>
+<!-- Left Sidebar End -->

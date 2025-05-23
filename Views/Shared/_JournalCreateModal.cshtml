@@ -1,0 +1,32 @@
+﻿@model SalesMetrics.Models.Journal.JournalEntry
+
+<div class="modal fade" id="createJournalModal" tabindex="-1" aria-labelledby="createJournalModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form asp-controller="Journal" asp-action="Create" method="post">
+                <div class="modal-header">
+                    <h5 class="modal-title text-orange">New Journal Entry</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label asp-for="Title" class="form-label">Title</label>
+                        <input asp-for="Title" class="form-control" />
+                    </div>
+                    <div class="mb-3">
+                        <label asp-for="NoteText" class="form-label">Note</label>
+                        <textarea asp-for="NoteText" class="form-control" rows="5"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label asp-for="EntryDate" class="form-label">Date</label>
+                        <input asp-for="EntryDate" type="datetime-local" class="form-control" value="@DateTime.Now.ToString("yyyy-MM-ddTHH:mm")" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-success">Save</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

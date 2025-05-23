@@ -1,0 +1,1126 @@
+﻿@{
+    ViewBag.Title = "Dashboard";
+    ViewBag.pTitle = "Sales Metrics";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+
+    var salesData = ViewBag.SalesData as Dictionary<string, object>;
+}
+
+@section styles {
+    <!-- DataTables -->
+    <link href="~/assets/libs/datatables.net-bs5/css/dataTables.bootstrap5.min.css" rel="stylesheet" type="text/css" />
+
+    <link href="~/assets/libs/bootstrap-datepicker/css/bootstrap-datepicker.min.css" rel="stylesheet">
+
+    <!-- buttons datatable -->
+    <link href="~/assets/libs/datatables.net-buttons-bs5/css/buttons.bootstrap5.min.css" rel="stylesheet" type="text/css" />
+
+    <!-- Responsive datatable examples -->
+    <link href="~/assets/libs/datatables.net-responsive-bs5/css/responsive.bootstrap5.min.css" rel="stylesheet" type="text/css" />
+
+    <style>
+        .daily-task-card {
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        .btn-bg-orange {
+            color: darkorange;
+        }
+    </style>
+}
+
+<input type="hidden" id="CurrentRoleId" value="@ViewBag.RoleId" />
+<input type="hidden" id="CurrentUserId" value="@ViewBag.UserId" />
+
+<div class="row">
+    <div class="col-3">
+        <div class="page-title-box d-flex align-items-center justify-content-between">
+            <div>
+                <h4 class="fs-16 fw-semibold mb-1 mb-md-2">
+                    @ViewBag.Greeting, <span class="text-primary">@ViewBag.Username!</span>
+                </h4>
+                <p class="text-muted mb-0">Here's what's happening with your sales today.</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-3">
+        <!-- 🔥 Filter Row (Dropdown + Toggle) -->
+        <div class="row mb-3 align-items-center">
+
+            @if (ViewBag.RoleId == 1 || ViewBag.RoleId == 3)
+            {
+                <!-- Admin/SalesAdmin: User Filter -->
+                <div class="col-auto">
+                    <label for="userFilter" class="form-label fw-bold mb-1">Filter by User:</label>
+                    <select id="userFilter" class="form-select fw-bold" style="min-width: 200px;">
+                        <option value="">All Users</option>
+                        @foreach (var user in (List<User>)ViewBag.Users)
+                        {
+                            <option class="fw-bold" value="@user.SalesmanID">@($"{user.FirstName} {user.LastName}")</option>
+                        }
+                    </select>
+                </div>
+            }
+
+        </div>
+    </div>    
+    <div class="col-4">
+        <div class="row mb-2">
+            <p class="mb-0 text-muted">Select Date Range for Dashboard Data</p>
+            <div class="col-sm-7">
+                <select class="form-select" id="quickRangeSelector">
+                    <option value="0" selected="@(ViewBag.SelectedRangeType == 0 ? "selected" : null)">Current Month</option>
+                    <option value="1" selected="@(ViewBag.SelectedRangeType == 1 ? "selected" : null)">Last Month</option>
+                    <option value="2" selected="@(ViewBag.SelectedRangeType == 2 ? "selected" : null)">Start of Last Quarter</option>
+                    <option value="3" selected="@(ViewBag.SelectedRangeType == 3 ? "selected" : null)">Start of This Year</option>
+                    <option value="4" selected="@(ViewBag.SelectedRangeType == 4 ? "selected" : null)">Start of Last Year</option>
+                </select>
+            </div>
+            <div class="col-sm-5 d-flex align-items-center">
+                <button id="applyQuickRange" class="btn btn-primary w-100">Apply</button>
+            </div>
+        </div>
+    </div>
+    <div class="col-2 align-items-center">
+        <div class="col-sm-12 mt-1 ">
+            <p id="selectedRangeLabel" class="text-dark fs-5 text-center">
+                Selected Range: <br/><strong>@ViewBag.StartDate</strong> to <strong>@ViewBag.EndDate</strong>
+            </p>
+        </div>
+    </div>
+</div>
+
+<!-- Top Row: Total Sales, Total Due, MTD, YTD -->
+<div class="row">
+    <!-- MTD Ranking -->
+    <div class="col-md-3">
+        <div class="card shadow">
+            <div class="card-header">
+                <h5 class="mb-0">MTD Ranking <span class="badge bg-info ms-2">@ViewBag.MTDRange</span></h5>
+            </div>
+            <div class="card-body table-responsive p-2">
+                @{
+                    var mtd = ViewBag.MTDRanking as List<SalesMetrics.Models.SalesRanking>;
+                    int mtdRank = 1;
+                }
+                <table class="table table-sm table-bordered mb-0">
+                    <thead>
+                        <tr><th>#</th><th>Salesperson</th><th>Amount</th></tr>
+                    </thead>
+                    <tbody>
+                        @if (mtd != null && mtd.Any())
+                        {
+                            foreach (var person in mtd)
+                            {
+                                <tr>
+                                    <td>@mtdRank</td>
+                                    <td>@person.SalespersonName</td>
+                                    <td>@person.MTDSales.ToString("C")</td>
+                                </tr>
+                                mtdRank++;
+                            }
+                        }
+                        else
+                        {
+                            <tr><td colspan="3" class="text-center">No data</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- YTD Ranking -->
+    <div class="col-md-3">
+        <div class="card shadow">
+            <div class="card-header">
+                <h5 class="mb-0">YTD Ranking <span class="badge bg-info ms-2">@ViewBag.YTDRange</span></h5>
+            </div>
+            <div class="card-body table-responsive p-2">
+                @{
+                    var ytd = ViewBag.YTDRanking as List<SalesMetrics.Models.SalesRanking>;
+                    int ytdRank = 1;
+                }
+                <table class="table table-sm table-bordered mb-0">
+                    <thead>
+                        <tr><th>#</th><th>Salesperson</th><th>Amount</th></tr>
+                    </thead>
+                    <tbody>
+                        @if (ytd != null && ytd.Any())
+                        {
+                            foreach (var person in ytd)
+                            {
+                                <tr>
+                                    <td>@ytdRank</td>
+                                    <td>@person.SalespersonName</td>
+                                    <td>@person.YTDSales.ToString("C")</td>
+                                </tr>
+                                ytdRank++;
+                            }
+                        }
+                        else
+                        {
+                            <tr><td colspan="3" class="text-center">No data</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Columns 1 -->
+    <div class="col-md-3">
+        <!-- Total Sales -->
+        <div class="col-md-12 mt-3">
+            <div class="shadow-lg p-3 rounded" style="background-color: darkorange">
+                <p class="text-white text-truncate mb-2">Total Sales</p>
+                <h3 class="mb-0 text-white">$@Convert.ToDecimal(salesData["TotalSales"]).ToString("N2")</h3>
+            </div>
+        </div>
+        <!-- Total Invoices -->
+        <div class="col-md-12 mt-3">
+            <div class="shadow-lg p-3 rounded" style="background-color: darkorange">
+                <p class="text-white text-truncate mb-2">Total Invoices</p>
+                <h3 class="mb-0 text-white">@Convert.ToInt32(salesData["TotalInvoices"]).ToString("N0")</h3>
+            </div>
+        </div>
+    </div>
+
+    <!-- Columns 2 -->
+    <div class="col-md-3">
+        <!-- Total Due -->
+        <div class="col-md-12 mt-3">
+            <div class="shadow-lg p-3 rounded" style="background-color: darkorange">
+                <p class="text-white text-truncate mb-2">Total Due</p>
+                <h3 class="mb-0 text-white">$@Convert.ToDecimal(salesData["AmountDue"]).ToString("N2")</h3>
+            </div>
+        </div>
+        <!-- Active Properties -->
+        <div class="col-md-12 mt-3">
+            <div class="shadow-lg p-3 rounded" style="background-color: darkorange">
+                <p class="text-white text-truncate mb-2">Active Properties</p>
+                <h3 class="mb-0 text-white">@Convert.ToInt32(salesData["PropertyCount"]).ToString("N0")</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Daily Task, Weekly Orders, Receivable Risk Summary -->
+<div class="row">
+    <!-- Daily Task Placeholder or Card -->
+    <div class="col-xl-4">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title mb-0">Daily Tasks</h4>
+            </div>
+            <div class="card-body">
+                @{
+                    var todayTasks = ViewBag.TodayTasks as List<SalesMetrics.Models.SalesTask>;
+                }
+
+                @if (todayTasks != null && todayTasks.Any())
+                {
+                    <ul class="list-group list-group-flush">
+                        @foreach (var task in todayTasks)
+                        {
+                            <li class="list-group-item">
+                                <div class="card mb-0 p-0 shadow-sm">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div>
+                                            <h6 class="fw-bold">@task.Title</h6>
+                                            <p class="mb-1 small text-muted">
+                                                <i class="far fa-clock me-1"></i> @task.DueDate?.ToString("hh:mm tt") |
+                                                <i class="fas fa-calendar-day me-1"></i> @task.DueDate?.ToString("MMM dd, yyyy")
+                                            </p>
+                                        </div>
+                                        <div class="text-end">
+                                            <span class="badge bg-success">@task.Status</span>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div>
+                                            <p class="mb-1"><strong>Property:</strong> <span class="badge bg-info text-white me-1"><i class="fas fa-map-marker-alt me-1"></i>@task.Property</span></p>
+
+                                            @if (!string.IsNullOrEmpty(task.CreatedBy))
+                                            {
+                                                <p class="mb-1">
+                                                    <strong>Created By:</strong>
+                                                    <span class="badge bg-secondary text-white me-1">
+                                                        <i class="fas fa-user-circle me-1"></i>@task.CreatedBy
+                                                    </span>
+                                                </p>
+                                            }
+                                        </div>
+                                        <div>
+                                            <p class="mb-1"><strong>Type:</strong> <span class="badge bg-light text-dark me-1"><i class="fas fa-tag me-1"></i>@task.Type</span></p>
+                                        </div>
+                                    </div>
+                                    <a href="javascript:void(0);"
+                                       class="stretched-link daily-task-card"
+                                       data-task-id="@task.TaskID"
+                                       data-bs-toggle="modal"
+                                       data-bs-target="#editTaskModal">
+                                    </a>
+
+                                </div>
+                            </li>
+                        }
+                    </ul>
+                }
+                else
+                {
+                    <p class="text-muted">No tasks scheduled for today.</p>
+                }
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Weekly Orders Bar Graph -->
+    <div class="col-xl-3">
+        <div class="card">
+            <div class="card-header">
+                <div class="row align-items-center w-100">
+                    <!-- Left: Title -->
+                    <div class="col-md-4 col-sm-12">
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="card-icon">
+                                <i class="fas fa-layer-group fs-14 text-muted me-1"></i>
+                            </div>
+                            <h4 class="card-title mb-0">Orders</h4>
+                        </div>
+                    </div>
+
+                    <!-- Center: Date Range -->
+                    <div class="col-md-4 col-sm-12 text-center">
+                        <span class="text-muted fw-medium fs-6 fw-bold ">
+                            @(((DateTime)ViewBag.WeeklyStart).ToString("M/d")) to @(((DateTime)ViewBag.WeeklyEnd).ToString("M/d"))
+                        </span>
+                    </div>
+
+                    <!-- Right: Select Week -->
+                    <div class="col-md-4 col-sm-12 text-end">
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-outline-primary dropdown-toggle" type="button" id="weekFilterBtn" data-bs-toggle="dropdown">
+                                Select Week
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="weekFilterBtn">
+                                <li><a class="dropdown-item week-range-option @(ViewBag.WeekOffset == 0 ? "active" : "")" data-offset="0">This Week</a></li>
+                                <li><a class="dropdown-item week-range-option @(ViewBag.WeekOffset == -1 ? "active" : "")" data-offset="-1">Last Week</a></li>
+                                <li><a class="dropdown-item week-range-option @(ViewBag.WeekOffset == 1 ? "active" : "")" data-offset="1">Next Week</a></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card-body">
+                @{
+                    var daysOfWeek = new[] { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
+                    var weeklyOrders = ViewBag.WeeklyOrders as List<DailyOrderCount>;
+                    var maxOrders = weeklyOrders != null && weeklyOrders.Any() ? weeklyOrders.Max(o => o.OrdersCount) : 1;
+                    var totalOrders = weeklyOrders?.Sum(o => o.OrdersCount) ?? 1;
+
+                    var dayColors = new Dictionary<string, string>
+                    {
+                        { "Sunday", "bg-danger" },
+                        { "Monday", "bg-primary" },
+                        { "Tuesday", "bg-success" },
+                        { "Wednesday", "bg-info" },
+                        { "Thursday", "bg-warning" },
+                        { "Friday", "bg-secondary" },
+                        { "Saturday", "bg-dark" }
+                    };
+                }
+
+                <div class="d-grid gap-3 fs-6">
+                    @foreach (var day in daysOfWeek)
+                    {
+                        var order = weeklyOrders?.FirstOrDefault(o => o.WeekdayName == day);
+                        var percentage = order != null && totalOrders > 0 ? (int)(((double)order.OrdersCount / totalOrders) * 100) : 0;
+                        var barWidth = order != null && maxOrders > 0 ? (int)(((double)order.OrdersCount / maxOrders) * 100) : 0;
+                        var barColor = dayColors.ContainsKey(day) ? dayColors[day] : "bg-primary";
+
+                        <div class="mb-1">
+                            <div class="d-flex justify-content-between">
+                                @* <span class="text-muted">@order?.OrdersCount (@percentage%)</span> *@
+                                <span class="text-muted">@((order?.OrdersCount ?? 0) + " (" + percentage + "%)")</span>
+                                <a href="#" class="text-muted day-link" data-day="@day">@day</a>
+
+                            </div>
+                            <div class="progress" style="height: 6px;">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated @barColor" style="width: @barWidth%;"></div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Receivable Risk Summary -->
+    <div class="col-xl-5">
+        <div class="card">
+            <div class="card-header justify-content-between">
+                <div class="card-icon text-muted"><i class="fas fa-sort-amount-up fs-14"></i></div>
+                <h4 class="card-title">Receivable Risk Summary</h4>
+                <div class="card-addon dropdown">
+                    @* <button class="btn btn-label-primary py-0 btn-sm dropdown-toggle" data-bs-toggle="dropdown">Option</button>
+                    <div class="dropdown-menu dropdown-menu-end dropdown-menu-animated">
+                        <a class="dropdown-item" href="#"><i class="fa fa-poll me-2"></i>Report</a>
+                        <a class="dropdown-item" href="#"><i class="fa fa-chart-pie me-2"></i>Charts</a>
+                        <a class="dropdown-item" href="#"><i class="fa fa-chart-line me-2"></i>Statistics</a>
+                        <div class="dropdown-divider"></div>
+                        <a class="dropdown-item" href="#"><i class="fa fa-cog me-2"></i>Settings</a>
+                    </div> *@
+                </div>
+            </div>
+            <div class="card-body">
+                @{
+                    var summary = ViewBag.TransactionSummary as TransactionSummary;
+                }
+                <div class="border-bottom text-center pb-3">
+                    <div class="d-flex align-items-center justify-content-center">
+                        <span class="text-primary fs-24 me-2"><i class="fas fa-file-invoice"></i></span>
+                        <h4 class="display-5 mb-0">@summary?.PendingInvoices</h4>
+                    </div>
+                    <p class="text-muted mb-0">Total Unpaid Invoices</p>
+                </div>
+                <div class="d-flex justify-content-between py-3">
+                    <p class="text-muted fs-5 mb-0">Invoice Aging details</p>
+                </div>
+                <div class="hstack gap-4 justify-content-center pb-3">
+                    <div class="text-center">
+                        <div class="d-flex align-items-center justify-content-center">
+                            <span class="text-info fs-22 me-2"><i class="fas fa-exclamation-circle"></i></span>
+                            <h4 class="display-6 mb-0">@summary?.Due30to60</h4>
+                        </div>
+                        <p class="text-muted mb-0">30-60 Days</p>
+                    </div>
+                    <div class="text-center">
+                        <div class="d-flex align-items-center justify-content-center">
+                            <span class="text-warning fs-22 me-2"><i class="fas fa-exclamation-triangle"></i></span>
+                            <h4 class="display-6 mb-0">@summary?.Due60to90</h4>
+                        </div>
+                        <p class="text-muted mb-0">60-90 Days</p>
+                    </div>
+                    <div class="text-center">
+                        <div class="d-flex align-items-center justify-content-center">
+                            <span class="text-danger fs-22 me-2"><i class="fas fa-radiation"></i></span>
+                            <h4 class="display-6 mb-0">@summary?.Due90to120</h4>
+                        </div>
+                        <p class="text-muted mb-0">90-120 Days</p>
+                    </div>
+                    @if (summary != null && summary.DueOver120 != 0)
+                    {
+                        <div class="text-center">
+                            <div class="d-flex align-items-center justify-content-center">
+                                <span class="text-danger fs-22 me-2">
+                                    <img src="~/assets/images/dog-house.png" alt="Delinquent" class="icon-img ms-1" />
+                                </span>
+                                <h4 class="display-6 mb-0">@summary.DueOver120</h4>
+                            </div>
+                            <p class="text-muted mb-0">Over 120 Days</p>
+                        </div>
+                    }
+                </div>
+                <div>
+                    @foreach (var customer in summary?.TopDelinquentCustomers ?? new List<CustomerOutstanding>())
+                    {
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <h5 class="fs-6 mb-0"><i class="fas fa-user text-danger me-2"></i>@customer.CustomerName</h5>
+                            <p class="text-muted mb-0">@customer.OutstandingAmount.ToString("C")</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Inactive Customers Table -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title mb-0">Inactive Customers (No Orders in 30-480 Days)</h4>
+            </div>
+            <div class="card-body">
+                @if (ViewBag.RoleId == 1 || ViewBag.RoleId == 3)
+                {
+                    <div id="repFilterWrapper" class="mb-3 d-flex justify-content-end align-items-center">
+                        <label for="repFilter" class="me-2 mb-0"><strong>Filter by Salesperson:</strong></label>
+                        <select id="repFilter" class="form-select w-auto">
+                            <option value="">All Reps</option>
+                            @foreach (var user in ViewBag.Users as List<SalesMetrics.Models.User>)
+                            {
+                                <option value="@($"{user.FirstName} {user.LastName}")">@user.FirstName @user.LastName</option>
+                            }
+                        </select>
+                    </div>
+                }
+                <table id="inactive-customers-table" class="table table-hover table-bordered dt-responsive nowrap w-100">
+                    <thead>
+                        <tr>
+                            <th>Customer #</th>
+                            <th>Property Name</th>
+                            <th>Mgmt Co</th>
+                            <th># Units</th>
+                            <th>Last Order</th>
+                            <th>Last Install</th>
+                            <th>YTD (This)</th>
+                            <th>YTD (Last)</th>
+                            <th>Balance</th>
+                            <th>Salesperson</th>
+                            <th>Established</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var cust in ViewBag.InactiveCustomers as List<SalesMetrics.Models.InactiveCustomerViewModel>)
+                        {
+                            <tr>
+                                <td>@cust.CustomerNumber</td>
+                                <td>@cust.CustomerName</td>
+                                <td>@cust.MgmtCo</td>
+                                <td>@cust.Units</td>
+                                <td data-order="@cust.LastOrderDate?.ToString("yyyy-MM-ddTHH:mm:ss")">@(cust.LastOrderDate?.ToString("g") ?? "N.A")</td>
+                                <td data-order="@cust.LastInstallDate?.ToString("yyyy-MM-ddTHH:mm:ss")">@(cust.LastInstallDate?.ToString("g") ?? "N/A")</td>
+                                <td>@cust.YTDCurrent.ToString("C")</td>
+                                <td>@cust.YTDPrevious.ToString("C")</td>
+                                <td>@cust.Balance.ToString("C")</td>
+                                <td>@cust.Salesperson</td>
+                                <td data-order="@cust.EstablishedDate?.ToString("yyyy-MM-ddTHH:mm:ss")">@cust.EstablishedDate?.ToString("MM/dd/yyyy")</td>
+                                <td>
+                                    <button class="btn btn-sm btn-orange create-task-from-inactive"
+                                            data-property="@cust.CustomerName"
+                                            data-id="@cust.CustomerNumber"
+                                            data-days="@cust.DaysSinceLastOrder">
+                                        Create Task
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- AR Invoice Aging (Account Receivables Table) -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title mb-0">AR - Invoices Past Due-Date</h4>
+            </div>
+            <div class="card-body">
+                <table id="ar_table" class="table table-hover table-bordered table-striped dt-responsive nowrap" style="border-collapse: collapse; border-spacing: 0; width: 100%;">
+                    <thead>
+                        <tr>
+                            <th>Invoice #</th>
+                            <th>Property</th>
+                            <th>Mgmt Co</th>
+                            <th>Amount</th>
+                            <th>Due Date</th>
+                            @if (ViewBag.roleId == 1 || ViewBag.roleId == 3) {
+                                <th>Salesperson</th>
+                            }
+                            <th>Aging</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var invoice in ViewBag.OverdueInvoices as List<SalesMetrics.Models.OverdueInvoice>)
+                        {
+                            <tr>
+                                <td>
+                                    <a href="javascript:void(0);" 
+                                        class="view-order-details fw-semibold" 
+                                        data-invoice="@invoice.Invoice" 
+                                        data-bs-toggle="modal" 
+                                        data-bs-target="#orderDetailsModal">
+                                        <i class="fas fa-file-invoice me-1 text-primary"></i> @invoice.Invoice
+                                    </a>
+                                </td>
+                                <td>@invoice.CustomerName</td>
+                                <td>@invoice.MgmtCo</td>
+                                <td>@String.Format("{0:C}", invoice.OutstandingAmount)</td>
+                                <td data-order="@invoice.DueDate.ToString("yyyy-MM-ddTHH:mm:ss")">@invoice.DueDate.ToString("g")</td>
+                                @if (ViewBag.RoleId == 1 || ViewBag.RoleId == 3)
+                                {
+                                    <td>@invoice.Salesperson</td>
+                                }
+                                <td>
+                                    @if (invoice.InvoiceAging == "30 to 60 Days")
+                                    {
+                                        <span class="badge bg-secondary">30–60 Days</span>
+                                    }
+                                    else if (invoice.InvoiceAging == "60 to 90 Days")
+                                    {
+                                        <span class="badge bg-info">60–90 Days</span>
+                                    }
+                                    else if (invoice.InvoiceAging == "90 to 120 Days")
+                                    {
+                                        <span class="badge bg-warning">90 to 120 Days</span>
+                                    }
+                                    else if (invoice.InvoiceAging == "Over 120 Days")
+                                    {
+                                        <span class="badge bg-danger">120+ Days</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-primary">@invoice.InvoiceAging</span>
+                                    }
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-orange create-ar-task"
+                                            data-customer="@invoice.CustomerName"
+                                            data-invoice="@invoice.Invoice"
+                                            data-balance="@invoice.OutstandingAmount">
+                                        Create Task
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end row -->
+<!-- AR INVOICE MODAL -->
+<div class="modal fade" id="orderDetailsModal" tabindex="-1" role="dialog" aria-labelledby="orderDetailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="orderDetailsModalLabel">Order Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="modalContent">
+                    <!-- Dynamic order details go here -->
+                    <div class="text-center text-muted">Loading order details...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- JOB SCHEDULE MODAL -->
+<div class="modal fade" id="workOrderModal" tabindex="-1" aria-labelledby="workOrderModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="workOrderModalLabel">Work Orders for <span id="modalDayTitle"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <table id="workOrdersTable" class="table table-striped w-100">
+                    <thead>
+                        <tr>
+                            <th>Order #</th>
+                            <th>Property Name</th>
+                            <th>City</th>
+                            <th>Order Type</th>
+                            <th>Qty</th>
+                            <th>Unit</th>
+                            <th>Type</th>
+                            <th>Delivery Date</th>
+                            <th>Product Class</th>
+                            <th>Description</th>
+                            <th>Ordered By</th>
+                            <th>Management</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- Clean Task Modal (Replaced) -->
+<div class="modal fade" id="taskModal" tabindex="-1" aria-labelledby="taskModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable">
+        <form id="taskForm" method="post">
+            <div class="modal-content">
+                @* @Html.AntiForgeryToken() *@
+                <div class="modal-body">
+                    <input type="hidden" name="PropertyID" id="PropertyID" />
+
+                    <div class="form-group">
+                        <label for="Title">Title</label>
+                        <input type="text" name="Title" id="Title" class="form-control" />
+                    </div>
+                    <div class="form-group">
+                        <label for="Description">Description</label>
+                        <textarea name="Description" id="Description" class="form-control"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="DueDate">Due Date</label>
+                        <input type="datetime-local" name="DueDate" id="DueDate" class="form-control" />
+                    </div>
+                    <div class="form-group">
+                        <label for="Type">Type</label>
+                        <select name="Type" id="Type" class="form-control">
+                            <option value="Follow Up">Follow Up</option>
+                            <option value="Site Visit" selected>Site Visit</option>
+                            <option value="Quality Check">QC Visit</option>
+                            <option value="Walkthrough">Walkthrough w/ Manager</option>
+                            <option value="Email">Email</option>
+                            <option value="Phone Call">Phone Call</option>
+                            <option value="Escalation">Escalation</option>
+                            <option value="AR Follow Up">AR Follow-Up</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="Property">Property</label>
+                        <input type="text" name="Property" id="Property" class="form-control" readonly />
+                    </div>
+                    <div class="form-group">
+                        <label for="Status">Status</label>
+                        <select name="Status" id="Status" class="form-control">
+                            <option value="Pending" selected>Pending</option>
+                            <option value="In Progress">In Progress</option>
+                            <option value="In Review">In Review</option>
+                            <option value="Completed">Completed</option>
+                        </select>
+                    </div>
+                    @if (ViewBag.RoleId == 2)
+                    {
+                        <div class="form-group">
+                            <label>Assigned To:</label>
+                            <input type="text" class="form-control" value="Myself" disabled />
+                            <input type="hidden" name="AssignedTo" id="AssignedTo" value="@ViewBag.UserId" />
+                        </div>
+                    }
+                    else if (ViewBag.Users != null)
+                    {
+                        <div class="form-group">
+                            <label for="AssignedTo">Assign To:</label>
+                            <select name="AssignedTo" id="AssignedTo" class="form-control">
+                                <option value="@ViewBag.UserId">Myself</option>
+                                @foreach (var user in ViewBag.Users)
+                                {
+                                    <option value="@user.UserID">@user.FirstName @user.LastName</option>
+                                }
+                            </select>
+                        </div>
+                    }
+
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary">Create Task</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Edit Modal (to be loaded dynamically) -->
+<div id="editTaskModal" class="modal fade" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-body text-center">
+                <div class="spinner-border text-primary m-5" role="status"></div>
+                <p>Loading...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- END MODAL -->
+@Html.Partial("~/Views/Shared/footer.cshtml")
+
+@section scripts {
+
+    <!-- CORRECTED SCRIPT TAGS -->
+    <script src="~/assets/js/pages/layout.js"></script>
+    @* <script src="~/assets/js/pages/dashboard.init.js"></script> *@
+    <script src="~/assets/libs/apexcharts/apexcharts.min.js"></script>
+
+    <!-- Required datatable js -->
+    <script src="~/assets/libs/datatables.net/js/jquery.dataTables.min.js"></script>
+    <script src="~/assets/libs/datatables.net-bs5/js/dataTables.bootstrap5.min.js"></script>
+
+    <!-- Responsive examples -->
+    <script src="~/assets/libs/datatables.net-responsive/js/dataTables.responsive.min.js"></script>
+    <script src="~/assets/libs/datatables.net-responsive-bs5/js/responsive.bootstrap5.min.js"></script>
+
+    <!-- buttons examples -->
+    <script src="~/assets/libs/datatables.net-buttons/js/dataTables.buttons.min.js"></script>
+    <script src="~/assets/libs/datatables.net-buttons-bs5/js/buttons.bootstrap5.min.js"></script>
+    <script src="~/assets/libs/datatables.net-buttons/js/buttons.colVis.min.js"></script>
+
+    <!-- Datatable init js -->
+    <script src="~/assets/js/pages/datatables-advanced.init.js"></script>
+
+    <!-- Bootstrap datepicker -->
+    <script src="~/assets/libs/bootstrap-datepicker/js/bootstrap-datepicker.min.js"></script>
+    <script src="~/assets/js/pages/form-datepicker.init.js"></script>
+
+    <!-- JS Initializer -->
+    <script>
+        // in a Table Modal,  Display the Work Orders in a DataTable
+        $(document).ready(function () {
+            let offset = new URLSearchParams(window.location.search).get("weekOffset") || 0;
+
+            $('.day-link').on('click', function (e) {
+                e.preventDefault();
+
+                let day = $(this).data('day');
+
+                $.ajax({
+                    url: '/Home/GetWorkOrdersByDay',
+                    method: 'GET',
+                    data: { dayOfWeek: day, weekOffset: offset },
+                    success: function (response) {
+                        const data = response.data;
+                        const date = response.deliveryDate;
+
+                        // Update modal title
+                        $('#modalDayTitle').text(`${day} - (${date})`);
+
+                        // Destroy existing DataTable instance if already initialized
+                        if ($.fn.DataTable.isDataTable('#workOrdersTable')) {
+                            $('#workOrdersTable').DataTable().clear().destroy();
+                        }
+
+                        // Clear and fill table
+                        const tbody = $('#workOrdersTable tbody');
+                        tbody.empty();
+
+                        data.forEach(row => {
+                            tbody.append(`
+                                <tr>
+                                    <td>${row.orderID}</td>
+                                    <td>${row.propertyName}</td>
+                                    <td>${row.city}</td>
+                                    <td>${row.orderType}</td>
+                                    <td>${row.qty}</td>
+                                    <td>${row.unitNumber}</td>
+                                    <td>${row.unitType}</td>
+                                    <td>${row.deliveryDate}</td>
+                                    <td>${row.productClass}</td>
+                                    <td>${row.productDescription}</td>
+                                    <td>${row.orderedBy}</td>
+                                    <td>${row.managementName}</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-primary create-workorder-task"
+                                                data-property="${row.propertyName}"
+                                                data-propertyid="${row.propertyCode}"
+                                                data-orderid="${row.orderID}"
+                                                data-unit="${row.unitNumber}"
+                                                data-duedate="${row.deliveryDate}">
+                                            Create Task
+                                        </button>
+                                    </td>
+                                </tr>
+                            `);
+                        });
+
+                        // Now re-initialize the DataTable cleanly
+                        $('#workOrdersTable').DataTable({
+                            pageLength: 5,
+                            responsive: true,
+                            dom: 'Bfrtip',
+                            buttons: ['copy', 'pdf', 'print']
+                        });
+
+                        $('#workOrderModal').modal('show');
+                    }
+                });
+            });
+
+            // AR DATATABLE
+            if (!$.fn.DataTable.isDataTable('#ar_table')) {
+                $('#ar_table').DataTable({
+                    pageLength: 10,
+                    responsive: true,
+                    dom: `
+                        <"top d-flex justify-content-between align-items-center mb-3" lBf>
+                        rt
+                        <"bottom d-flex justify-content-between align-items-center mt-3" ip>`,
+                    buttons: ['excel', 'pdf'],
+                    lengthChange: true,
+                    ordering: true
+                });
+            }
+
+            // INACTIVE ACCOUNTS DATATABLE
+            if (!$.fn.DataTable.isDataTable('#inactive-customers-table')) {
+                const table = $('#inactive-customers-table').DataTable({
+                    pageLength: 10,
+                    responsive: true,
+                    dom: `
+                        <"top d-flex justify-content-between align-items-center mb-3" lBf>
+                        rt
+                        <"bottom d-flex justify-content-between align-items-center mt-3" ip>`,
+                    buttons: ['excel', 'pdf'],
+                    lengthChange: true,
+                    ordering: true
+                });
+            }
+
+            // DROP DOWN Filtering
+            // Add filter logic for Salesperson dropdown
+            $('#repFilter').on('change', function () {
+                const selectedRep = $(this).val();
+                const repColumnIndex = 9; // Assuming "Salesperson" is the 10th column (0-based index)
+
+                if (selectedRep === '') {
+                    table.column(repColumnIndex).search('').draw(); // Clear filter
+                } else {
+                    table.column(repColumnIndex).search('^' + selectedRep + '$', true, false).draw(); // Exact match
+                }
+            });
+        });
+    </script>
+
+    <!-- Weekly Radar Chart -->
+    <script>
+        let chartInstance; // Global variable to store the chart instance
+        const urlParams = new URLSearchParams(window.location.search);
+        const weekOffset = urlParams.get("weekOffset") || 0;
+
+        fetch(`/Home/GetWeeklyOrders?weekOffset=${weekOffset}`)
+            .then(res => res.json())
+            .then(data => {
+                if (!data || data.length === 0) {
+                    console.error("No data received from the server.");
+                    return;
+                }
+
+                const daysOrder = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                const orderData = Array(7).fill(0);
+                let maxOrders = 0;
+
+                data.forEach(item => {
+                    const idx = daysOrder.indexOf(item.weekdayName);
+                    if (idx >= 0) {
+                        orderData[idx] = item.ordersCount;
+                        maxOrders = Math.max(maxOrders, item.ordersCount);
+                    }
+                });
+
+                // Update progress bars dynamically
+                document.querySelectorAll(".progress-bar").forEach((bar, index) => {
+                    if (index < orderData.length) {
+                        let percentage = maxOrders > 0 ? Math.round((orderData[index] / maxOrders) * 100) : 0;
+                        bar.style.width = percentage + "%";
+                        let orderCount = orderData[index];
+
+                        bar.parentElement?.previousElementSibling.firstElementChild.textContent = `Orders: ${orderCount} ( ${percentage}% )`;
+                    }
+                });
+
+                // Destroy the previous chart instance if it exists
+                // if (typeof chartInstance !== 'undefined' && chartInstance !== null) {
+                //     chartInstance.destroy();
+                // }
+            })
+            .catch(error => console.error("Error fetching data:", error));
+    </script>
+    <script>
+        // Initialize the linked datepickers
+        $('.input-daterange input').each(function () {
+            $(this).datepicker({
+                format: "yyyy-mm-dd",
+                todayHighlight: true,
+                autoclose: true,
+                orientation: "bottom"
+            });
+        });
+    </script>
+    <script>
+        document.getElementById("applyQuickRange").addEventListener("click", function () {
+            const selectedOption = parseInt(document.getElementById("quickRangeSelector").value);
+
+            let startDate = new Date();
+            let endDate = new Date();
+
+            if (selectedOption === 0) {
+                startDate = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+            } else if (selectedOption === 1) {
+                startDate = new Date(endDate.getFullYear(), endDate.getMonth() - 1, 1);
+                endDate.setMonth(endDate.getMonth() - 1);
+                endDate.setDate(new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0).getDate());
+            } else if (selectedOption === 2) {
+                const currentMonth = endDate.getMonth();
+                const currentQuarterStartMonth = Math.floor(currentMonth / 3) * 3;
+                startDate = new Date(endDate.getFullYear(), currentQuarterStartMonth - 3, 1);
+                endDate.setMonth(currentQuarterStartMonth - 1);
+                endDate.setDate(new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0).getDate());
+            } else if (selectedOption === 3) {
+                startDate = new Date(endDate.getFullYear(), 0, 1);
+            } else if (selectedOption === 4) {
+                startDate = new Date(endDate.getFullYear() - 1, 0, 1);
+                endDate.setFullYear(endDate.getFullYear() - 1);
+                endDate.setMonth(11);
+                endDate.setDate(31);
+            }
+
+            const format = date => date.toISOString().split("T")[0];
+            const start = format(startDate);
+            const end = format(endDate);
+
+            // THEN continue with navigation (full reload)
+            window.location.href = `/Home/Index?startDate=${start}&endDate=${end}&rangeType=${selectedOption}`;
+        });
+    </script>
+    <script>
+        document.querySelectorAll('.week-range-option').forEach(item => {
+            item.addEventListener('click', function () {
+                const offset = this.getAttribute('data-offset');
+                window.location.href = `/Home/Index?weekOffset=${offset}`;
+            });
+        });
+    </script>
+    <script>
+        $(document).on('click', '.view-order-details', function () {
+            const invoice = $(this).data('invoice');
+            $("#modalContent").html('<div class="text-center text-muted">Loading order details...</div>');
+
+            $.get(`/Home/GetOrderDetails?invoiceNumber=${invoice}`, function (data) {
+                $("#modalContent").html(data);
+                $("#orderDetailsModal").modal('show');
+            }).fail(function () {
+                $("#modalContent").html('<div class="text-danger">Failed to load order details.</div>');
+            });
+        });
+    </script>
+
+    
+    <script>
+        // JS To Create Task from the Work Order
+        $(document).on('click', '.create-workorder-task', function () {
+            const property = $(this).data('property');
+            const propertyID = $(this).data('propertyid');
+            const orderID = $(this).data('orderid');
+            const unit = $(this).data('unit');
+            const tomorrowAt10AM = new Date();
+            tomorrowAt10AM.setDate(tomorrowAt10AM.getDate() + 1);
+            tomorrowAt10AM.setHours(10, 0, 0, 0); // 10:00 AM sharp
+
+            // ✅ Clean: Property = only the property name
+            $('#Property').val(property);
+            $('#PropertyID').val(propertyID);
+
+            // ✅ Enriched Title/Description for display only
+            $('#Title').val(`Visit ${property} - Unit: ${unit}`);
+            $('#Description').val(`Follow up on Order #${orderID} for Unit ${unit}`);
+            $('#DueDate').val(tomorrowAt10AM.toISOString().slice(0, 16));
+            $('#Type').val('Site Visit');
+            $('#Status').val('Pending');
+
+            $('#workOrderModal').on('hidden.bs.modal', function () {
+                $('#taskModal').modal('show');
+            });
+            $('#workOrderModal').modal('hide');
+
+        });
+
+    </script>
+    <script>
+        $('#taskModal').on('shown.bs.modal', function () {
+            console.log("Task modal is now fully visible.");
+            const roleId = parseInt($('#CurrentRoleId').val());
+            const userId = $('#CurrentUserId').val();
+
+            if (roleId === 2) {
+                $('#AssignedTo').val(userId);
+
+            }
+
+            $('#taskForm').off('submit').on('submit', function (e) {
+                e.preventDefault();
+                console.log("Intercepted form submit");
+
+                const form = $(this);
+                const data = form.serialize();
+
+                $.post('/Tasks/CreateFromWorkOrder', data)
+                    .done(function (res) {
+                        Swal.fire("Success", "Task created", "success");
+                        $('#taskModal').modal('hide');
+                        location.reload();
+                    })
+                    .fail(function (xhr) {
+                        Swal.fire("Error", "Something went wrong", "error");
+                        console.log(xhr.responseText);
+                    });
+            });
+        });
+
+    </script>
+    <script>
+
+        // Load Edit Modal
+        $('#editTaskModal').on('show.bs.modal', function (event) {
+            var button = $(event.relatedTarget);
+            var taskId = button.data('task-id');
+            var modal = $(this);
+
+            $.get('/Tasks/EditModalPartial/' + taskId)
+                .done(function (html) {
+                    $('#editTaskModal .modal-content').html(html);
+                })
+                .fail(function (jqXHR, textStatus, errorThrown) {
+                    $('#editTaskModal .modal-content').html('<div class="p-4 text-danger">Error loading modal: ' + jqXHR.responseText + '</div>');
+                    console.error("AJAX Load Error:", textStatus, errorThrown);
+                });
+        });
+
+    </script>
+    <script>
+        $(document).on('click', '.create-ar-task', function () {
+            const customer = $(this).data('customer');
+            const invoice = $(this).data('invoice');
+            const balance = $(this).data('balance');
+
+            const tomorrowAt10AM = new Date();
+            tomorrowAt10AM.setDate(tomorrowAt10AM.getDate() + 1);
+            tomorrowAt10AM.setHours(10, 0, 0, 0);
+
+            // ✅ Set fields in the modal
+            $('#Property').val(customer);
+            $('#PropertyID').val(invoice); // Optional to track Invoice #
+            $('#Title').val(`Follow up on Invoice #${invoice}`);
+            $('#Description').val(`Outstanding balance of ${parseFloat(balance).toFixed(2)} for Invoice #${invoice}`);
+            $('#DueDate').val(tomorrowAt10AM.toISOString().slice(0, 16));
+            $('#Type').val('Email'); // 🧠 Default to Email followup
+            $('#Status').val('Pending');
+
+            // Show the Task Modal
+            $('#taskModal').modal('show');
+        });
+    </script>
+    <script>
+        $(document).on('click', '.create-task-from-inactive', function () {
+            const property = $(this).data('property');
+            const customerId = $(this).data('id');
+            const daysInactive = $(this).data('days');
+
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            tomorrow.setHours(10, 0, 0, 0);
+
+            $('#Property').val(property);
+            $('#PropertyID').val(customerId);
+            $('#Title').val(`Follow up with ${property}`);
+            $('#Description').val(`No recent activity. Consider outreach. ${property} has not placed an order in over ${daysInactive} days.`);
+            $('#DueDate').val(tomorrow.toISOString().slice(0, 16));
+            $('#Type').val('Email');
+            $('#Status').val('Pending');
+
+            $('#taskModal').modal('show');
+        });
+    </script>
+
+
+}

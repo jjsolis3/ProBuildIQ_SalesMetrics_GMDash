@@ -1,0 +1,77 @@
+﻿@model SalesMetrics.Models.InvoiceDetailViewModel
+
+@if (!Model.LineItems.Any())
+{
+    <div class="text-danger">No order details found.</div>
+}
+else
+{
+    <div class="row">
+        <!-- Header Info -->
+        <div class="col-md-6">
+            <p><strong>Customer Name:</strong> @Model.Header.CustomerName</p>
+            <p><strong>Customer #:</strong> @Model.Header.CustomerNumber</p>
+            <p><strong>Invoice #:</strong> @Model.Header.InvoiceNumber</p>
+            <p><strong>Order #:</strong> @Model.Header.OrderNumber</p>
+            <p><strong>Customer PO#:</strong> @Model.Header.CustomerPO</p>
+            <p><strong>Invoice Date:</strong> @Model.Header.InvoiceDate.ToString("MMM dd, yyyy")</p>
+            <p><strong>Delivery Date:</strong> @Model.Header.DeliveryDate.ToString("MMM dd, yyyy")</p>
+            <p><strong>Amount Due:</strong> @Model.Header.OutstandingAmount.ToString("C")</p>
+            <p><strong>Status:</strong> @Model.Header.InvoiceAging</p>
+        </div>
+
+        <!-- Notes -->
+        <div class="col-md-6">
+            <h6><strong>Invoice Notes:</strong></h6>
+            <table class="table table-sm table-striped">
+                <thead>
+                    <tr>
+                        <th>Line #</th>
+                        <th>Comment</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var note in Model.Notes)
+                    {
+                        <tr>
+                            <td>@note.LineNumber</td>
+                            <td>@note.Comment</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <hr />
+
+    <!-- Order Line Items -->
+    <div class="row">
+        <div class="col-md-12">
+            <h6><strong>Order Details</strong></h6>
+            <table class="table table-bordered">
+                <thead>
+                    <tr>
+                        <th>Qty</th>
+                        <th>UOM</th>
+                        <th>Prod Class</th>
+                        <th>Description</th>
+                        <th>Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in Model.LineItems)
+                    {
+                        <tr>
+                            <td>@item.Quantity.ToString("N2")</td>
+                            <td>@item.UOM</td>
+                            <td>@item.ProdClass</td>
+                            <td>@item.Description</td>
+                            <td>@item.ProductTotal?.ToString("C")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}

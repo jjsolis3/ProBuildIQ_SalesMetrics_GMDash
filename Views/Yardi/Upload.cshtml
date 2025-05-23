@@ -1,0 +1,20 @@
+﻿@{
+    ViewData["Title"] = "Upload Yardi Matrix Data";
+}
+
+<h2>Upload Yardi Matrix Excel File</h2>
+
+<form asp-controller="Yardi" asp-action="Upload" method="post" enctype="multipart/form-data">
+    <input type="file" name="file" class="form-control mb-3" />
+    <button type="submit" class="btn btn-primary">Upload</button>
+</form>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success">@TempData["Success"]</div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger">@TempData["Error"]</div>
+}
+

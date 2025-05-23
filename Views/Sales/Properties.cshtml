@@ -1,0 +1,320 @@
+﻿@using SalesMetrics.Services.Helpers
+
+@{
+    ViewBag.Title = "Properties";
+    ViewBag.pTitle = "Sales Properties";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+@model IEnumerable<SalesMetrics.Models.CustomerPropertyViewModel>
+
+@section styles {
+<link href="~/assets/libs/datatables.net-searchpanes-bs5/css/searchPanes.bootstrap5.min.css" rel="stylesheet" />
+<link href="~/assets/libs/select2/css/select2.min.css" rel="stylesheet" />
+}
+
+<style>
+    table.dataTable thead th {
+    background-color: darkorange !important;
+    color: white !important;
+    }
+
+    div.dataTables_length {
+    margin-right: 1.5rem;
+    }
+
+    div.dataTables_filter {
+    max-width: 300px;
+    margin-left: auto;
+    }
+
+</style>
+
+<div class="table-responsive">
+    <table id="erpTable" class="table table-bordered table-striped nowrap" style="width:100%">
+        <thead>
+            <tr>
+                <th>Customer #</th>
+                <th>Property</th>
+                <th>PriceCode</th>
+                <th>Managent Co</th>
+                <th>Address</th>
+                <th>City</th>
+                <th>State</th>
+                <th>Zip</th>
+                <th>Phone</th>
+                <th>Email</th>
+                <th>AR Balance</th>
+                <th>Established</th>
+                <th>Credit Hold</th>
+                <th>Salesperson</th>
+                <th>Attention To</th>
+                <th>PO Required</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (Model != null)
+            {
+                foreach (var p in Model)
+                {
+                    <tr>
+                        <td>@p.CustomerNumber</td>
+                        <td>
+                            <a asp-controller="Sales" asp-action="PropertyDetails" asp-route-id="@p.CustomerId">
+                                @p.CustomerName
+                            </a>
+                        </td>
+                        <td>@p.PriceCode</td>
+                        <td>@p.MgmtCo</td>
+                        <td>@p.Address</td>
+                        <td>@p.City</td>
+                        <td>@p.State</td>
+                        <td>@p.Zip</td>
+                        <td>@p.PhoneNumber</td>
+                        <td>@p.Email</td>
+                        <td data-order="@p.ARBalance">@p.ARBalance?.ToString("C")</td>
+                        <td data-order="@p.EstablishedDate?.ToString("yyyy-MM-dd")">
+                            @(p.EstablishedDate?.ToString("MM/dd/yyyy") ?? "N/A")
+                        </td>
+                        @if (p.CreditHold == 1)
+                        {
+                            <td class="bg-danger text-light" style="font-weight: bold;">On Credit Hold</td>
+                        }
+                        else
+                        {
+                            <td></td>
+                        }
+                        <td>@p.Salesperson</td>
+                        <td>@p.AttentionTo</td>
+                        <td>@(p.PONumberRequired ? "Yes" : "No")</td>
+                        <td>
+                            <button class="btn btn-sm btn-primary create-task"
+                                    data-id="@p.CustomerId"
+                                    data-name="@p.CustomerName">
+                                Create Task
+                            </button>
+                        </td>
+                    </tr>
+                }
+            }
+            else
+            {
+                <tr><td colspan="14">No property data found.</td></tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@* Task Modal for ERP Properties *@
+<div class="modal fade" id="taskModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <form id="propertyTaskForm" asp-controller="Tasks" asp-action="CreateFromProperties" method="post">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Create Task for Property</h5>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Title</label>
+                        <input type="text" class="form-control" name="Task.Title" />
+                    </div>
+                    <div class="form-group">
+                        <label>Description</label>
+                        <textarea name="Task.Description" class="form-control"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Due Date</label>
+                        <input type="datetime-local" class="form-control" name="Task.DueDate" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>Task Type</label>
+                        <select class="form-control" name="Task.Type" required>
+                            <option disabled selected value="">-- Select Type --</option>
+                            @foreach (var type in TaskTypeHelper.GetTaskTypes("Properties"))
+                            {
+                                <option value="@type.Value">@type.Text</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Property</label>
+                        <input type="text" class="form-control" name="Task.Property" readonly />
+                    </div>
+                    <div class="form-group">
+                        <label>Status</label>
+                        <select class="form-control" name="Task.Status">
+                            <option value="Pending">Pending</option>
+                            <option value="Assigned">Assigned</option>
+                            <option value="In Progress">In Progress</option>
+                            <option value="In Review">In Review</option>
+                            <option value="Completed">Completed</option>
+                            <option value="Cancelled">Cancelled</option>
+                        </select>
+                    </div>
+
+                    @if (Context.Session.GetInt32("RoleId") != 2 && ViewBag.Users is List<SalesMetrics.Models.User> userList)
+                    {
+                        <div class="form-group">
+                            <label>Assign To</label>
+                            <select class="form-control" name="Task.AssignedTo">
+                                <option value="">-- Select User --</option>
+                                <option value="@ViewBag.UserId">Myself</option>
+                                @foreach (var u in userList)
+                                {
+                                    <option value="@u.UserID">@u.FirstName @u.LastName</option>
+                                }
+                            </select>
+                        </div>
+                    }
+                    else
+                    {
+                        <!-- Hidden field for Sales Role -->
+                        <input type="hidden" name="Task.AssignedTo" id="hiddenAssignedTo" />
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary">Save Task</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <!-- DataTables CSS -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.5/css/jquery.dataTables.min.css" />
+    <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.dataTables.min.css" />
+
+    <!-- jQuery + DataTables JS -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.5/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.colVis.min.js"></script>
+
+    <!-- ✅ Required for export buttons -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.print.min.js"></script>
+
+    <script src="~/assets/libs/datatables.net-searchpanes/js/dataTables.searchPanes.min.js"></script>
+    <script src="~/assets/libs/datatables.net-searchpanes-bs5/js/searchPanes.bootstrap5.min.js"></script>
+    <script src="~/assets/libs/datatables.net-select/js/dataTables.select.min.js"></script>
+    
+    <script src="~/assets/libs/select2/js/select2.full.min.js"></script>
+
+    <script>
+        var table; // 👈 make table globally accessible
+
+        $(document).ready(function () {
+            table = $('#erpTable').DataTable({
+                order: [
+                    [3, 'asc'], // 3 Mgmt Co
+                    [1, 'asc']  // 1 Property
+                ],
+                dom: `
+                  <"top mb-2"P>
+                  <"top d-flex justify-content-between align-items-center mb-3" lBf>
+                  rt
+                  <"bottom d-flex justify-content-between align-items-center mt-3" ip>
+                `,
+                scrollX: true,
+                searchPanes: {
+                    cascadePanes: true,
+                    viewTotal: true,
+                    layout: 'columns-2',
+                    initCollapsed: true
+                },
+                buttons: [
+                    {
+                        extend: 'colvis',
+                        text: '<i class="bi bi-eye"></i> Show/Hide Columns',
+                        className: 'btn btn-outline-primary rounded-pill shadow-sm me-2'
+                    },
+                    {
+                        extend: 'excelHtml5',
+                        text: '<i class="bi bi-file-earmark-excel"></i> Excel',
+                        className: 'btn btn-outline-success rounded-pill shadow-sm me-2'
+                    },
+                    {
+                        extend: 'pdfHtml5',
+                        text: '<i class="bi bi-file-earmark-pdf"></i> PDF',
+                        className: 'btn btn-outline-danger rounded-pill shadow-sm'
+                    }
+                ],
+                columnDefs: [
+                    { targets: [2, 6, 7, 8, 9, 14, 15], visible: false }, 
+                    { searchPanes: { show: true }, targets: [3, 5] }, // Mgmt Co, City
+                    { searchPanes: { show: false }, targets: '_all' }
+                ]
+            });
+
+            table.on('searchPanes.statesLoaded', function () {
+                updateFilterCount();
+            });
+
+            table.on('searchPanes.selectionChanged', function () {
+                updateFilterCount();
+            });
+
+            function updateFilterCount() {
+                const count = table.searchPanes.getSelections().reduce((total, pane) => total + pane.rows.length, 0);
+                $('#filtersCount').text(count);
+            }
+
+            $('#erpTable').on('click', '.create-task', function () {
+                const name = $(this).data('name');
+                const title = `Follow up for ${name}`;
+                const due = new Date();
+                due.setHours(due.getHours() + 24);
+
+                $('#taskModal input[name="Task.Property"]').val(name);
+                $('#taskModal input[name="Task.Title"]').val(title);
+                $('#taskModal input[name="Task.DueDate"]').val(due.toISOString().slice(0, 16));
+
+                const assignedToField = document.getElementById('hiddenAssignedTo');
+                if (assignedToField) {
+                    assignedToField.value = '@Context.Session.GetString("UserId")';
+                }
+
+                $('#taskModal').modal('show');
+            });
+
+        });
+    </script>
+
+    <script>
+        $(document).ready(function () {
+            $('#propertyTaskForm').on('submit', function (e) {
+                e.preventDefault(); // prevent full page reload
+
+                const form = $(this);
+                const formData = form.serialize();
+
+                $.post(form.attr('action'), formData)
+                    .done(function (data) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Task Created!',
+                            text: 'The task was successfully created from the property.'
+                        });
+
+                        $('#taskModal').modal('hide'); // close modal
+                        form[0].reset(); // clear form
+                    })
+                    .fail(function (xhr) {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Oops!',
+                            text: 'Something went wrong. Please try again.'
+                        });
+                    });
+            });
+        });
+    </script>
+
+}

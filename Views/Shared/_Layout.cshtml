@@ -43,7 +43,6 @@
             }
         }
     </style>
-
 </head>
 <body>
     <div id="layout-wrapper">
@@ -53,6 +52,7 @@
             var currentAction = ViewContext.RouteData.Values["action"]?.ToString();
 
             var showOverlay =
+                (currentController == "GM" && currentAction == "Index") ||
                 (currentController == "Dashboard" && currentAction == "Index") ||
                 (currentController == "Sales" && currentAction == "Properties") ||
                 (currentController == "Dashboard" && currentAction == "Index") ||
@@ -152,6 +152,22 @@
         document.addEventListener("mousemove", resetSessionTimer);
         document.addEventListener("keypress", resetSessionTimer);
         document.addEventListener("click", resetSessionTimer);
+    </script>
+    <script>
+        $(document).ready(function () {
+            const success = '@TempData["Success"]';
+            if (success) {
+                Swal.fire({
+                    toast: true,
+                    position: 'top-end',
+                    icon: 'success',
+                    title: success,
+                    showConfirmButton: false,
+                    timer: 5000,
+                    timerProgressBar: true
+                });
+            }
+        });
     </script>
 
 

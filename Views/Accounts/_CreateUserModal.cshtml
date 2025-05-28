@@ -1,15 +1,17 @@
 ﻿@model SalesMetrics.Models.RegisterViewModel
 
-<div class="modal fade" id="editUserModal" tabindex="-1" aria-labelledby="editUserModalLabel" aria-hidden="true">
+<div class="modal fade" id="createUserModal" tabindex="-1" aria-labelledby="createUserModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
-            <form asp-action="UpdateUser" asp-controller="Accounts" method="post">
+            <form asp-action="CreateUser" asp-controller="Accounts" method="post">
                 <div class="modal-header">
-                    <h5 class="modal-title">Edit User</h5>
+                    <h5 class="modal-title">Add New User</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
+                    @Html.AntiForgeryToken()
                     @Html.HiddenFor(m => m.UserId)
+                    <!-- Repeat fields just like the edit modal, but for registration -->
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             @Html.LabelFor(m => m.FirstName)
@@ -20,22 +22,20 @@
                             @Html.TextBoxFor(m => m.LastName, new { @class = "form-control" })
                         </div>
                     </div>
-
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             @Html.LabelFor(m => m.Username)
                             @Html.TextBoxFor(m => m.Username, new { @class = "form-control" })
                         </div>
                         <div class="col-md-6 mb-3">
-                            @Html.LabelFor(m => m.Email)
-                            @Html.TextBoxFor(m => m.Email, new { @class = "form-control" })
-                        </div>
-                    </div>
-
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
                             @Html.LabelFor(m => m.Password)
                             @Html.PasswordFor(m => m.Password, new { @class = "form-control" })
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            @Html.LabelFor(m => m.Email)
+                            @Html.TextBoxFor(m => m.Email, new { @class = "form-control" })
                         </div>
                         <div class="col-md-3 mb-3">
                             @Html.LabelFor(m => m.RoleId)
@@ -43,7 +43,7 @@
                             new { Value = 1, Text = "ADMIN" },
                             new { Value = 2, Text = "SALES" },
                             new { Value = 3, Text = "SALES ADMIN" },
-                            new { Value = 4, Text = "GENERAL MANAGER" }
+                            new { Value = 4, Text = "OFFICE" }
                             }, "Value", "Text"), "Select Role", new { @class = "form-select" })
                         </div>
                         <div class="col-md-3 mb-3">
@@ -57,26 +57,10 @@
                             }, "Value", "Text"), "Select Office", new { @class = "form-select" })
                         </div>
                     </div>
-
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            @Html.LabelFor(m => m.SalesmanId)
-                            @Html.TextBoxFor(m => m.SalesmanId, new { @class = "form-control" })
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            @Html.LabelFor(m => m.SalesmanNumber)
-                            @Html.TextBoxFor(m => m.SalesmanNumber, new { @class = "form-control" })
-                        </div>
-                    </div>
-
-                    <div class="form-check form-switch mb-3">
-                        <input class="form-check-input" type="checkbox" id="IsActive" name="IsActive" value="true" @(ViewBag.IsActive != null && (bool)ViewBag.IsActive ? "checked" : "") />
-                        <label class="form-check-label" for="IsActive">Active</label>
-                    </div>
                 </div>
                 <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary">Create User</button>
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Changes</button>
                 </div>
             </form>
         </div>

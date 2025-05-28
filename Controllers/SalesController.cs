@@ -10,6 +10,7 @@ using SalesMetrics.Services.Helpers;
 using User = SalesMetrics.Models.User;
 using EfUser = SalesMetrics.Models.EFCore.UserEntity;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.AspNetCore.Http.HttpResults;
 
 
 namespace SalesMetrics.Controllers
@@ -130,12 +131,13 @@ namespace SalesMetrics.Controllers
                             CreditLimit = reader.IsDBNull("CUM_CREDIT_LIMIT") ? 0 : Convert.ToDecimal(reader["CUM_CREDIT_LIMIT"]),
                             CreditHold = reader.GetInt32("CUM_CREDIT_HOLD_FLAG"),
                             EstablishedDate = reader.IsDBNull(10) ? null : reader.GetDateTime(10),
-                            ARBalance = reader.IsDBNull(11) ? null : Convert.ToDecimal(reader[11]),
-                            PriceCode = reader.IsDBNull(12) ? 0 : reader.GetInt32(12),
-                            AttentionTo = reader.IsDBNull(13) ? "" : reader.GetString(13),
-                            Salesperson = reader.IsDBNull(15) ? "" : reader.GetString(15),
-                            PONumberRequired = reader.GetBoolean(18),
-                            MgmtCo = reader.IsDBNull(19) ? "" : reader.GetString(19)
+                            ARBalance = reader.IsDBNull("CUM_AR_BALANCE") ? 0 : Convert.ToDecimal(reader["CUM_AR_BALANCE"]),
+                            PriceCode = reader.IsDBNull("CUM_PRICE_CODE") ? 0 : reader.GetInt32("CUM_PRICE_CODE"),
+                            AttentionTo = reader.IsDBNull("CUM_ATTENTION_TO") ? "" : reader.GetString("CUM_ATTENTION_TO"),
+                            SalesmanID = reader.IsDBNull("CUM_SMNMAS_ID") ? 0 : reader.GetInt32("CUM_SMNMAS_ID"),
+                            Salesperson = reader.IsDBNull("SMN_SALESMAN_NAME") ? "" : reader.GetString("SMN_SALESMAN_NAME"),
+                            PONumberRequired = reader.GetBoolean("CUM_PO_NUMBER_REQUIRED"),
+                            MgmtCo = reader.IsDBNull("IPC_DESCRIPTION") ? "" : reader.GetString("IPC_DESCRIPTION")
                         });
                     }
                 }
@@ -148,6 +150,7 @@ namespace SalesMetrics.Controllers
             int roleId = int.Parse(User.FindFirst("RoleId")?.Value ?? "0");
             int salesmanId = int.Parse(User.FindFirst("SalesmanId")?.Value ?? "0");
             string officeLocation = HttpContext.Session.GetString("OfficeLocation") ?? "LA"; // Default fallback
+            int locationId = Convert.ToInt32(HttpContext.Session.GetString("LocationId"));
 
             var vm = new PropertyDetailsViewModel
             {
@@ -165,6 +168,7 @@ namespace SalesMetrics.Controllers
                 // 🔹 Get property info
                 using (var cmd = new SqlCommand(@"
                     SELECT 
+                        CUM_CUSTOMER_NUMBER as [CustomerNumber],  
                         CUM_CUSTOMER_NAME as [CustomerName], 
                         CONCAT(ISNULL(CUM_ADDRESS_1, ''), ' ', ISNULL(CUM_ADDRESS_2, ''),' ', ISNULL(CUM_ADDRESS_3, '')) as [Address],
 	                    CUM_CITY as [City],
@@ -191,21 +195,22 @@ namespace SalesMetrics.Controllers
                     using var reader = cmd.ExecuteReader();
                     if (reader.Read())
                     {
-                        vm.CustomerNumber = id;
-                        vm.CustomerName = reader.GetString(0);
-                        vm.Address = reader.GetString(1);
-                        vm.City = reader.GetString(2);
-                        vm.State = reader.GetString(3);
-                        vm.Zip = reader.GetString(4);
-                        vm.EstablishedDate = reader.IsDBNull(5) ? null : reader.GetDateTime(5);
-                        vm.CreditLimit = reader.IsDBNull(6) ? null : reader.GetDouble(6);
+                        vm.PropertyId = id != null ? Convert.ToInt32(id) : 0;
+                        vm.CustomerNumber = reader.GetString("CustomerNumber");
+                        vm.CustomerName = reader.GetString("CustomerName");
+                        vm.Address = reader.GetString("Address");
+                        vm.City = reader.GetString("City");
+                        vm.State = reader.GetString("State");
+                        vm.Zip = reader.GetString("Zip");
+                        vm.EstablishedDate = reader.IsDBNull("EstablishedDate") ? null : reader.GetDateTime("EstablishedDate");
+                        vm.CreditLimit = reader.IsDBNull("CreditLimit") ? null : reader.GetDouble("CreditLimit");
                         vm.CreditHold = reader.IsDBNull("CUM_CREDIT_HOLD_FLAG") ? 0 : reader.GetInt32("CUM_CREDIT_HOLD_FLAG");
-                        vm.PriceCode = reader.IsDBNull(7) ? 0 : reader.GetInt32(7);
-                        vm.MgmtCo = reader.IsDBNull(8) ? "" : reader.GetString(8);
-                        vm.AttnTo = reader.IsDBNull(9) ? "" : reader.GetString(9);
-                        vm.SalesmanID = reader.IsDBNull(10) ? 0 : reader.GetInt32(10);
-                        vm.SalemanName = reader.IsDBNull(11) ? "" : reader.GetString(11);
-                        vm.SalemanNumber = reader.IsDBNull(12) ? "" : reader.GetString(12);
+                        vm.PriceCode = reader.IsDBNull("PriceCode") ? 0 : reader.GetInt32("PriceCode");
+                        vm.MgmtCo = reader.IsDBNull("MgmtCo") ? "" : reader.GetString("MgmtCo");
+                        vm.AttnTo = reader.IsDBNull("AttnTo") ? "" : reader.GetString("AttnTo");
+                        vm.SalesmanID = reader.IsDBNull("SalemanID") ? 0 : reader.GetInt32("SalemanID");
+                        vm.SalemanName = reader.IsDBNull("SalemanName") ? "" : reader.GetString("SalemanName");
+                        vm.SalemanNumber = reader.IsDBNull("SalemanNumber") ? "" : reader.GetString("SalemanNumber");
                     }
                 }
 
@@ -295,6 +300,55 @@ namespace SalesMetrics.Controllers
                         vm.AROverdueInvoiceCount = reader["OverdueCount"] != DBNull.Value ? Convert.ToInt32(reader["OverdueCount"]) : 0;
                     }
                 }
+
+                conn.Close();
+            }
+
+            // Get property notes
+            var connNotesStr = _configuration.GetConnectionString("SalesMetrics");
+
+            using (SqlConnection conn = new(connNotesStr))
+            {
+                conn.Open();
+
+                using (var notesCmd = new SqlCommand(@"
+                    SELECT [NoteID]
+                        ,[PropertyId]
+                        ,[PropertyNumber]
+                        ,[PropertyName]
+                        ,[NoteText]
+                        ,[NoteType]
+                        ,[LocationId]
+                        ,[CreatedBy]
+                        ,[CreatedDate]
+                        ,[ModifiedBy]
+                        ,[ModifiedDate]
+                        ,[IsActive] 
+                    FROM PropertyNotes 
+                    WHERE PropertyId = @id 
+                        AND LocationId = @LocationId
+                        AND IsActive = 1
+                        AND NoteType = 'Property'
+                    ORDER BY CreatedDate DESC
+                ", conn))
+                {
+                    notesCmd.Parameters.AddWithValue("@id", id);
+                    notesCmd.Parameters.AddWithValue("@LocationId", locationId);
+                    using var reader = notesCmd.ExecuteReader();
+                    while (reader.Read())
+                    {
+                        vm.PropertyNotes.Add(new PropertyNote
+                        {
+                            NoteID = reader.GetInt32("NoteID"),
+                            PropertyId = reader.IsDBNull("PropertyId") ? null : reader.GetString("PropertyId"),
+                            NoteText = reader.IsDBNull("NoteText") ? "" : reader.GetString("NoteText"),
+                            CreatedBy = reader.IsDBNull("CreatedBy") ? "unknown" : reader.GetString("CreatedBy"),
+                            CreatedDate = reader.IsDBNull("CreatedDate") ? DateTime.MinValue : Convert.ToDateTime(reader["CreatedDate"])
+                        });
+                    }
+                }
+
+                conn.Close();
             }
 
             return View(vm);
@@ -341,6 +395,7 @@ namespace SalesMetrics.Controllers
                     APT.Description AS UnitType,
                     CONVERT(VARCHAR, S.SOH_DELIVERY_DATE, 101) AS DeliveryDate,
                     CONVERT(VARCHAR, S.SOH_MOVING_DATE, 101) AS MoveInDate,
+                    ISNULL(AR.ARO_DATE_PAID_IN_FULL, '') AS PaidInFullDate,
 
                     ISNULL((
                         SELECT TOP 1 ITM_PCLMAS_ID
@@ -367,7 +422,12 @@ namespace SalesMetrics.Controllers
                     ), '') AS ProductDescription,
 
                     S.SOH_ORDERED_BY AS OrderedBy, 
-                    CASE WHEN SOH_CANCELED_DATE IS NOT NULL THEN 'C' ELSE 'U' END AS Status,
+                    CASE 
+		                WHEN AR.ARO_INVOICE_NUMBER IS NOT NULL THEN 
+			                CASE 
+				                WHEN AR.ARO_DATE_PAID_IN_FULL IS NOT NULL THEN 'PAID'
+				                ELSE 'UNPAID' END
+		                ELSE 'NOT INVOICED' END as Status,
                     WHS_WAREHOUSE_NUMBER AS Location
 
                 FROM SALES_HEADER AS S
@@ -377,6 +437,7 @@ namespace SalesMetrics.Controllers
                     LEFT JOIN CUSTOMER_MASTER AS CUS ON CUS.CUM_CUMMAS_ID = S.SOH_CUMMAS_ID
                     LEFT JOIN PRICE_CODES AS P ON CUS.CUM_PRICE_CODE = P.IPC_PRICE_CODE
                     LEFT JOIN WAREHOUSE_MASTER ON WHS_WAREHOUSE_NUMBER = S.SOH_WHSMAS_ID
+	                LEFT JOIN AR_OPEN_ITEM as AR on S.SOH_NUMBER = AR.ARO_SALES_ORDER_NUMBER
                 WHERE 
                     S.SOH_CANCELED_DATE IS NULL
                     AND EXISTS (
@@ -420,7 +481,7 @@ namespace SalesMetrics.Controllers
                         UnitNumber = reader["UnitNumber"]?.ToString(),
                         UnitType = reader["UnitType"]?.ToString(),
                         DeliveryDate = reader["DeliveryDate"]?.ToString(),
-                        MoveInDate = reader["MoveInDate"]?.ToString(),
+                        PaidInFullDate = reader["MoveInDate"]?.ToString(),
                         ProductClass = reader["ProductClass"]?.ToString(),
                         ProductDescription = reader["ProductDescription"]?.ToString(),
                         OrderedBy = reader["OrderedBy"]?.ToString(),
@@ -464,6 +525,7 @@ namespace SalesMetrics.Controllers
                     APT.Description AS UnitType,
                     CONVERT(VARCHAR, S.SOH_DELIVERY_DATE, 101) AS DeliveryDate,
                     CONVERT(VARCHAR, S.SOH_MOVING_DATE, 101) AS MoveInDate,
+                    ISNULL(AR.ARO_DATE_PAID_IN_FULL, '') AS PaidInFullDate,
 
                     ISNULL((
                         SELECT TOP 1 ITM_PCLMAS_ID
@@ -490,7 +552,14 @@ namespace SalesMetrics.Controllers
                     ), '') AS ProductDescription,
 
                     S.SOH_ORDERED_BY AS OrderedBy, 
-                    CASE WHEN SOH_CANCELED_DATE IS NOT NULL THEN 'C' ELSE 'U' END AS Status,
+                    CASE 
+		                WHEN AR.ARO_INVOICE_NUMBER IS NOT NULL THEN 
+			                CASE 
+				                WHEN AR.ARO_DATE_PAID_IN_FULL IS NOT NULL THEN 'PAID'
+				                ELSE 'UNPAID'
+				                END
+		                ELSE 'NOT INVOICED'
+		                END as Status,
                     WHS_WAREHOUSE_NUMBER AS Location
 
                 FROM SALES_HEADER AS S
@@ -500,6 +569,7 @@ namespace SalesMetrics.Controllers
                     LEFT JOIN CUSTOMER_MASTER AS CUS ON CUS.CUM_CUMMAS_ID = S.SOH_CUMMAS_ID
                     LEFT JOIN PRICE_CODES AS P ON CUS.CUM_PRICE_CODE = P.IPC_PRICE_CODE
                     LEFT JOIN WAREHOUSE_MASTER ON WHS_WAREHOUSE_NUMBER = S.SOH_WHSMAS_ID
+                    LEFT JOIN AR_OPEN_ITEM as AR on S.SOH_NUMBER = AR.ARO_SALES_ORDER_NUMBER
                 WHERE 
                     S.SOH_CANCELED_DATE IS NULL
                     AND EXISTS (
@@ -541,7 +611,7 @@ namespace SalesMetrics.Controllers
                         UnitNumber = reader["UnitNumber"]?.ToString(),
                         UnitType = reader["UnitType"]?.ToString(),
                         DeliveryDate = reader["DeliveryDate"]?.ToString(),
-                        MoveInDate = reader["MoveInDate"]?.ToString(),
+                        PaidInFullDate = reader["PaidInFullDate"]?.ToString(),
                         ProductClass = reader["ProductClass"]?.ToString(),
                         ProductDescription = reader["ProductDescription"]?.ToString(),
                         OrderedBy = reader["OrderedBy"]?.ToString(),
@@ -553,6 +623,50 @@ namespace SalesMetrics.Controllers
 
             return workOrders;
         }
+
+        [HttpPost]
+        public IActionResult AddPropertyNote(string PropertyId, string PropertyNumber, string PropertyName, string NoteText)
+        {
+            var user = HttpContext.Session.GetString("Username") ?? "unknown";
+            var connection = _configuration.GetConnectionString("SalesMetrics");
+            int locationId = Convert.ToInt32(HttpContext.Session.GetString("LocationId"));
+
+            if (string.IsNullOrEmpty(PropertyId) || string.IsNullOrEmpty(NoteText))
+            {
+                return BadRequest("Property ID and Note Text are required.");
+            }
+
+            try
+            {
+                using var conn = new SqlConnection(connection);
+                conn.Open();
+
+                var cmd = new SqlCommand(@"
+                INSERT INTO PropertyNotes (PropertyId, PropertyNumber, PropertyName,  NoteText, NoteType, LocationId, CreatedBy, CreatedDate )
+                VALUES (@PropertyId, @PropertyNumber, @PropertyName, @NoteText, @NoteType, @LocationId, @CreatedBy, @CreatedDate)
+            ", conn);
+
+                cmd.Parameters.AddWithValue("@PropertyId", PropertyId);
+                cmd.Parameters.AddWithValue("@PropertyNumber", PropertyNumber);
+                cmd.Parameters.AddWithValue("@PropertyName", PropertyName);
+                cmd.Parameters.AddWithValue("@NoteText", NoteText);
+                cmd.Parameters.AddWithValue("@NoteType", "Property");
+                cmd.Parameters.AddWithValue("@LocationId", locationId);
+                cmd.Parameters.AddWithValue("@CreatedBy", user);
+                cmd.Parameters.AddWithValue("@CreatedDate", DateTime.Now);
+
+                cmd.ExecuteNonQuery();
+            }   
+            catch (Exception ex)
+            {
+                // Log the exception (not implemented here)
+                return BadRequest("An error occurred while adding the note: " + ex.Message);
+            }
+            
+
+            return RedirectToAction("PropertyDetails", new { id = PropertyId });
+        }
+
 
     }
 }

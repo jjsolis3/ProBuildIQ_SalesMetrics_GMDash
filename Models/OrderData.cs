@@ -82,6 +82,7 @@
         public DateTime OrderDate { get; set; }
         public DateTime DeliveryDate { get; set; }
         public DateTime InvoiceDate { get; set; }
+        public string? PaidInFullDate { get; set; }
         public decimal BalanceAmount { get; set; }
         public string? OrderAging { get; set; }
         public string? CustomerPO { get; set; }
@@ -131,6 +132,7 @@
         public string UnitType { get; set; }
         public string DeliveryDate { get; set; }
         public string MoveInDate { get; set; }
+        public string PaidInFullDate { get; set; }
         public string ProductClass { get; set; }
         public string ProductDescription { get; set; }
         public string OrderedBy { get; set; }

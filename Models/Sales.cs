@@ -40,6 +40,7 @@ namespace SalesMetrics.Models
             .Where(i => i.Date >= DateTime.Today.AddYears(-1)).ToList();
         public List<WorkOrderViewModel> WorkOrders { get; set; } = new();
         public List<MonthlyInvoiceSummary> MonthlyInvoices { get; set; } = new();
+        public List<PropertyNote> PropertyNotes { get; set; } = new();
 
         public DateTime? EstablishedDate { get; set; }
         public double? CreditLimit { get; set; }
@@ -106,4 +107,19 @@ namespace SalesMetrics.Models
         public double Balance { get; set; }
 
     }
+
+    public class PropertyNote
+    {
+        public int NoteID { get; set; }
+        public string PropertyId { get; set; }
+        public int CustomerNumber { get; set; }
+        public string NoteText { get; set; }
+        public string CreatedBy { get; set; }
+        public DateTime CreatedDate { get; set; }
+        public string ModifiedBy { get; set; }
+        public DateTime? ModifiedDate { get; set; }
+        public bool IsActive { get; set; } = true;
+        public int LocationId { get; set; }
+    }
+
 }

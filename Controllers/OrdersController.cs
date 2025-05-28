@@ -67,6 +67,7 @@ namespace SalesMetrics.Controllers
                     APT.Description AS UnitType,
                     CONVERT(VARCHAR, S.SOH_DELIVERY_DATE, 101) AS DeliveryDate,
                     CONVERT(VARCHAR, S.SOH_MOVING_DATE, 101) AS MoveInDate,
+                    ISNULL(AR.ARO_DATE_PAID_IN_FULL, '') AS PaidInFullDate,
 
                     ISNULL((
                         SELECT TOP 1 ITM_PCLMAS_ID
@@ -93,7 +94,14 @@ namespace SalesMetrics.Controllers
                     ), '') AS ProductDescription,
 
                     S.SOH_ORDERED_BY AS OrderedBy, 
-                    CASE WHEN SOH_CANCELED_DATE IS NOT NULL THEN 'C' ELSE 'U' END AS Status,
+                    CASE 
+		                WHEN AR.ARO_INVOICE_NUMBER IS NOT NULL THEN 
+			                CASE 
+				                WHEN AR.ARO_DATE_PAID_IN_FULL IS NOT NULL THEN 'PAID'
+				                ELSE 'UNPAID'
+				                END
+		                ELSE 'NOT INVOICED'
+		                END as Status,
                     WHS_WAREHOUSE_NUMBER AS Location
 
                 FROM SALES_HEADER AS S
@@ -103,6 +111,7 @@ namespace SalesMetrics.Controllers
                     LEFT JOIN CUSTOMER_MASTER AS CUS ON CUS.CUM_CUMMAS_ID = S.SOH_CUMMAS_ID
                     LEFT JOIN PRICE_CODES AS P ON CUS.CUM_PRICE_CODE = P.IPC_PRICE_CODE
                     LEFT JOIN WAREHOUSE_MASTER ON WHS_WAREHOUSE_NUMBER = SOH_WHSMAS_ID
+                    LEFT JOIN AR_OPEN_ITEM as AR on S.SOH_NUMBER = AR.ARO_SALES_ORDER_NUMBER
                 WHERE 
                     S.SOH_DELIVERY_DATE = @FromDate
                     AND S.SOH_CURRENT_STATUS <> 4
@@ -146,6 +155,7 @@ namespace SalesMetrics.Controllers
                         UnitType = reader["UnitType"]?.ToString(),
                         DeliveryDate = reader["DeliveryDate"]?.ToString(),
                         MoveInDate = reader["MoveInDate"]?.ToString(),
+                        PaidInFullDate = reader["PaidInFullDate"]?.ToString(),
                         ProductClass = reader["ProductClass"]?.ToString(),
                         ProductDescription = reader["ProductDescription"]?.ToString(),
                         OrderedBy = reader["OrderedBy"]?.ToString(),
@@ -198,6 +208,7 @@ namespace SalesMetrics.Controllers
                     APT.Description AS UnitType,
                     CONVERT(VARCHAR, S.SOH_DELIVERY_DATE, 101) AS DeliveryDate,
                     CONVERT(VARCHAR, S.SOH_MOVING_DATE, 101) AS MoveInDate,
+                    ISNULL(AR.ARO_DATE_PAID_IN_FULL, '') AS PaidInFullDate,
 
                     ISNULL((
                         SELECT TOP 1 ITM_PCLMAS_ID
@@ -224,7 +235,14 @@ namespace SalesMetrics.Controllers
                     ), '') AS ProductDescription,
 
                     S.SOH_ORDERED_BY AS OrderedBy, 
-                    CASE WHEN SOH_CANCELED_DATE IS NOT NULL THEN 'C' ELSE 'U' END AS Status,
+                    CASE 
+		                WHEN AR.ARO_INVOICE_NUMBER IS NOT NULL THEN 
+			                CASE 
+				                WHEN AR.ARO_DATE_PAID_IN_FULL IS NOT NULL THEN 'PAID'
+				                ELSE 'UNPAID'
+				                END
+		                ELSE 'NOT INVOICED'
+		                END as Status,
                     WHS_WAREHOUSE_NUMBER AS Location
 
                 FROM SALES_HEADER AS S
@@ -234,6 +252,7 @@ namespace SalesMetrics.Controllers
                     LEFT JOIN CUSTOMER_MASTER AS CUS ON CUS.CUM_CUMMAS_ID = S.SOH_CUMMAS_ID
                     LEFT JOIN PRICE_CODES AS P ON CUS.CUM_PRICE_CODE = P.IPC_PRICE_CODE
                     LEFT JOIN WAREHOUSE_MASTER ON WHS_WAREHOUSE_NUMBER = SOH_WHSMAS_ID
+                    LEFT JOIN AR_OPEN_ITEM as AR on S.SOH_NUMBER = AR.ARO_SALES_ORDER_NUMBER
                 WHERE 
                     S.SOH_DELIVERY_DATE = @FromDate
                     AND S.SOH_CURRENT_STATUS <> 4
@@ -275,6 +294,7 @@ namespace SalesMetrics.Controllers
                         UnitType = reader["UnitType"]?.ToString(),
                         DeliveryDate = reader["DeliveryDate"]?.ToString(),
                         MoveInDate = reader["MoveInDate"]?.ToString(),
+                        PaidInFullDate = reader["MoveInDate"]?.ToString(),
                         ProductClass = reader["ProductClass"]?.ToString(),
                         ProductDescription = reader["ProductDescription"]?.ToString(),
                         OrderedBy = reader["OrderedBy"]?.ToString(),
@@ -346,6 +366,7 @@ namespace SalesMetrics.Controllers
 	
                         S.SOH_ORDER_DATE as [ORDER_DATE],
                         S.SOH_DELIVERY_DATE as [DELIVERY_DATE],
+                        A.ARO_DATE_PAID_IN_FULL as [DATE_PAID_IN_FULL],
                         ISNULL(A.ARO_INVOICE_BALANCE_DUE, S.SOH_BALANCE_DUE) as [BALANCE_DUE],
 	                    CASE 
                             WHEN A.ARO_INVOICE_NUMBER IS NOT NULL THEN
@@ -437,6 +458,7 @@ namespace SalesMetrics.Controllers
                             InvoiceNumber = reader["INVOICE_NUMBER"] == DBNull.Value ? 0 : Convert.ToInt32(reader["INVOICE_NUMBER"]),
                             OrderDate = reader["ORDER_DATE"] == DBNull.Value ? DateTime.MinValue : Convert.ToDateTime(reader["ORDER_DATE"]),
                             DeliveryDate = reader["DELIVERY_DATE"] == DBNull.Value ? DateTime.MinValue : Convert.ToDateTime(reader["DELIVERY_DATE"]),
+                            PaidInFullDate = reader["DATE_PAID_IN_FULL"] as string ?? "",
                             BalanceAmount = reader["BALANCE_DUE"] == DBNull.Value ? 0 : Convert.ToDecimal(reader["BALANCE_DUE"]),
                             OrderAging = reader["INVOICE_AGING"] as string ?? "",
                             CustomerPO = reader["CUSTOMER_PO"] as string ?? "",

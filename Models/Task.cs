@@ -40,12 +40,12 @@ namespace SalesMetrics.Models
         public string? Description { get; set; }
         // This is the combined value that will be saved
         public DateTime DueDate { get; set; }
-        
-        // These are form-only fields
+
+        //These are form-only fields
         [BindProperty]
-        public string DueDateDate { get; set; }
+        public string? DueDateDate { get; set; }
         [BindProperty]
-        public string DueDateTime { get; set; }
+        public string? DueDateTime { get; set; }
         public DateTime TaskEndDate { get; set; } // New property for end date
         public string? Type { get; set; }
         public string? Status { get; set; }

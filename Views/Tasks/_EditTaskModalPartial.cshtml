@@ -123,46 +123,6 @@
         }
 
     </div>
-
-    @* <script>
-        document.querySelector('form').addEventListener('submit', function (e) {
-            const date = document.getElementById('dueDate').value;
-            const time = document.getElementById('dueTime').value;
-
-            if (date && time) {
-                const combined = `${date} ${time}`; // "yyyy-MM-dd HH:mm"
-                document.getElementById('dueDateTimeHidden').value = combined;
-                Console.WriteLine("🕒 Received DueDate: " + updatedTask.DueDate.ToString("yyyy-MM-dd HH:mm:ss"));
-
-            }
-        });
-    </script> *@
-    @* <script>
-        const form = document.getElementById('editTaskForm');
-
-        form.addEventListener('submit', function (e) {
-            e.preventDefault(); // prevent immediate submission
-
-            const date = document.getElementById('dueDate').value;
-            const time = document.getElementById('dueTime').value;
-
-            if (date && time) {
-                const combined = new Date(`${date}T${time}`);
-                const isoString = combined.toISOString();
-                document.getElementById('dueDateTimeHidden').value = isoString;
-
-                // small delay to ensure value is set before submit
-                setTimeout(() => form.submit(), 10);
-            } else {
-                // fallback to now if missing
-                document.getElementById('dueDateTimeHidden').value = new Date().toISOString();
-                setTimeout(() => form.submit(), 10);
-            }
-        });
-    </script> *@
-
-
-
     <div class="modal-footer">
         <button type="submit" class="btn btn-success">Save Changes</button>
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>

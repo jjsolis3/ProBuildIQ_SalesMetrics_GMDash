@@ -38,7 +38,7 @@
 @*<div class="table-responsive">*@
     @if (Model.Tasks != null && Model.Tasks.Any())
     {
-        <table id="taskTable" class="table table-hover table-bordered table-striped" style="width:100%">
+        <table id="taskTable" class="table table-hover table-bordered table-striped dt-responsive" style="width:100%">
             <thead class="table-dark">
                 <tr>
                     <th>Title</th>
@@ -87,9 +87,17 @@
                         </td>
                         <td>@task.CreatedBy</td>
                         <td>
-                            <button class="btn btn-sm btn-info" data-bs-toggle="modal" data-bs-target="#editTaskModal" data-task-id="@task.TaskID">
-                                <i class="fa fa-edit fs-14"></i>
-                            </button>
+                            <div class="d-flex gap-1">
+                                <button class="btn btn-sm btn-info" data-bs-toggle="modal" data-bs-target="#editTaskModal" data-task-id="@task.TaskID">
+                                    <i class="fa fa-edit fs-14"></i>
+                                </button>
+                                <form id="deleteForm-@task.TaskID" method="post" asp-action="Delete" asp-controller="Tasks">
+                                    <input type="hidden" name="taskId" value="@task.TaskID" />
+                                    <button type="button" class="btn btn-sm btn-danger" onclick="confirmDelete(@task.TaskID)">
+                                        <i class="fa fa-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
                         </td>
                     </tr>
                 }
@@ -354,5 +362,23 @@
                 });
         });
     </script>
-
+    <script>
+        // Confirm Delete with SweetAlert2
+        function confirmDelete(taskId) {
+            Swal.fire({
+                title: 'Are you sure?',
+                text: "Do you really want to delete this task?",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Yes, delete it!',
+                reverseButtons: true
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    document.getElementById(`deleteForm-${taskId}`).submit();
+                }
+            });
+        }
+    </script>
 }

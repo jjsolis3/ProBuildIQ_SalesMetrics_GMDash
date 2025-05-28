@@ -30,7 +30,7 @@
     }
 
     .kpi-value {
-    font-size: clamp(1.0rem, 2.0vw, 1.7rem);
+    font-size: clamp(1.0rem, 1.8vw, 1.5rem);
     font-weight: 500;
     line-height: 0.5;
     word-break: break-word;
@@ -38,9 +38,10 @@
     }
 
 </style>
-
 }
-<div class="col-6 justify-content-center">
+
+<!-- SELECT OFFICE DROP-DOWN -->
+<div class="col-xl-3 col-md-3 col-sm-12 justify-content-center align-items-start">
     <div class="card shadow p-2">
         <form method="get" asp-controller="GM" asp-action="Index" class="mb-3">
             <label for="locationId" class="form-label">Select Seamless Branch:</label>
@@ -55,15 +56,95 @@
         </form>
     </div>
 </div>
+<!-- KPI TOP BUBBLES -->
+<div class="row">
+    <!-- SALES DATA -->
+    <div class="col-xl-3 col-md-3 col-sm-12 ">
+        <div class="card shadow mb-3">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    @(string.IsNullOrEmpty(ViewBag.LocationFullName as string) ? "MTD All Branches" : $"MTD for {ViewBag.LocationFullName}")
+                    <span class="badge bg-info ms-2">@ViewBag.MTDStartDateRange</span>
+                </h5>
+            </div>
+            <div class="card-body table-responsive p-2">
+                <div class="kpi-tile shadow-lg rounded p-0 d-flex flex-column justify-content-center align-items-start">
+                    <h6 class="kpi-value" style="margin: 0 auto;">$ @ViewBag.MTDSales</h6>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-3 col-sm-12">
+        <div class="card shadow mb-3">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    @(string.IsNullOrEmpty(ViewBag.LocationFullName as string) ? "YTD All Branches" : $"YTD for {ViewBag.LocationFullName}")
+                    <span class="badge bg-info ms-2">@ViewBag.YTDStartDateRange</span>
+                </h5>
+            </div>
+            <div class="card-body table-responsive p-2">
+                <div class="kpi-tile shadow-lg rounded p-0 d-flex flex-column justify-content-center align-items-start">
+                    <h6 class="kpi-value" style="margin: 0 auto;">$ @ViewBag.YTDSales</h6>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- ONLINE ORDERING KPI -->
+    @{
+        var onlineOrders = (List<SalesMetrics.Models.ViewModels.GMOnlineOrders>)Model.OnlineOrders;
+        var totalOrdersCount = onlineOrders.Sum(x => x.TotalOrders);
+        var onlineOrdersCount = onlineOrders.Sum(x => x.OnlineOrders);
+        var totalAmount = onlineOrders.Sum(x => x.TotalOrdersAmount);
+        var onlineAmount = onlineOrders.Sum(x => x.OnlineOrdersAmount);
+    }
+    <div class="col-xl-3 col-md-3 col-sm-12">
+        <div class="card shadow mb-3">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    Online Orders
+                    @(string.IsNullOrEmpty(ViewBag.LocationFullName as string) ? " | All Branches" : $" for {ViewBag.LocationFullName}")
+                </h5>
+            </div>
+            <div class="card-body table-responsive p-2 mt-2">
+                <div class="kpi-tile shadow-lg rounded p-0 d-flex flex-column justify-content-center align-items-start">
+                    <h5 class="kpi-value" style="margin: 0 auto;">@onlineAmount.ToString("C") <span class="badge bg-primary ms-2">ONLINE</span></h5>
+                    <p style="margin: 8px auto;">(of @totalAmount.ToString("C") in total orders)</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-3 col-sm-12">
+        <div class="card shadow mb-3">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    Online Orders
+                    @(string.IsNullOrEmpty(ViewBag.LocationFullName as string) ? " | All Branches" : $" for {ViewBag.LocationFullName}")
+                </h5>
+            </div>            
+            <div class="card-body table-responsive p-2">
+                <div class="kpi-tile shadow-lg rounded p-0 d-flex flex-column justify-content-center align-items-start">
+                    <h5 class="kpi-value" style="margin: 0 auto;">
+                        @Model.OnlineOrderPercentageOverall.ToString("0.0")% of Orders
+                    </h5>
+                    <p style="margin: 10px auto;">@onlineOrdersCount.ToString("N0") of @totalOrdersCount.ToString("N0") orders placed online)</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+</div>
+
+<!-- BEGIN GM DASHBOARD MODULES -->
 <div class="row">
     <!-- SALES RANKING BY OFFICE -->
     <div class="col-xl-4 col-md-4 col-sm-12">
         <div class="card shadow">
             <div class="card">
                 <div class="card-header">
-                    <h5>Sales Ranking by Seamless Location</h5>
+                    <h5 class="mb-0">Sales Ranking by Seamless Location</h5>
                 </div>
-                <table class="table table-hover table-bordered table-striped dt-responsive nowrap">
+                <table class="table table-bordered table-striped">
+                @* <table class="table table-hover table-bordered table-striped dt-responsive nowrap"> *@
                     <thead>
                         <tr>
                             <th>Location</th>
@@ -86,66 +167,12 @@
         </div>
     </div>
 
-    <!-- SALES DATA -->
-    <div class="col-xl-4 col-md-4 col-sm-12">
-        <div class="row">
-            <div class="card shadow mb-3">
-                <div class="card-body table-responsive p-2">
-                    <div class="col-12 mb-2">
-                        <div class="card-header">
-                            <h5 class="mb-0">
-                                @(string.IsNullOrEmpty(ViewBag.LocationFullName as string) ? "MTD All Branches" : $"MTD for {ViewBag.LocationFullName}")
-                                <span class="badge bg-info ms-2">@ViewBag.MTDStartDateRange</span>
-                            </h5>
-                        </div>
-                        <div class="kpi-tile shadow-lg rounded p-0 d-flex flex-column justify-content-center align-items-start">
-                            <h6 class="kpi-value" style="margin: 0 auto;">$ @ViewBag.MTDSales</h6>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="card shadow mb-2">
-                <div class="card-body table-responsive p-2">
-                    <div class="col-12 mb-2">
-                        <div class="card-header">
-                            <h5 class="mb-0">
-                                @(string.IsNullOrEmpty(ViewBag.LocationFullName as string) ? "YTD All Branches" : $"YTD for {ViewBag.LocationFullName}")
-                                <span class="badge bg-info ms-2">@ViewBag.YTDStartDateRange</span>
-                            </h5>
-                        </div>
-                        <div class="kpi-tile shadow-lg rounded p-0 d-flex flex-column justify-content-center align-items-start">
-                            <h6 class="kpi-value" style="margin: 0 auto;">$ @ViewBag.YTDSales</h6>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <!-- ONLINE ORDERING KPI -->
-    <div class="col-xl-4 col-md-4 col-sm-12">
-        <div class="card shadow mb-2">
-            <div class="card-header">
-                <h5>Online Ordering
-                    @(string.IsNullOrEmpty(ViewBag.LocationFullName as string) ? " | All Branches" : $" for {ViewBag.LocationFullName}")
-                </h5>
-            </div>
-            <div class="card-body text-center">
-                <h3>@Model.OnlineOrderPercentageOverall.ToString("0.0")% of Orders</h3>
-                @{
-                    var onlineOrders = (List<SalesMetrics.Models.ViewModels.GMOnlineOrders>)Model.OnlineOrders;
-                }
-                <p>(@onlineOrders.Sum(x => x.OnlineOrders) of @onlineOrders.Sum(x => x.TotalOrders) orders placed online)</p>
-
-            </div>
-        </div>
-    </div>   
-</div>
-<div class="row">
     <!-- AR BREAKDOWN -->
     <div class="col-xl-4 col-md-4 col-sm-12">
         <div class="card shadow">
             <div class="card-header">
-                <h5>AR Aging Breakdown
+                <h5>
+                    AR Aging Breakdown
                     @(string.IsNullOrEmpty(ViewBag.LocationFullName as string) ? " | All Branches" : $" for {ViewBag.LocationFullName}")
                 </h5>
             </div>
@@ -154,6 +181,41 @@
             </div>
         </div>
     </div>
+    
+    <!-- Online Ordering by Branch Table -->
+    <div class="col-xl-4 col-md-4 col-sm-12">
+        <div class="card shadow mb-3">
+            <div class="card-header">
+                <h5 class="mb-0">Online Ordering by Branch</h5>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-bordered table-striped">
+                    <thead>
+                        <tr>
+                            <th>Location</th>
+                            <th>Online $</th>
+                            <th>Online %</th>
+                            <th>Total $</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                            @foreach (var item in Model.OnlineOrders)
+                            {
+                                <tr>
+                                    <td><strong>@item.LocationName</strong></td>
+                                    <td>@item.OnlineOrdersAmount.ToString("C")</td>
+                                    <td>@item.OnlineOrderPercentage.ToString("0.0")%</td>
+                                    <td>@item.TotalOrdersAmount.ToString("C")</td>
+                                </tr>
+                            }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="row">
+    
 
 </div>
 

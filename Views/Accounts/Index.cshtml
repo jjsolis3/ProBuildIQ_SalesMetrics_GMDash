@@ -4,6 +4,11 @@
     ViewBag.Title = "Users";
     Layout = "~/Views/Shared/_Layout.cshtml";
 }
+<div class="mb-3 text-end">
+    <button class="btn btn-success open-create-user">
+        ➕ Add New User
+    </button>
+</div>
 
 <h4 class="mt-4 mb-4">Users Management</h4>
 
@@ -46,7 +51,7 @@
                     </td>
                     <td>@(user.LastLoginDate?.ToString("g") ?? "-")</td>
                     <td>
-                        <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#editUserModal" data-id="@user.Users_ID">Edit</button>
+                        <button class="btn btn-sm btn-primary open-edit-user" data-id="@user.Users_ID">Edit</button>
                     </td>
                 </tr>
             }
@@ -62,12 +67,16 @@
 </div>
 
 <!-- Edit Modal Template (can be populated via JS later) -->
-@await Html.PartialAsync("_EditUserModal", new SalesMetrics.Models.RegisterViewModel())
+<!-- Placeholder for dynamically loaded modal -->
+<div id="modalContainer"></div>
+
 
 @section Scripts {
     <link href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css" rel="stylesheet" />
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
     <script>
         $(document).ready(function () {
             $('#usersTable').DataTable({
@@ -78,15 +87,63 @@
                 fixedHeader: true
             });
 
-            // Prepare modal open event
-            $('#editUserModal').on('show.bs.modal', function (event) {
-                var button = $(event.relatedTarget);
-                var userId = button.data('id');
-                var modal = $(this);
+            // Show SweetAlert messages from TempData
+            @if (TempData["Success"] != null)
+            {
+                <text>
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Success',
+                            text: '@TempData["Success"]'
+                        });
+                </text>
+            }
+            @if (TempData["Error"] != null)
+            {
+                <text>
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Oops...',
+                            text: '@TempData["Error"]'
+                        });
+                </text>
+            }
+        });
 
-                modal.find('.modal-body').html('<p>Loading user data for ID ' + userId + '...</p>');
-                // TODO: Replace with AJAX call to load user details
+        // OPEN CREATE USER MODAL
+        $(document).on('click', '.open-create-user', function () {
+            $.get('/Accounts/GetCreateUserModal', function (html) {
+                $('#modalContainer').html(html);
+                const modalEl = document.getElementById('createUserModal');
+                const modal = new bootstrap.Modal(modalEl);
+                modal.show();
             });
         });
+
+        // OPEN EDIT USER MODAL
+        $(document).on('click', '.open-edit-user', function () {
+            var userId = $(this).data('id');
+
+            $.get('/Accounts/GetEditUserModal', { id: userId }, function (html) {
+                // Inject modal into placeholder
+                $('#modalContainer').html(html);
+
+                // Wait for DOM insertion to complete before calling Bootstrap Modal
+                setTimeout(function () {
+                    var modalEl = document.getElementById('editUserModal');
+                    if (modalEl) {
+                        var modal = new bootstrap.Modal(modalEl);
+                        modal.show();
+                    } else {
+                        console.error("Modal element not found after AJAX load.");
+                    }
+                }, 100); // Small delay ensures modal HTML is rendered
+            });
+        });
+
+
     </script>
+
+
+
 }

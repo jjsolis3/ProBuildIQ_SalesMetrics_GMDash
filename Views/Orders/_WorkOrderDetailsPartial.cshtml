@@ -56,7 +56,7 @@ else
                                 <td class="fw-bold">Salesperson: </td>
                                 <td class="fs-6">@Model.Header.Salesperson</td>
                             </tr>
-                            
+
                         </table>
                     </div>
                     <div class="col-md-6">
@@ -78,9 +78,9 @@ else
                                 <td class="fw-bold">Address: </td>
                                 <td class="fs-6"><i class="mdi mdi-map-marker" style="color: red;"></i>
                                     <a href="https://www.google.com/maps/search/?api=1&query=@Uri.EscapeDataString(Model.Header.DeliveryAddress)"
-                                       target="_blank"
-                                       rel="noopener noreferrer">
-                                            @Model.Header.DeliveryAddress
+                                    target="_blank"
+                                    rel="noopener noreferrer">
+                                        @Model.Header.DeliveryAddress
                                     </a>
                                 </td>
                             </tr>
@@ -151,9 +151,18 @@ else
                 <div class="mt-4 d-flex justify-content-between">
                     <div>
                         <p class="mb-0 text-muted fs-6">Ordered by: @Model.Header.OrderedBy</p>
+                        <p class="mb-1 text-muted fs-6">Paid in Full on: @Model.Header.PaidInFullDate.ToString()</p>
                     </div>
                     <div>
                         <table class="table table-borderless text-end">
+                            @if (!string.IsNullOrEmpty(Model.Header.PaidInFullDate))
+                            {
+                                <tr>
+                                    <td colspan="2" class="text-end">
+                                        <img src="~/assets/images/paid_stamp.png" style="width:150px;" />
+                                    </td>
+                                </tr>
+                            }
                             <tr>
                                 <td class="fw-bold"><h5>Total:</h5></td>
                                 <td><h5>@Model.LineItems.Sum(i => i.ProductTotal ?? 0).ToString("C")</h5></td>
@@ -161,11 +170,6 @@ else
                         </table>
                     </div>
                 </div>
-
-                @* <div class="mt-5 d-flex justify-content-between">
-                    <div class="text-center border-top pt-2 w-50">Customer Signature</div>
-                    <div class="text-center border-top pt-2 w-50">Authorized Signature</div>
-                </div> *@
             </div>
         </div>
         <div class="no-print mt-4 text-end">

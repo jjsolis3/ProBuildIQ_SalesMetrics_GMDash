@@ -20,7 +20,6 @@ namespace SalesMetrics.Controllers
 
     public class TasksController : Controller
     {
-
         private readonly IConfiguration _configuration;
         private readonly SalesMetricsDbContext _context;
 
@@ -79,10 +78,11 @@ namespace SalesMetrics.Controllers
             if (string.IsNullOrEmpty(userId))
                 return RedirectToAction("Login", "Auth");
             
+            int locationId = int.Parse(User.FindFirst("locationId")?.Value ?? "0");
             int roleId = int.Parse(User.FindFirst("roleId")?.Value ?? "0");
             int salesmanId = int.Parse(User.FindFirst("SalesmanId")?.Value ?? "0");
 
-            var tasks = GetTasksByUserId(Convert.ToInt32(userId));
+            var tasks = GetTasksByUserId(Convert.ToInt32(userId), locationId);
 
             // Backend Filtering
             if (filter == "active")
@@ -139,7 +139,7 @@ namespace SalesMetrics.Controllers
             }
             else
             {
-                tasks = GetTasksByUserId(userId);
+                tasks = GetTasksByUserId(userId, locationId);
                 users = GetActiveUsers(); // just for modal use
 
                 ViewBag.FilterUsers = users; // For regular users, just themselves
@@ -172,13 +172,14 @@ namespace SalesMetrics.Controllers
 
             int roleId = int.Parse(User.FindFirst("roleId")?.Value ?? "0");
             int salesmanId = int.Parse(User.FindFirst("SalesmanId")?.Value ?? "0");
+            int locationId = int.Parse(User.FindFirst("locationId")?.Value ?? "0");
 
             // In Task() action and any other that renders the task modal:
             ViewBag.UserId = userId;
             ViewBag.RoleId = roleId;
             ViewBag.SalesmanId = salesmanId;
 
-            var tasks = GetTasksByUserId(Convert.ToInt32(userId));
+            var tasks = GetTasksByUserId(Convert.ToInt32(userId), locationId);
             var users = GetActiveUsers();
 
             var viewModel = new TaskPageViewModel
@@ -232,7 +233,7 @@ namespace SalesMetrics.Controllers
                 // Reload page with existing task/user list
                 var viewModel = new TaskPageViewModel
                 {
-                    Tasks = GetTasksByUserId(userId),
+                    Tasks = GetTasksByUserId(userId, locationId),
                     Users = GetActiveUsers(),
                     NewTask = new SalesTask
                     {
@@ -329,12 +330,12 @@ namespace SalesMetrics.Controllers
                             }
                             else
                             {
-                                TempData["Warning"] = "Task created but failed to sync to Google Calendar & Google Task.";
+                                TempData["Success"] = "Task created Successfully.";
                             }
                         }
                         else
                         {
-                            TempData["Warning"] = "Google Calendar and Google Task not synced due to missing token.";
+                            TempData["Warning"] = "Task Created!";
                         }
                     }
                 }
@@ -514,22 +515,23 @@ namespace SalesMetrics.Controllers
                 {
                     conn.Open();
                     SqlCommand cmd = new SqlCommand(@"
-                    SELECT TaskID,
-                           Title,
-                           Description,
-                           DueDate,
-                           Status,
-                           AssignedTo,
-                           Location,
-                           Property,
-                           Type,
-                           CreatedBy,
-                           CreatedDate,
-                           ModifiedDate,
-                           CompletedDate,
-                           CancelledDate
-                    FROM Tasks
-                    WHERE Location = @LocationId
+                        SELECT TaskID,
+                               Title,
+                               Description,
+                               DueDate,
+                               Status,
+                               AssignedTo,
+                               Location,
+                               Property,
+                               Type,
+                               CreatedBy,
+                               CreatedDate,
+                               ModifiedDate,
+                               CompletedDate,
+                               CancelledDate
+                        FROM Tasks
+                        WHERE Location = @LocationId
+                            AND Status != 'Deleted'
                     ", conn);
 
                     cmd.Parameters.AddWithValue("@LocationId", locationId);
@@ -570,7 +572,7 @@ namespace SalesMetrics.Controllers
             return tasks;
         }
 
-        private List<SalesTask> GetTasksByUserId(int userId)
+        private List<SalesTask> GetTasksByUserId(int userId, int locationId)
         {
             string connectionString = _configuration.GetConnectionString("SalesMetrics");
             var tasks = new List<SalesTask>();
@@ -581,24 +583,28 @@ namespace SalesMetrics.Controllers
                 {
                     conn.Open();
                     SqlCommand cmd = new SqlCommand(@"
-                    SELECT TaskID,
-                           Title,
-                           Description,
-                           DueDate,
-                           Status,
-                           AssignedTo,
-                           Location,
-                           Property,
-                           Type,
-                           CreatedBy,
-                           CreatedDate,
-                           ModifiedDate,
-                           CompletedDate,
-                           CancelledDate
-                    FROM Tasks
-                    WHERE AssignedTo = @UserId", conn);
+                        SELECT TaskID,
+                               Title,
+                               Description,
+                               DueDate,
+                               Status,
+                               AssignedTo,
+                               Location,
+                               Property,
+                               Type,
+                               CreatedBy,
+                               CreatedDate,
+                               ModifiedDate,
+                               CompletedDate,
+                               CancelledDate
+                        FROM Tasks
+                        WHERE AssignedTo = @UserId
+                            AND Location = @LocationId
+                            AND Status != 'Deleted'
+                    ", conn);
 
                     cmd.Parameters.AddWithValue("@UserId", userId);
+                    cmd.Parameters.AddWithValue("@LocationId", locationId);
 
                     using (SqlDataReader reader = cmd.ExecuteReader())
                     {
@@ -722,19 +728,18 @@ namespace SalesMetrics.Controllers
 
             int userId = Convert.ToInt32(HttpContext.Session.GetString("UserId"));
             int roleId = Convert.ToInt32(HttpContext.Session.GetString("RoleId"));
-
+            int locationId = Convert.ToInt32(HttpContext.Session.GetString("LocationId"));
             SalesTask? task;
 
             if (roleId == 1 || roleId == 3)
             {
                 // Admins and Sales Admins can see all tasks by location
-                int locationId = Convert.ToInt32(HttpContext.Session.GetString("LocationId"));
                 task = GetAllTasksByLocation(locationId).FirstOrDefault(t => t.TaskID == id);
             }
             else
             {
                 // Sales users only see their own tasks
-                task = GetTasksByUserId(userId).FirstOrDefault(t => t.TaskID == id);
+                task = GetTasksByUserId(userId, locationId).FirstOrDefault(t => t.TaskID == id);
             }
 
             if (task == null)
@@ -965,9 +970,10 @@ namespace SalesMetrics.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> Delete(int id)
+        public async Task<IActionResult> Delete(int taskId)
         {
             var userId = Convert.ToInt32(HttpContext.Session.GetString("UserId"));
+            var locationId = Convert.ToInt32(HttpContext.Session.GetString("LocationId"));
 
             try
             {
@@ -975,8 +981,10 @@ namespace SalesMetrics.Controllers
                 await conn.OpenAsync();
 
                 // Get the GoogleAccessToken and RefreshToken
-                var tokenCmd = new SqlCommand("SELECT GoogleAccessToken, GoogleRefreshToken FROM Users WHERE UserID = @UserID", conn);
+                var tokenCmd = new SqlCommand("SELECT GoogleAccessToken, GoogleRefreshToken FROM Users WHERE UserID = @UserID and Location = @Location", conn);
                 tokenCmd.Parameters.AddWithValue("@UserID", userId);
+                tokenCmd.Parameters.AddWithValue("@Location", locationId);
+
                 string? accessToken = null, refreshToken = null;
                 using (var reader = await tokenCmd.ExecuteReaderAsync())
                 {
@@ -991,15 +999,22 @@ namespace SalesMetrics.Controllers
                 if (!string.IsNullOrEmpty(accessToken) && !string.IsNullOrEmpty(refreshToken))
                 {
                     var calendarService = new GoogleCalendarService(_configuration);
-                    await calendarService.DeleteTaskEventAsync(userId, accessToken, refreshToken, id.ToString());
+                    await calendarService.DeleteTaskEventAsync(userId, accessToken, refreshToken, taskId.ToString());
                 }
 
                 // Delete from DB
-                var deleteCmd = new SqlCommand("DELETE FROM Tasks WHERE TaskID = @TaskID", conn);
-                deleteCmd.Parameters.AddWithValue("@TaskID", id);
+                //var deleteCmd = new SqlCommand("DELETE FROM Tasks WHERE TaskID = @TaskID", conn);
+                var deleteCmd = new SqlCommand(@"
+                    UPDATE Tasks
+                    SET Status = 'Deleted',
+                        ModifiedDate = @ModifiedDate
+                    WHERE TaskID = @TaskID
+                ", conn);
+                deleteCmd.Parameters.AddWithValue("@TaskID", taskId);
+                deleteCmd.Parameters.AddWithValue("@ModifiedDate", DateTime.Now);
                 await deleteCmd.ExecuteNonQueryAsync();
 
-                TempData["Success"] = "Task deleted and removed from Google Calendar.";
+                TempData["Success"] = "Task has been deleted as requested.";
             }
             catch (Exception ex)
             {
@@ -1116,6 +1131,24 @@ namespace SalesMetrics.Controllers
         {
             var model = modal.Task;
 
+            if (!string.IsNullOrEmpty(model.DueDateDate) && !string.IsNullOrEmpty(model.DueDateTime))
+            {
+                var combined = $"{model.DueDateDate} {model.DueDateTime}";
+                if (DateTime.TryParse(combined, out var parsed))
+                {
+                    model.DueDate = parsed;
+                }
+                else
+                {
+                    ModelState.AddModelError("DueDate", "Invalid date/time.");
+                }
+            }
+            else
+            {
+                ModelState.AddModelError("DueDate", "Date and time are required.");
+            }
+
+
             if (model == null || string.IsNullOrWhiteSpace(model.Property))
             {
                 TempData["Error"] = "Invalid property info.";
@@ -1128,47 +1161,59 @@ namespace SalesMetrics.Controllers
                 return RedirectToAction("YardiProperties", "Yardi");
             }
 
-            // ✅ Convert TaskCreateViewModel ➜ TaskEntity
-            var task = new TaskEntity
+            try
             {
-                Title = string.IsNullOrWhiteSpace(model.Title) ? $"Follow up for {model.Property}" : model.Title,
-                Description = model.Description ?? "Yardi Matrix Related Task",
-                DueDate = model.DueDate == default ? DateTime.Now.AddDays(1) : model.DueDate,
-                PropertyID = model.PropertyID,
-                Property = model.Property,
-                Status = string.IsNullOrWhiteSpace(model.Status) ? "Pending" : model.Status,
-                Type = model.Type ?? "Follow Up",
-                CreatedBy = HttpContext.Session.GetString("Username") ?? "system",
-                CreatedDate = DateTime.Now
-            };
+                int roleId = int.Parse(User.FindFirst("roleId")?.Value ?? "0");
+                int salesmanId = int.Parse(User.FindFirst("SalesmanId")?.Value ?? "0");
 
-            // Handle nullable session-based properties
-            if (int.TryParse(HttpContext.Session.GetString("LocationId"), out var locId))
-                task.Location = locId;
-
-            int roleId = int.Parse(User.FindFirst("roleId")?.Value ?? "0");
-            int salesmanId = int.Parse(User.FindFirst("SalesmanId")?.Value ?? "0");
-
-            if (roleId == 1 || roleId == 3)
-            {
-                task.AssignedTo = (int)model.AssignedTo;
-            }
-            else
-            {
-                // fallback for Sales role (2) using hidden input
-                if (!int.TryParse(HttpContext.Session.GetString("UserId"), out var assignedTo))
+                // ✅ Convert TaskCreateViewModel ➜ TaskEntity
+                var task = new SalesTask
                 {
-                    TempData["Error"] = "Unable to determine assigned user.";
-                    return RedirectToAction("Index", "Home");
+                    Title = string.IsNullOrWhiteSpace(model.Title) ? $"Follow up for {model.Property}" : model.Title,
+                    Description = model.Description ?? "ERP Property Task",
+                    DueDate = model.DueDate == default ? DateTime.Now.AddDays(1) : model.DueDate,
+                    PropertyID = model.PropertyID,
+                    Property = model.Property,
+                    Status = string.IsNullOrWhiteSpace(model.Status) ? "Pending" : model.Status,
+                    Type = model.Type ?? "Follow Up",
+                    CreatedBy = HttpContext.Session.GetString("Username") ?? "system",
+                    CreatedDate = DateTime.Now,
+                    Location = int.TryParse(HttpContext.Session.GetString("LocationId"), out var locId) ? locId : 0,
+                    AssignedTo = (roleId == 1 || roleId == 3) ? model.AssignedTo : Convert.ToInt32(HttpContext.Session.GetString("UserId"))
+                };
+
+                // Handle nullable session-based properties
+                //if (int.TryParse(HttpContext.Session.GetString("LocationId"), out var locId))
+                //    task.Location = locId;
+
+                if (roleId == 1 || roleId == 3)
+                {
+                    task.AssignedTo = (int)model.AssignedTo;
                 }
-                task.AssignedTo = assignedTo;
+                else
+                {
+                    // fallback for Sales role (2) using hidden input
+                    if (!int.TryParse(HttpContext.Session.GetString("UserId"), out var assignedTo))
+                    {
+                        TempData["Error"] = "Unable to determine assigned user.";
+                        return RedirectToAction("Login", "Auth");
+                    }
+                    task.AssignedTo = assignedTo;
+                }
+
+                //_context.Tasks.Add(task);
+                //_context.SaveChanges();
+                int TaskID = SaveTaskToDatabase(task);
+
+                TempData["Success"] = $"Task created successfully for {task.Property} | Task ID: {TaskID}";
+                return RedirectToAction("Properties", "Sales");
             }
-
-            _context.Tasks.Add(task);
-            _context.SaveChanges();
-
-            TempData["Success"] = $"Task created for {model.Property}";
-            return RedirectToAction("YardiProperties", "Yardi");
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error creating task: {ex.Message}");
+                TempData["Error"] = $"Error creating Task for {model.Property}";
+                return StatusCode(500, $"Internal server error: {ex.Message}");
+            }
         }
 
         [HttpPost]
@@ -1224,7 +1269,7 @@ namespace SalesMetrics.Controllers
                 int TaskID = SaveTaskToDatabase(task);
 
                 TempData["Success"] = $"Task created successfully. Task ID: {TaskID}";
-                return RedirectToAction("Index", "Home");
+                return RedirectToAction("Index", "Dashboard");
             }
             catch (Exception ex)
             {
@@ -1274,7 +1319,7 @@ namespace SalesMetrics.Controllers
             }
             else
             {
-                tasks = GetTasksByUserId(userId);
+                tasks = GetTasksByUserId(userId, locationId);
                 users = GetActiveUsers();
             }
 

@@ -30,7 +30,7 @@ namespace SalesMetrics.Controllers
             using (var conn = new SqlConnection(connStr))
             {
                 conn.Open();
-                var cmd = new SqlCommand("SELECT TOP 1000 * FROM Users", conn);
+                var cmd = new SqlCommand("SELECT * FROM Users", conn);
                 using var reader = cmd.ExecuteReader();
 
                 while (reader.Read())
@@ -58,11 +58,13 @@ namespace SalesMetrics.Controllers
         public IActionResult Profile()
         {
             var userId = HttpContext.Session.GetString("UserId");
+            var locationId = Convert.ToInt32(HttpContext.Session.GetString("LocationId"));
 
             using var conn = new SqlConnection(_configuration.GetConnectionString("SalesMetrics"));
             conn.Open();
-            var cmd = new SqlCommand("SELECT FirstName, LastName, Email, GoogleEmail, GoogleAccessToken, GoogleRefreshToken FROM Users WHERE UserID = @UserID", conn);
+            var cmd = new SqlCommand("SELECT FirstName, LastName, Email, GoogleEmail, GoogleAccessToken, GoogleRefreshToken FROM Users WHERE UserID = @UserID and Location = @LocationId", conn);
             cmd.Parameters.AddWithValue("@UserID", userId);
+            cmd.Parameters.AddWithValue("@LocationId", locationId);
 
             var model = new UserProfileViewModel();
 
@@ -184,5 +186,138 @@ namespace SalesMetrics.Controllers
             TempData["Success"] = $"✅ Rehashed {users.Count} user passwords successfully.";
             return RedirectToAction("Index"); // Adjust if your user page action is named differently
         }
+
+        [HttpGet]
+        public IActionResult GetEditUserModal(int id)
+        {
+            var connStr = _configuration.GetConnectionString("SalesMetrics");
+            RegisterViewModel user = new();
+
+            using (var conn = new SqlConnection(connStr))
+            {
+                conn.Open();
+                var cmd = new SqlCommand("SELECT * FROM Users WHERE Users_ID = @id", conn);
+                cmd.Parameters.AddWithValue("@id", id);
+                using var reader = cmd.ExecuteReader();
+                if (reader.Read())
+                {
+                    user = new RegisterViewModel
+                    {
+                        UserId = Convert.ToInt32(reader["Users_ID"]),
+                        FirstName = reader["FirstName"]?.ToString(),
+                        LastName = reader["LastName"]?.ToString(),
+                        Username = reader["Username"]?.ToString(),
+                        Email = reader["Email"]?.ToString(),
+                        RoleId = Convert.ToInt32(reader["RoleID"]),
+                        LocationId = Convert.ToInt32(reader["Location"]),
+                        SalesmanId = reader["SalesmanID"] != DBNull.Value ? Convert.ToInt32(reader["SalesmanID"]) : null,
+                        SalesmanNumber = reader["SalesmanNumber"]?.ToString()
+                    };
+                    ViewBag.IsActive = Convert.ToBoolean(reader["IsActive"]);
+                }
+            }
+
+            return PartialView("_EditUserModal", user);
+        }
+
+        [HttpPost]
+        public IActionResult UpdateUser(RegisterViewModel model, bool IsActive)
+        {
+            if (!ModelState.IsValid)
+            {
+                TempData["Error"] = "Invalid user data submitted.";
+                return RedirectToAction("Index");
+            }
+
+            var connStr = _configuration.GetConnectionString("SalesMetrics");
+
+            using (var conn = new SqlConnection(connStr))
+            {
+                conn.Open();
+
+                var cmd = new SqlCommand(@"
+                    UPDATE Users
+                    SET FirstName = @FirstName,
+                        LastName = @LastName,
+                        Username = @Username,
+                        Email = @Email,
+                        RoleID = @RoleID,
+                        Location = @LocationID,
+                        SalesmanID = @SalesmanID,
+                        SalesmanNumber = @SalesmanNumber,
+                        IsActive = @IsActive,
+                        ModifiedDate = GETDATE()
+                    WHERE Users_ID = @UserID
+                ", conn);
+
+                cmd.Parameters.AddWithValue("@FirstName", model.FirstName ?? "");
+                cmd.Parameters.AddWithValue("@LastName", model.LastName ?? "");
+                cmd.Parameters.AddWithValue("@Username", model.Username ?? "");
+                cmd.Parameters.AddWithValue("@Email", model.Email ?? "");
+                cmd.Parameters.AddWithValue("@RoleID", model.RoleId);
+                cmd.Parameters.AddWithValue("@LocationID", model.LocationId);
+                cmd.Parameters.AddWithValue("@SalesmanID", (object?)model.SalesmanId ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@SalesmanNumber", (object?)model.SalesmanNumber ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@IsActive", IsActive);
+                cmd.Parameters.AddWithValue("@UserID", model.UserId);
+
+                cmd.ExecuteNonQuery();
+            }
+
+            TempData["Success"] = "User updated successfully.";
+            return RedirectToAction("Index");
+        }
+
+        [HttpGet]
+        public IActionResult GetCreateUserModal()
+        {
+            var model = new RegisterViewModel();
+            return PartialView("_CreateUserModal", model);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult CreateUser(RegisterViewModel model)
+        {
+            if (!ModelState.IsValid)
+            {
+                TempData["Error"] = "Invalid form input.";
+                return RedirectToAction("Index");
+            }
+
+            string salt = PasswordSecurity.GenerateSalt();
+            string hash = PasswordSecurity.HashPassword(model.Password, salt);
+
+            string connStr = _configuration.GetConnectionString("SalesMetrics");
+            using var conn = new SqlConnection(connStr);
+            conn.Open();
+
+            var cmd = new SqlCommand(@"
+                INSERT INTO Users 
+                    (Username, Password, FirstName, LastName, Email, UserID, RoleID, Location, SalesmanID, SalesmanNumber, CreatedDate, IsActive, PasswordHash, Salt)
+                VALUES 
+                    (@Username, @Password, @FirstName, @LastName, @Email, @UserId, @RoleId, @LocationId, @SalesmanId, @SalesmanNumber, GETDATE(), 1, @PasswordHash, @Salt)
+            ", conn);
+
+            cmd.Parameters.AddWithValue("@Username", model.Username);
+            cmd.Parameters.AddWithValue("@Password", model.Password);
+            cmd.Parameters.AddWithValue("@FirstName", model.FirstName);
+            cmd.Parameters.AddWithValue("@LastName", model.LastName);
+            cmd.Parameters.AddWithValue("@Email", model.Email);
+            cmd.Parameters.AddWithValue("@UserId", model.UserId);
+            cmd.Parameters.AddWithValue("@RoleId", model.RoleId);
+            cmd.Parameters.AddWithValue("@LocationId", model.LocationId);
+            cmd.Parameters.AddWithValue("@SalesmanId", (object?)model.SalesmanId ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@SalesmanNumber", (object?)model.SalesmanNumber ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@PasswordHash", hash);
+            cmd.Parameters.AddWithValue("@Salt", salt);
+
+            cmd.ExecuteNonQuery();
+
+            TempData["Success"] = "New user created.";
+            return RedirectToAction("Index");
+        }
+
+
     }
 }

@@ -26,5 +26,10 @@ namespace SalesMetrics.Services.Helpers
             var map = GetLocationMap();
             return map.ContainsKey(locationId) ? map[locationId] : null;
         }
+
+        public static int GetLocationId(string locationName)
+        {
+            return GetLocationMap().FirstOrDefault(x => x.Value == locationName).Key;
+        }
     }
 }

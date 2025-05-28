@@ -13,6 +13,7 @@ using UAParser;
 using System.Security.Cryptography;
 using System.Text;
 using SalesMetrics.Services;
+using Microsoft.EntityFrameworkCore.ValueGeneration.Internal;
 
 
 namespace SalesMetrics.Controllers
@@ -88,10 +89,11 @@ namespace SalesMetrics.Controllers
                     PasswordHash,
                     Salt
                 FROM Users
-                WHERE Username = @username and IsActive = 1
+                WHERE Username = @username and Location = @LocationId and IsActive = 1
                 ", conn);                
 
             cmd.Parameters.AddWithValue("@username", username);
+            cmd.Parameters.AddWithValue("@LocationId", locationId);
 
             using var reader = await cmd.ExecuteReaderAsync();
             if (!reader.Read())
@@ -100,26 +102,44 @@ namespace SalesMetrics.Controllers
                 return View("Login");
             }
 
+            try
+            {
+                string storedHash = reader["PasswordHash"]?.ToString();
+                string storedSalt = reader["Salt"]?.ToString();
+
+                // Validate Hash
+                if (string.IsNullOrEmpty(storedHash) || string.IsNullOrEmpty(storedSalt))
+                {
+                    ViewBag.Error = "This user is missing a hashed password.  Please contact the IT Dept.";
+                    return View("Login");
+                }
+
+                string inputHash = PasswordSecurity.HashPassword(password, storedSalt);
+
+                if (!string.Equals(inputHash, storedHash, StringComparison.OrdinalIgnoreCase))
+                {
+                    ViewBag.Error = "Invalid Password!";
+                    return View("Login");
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log the exception (optional)
+                ViewBag.Error = "An error occurred while processing your request. Please try again later.";
+
+                string storedPassword = reader["Password"]?.ToString() ?? "";
+                if (storedPassword != password)
+                {
+                    ViewBag.Error = "Invalid Password!";
+                    return View("Login");
+                }
+            }
             //string storedPassword = reader["Password"]?.ToString() ?? "";
             //if (storedPassword != password)
-
-            string storedHash = reader["PasswordHash"]?.ToString();
-            string storedSalt = reader["Salt"]?.ToString();
-
-            // Validate Hash
-            if (string.IsNullOrEmpty(storedHash) || string.IsNullOrEmpty(storedSalt))
-            {
-                ViewBag.Error = "This user is missing a hashed password.  Please contact the IT Dept.";
-                return View("Login");
-            }
-
-            string inputHash = PasswordSecurity.HashPassword(password, storedSalt);
-
-            if (!string.Equals(inputHash, storedHash, StringComparison.OrdinalIgnoreCase))
-            {
-                ViewBag.Error = "Invalid Password!";
-                return View("Login");
-            }
+            //{
+            //    ViewBag.Error = "Invalid Password!";
+            //    return View("Login");
+            //}                
 
             // Extract User Info
             salesMetricsUserId = Convert.ToInt32(reader["UserID"]);
@@ -181,8 +201,9 @@ namespace SalesMetrics.Controllers
             LogLoginAttempt(salesMetricsUserId, username, officeLocation, true);
 
             // UPDATE LastLoginDate in Users table
-            using var updateCmd = new SqlCommand("UPDATE Users SET LastLoginDate = GETDATE() WHERE UserID = @UserID", conn);
+            using var updateCmd = new SqlCommand("UPDATE Users SET LastLoginDate = GETDATE() WHERE UserID = @UserID and Location = @locationId", conn);
             updateCmd.Parameters.AddWithValue("@UserID", salesMetricsUserId);
+            updateCmd.Parameters.AddWithValue("@locationId", locationId);
             await updateCmd.ExecuteNonQueryAsync();
 
             return RedirectToAppropriatePage(role);
@@ -267,6 +288,12 @@ namespace SalesMetrics.Controllers
         private string GetUserIPAddress()
         {
             return HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown";
+        }
+
+        public static string GenerateSalt()
+        {
+            byte[] saltBytes = RandomNumberGenerator.GetBytes(16); // Generates a 128-bit salt
+            return Convert.ToBase64String(saltBytes);
         }
 
         private IActionResult RedirectToAppropriatePage(string userRole)

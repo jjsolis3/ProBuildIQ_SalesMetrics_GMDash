@@ -64,11 +64,18 @@
                             <tr>
                                 <th scope="row"><i class="mdi mdi-map-marker text-danger me-2 h4"></i> Address:</th>
                                 <td class="fs-5">
-                                    <a href="https://www.google.com/maps/search/?api=1&query=@Uri.EscapeDataString(Model.Address)"
-                                       target="_blank"
-                                       rel="noopener noreferrer">
-                                        @Model.Address
-                                    </a>
+                                    @if (!string.IsNullOrEmpty(Model.Address))
+                                    {
+                                        <a href="https://www.google.com/maps/search/?api=1&query=@Uri.EscapeDataString(Model.Address)"
+                                           target="_blank"
+                                           rel="noopener noreferrer">
+                                            @Model.Address
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">No address available</span>
+                                    }
                                 </td>
                             </tr>
                             <tr>
@@ -103,70 +110,32 @@
                     <div class="d-flex mb-3">
                         <div class="flex-grow-1">
                             <div>
-                                <h4 class="card-title mb-3 border-bottom pb-2">Accounts Receivable</h4>
+                                <h4 class="card-title mb-3 border-bottom pb-2">Property Notes</h4>
                                 <span class="text-muted"></span>
                             </div>
                         </div>
                     </div>
-                    <ul class="verti-timeline list-unstyled">
-                        <!-- Outstanding -->
-                        <li class="mb-3">
-                            <div class="d-flex">
-                                <div class="flex-shrink-0 me-3">
-                                    <i class="mdi mdi-cash-multiple h4 text-primary"></i>
-                                </div>
-                                <div class="flex-grow-1">
-                                    <div>
-                                        <h5 class="fs-14 mb-1">Outstanding AR Amount:</h5>
-                                        <span class="fs-5">@Model.ARAmountDue.ToString("C")</span>
+                    <div id="property-notes" style="max-height: 250px; overflow-y: auto;">
+                        @foreach (var note in Model.PropertyNotes)
+                        {
+                            <div class="mb-2 p-2 border-bottom">
+                                <div class="col-12 fs-6 text-end">@note.NoteText</div>
+                                <div class="row">
+                                    <div class="text-end">
+                                        <span class="col-4 text-muted small">@note.CreatedDate.ToString("g")</span> | 
+                                        <span cclass="fw-bold"> by: @note.CreatedBy</span>
                                     </div>
                                 </div>
                             </div>
-                        </li>
-                        <!-- Overdue Invoice Counts -->
-                        <li class="mb-3">
-                            <div class="d-flex">
-                                <div class="flex-shrink-0 me-3">
-                                    <i class="mdi mdi-cash-multiple h4 text-primary"></i>
-                                </div>
-                                <div class="flex-grow-1">
-                                    <div>
-                                        <h5 class="fs-14 mb-1">Open Invoices:</h5>
-                                        <span class="fs-5">@Model.AROverdueInvoiceCount</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </li>
-                        <!-- Over Due Invoices -->
-                        <li class="mb-3">
-                            <div class="d-flex">
-                                <div class="flex-shrink-0 me-3">
-                                    <i class="mdi mdi-cash-multiple h4 text-primary"></i>
-                                </div>
-                                <div class="flex-grow-1">
-                                    <div>
-                                        <h5 class="fs-14 mb-1">Total Revenue:</h5> 
-                                        <span class="fs-5">@Model.ARTotalSales.ToString("C")</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </li>
-                        <!-- Invoice Counts -->
-                        <li class="mb-3">
-                            <div class="d-flex">
-                                <div class="flex-shrink-0 me-3">
-                                    <i class="mdi mdi-cash-multiple h4 text-primary"></i>
-                                </div>
-                                <div class="flex-grow-1">
-                                    <div>
-                                        <h5 class="fs-14 mb-1">Total Invoices:</h5> 
-                                        <span class="fs-5">@Model.ARInvoiceCount</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </li>
-                        
-                    </ul>
+                        }
+                    </div>
+                    <form id="add-property-note-form" method="post" action="/Sales/AddPropertyNote">
+                        <input type="hidden" name="PropertyId" value="@Model.PropertyId" />
+                        <input type="hidden" name="PropertyNumber" value="@Model.CustomerNumber" />
+                        <input type="hidden" name="PropertyName" value="@Model.CustomerName" />
+                        <textarea class="form-control mb-2" name="NoteText" rows="2" placeholder="Add a new note..."></textarea>
+                        <button type="submit" class="btn btn-sm btn-outline-primary w-100">Add Note</button>
+                    </form>
                 </div>
 
             </div>
@@ -199,8 +168,8 @@
                                 </div>
                             </div>
                             <div class="flex-grow-1 ms-3">
-                                <p class="text-muted fw-medium mb-2">Completed Projects</p>
-                                <h4 class="mb-0">@Model.CompletedOrders</h4>
+                                <p class="text-muted fw-medium mb-2">AR Amount Due</p>
+                                <h4 class="mb-0">@Model.ARAmountDue.ToString("C")</h4>
                             </div>
                         </div>
                     </div>
@@ -260,8 +229,8 @@
                             <th>Qty</th>
                             <th>Unit #</th>
                             <th>Unit Type</th>
-                            <th>Delivery</th>
-                            <th>Move-In</th>
+                            <th>Installed</th>
+                            <th>Paid Date</th>
                             <th>Class</th>
                             <th>Description</th>
                             <th>Ordered By</th>
@@ -270,36 +239,36 @@
                         </tr>
                     </thead>
                     <tbody>
-                            @foreach (var order in Model.WorkOrders)
-                            {
-                            <tr>
-                                <td>
-                                    <a href="javascript:void(0)" class="view-order" data-id="@order.OrderID">
-                                        @order.OrderID
-                                    </a>
-                                </td>
-                                <td>@order.OrderType</td>
-                                <td>@order.Qty</td>
-                                <td>@order.UnitNumber</td>
-                                <td>@order.UnitType</td>
-                                <td data-order="@DateTime.Parse(order.DeliveryDate).ToString("yyyy-MM-dd")">@order.DeliveryDate</td>
-                                @{
-                                    var moveInRaw = order.MoveInDate;
-                                    string moveInFormatted = "";
-                                    if (DateTime.TryParse(moveInRaw, out var moveInDate))
-                                    {
-                                        moveInFormatted = moveInDate.ToString("yyyy-MM-dd");
-                                    }
+                        @foreach (var order in Model.WorkOrders)
+                        {
+                        <tr>
+                            <td>
+                                <a href="javascript:void(0)" class="view-order" data-id="@order.OrderID">
+                                    @order.OrderID
+                                </a>
+                            </td>
+                            <td>@order.OrderType</td>
+                            <td>@order.Qty</td>
+                            <td>@order.UnitNumber</td>
+                            <td>@order.UnitType</td>
+                            <td data-order="@DateTime.Parse(order.DeliveryDate).ToString("yyyy-MM-dd")">@order.DeliveryDate</td>
+                            @{
+                                var paidInRaw = order.PaidInFullDate;
+                                string paidInFormatted = "";
+                                if (DateTime.TryParse(paidInRaw, out var paidInDate))
+                                {
+                                    paidInFormatted = paidInDate.ToString("yyyy-MM-dd");
                                 }
-                                <td data-order="@moveInFormatted">@moveInRaw</td>
-
-                                <td>@order.ProductClass</td>
-                                <td>@order.ProductDescription</td>
-                                <td>@order.OrderedBy</td>
-                                <td>@order.Status</td>
-                                <td>@order.Location</td>
-                            </tr>
                             }
+                            <td data-order="@paidInFormatted">@paidInRaw</td>
+
+                            <td>@order.ProductClass</td>
+                            <td>@order.ProductDescription</td>
+                            <td>@order.OrderedBy</td>
+                            <td>@order.Status</td>
+                            <td>@order.Location</td>
+                        </tr>
+                        }
                     </tbody>
                 </table>
             </div>

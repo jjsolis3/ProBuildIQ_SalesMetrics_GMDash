@@ -78,11 +78,19 @@ namespace SalesMetrics.Models.ViewModels
 
     public class GMOnlineOrders
     {
+        public int LocationID { get; set; }
+        public string LocationName { get; set; }
+
         public int TotalOrders { get; set; }
         public int OnlineOrders { get; set; }
 
         public double OnlineOrderPercentage => TotalOrders > 0 
             ? (double)OnlineOrders / TotalOrders * 100 : 0;
+
+        public decimal TotalOrdersAmount { get; set; }
+        public decimal OnlineOrdersAmount { get; set; }
     }
+
+
 }
 

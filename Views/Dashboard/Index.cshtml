@@ -506,7 +506,7 @@
                     @foreach (var customer in summary?.TopDelinquentCustomers ?? new List<CustomerOutstanding>())
                     {
                         <div class="d-flex align-items-center justify-content-between mb-2">
-                            <a asp-controller="Sales" asp-action="PropertyDetails" asp-route-id="@customer.CustomerId">
+                            <a asp-controller="Properties" asp-action="PropertyDetails" asp-route-id="@customer.CustomerId">
                                 <h5 class="mb-0" style="font-size: clamp(0.75rem, 1vw, 0.85rem);"><i class="fas fa-user text-danger me-2"></i>@customer.CustomerName</h5>
                             </a>
                             <p class="text-muted mb-0" style="font-size: clamp(0.75rem, 1vw, 0.85rem); font-weight:400;">@customer.OutstandingAmount.ToString("C")</p>
@@ -548,7 +548,7 @@
                             <tr>
                                 <td>@cust.CustomerNumber</td>
                                 <td>
-                                    <a asp-controller="Sales" asp-action="PropertyDetails" asp-route-id="@cust.CustomerId">
+                                    <a asp-controller="Properties" asp-action="PropertyDetails" asp-route-id="@cust.CustomerId">
                                         @cust.CustomerName
                                     </a>
                                 </td>
@@ -615,7 +615,7 @@
                                     </a>
                                 </td>
                                 <td>
-                                    <a asp-controller="Sales" asp-action="PropertyDetails" asp-route-id="@invoice.CustomerId">@invoice.CustomerName</a>
+                                    <a asp-controller="Properties" asp-action="PropertyDetails" asp-route-id="@invoice.CustomerId">@invoice.CustomerName</a>
                                 </td>
                                 <td>@invoice.MgmtCo</td>
                                 <td>@String.Format("{0:C}", invoice.OutstandingAmount)</td>

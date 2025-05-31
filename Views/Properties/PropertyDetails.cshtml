@@ -103,7 +103,7 @@
                 </div>
             </div>
 
-            <!-- BOTTOM ABOUT SECTION -->
+            <!-- BOTTOM SECTION - NOTES -->
             <div class="card-body border-top">
                 <h4 class="card-title mb-4"></h4>
                 <div class="">
@@ -129,7 +129,7 @@
                             </div>
                         }
                     </div>
-                    <form id="add-property-note-form" method="post" action="/Sales/AddPropertyNote">
+                    <form id="add-property-note-form" method="post" action="/Properties/AddPropertyNote">
                         <input type="hidden" name="PropertyId" value="@Model.PropertyId" />
                         <input type="hidden" name="PropertyNumber" value="@Model.CustomerNumber" />
                         <input type="hidden" name="PropertyName" value="@Model.CustomerName" />
@@ -156,14 +156,14 @@
 
         <!-- Data Bubbles -->
         <div class="row">
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <div class="card">
                     <div class="card-body">
                         <div class="d-flex">
                             <div class="flex-shrink-0 align-self-center">
-                                <div class="avatar-sm rounded bg-info-subtle text-info d-flex align-items-center justify-content-center">
+                                <div class="avatar-sm rounded bg-danger-subtle text-danger d-flex align-items-center justify-content-center">
                                     <span class="avatar-title">
-                                        <i class="mdi mdi-check-circle-outline fs-24"></i>
+                                        <i class="mdi mdi-cash-usd-outline fs-24"></i>
                                     </span>
                                 </div>
                             </div>
@@ -175,7 +175,7 @@
                     </div>
                 </div>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <div class="card">
                     <div class="card-body">
                         <div class="d-flex">
@@ -194,12 +194,31 @@
                     </div>
                 </div>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <div class="card">
                     <div class="card-body">
                         <div class="d-flex">
                             <div class="flex-shrink-0 align-self-center">
-                                <div class="avatar-sm rounded bg-danger-subtle text-danger d-flex align-items-center justify-content-center">
+                                <div class="avatar-sm rounded bg-info-subtle text-info d-flex align-items-center justify-content-center">
+                                    <span class="avatar-title">
+                                        <i class="mdi mdi-check-circle-outline"></i>
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="flex-grow-1 ms-3">
+                                <p class="text-muted fw-medium mb-2">Completed Projects</p>
+                                <h4 class="mb-0">@Model.CompletedOrders</h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex">
+                            <div class="flex-shrink-0 align-self-center">
+                                <div class="avatar-sm rounded bg-primary-subtle text-primary d-flex align-items-center justify-content-center">
                                     <span class="">
                                         <i class="mdi mdi-chart-line fs-24"></i>
                                     </span>

@@ -31,5 +31,17 @@ namespace SalesMetrics.Services.Helpers
         {
             return GetLocationMap().FirstOrDefault(x => x.Value == locationName).Key;
         }
+
+        public static Dictionary<int, (string Code, string Name)> Locations = new()
+        {
+            { 1, ("LAX", "Los Angeles") },
+            { 2, ("LSV", "Las Vegas") },
+            { 3, ("CHN", "Chino") },
+            { 4, ("PHX", "Phoenix") },
+            { 5, ("SND", "San Diego") }
+        };
+
+        public static string? GetLocationCode(int id) => Locations.ContainsKey(id) ? Locations[id].Code : null;
+        public static string GetLocationName(int id) => Locations.ContainsKey(id) ? Locations[id].Name : "Unknown";
     }
 }

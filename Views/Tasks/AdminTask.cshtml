@@ -87,7 +87,7 @@
                         </td>
                         <td>@task.CreatedBy</td>
                         <td>
-                            <div class="d-flex gap-1">
+                            <div class="d-flex gap-1 align-items-center">
                                 <button class="btn btn-sm btn-info" data-bs-toggle="modal" data-bs-target="#editTaskModal" data-task-id="@task.TaskID">
                                     <i class="fa fa-edit fs-14"></i>
                                 </button>
@@ -322,7 +322,9 @@
 
     <script>
         // Inline Status Update
-        $(".status-dropdown").change(function () {
+        //$(".status-dropdown").change(function () {
+        $('#taskTable tbody').on("change", ".status-dropdown", function () {
+
             var taskId = $(this).data("task-id");
             var newStatus = $(this).val();
 

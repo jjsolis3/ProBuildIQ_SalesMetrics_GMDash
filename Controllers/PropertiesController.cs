@@ -15,13 +15,13 @@ using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace SalesMetrics.Controllers
 {
-    public class SalesController : Controller
+    public class PropertiesController : Controller
     {
         private readonly IConfiguration _configuration;
 
         private readonly IMemoryCache _cache;
 
-        public SalesController(IConfiguration configuration)
+        public PropertiesController(IConfiguration configuration)
         {
             _configuration = configuration;
         }
@@ -581,18 +581,19 @@ namespace SalesMetrics.Controllers
                     AND CUS.CUM_CUMMAS_ID = @id
             ";
 
-            if (roleId == 2)
-            {
-                sql += " AND SOH_SMNMAS_ID = @SalesmanID";
-            }
+            //if (roleId == 2)
+            //{
+            //    sql += " AND SOH_SMNMAS_ID = @SalesmanID";
+            //}
 
             using (SqlConnection conn = new SqlConnection(connectionString))
             {
                 conn.Open();
                 SqlCommand cmd = new SqlCommand(sql, conn);
                 cmd.Parameters.AddWithValue("@id", customerId);
-                if (roleId == 2)
-                    cmd.Parameters.AddWithValue("@SalesmanID", salesmanId);
+
+                //if (roleId == 2)
+                //    cmd.Parameters.AddWithValue("@SalesmanID", salesmanId);
 
                 using var reader = cmd.ExecuteReader();
                 while (reader.Read())

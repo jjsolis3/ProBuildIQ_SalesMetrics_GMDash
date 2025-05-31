@@ -894,9 +894,32 @@ namespace SalesMetrics.Controllers
         public async Task<IActionResult> Update(TaskModalViewModel modal)
         {
             string connStr = _configuration.GetConnectionString("SalesMetrics");
+            
             var userId = Convert.ToInt32(HttpContext.Session.GetString("UserId"));
+            var roleId = Convert.ToInt32(HttpContext.Session.GetString("RoleId"));
 
             var updatedTask = modal.Task;
+
+            try
+            {
+                if (!string.IsNullOrEmpty(updatedTask.DueDateDate) && !string.IsNullOrEmpty(updatedTask.DueDateTime))
+                {
+                    var combinedString = $"{updatedTask.DueDateDate} {updatedTask.DueDateTime}";
+                    if (DateTime.TryParse(combinedString, out var parsedDate))
+                    {
+                        updatedTask.DueDate = parsedDate;
+                    }
+                    else
+                    {
+                        TempData["Error"] = "Invalid date/time provided.";
+                        return RedirectToAction("AdminTask");
+                    }
+                }
+            }
+            catch
+            {
+                updatedTask.DueDate = DateTime.Now;
+            }
 
             try
             {
@@ -904,7 +927,8 @@ namespace SalesMetrics.Controllers
                 {
                     conn.Open();
                     string query = @"
-                        UPDATE Tasks SET
+                        UPDATE Tasks 
+                        SET
                             Title = @Title,
                             Description = @Description,
                             DueDate = @DueDate,
@@ -934,7 +958,14 @@ namespace SalesMetrics.Controllers
                         cmd.Parameters.AddWithValue("@AssignedTo", updatedTask.AssignedTo);
                         cmd.Parameters.AddWithValue("@TaskID", updatedTask.TaskID);
 
-                        cmd.ExecuteNonQuery();
+                        int rowsAffected = cmd.ExecuteNonQuery();
+                        if (rowsAffected == 0)
+                        {
+                            Console.WriteLine($"[WARNING] No rows updated. TaskID = {updatedTask.TaskID}");
+                            TempData["Error"] = "Update failed. Task not found or no changes applied.";
+                            return RedirectToAction("Task");
+                        }
+                        //cmd.ExecuteNonQuery();
                     }
 
                     // Pull Google token info
@@ -957,7 +988,7 @@ namespace SalesMetrics.Controllers
                     }
                 }
 
-                TempData["Success"] = "Task updated and synced with Google Calendar.";
+                TempData["Success"] = $"Task {updatedTask.TaskID.ToString()}  |  {updatedTask.Title.ToString()} | has been updated.";
 
             }
             catch (Exception ex)

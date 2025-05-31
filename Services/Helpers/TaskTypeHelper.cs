@@ -8,7 +8,7 @@ namespace SalesMetrics.Services.Helpers
         {
             return source switch
             {
-                "Task" or "AdminTask" or "Calendar" => new List<SelectListItem>
+                "Task" or "AdminTask" or "Calendar" or "Schedule" => new List<SelectListItem>
                 {
                     new("Measure", "Measure"),
                     new("Follow Up", "Follow Up"),

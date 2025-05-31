@@ -31,7 +31,6 @@
             </div>
             <div class="mb-3 col-6">
                 <label class="form-label">Start Time</label>
-                @* <input type="time" class="form-control" id="dueTime" value="@Model.Task.DueDate.ToString("HH:mm")" /> *@
                 <select class="form-select" id="dueTime" name="Task.DueDateTime">
                     @{
                         var taskTime = Model.Task.DueDate.ToString("HH:mm");
@@ -128,3 +127,18 @@
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
     </div>
 </form>
+
+@section Scripts {
+    <script>
+        document.getElementById('editTaskForm').addEventListener('submit', function () {
+            const date = document.querySelector('[name="Task.DueDateDate"]').value;
+            const time = document.querySelector('[name="Task.DueDateTime"]').value;
+            const hidden = document.getElementById('dueDateTimeHidden');
+
+            if (date && time) {
+                hidden.value = `${date}T${time}`; // ISO format
+            }
+        });
+    </script>
+
+}

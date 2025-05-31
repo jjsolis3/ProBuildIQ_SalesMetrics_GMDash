@@ -148,13 +148,13 @@ else
                     </div>
                 }
 
-                <div class="mt-4 d-flex justify-content-between">
-                    <div>
+                <div class="mt-4 d-flex justify-content-between align-items-end" style="min-height: 160px;">
+                    <div class="align-self-end">
                         <p class="mb-0 text-muted fs-6">Ordered by: @Model.Header.OrderedBy</p>
                         <p class="mb-1 text-muted fs-6">Paid in Full on: @Model.Header.PaidInFullDate.ToString()</p>
                     </div>
-                    <div>
-                        <table class="table table-borderless text-end">
+                    <div class="align-self-end">
+                        <table class="table table-borderless text-end mb-0">
                             @if (!string.IsNullOrEmpty(Model.Header.PaidInFullDate))
                             {
                                 <tr>
@@ -170,6 +170,8 @@ else
                         </table>
                     </div>
                 </div>
+
+
             </div>
         </div>
         <div class="no-print mt-4 text-end">

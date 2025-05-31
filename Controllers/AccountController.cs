@@ -151,7 +151,12 @@ namespace SalesMetrics.Controllers
             using (var conn = new SqlConnection(connStr))
             {
                 conn.Open();
-                var cmd = new SqlCommand("SELECT UserID, Password FROM Users WHERE Password IS NOT NULL", conn);
+                var cmd = new SqlCommand(@"SELECT UserID, Password 
+                    FROM Users 
+                    WHERE Password IS NOT NULL
+                        AND PasswordHash is NULL
+                        AND Salt IS NULL
+                ", conn);
                 using var reader = cmd.ExecuteReader();
                 while (reader.Read())
                 {

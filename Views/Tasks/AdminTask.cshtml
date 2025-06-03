@@ -81,7 +81,6 @@
                                 var assignedUser = Model.Users?.FirstOrDefault(u => u.UserID == task.AssignedTo);
                             }
 
-                            @*(assignedUser != null ? $"{assignedUser.FirstName} {assignedUser.LastName}" : $"{task.AssignedTo}")*@
                             @(assignedUser != null ? $"{assignedUser.FirstName} {assignedUser.LastName}" : "Unassigned")
 
                         </td>

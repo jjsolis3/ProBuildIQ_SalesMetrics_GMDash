@@ -1,0 +1,52 @@
+﻿@model List<SalesMetrics.Models.RTJEntry>
+
+@{
+    var grouped = Model
+        .GroupBy(r => r.Location)
+        .Select(g => new
+        {
+            Location = g.Key,
+            Entries = g.ToList()
+        }).ToList();
+}
+
+@foreach (var group in grouped)
+{
+    <div class="modal fade" id="rtjModal_@group.Location" tabindex="-1" aria-labelledby="rtjModalLabel_@group.Location" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">RTJ Details for @group.Location</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-2">
+                    <table class="table table-sm table-bordered" id="rtjTable_@group.Location">
+                        <thead class="table-light text-center">
+                            <tr>
+                                <th>Date</th>
+                                <th>Whs</th>
+                                <th>Jrnl#</th>
+                                <th>Adjustment Comments</th>
+                                <th>Debit</th>
+                                <th>Credit</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in group.Entries)
+                            {
+                                <tr>
+                                    <td data-order="@item">@item.Date.ToString("MM/dd/yyyy")</td>
+                                    <td class="text-center">@item.WarehouseNumber</td>
+                                    <td class="text-center">@item.JournalNumber</td>
+                                    <td>@item.AdjustmentComments</td>
+                                    <td>@item.Debit.ToString("C")</td>
+                                    <td>@item.Credit.ToString("C")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+}

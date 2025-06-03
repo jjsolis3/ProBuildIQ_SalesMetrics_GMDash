@@ -51,6 +51,8 @@ namespace SalesMetrics.Controllers
                 }
             }
 
+            ViewBag.FlaggedUsers = GetFlaggedUsers(); // Get flagged users for display
+
             return View(users);
         }
 
@@ -72,6 +74,8 @@ namespace SalesMetrics.Controllers
             {
                 if (reader.Read())
                 {
+                    model.FirstName = reader["FirstName"]?.ToString();
+                    model.LastName = reader["LastName"]?.ToString();
                     model.FullName = reader["FirstName"] + " " + reader["LastName"];
                     model.Email = reader["Email"]?.ToString();
                     model.GoogleEmail = reader["GoogleEmail"]?.ToString();
@@ -145,13 +149,14 @@ namespace SalesMetrics.Controllers
 
             string connStr = _configuration.GetConnectionString("SalesMetrics");
 
-            var users = new List<(int UserId, string Password)>();
+            var usersToFix = new List<(int UserId, string Password)>();
 
             // Step 1: Get all users with non-null passwords
             using (var conn = new SqlConnection(connStr))
             {
                 conn.Open();
-                var cmd = new SqlCommand(@"SELECT UserID, Password 
+                var cmd = new SqlCommand(@"
+                    SELECT UserID, Password 
                     FROM Users 
                     WHERE Password IS NOT NULL
                         AND PasswordHash is NULL
@@ -160,7 +165,7 @@ namespace SalesMetrics.Controllers
                 using var reader = cmd.ExecuteReader();
                 while (reader.Read())
                 {
-                    users.Add((reader.GetInt32(0), reader.GetString(1)));
+                    usersToFix.Add((reader.GetInt32(0), reader.GetString(1)));
                 }
             }
 
@@ -168,7 +173,7 @@ namespace SalesMetrics.Controllers
             using (var conn = new SqlConnection(connStr))
             {
                 conn.Open();
-                foreach (var user in users)
+                foreach (var user in usersToFix)
                 {
                     string salt = PasswordSecurity.GenerateSalt();
                     string hash = PasswordSecurity.HashPassword(user.Password, salt);
@@ -188,7 +193,7 @@ namespace SalesMetrics.Controllers
                 }
             }
 
-            TempData["Success"] = $"✅ Rehashed {users.Count} user passwords successfully.";
+            TempData["Success"] = $"✅ Rehashed {usersToFix.Count} user passwords successfully.";
             return RedirectToAction("Index"); // Adjust if your user page action is named differently
         }
 
@@ -320,6 +325,129 @@ namespace SalesMetrics.Controllers
             cmd.ExecuteNonQuery();
 
             TempData["Success"] = "New user created.";
+            return RedirectToAction("Index");
+        }
+
+        private List<FlaggedUserViewModel> GetFlaggedUsers()
+        {
+            var flaggedUsers = new List<FlaggedUserViewModel>();
+            string connStr = _configuration.GetConnectionString("SalesMetrics");
+
+            using var conn = new SqlConnection(connStr);
+            conn.Open();
+
+            var cmd = new SqlCommand(@"
+                SELECT 
+                    Users_ID, FirstName, LastName, Username, Email, Location, Password, Salt, PasswordHash, PasswordChangedDate
+                FROM Users
+                WHERE IsActive = 1 AND Password IS NOT NULL
+            ", conn);
+
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                string reason = "";
+                int userId = Convert.ToInt32(reader["Users_ID"]);
+                string username = reader["Username"].ToString()!;
+                string email = reader["Email"]?.ToString() ?? "";
+                string firstName = reader["FirstName"]?.ToString() ?? "";
+                string lastName = reader["LastName"]?.ToString() ?? "";
+                int locationid = Convert.ToInt32(reader["Location"]);
+                string password = reader["Password"].ToString()!;
+                string? salt = reader["Salt"]?.ToString();
+                string? storedHash = reader["PasswordHash"]?.ToString();
+                DateTime? changedDate = reader["PasswordChangedDate"] == DBNull.Value
+                    ? null
+                    : Convert.ToDateTime(reader["PasswordChangedDate"]);
+                // Define the date to check password change againt today at June 3rd 2025 at 10AM PST
+                DateTime PasswordDateCheck = new DateTime(2025, 6, 3, 10, 0, 0, DateTimeKind.Utc);
+
+                // Reason logic
+                List<string> issues = new();
+                if (string.IsNullOrEmpty(salt) || string.IsNullOrEmpty(storedHash))
+                    issues.Add("Missing hash or salt");
+                if (changedDate == null || changedDate < PasswordDateCheck)
+                    issues.Add("Account has not been updated");
+                string simulatedHash = PasswordSecurity.HashPassword(password, salt);
+                if (!string.Equals(simulatedHash, storedHash, StringComparison.OrdinalIgnoreCase))
+                    issues.Add("Password hash mismatch");
+
+                reason = string.Join(" | ", issues);
+
+                if (!string.IsNullOrEmpty(reason))
+                {
+                    flaggedUsers.Add(new FlaggedUserViewModel
+                    {
+                        Users_ID = userId,
+                        FirstName = firstName,
+                        LastName = lastName,
+                        Username = username,
+                        Email = email,
+                        LocationId = locationid, 
+                        Reason = reason
+                    });
+                }
+
+                
+            }
+
+            return flaggedUsers;
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult FixUserPassword(int userId, int locationId)
+        {
+            string connStr = _configuration.GetConnectionString("SalesMetrics");
+
+            using var conn = new SqlConnection(connStr);
+            conn.Open();
+
+            // 1. Retrieve plain password for user+location
+            var cmd = new SqlCommand(@"
+                SELECT Password 
+                FROM Users 
+                WHERE Users_ID = @UserId 
+                    AND Location = @LocationId 
+                    AND Password IS NOT NULL
+            ", conn);
+
+            cmd.Parameters.AddWithValue("@UserId", userId);
+            cmd.Parameters.AddWithValue("@LocationId", locationId);
+
+            string? plainPassword = cmd.ExecuteScalar()?.ToString();
+
+            if (string.IsNullOrEmpty(plainPassword))
+            {
+                TempData["Error"] = "❌ Password missing for this user.";
+                return RedirectToAction("Index");
+            }
+
+            // 2. Generate hash + salt
+            string newSalt = PasswordSecurity.GenerateSalt();
+            string newHash = PasswordSecurity.HashPassword(plainPassword, newSalt);
+
+            // 3. Update password for that location
+            var updateCmd = new SqlCommand(@"
+                UPDATE Users
+                SET PasswordHash = @Hash,
+                    Salt = @Salt,
+                    PasswordChangedDate = GETDATE()
+                WHERE Users_ID = @UserId AND Location = @LocationId
+            ", conn);
+
+            updateCmd.Parameters.AddWithValue("@Hash", newHash);
+            updateCmd.Parameters.AddWithValue("@Salt", newSalt);
+            updateCmd.Parameters.AddWithValue("@UserId", userId);
+            updateCmd.Parameters.AddWithValue("@LocationId", locationId);
+
+            int affected = updateCmd.ExecuteNonQuery();
+
+            if (affected > 0)
+                TempData["Success"] = $"✅ Fixed user {userId} for location {locationId}.";
+            else
+                TempData["Error"] = $"❌ Update failed for user {userId}.";
+
             return RedirectToAction("Index");
         }
 

@@ -14,6 +14,7 @@ using System.Security.Cryptography;
 using System.Text;
 using SalesMetrics.Services;
 using Microsoft.EntityFrameworkCore.ValueGeneration.Internal;
+using System.Numerics;
 
 
 namespace SalesMetrics.Controllers
@@ -98,9 +99,19 @@ namespace SalesMetrics.Controllers
             using var reader = await cmd.ExecuteReaderAsync();
             if (!reader.Read())
             {
+                string errorMsg = "User not found or inactive!";
                 ViewBag.Error = "Access Denied: User not found or Inactive!";
+                LogLoginAttempt(salesMetricsUserId, username, officeLocation, false, errorMsg);
                 return View("Login");
             }
+
+            // ✅ Move this up to make sure salesMetricsUserId is populated
+            salesMetricsUserId = Convert.ToInt32(reader["UserID"]);
+            roleId = Convert.ToInt32(reader["RoleID"]);
+            locationId = Convert.ToInt32(reader["Location"]);
+            salesmanId = reader.IsDBNull(reader.GetOrdinal("SalesmanID")) ? 0 : Convert.ToInt32(reader["SalesmanID"]);
+            salesmanNumber = reader.IsDBNull(reader.GetOrdinal("SalesmanNumber")) ? "" : reader["SalesmanNumber"].ToString();
+            fullName = $"{reader["FirstName"]} {reader["LastName"]}";
 
             try
             {
@@ -110,7 +121,9 @@ namespace SalesMetrics.Controllers
                 // Validate Hash
                 if (string.IsNullOrEmpty(storedHash) || string.IsNullOrEmpty(storedSalt))
                 {
-                    ViewBag.Error = "This user is missing a hashed password.  Please contact the IT Dept.";
+                    string errorMsg = "User is missing a hashed password or salt.";
+                    ViewBag.Error = errorMsg + " Please contact the IT Dept.";
+                    LogLoginAttempt(salesMetricsUserId, username, officeLocation, false, errorMsg);
                     return View("Login");
                 }
 
@@ -118,37 +131,44 @@ namespace SalesMetrics.Controllers
 
                 if (!string.Equals(inputHash, storedHash, StringComparison.OrdinalIgnoreCase))
                 {
-                    ViewBag.Error = "Invalid Password!";
-                    return View("Login");
+                    // Fallback: try legacy hex-based hash comparison
+                    string legacyHash = PasswordSecurity.HashPasswordLegacy(password, storedSalt);
+                    
+
+                    if (!string.Equals(legacyHash, storedHash, StringComparison.OrdinalIgnoreCase))
+                    {
+                        string errorMsg = "Invalid Password!";
+                        ViewBag.Error = errorMsg + " Please try again.";
+                        LogLoginAttempt(salesMetricsUserId, username, officeLocation, false, errorMsg);
+                    }
+                    else
+                    {
+                        // ✅ Legacy hash matched: upgrade to Base64
+                        var newSalt = PasswordSecurity.GenerateSalt();
+                        var newHash = PasswordSecurity.HashPassword(password, newSalt); // ✅ rehash using the new salt
+
+
+                        using (var upgradeConn = new SqlConnection(_configuration.GetConnectionString("SalesMetrics")))
+                        {
+                            await upgradeConn.OpenAsync();
+                            var upgradeCmd = new SqlCommand("UPDATE Users SET PasswordHash = @NewHash, Salt = @NewSalt, PasswordChangedDate = GetDate() WHERE UserID = @UserID AND Location = @LocationId", upgradeConn);
+                            upgradeCmd.Parameters.AddWithValue("@NewHash", newHash);
+                            upgradeCmd.Parameters.AddWithValue("@NewSalt", newSalt);
+                            upgradeCmd.Parameters.AddWithValue("@UserID", salesMetricsUserId);
+                            upgradeCmd.Parameters.AddWithValue("@LocationId", locationId);
+                            await upgradeCmd.ExecuteNonQueryAsync();
+                        }
+                    }
                 }
             }
             catch (Exception ex)
             {
                 // Log the exception (optional)
-                ViewBag.Error = "An error occurred while processing your request. Please try again later.";
-
-                string storedPassword = reader["Password"]?.ToString() ?? "";
-                if (storedPassword != password)
-                {
-                    ViewBag.Error = "Invalid Password!";
-                    return View("Login");
-                }
-            }
-            //string storedPassword = reader["Password"]?.ToString() ?? "";
-            //if (storedPassword != password)
-            //{
-            //    ViewBag.Error = "Invalid Password!";
-            //    return View("Login");
-            //}                
-
-            // Extract User Info
-            salesMetricsUserId = Convert.ToInt32(reader["UserID"]);
-            roleId = Convert.ToInt32(reader["roleId"]);
-            role = GetUserRole(roleId);
-            locationId = Convert.ToInt32(reader["Location"]);
-            salesmanId = reader.IsDBNull(reader.GetOrdinal("SalesmanID")) ? 0 : Convert.ToInt32(reader["SalesmanID"]);
-            salesmanNumber = reader.IsDBNull(reader.GetOrdinal("SalesmanNumber")) ? "" : reader["SalesmanNumber"].ToString();
-            fullName = $"{reader["FirstName"]} {reader["LastName"]}";
+                string errorMsg = "An error occurred while validating the password.";
+                ViewBag.Error = errorMsg + " Please try again later.";
+                LogLoginAttempt(salesMetricsUserId, username, officeLocation, false, errorMsg);
+                return View("Login");
+            }               
 
             // ✅ Close the reader before reusing the connection
             reader.Close();
@@ -248,7 +268,7 @@ namespace SalesMetrics.Controllers
             return role;
         }
 
-        private void LogLoginAttempt(int userID, string username, string branch, bool success)
+        private void LogLoginAttempt(int userID, string username, string branch, bool success, string errorMsg = null)
         {
             string connSR = _configuration.GetConnectionString("SalesMetrics");
 
@@ -270,8 +290,8 @@ namespace SalesMetrics.Controllers
                 var deviceInfo = $"{browser} on {os}";
 
                 SqlCommand cmd = new SqlCommand(@"
-                    INSERT INTO [LoginHistory] (UserID, UserName, Success, IPAddress, office, DeviceInfo, UserAgentRaw)
-                    VALUES (@userID, @userName, @success, @ipAddress, @office, @deviceInfo, @userAgentRaw)", conn);
+                    INSERT INTO [LoginHistory] (UserID, UserName, Success, IPAddress, office, DeviceInfo, UserAgentRaw, ErrorLog)
+                    VALUES (@userID, @userName, @success, @ipAddress, @office, @deviceInfo, @userAgentRaw, @errorLog)", conn);
 
                 cmd.Parameters.AddWithValue("@userID", userID);
                 cmd.Parameters.AddWithValue("@userName", username);
@@ -280,6 +300,7 @@ namespace SalesMetrics.Controllers
                 cmd.Parameters.AddWithValue("@office", branch);
                 cmd.Parameters.AddWithValue("@deviceInfo", deviceInfo ?? "Unknown");
                 cmd.Parameters.AddWithValue("@userAgentRaw", Request.Headers["User-Agent"].ToString());
+                cmd.Parameters.AddWithValue("@errorLog", success == true ? DBNull.Value : errorMsg);
 
                 cmd.ExecuteNonQuery();
             }

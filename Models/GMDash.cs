@@ -6,6 +6,11 @@
         public GMARDataViewModel ARData { get; set; }
         public GMInstallerMetricsViewModel InstallerMetrics { get; set; }
         public GMInventoryDataViewModel InventoryData { get; set; }
+        public List<InventoryProductClassSummary> InventoryByClass { get; set; } = new();
+        public List<InstallerCompletionMetric> InstallerCompletionMetrics { get; set; } = new();
+        public List<GMARDataViewModel> ARBranchBreakdown { get; set; } = new();
+        public List<RTJEntry> RecentRTJs { get; set; } = new();
+
 
         public DateTime MTDStartDateRange { get; set; }
         public DateTime YTDStartDateRange { get; set; }
@@ -27,7 +32,7 @@
         public decimal OnlineOrderAmount { get; set; }
 
         public double OnlineOrderPercentage => TotalOrders > 0
-            ? (double)OnlineOrders / TotalOrders * 100 
+            ? (double)OnlineOrderAmount / (double)TotalOrderAmount * 100 
             : 0;
 
         public string LocationFullName => Location switch
@@ -46,12 +51,7 @@
         public string TotalOrderAmountFormatted => TotalOrderAmount.ToString("C0");
         public string OnlineOrderPercentageFormatted => $"{OnlineOrderPercentage:0.0}%";
     }
-       
 
-}
-
-namespace SalesMetrics.Models
-{
     public class GMARDataViewModel
     {
         public decimal DueUnder30 { get; set; }
@@ -86,10 +86,6 @@ namespace SalesMetrics.Models
 
     }
 
-}
-
-namespace SalesMetrics.Models
-{
     public class GMInventoryDataViewModel
     {
         public int TotalItems { get; set; }
@@ -98,10 +94,33 @@ namespace SalesMetrics.Models
         public string TotalValuationFormatted => TotalValuation.ToString("C0");
         public string Location { get; set; }
     }
-}
 
-namespace SalesMetrics.Models
-{
+    public class BranchInventorySummary
+    {
+        public string WarehouseId { get; set; }
+        public string ProductClass { get; set; }
+        public string Style { get; set; }
+        public string Color { get; set; }
+        public string Description { get; set; }
+        public string Vendor { get; set; }
+        public decimal QtyAvailable { get; set; }
+        public decimal QtyOnHand { get; set; }
+        public decimal QtyAllocated { get; set; }
+        public int AgingDays { get; set; }
+        public DateTime DateReceived { get; set; }
+    }
+
+    public class InventoryProductClassSummary
+    {
+        public string WarehouseId { get; set; }
+        public string ProductClass { get; set; }
+        public decimal LAX_InventoryCost { get; set; }
+        public decimal LSV_InventoryCost { get; set; }
+        public decimal CHN_InventoryCost { get; set; }
+        public decimal PHX_InventoryCost { get; set; }
+        public decimal SND_InventoryCost { get; set; }
+    }
+
     public class GMInstallerMetricsViewModel
     {
         public int TotalInstallers { get; set; }
@@ -114,5 +133,37 @@ namespace SalesMetrics.Models
         public string UtilizationFormatted => $"{UtilizationPercentage:0.0}%";
         public string Location { get; set; }
     }
+
+    public class InstallerCompletionMetric
+    {
+        public string Location { get; set; }
+
+        public int TotalOrders { get; set; }
+        public int CompletedOrders { get; set; }
+
+        public double CompletionRate => TotalOrders > 0
+            ? Math.Round((double)CompletedOrders / TotalOrders * 100, 2)
+            : 0;
+
+        public int WhsArrivalCount { get; set; }
+        public int WhsDepartCount { get; set; }
+        public int OrderArrivalCount { get; set; }
+        public int OrderCompletedCount { get; set; }
+        public int OrderCancelledCount { get; set; }
+    }
+
+    public class RTJEntry
+    {
+        public string AdjustmentComments { get; set; }
+        public string JournalNumber { get; set; }
+        public decimal Credit { get; set; }
+        public decimal Debit { get; set; }
+        public DateTime Date { get; set; }
+        public int WarehouseNumber { get; set; }
+        public string Location { get; set; }  // NEW ✅
+    }
+
+
+
 
 }

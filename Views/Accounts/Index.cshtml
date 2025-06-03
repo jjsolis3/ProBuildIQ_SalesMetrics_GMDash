@@ -66,6 +66,49 @@
     </form>
 </div>
 
+@if (ViewBag.FlaggedUsers != null)
+{
+    <h4 class="mt-5">⚠️ Users With Potential Login Issues</h4>
+    <div style="overflow-x: auto;">
+        <table id="flaggedUsersTable" class="table table-bordered table-warning table-striped w-100">
+            <thead class="sticky-top">
+                <tr>
+                    <th>User ID</th>
+                    <th>First</th>
+                    <th>Last</th>
+                    <th>Username</th>
+                    <th>Email</th>
+                    <th>Location</th>
+                    <th>Issue</th>
+                    <th>Fix</th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var user in ViewBag.FlaggedUsers as List<SalesMetrics.Models.FlaggedUserViewModel>)
+            {
+                <tr>
+                    <td>@user.Users_ID</td>
+                    <td>@user.FirstName</td>
+                    <td>@user.LastName</td>
+                    <td>@user.Username</td>
+                    <td>@user.Email</td>
+                    <td>@user.LocationName()</td>
+                    <td><strong>@user.Reason</strong></td>
+                    <td>
+                        <form method="post" asp-controller="Accounts" asp-action="FixUserPassword" style="display:inline;">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="userId" value="@user.Users_ID" />
+                            <input type="hidden" name="locationId" value="@user.LocationId" />
+                            <button type="submit" class="btn btn-sm btn-warning">Fix</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+}
+
 <!-- Edit Modal Template (can be populated via JS later) -->
 <!-- Placeholder for dynamically loaded modal -->
 <div id="modalContainer"></div>
@@ -141,9 +184,17 @@
             });
         });
 
+    </script>
+    <script>
+        $('#flaggedUsersTable').DataTable({
+            scrollY: "500px",
+            scrollCollapse: true,
+            paging: true,
+            pageLength: 10,
+            fixedHeader: true
+        });
 
     </script>
-
 
 
 }

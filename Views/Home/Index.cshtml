@@ -32,6 +32,12 @@
 <input type="hidden" id="CurrentRoleId" value="@ViewBag.RoleId" />
 <input type="hidden" id="CurrentUserId" value="@ViewBag.UserId" />
 
+@if (ViewBag.RoleId == 2)
+{
+    <input type="hidden" id="CurrentSalesmanId" value="@ViewBag.SalespersonId" />
+}
+
+
 <div class="row">
     <div class="col-3">
         <div class="page-title-box d-flex align-items-center justify-content-between">
@@ -768,17 +774,24 @@
     <script>
         // in a Table Modal,  Display the Work Orders in a DataTable
         $(document).ready(function () {
-            let offset = new URLSearchParams(window.location.search).get("weekOffset") || 0;
+            //let offset = new URLSearchParams(window.location.search).get("weekOffset") || 0;
 
             $('.day-link').on('click', function (e) {
                 e.preventDefault();
 
-                let day = $(this).data('day');
+                const day = $(this).data('day');
+                const offset = new URLSearchParams(window.location.search).get("weekOffset") || 0;
+                const roleId = parseInt($("#CurrentRoleId").val());
+                const salesmanId = roleId == 2 ? $("#CurrentSalesmanId").val() : null;
 
                 $.ajax({
                     url: '/Home/GetWorkOrdersByDay',
                     method: 'GET',
-                    data: { dayOfWeek: day, weekOffset: offset },
+                    data: { 
+                        dayOfWeek: day, 
+                        weekOffset: offset,
+                        filterSalesmanId: salesmanId
+                    },
                     success: function (response) {
                         const data = response.data;
                         const date = response.deliveryDate;
@@ -886,9 +899,18 @@
     <script>
         let chartInstance; // Global variable to store the chart instance
         const urlParams = new URLSearchParams(window.location.search);
+        const roleId = parseInt(document.getElementById("CurrentRoleId")?.value);
+        const salesmanId = document.getElementById("CurrentSalesmanId")?.value;
         const weekOffset = urlParams.get("weekOffset") || 0;
 
-        fetch(`/Home/GetWeeklyOrders?weekOffset=${weekOffset}`)
+        let url = `/Home/GetWeeklyOrders?weekOffset=${weekOffset}`;
+
+        // ✅ Only add salesmanId if logged-in user is a salesperson
+        if (roleId === 2 && salesmanId) {
+            url += `&salesmanId=${salesmanId}`;
+        }
+
+        fetch(url)
             .then(res => res.json())
             .then(data => {
                 if (!data || data.length === 0) {

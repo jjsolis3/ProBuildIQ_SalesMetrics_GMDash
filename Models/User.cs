@@ -27,6 +27,8 @@ namespace SalesMetrics.Models
 
     public class UserProfileViewModel
     {
+        public string? FirstName { get; set; }
+        public string? LastName { get; set; }    
         public string? FullName { get; set; }
         public string? Email { get; set; }
         public string? GoogleEmail { get; set; }
@@ -47,5 +49,31 @@ namespace SalesMetrics.Models
         public int? SalesmanId { get; set; }
         public string? SalesmanNumber { get; set; }
     }
+
+    public class FlaggedUserViewModel
+    {
+        public int Users_ID { get; set; }
+        public string FirstName { get; set; }
+        public string LastName { get; set; }
+        public string Username { get; set; }
+        public string Email { get; set; }
+        public int LocationId { get; set; }
+        public string Reason { get; set; }
+
+        public string LocationName()
+        {
+            return LocationId switch
+            {
+                1 => "Los Angeles",
+                2 => "Las Vegas",
+                3 => "Chino",
+                4 => "Phoenix",
+                5 => "San Diego",
+                _ => "Unknown"
+            };
+        }
+
+    }
+
 
 }

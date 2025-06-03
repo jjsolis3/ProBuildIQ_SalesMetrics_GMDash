@@ -72,7 +72,7 @@ namespace SalesMetrics.Controllers
             var (weeklyOrders, startOfWeek, endOfWeek) = GetWeeklyOrdersDataWithRange(weekOffset, roleId, effectiveSalesmanId);
             var transactionSummary = GetTransactionSummary(startDate, endDate, roleId, effectiveSalesmanId);
             var overdueInvoices = GetOverdueInvoices(roleId, effectiveSalesmanId);
-            var todayTasks = GetTodayTasks(selectedUserId);
+            var todayTasks = GetTodayTasks(selectedUserId, officeID);
             var inactiveCustomers = GetInactiveCustomers(roleId, effectiveSalesmanId);
 
             ViewBag.RoleId = roleId;
@@ -328,11 +328,11 @@ namespace SalesMetrics.Controllers
         }
 
         [HttpGet]
-        public JsonResult GetWeeklyOrders(int weekOffset = 0)
+        public JsonResult GetWeeklyOrders(int weekOffset = 0, int salesmanId = 0)
         {
             int roleId = Convert.ToInt32(HttpContext.Session.GetString("RoleId"));
 
-            var (orders, _, _) = GetWeeklyOrdersDataWithRange(weekOffset, roleId); // Fetch the weekly orders data
+            var (orders, _, _) = GetWeeklyOrdersDataWithRange(weekOffset, roleId, salesmanId); // Fetch the weekly orders data
             return Json(orders);
         }
 
@@ -705,7 +705,19 @@ namespace SalesMetrics.Controllers
             var officeLocation = User.FindFirstValue("OfficeLocation");
             var connectionString = _configuration.GetConnectionString(officeLocation);
             var results = new List<WorkOrderViewModel>();
-            int salesmanId = filterSalesmanId ?? int.Parse(User.FindFirst("SalesmanId")?.Value ?? "0");
+
+            int salesmanId = 0;
+            
+            if (filterSalesmanId.HasValue && filterSalesmanId.Value != 0)
+            {
+                salesmanId = filterSalesmanId.Value;
+            }
+            else if (!int.TryParse(User.FindFirst("SalesmanId")?.Value, out salesmanId))
+            {
+                salesmanId = 0; // fallback default
+            }
+
+
             int roleId = int.Parse(User.FindFirst("RoleId")?.Value ?? "0");
             //var roleId = Convert.ToInt32(HttpContext.Session.GetString("RoleId"));
 
@@ -875,7 +887,7 @@ namespace SalesMetrics.Controllers
             });
         }
 
-        private List<SalesTask> GetTodayTasks(int userId)
+        private List<SalesTask> GetTodayTasks(int userId, int locationId)
         {
             var results = new List<SalesTask>();
             var connectionString = _configuration.GetConnectionString("SalesMetrics");
@@ -888,9 +900,11 @@ namespace SalesMetrics.Controllers
                 WHERE AssignedTo = @UserId
                   AND CAST(DueDate AS DATE) >= CAST(GETDATE() AS DATE)
                   AND (CancelledDate IS NULL AND CompletedDate IS NULL)
+                  AND Location = @LocationId
                 ORDER BY DueDate", conn);
 
                 cmd.Parameters.AddWithValue("@UserId", userId);
+                cmd.Parameters.AddWithValue("@LocationId", locationId);
 
                 conn.Open();
                 using (var reader = cmd.ExecuteReader())

@@ -133,15 +133,18 @@
     </div>
 
     <!-- Switch Location Modal -->
-    @* <partial name="_SwitchLocationModal" model="switchModel" /> *@
-    @if ((User.IsInRole("Admin") || User.IsInRole("GM") || User.FindFirst("RoleId")?.Value == "1" || User.FindFirst("RoleId")?.Value == "4")
-    && !(ViewContext.RouteData.Values["controller"]?.ToString() == "GMDash"
-    && ViewContext.RouteData.Values["action"]?.ToString() == "Index"))
+    @{
+        var hideLocationSwitcher = currentController.Equals("GMDash", StringComparison.OrdinalIgnoreCase)
+        && currentAction.Equals("Index", StringComparison.OrdinalIgnoreCase);
+
+        var showSwitchLocationModal = !hideLocationSwitcher
+        && (User.IsInRole("Admin") || User.IsInRole("GM") || User.FindFirst("RoleId")?.Value == "1" || User.FindFirst("RoleId")?.Value == "4");
+    }
+
+    @if (showSwitchLocationModal)
     {
         @await Component.InvokeAsync("UserLocationSwitcher", new { viewName = "_SwitchLocationModal" })
     }
-
-
 
     <!-- Journal Entry Modal -->
     @await Html.PartialAsync("_JournalCreateModal", new SalesMetrics.Models.Journal.JournalEntry())

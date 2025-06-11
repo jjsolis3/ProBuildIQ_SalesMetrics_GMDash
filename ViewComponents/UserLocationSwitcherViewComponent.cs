@@ -16,7 +16,7 @@ namespace SalesMetrics.ViewComponents
             _context = context;
         }
 
-        public async Task<IViewComponentResult> InvokeAsync()
+        public async Task<IViewComponentResult> InvokeAsync(string viewName = "Default")
         {
             var userId = int.Parse(HttpContext.User.FindFirstValue("Users_ID") ?? "0");
             var currentLocation = HttpContext.Session.GetString("OfficeLocation");
@@ -40,7 +40,7 @@ namespace SalesMetrics.ViewComponents
 
             Console.WriteLine($"[DEBUG] Loaded {locations.Count} locations for user {userId}");
 
-            return View(model);
+            return View(viewName, model);
         }
     }
 }

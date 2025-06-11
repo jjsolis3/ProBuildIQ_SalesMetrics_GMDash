@@ -25,11 +25,13 @@ namespace SalesMetrics.Controllers
         [Authorize]
         public IActionResult Index(DateTime? startDate, DateTime? endDate, int weekOffset = 0, int? rangeType = 0, int? filterSalesmanId = null)
         {
+            int locationId = LocationHelper.GetCurrentLocationId(HttpContext);
+            string officeLocation = LocationHelper.GetCurrentOfficeCode(HttpContext);
+            var connectionString = _configuration.GetConnectionString(officeLocation);
+
             var userId = HttpContext.Session.GetString("UserId");
             var fullName = HttpContext.Session.GetString("FullName");
-            var officeLocation = HttpContext.Session.GetString("OfficeLocation");
             int roleId = Convert.ToInt32(HttpContext.Session.GetString("RoleId"));
-            int officeID = Convert.ToInt32(HttpContext.Session.GetString("LocationId"));
             int salesmanId = Convert.ToInt32(HttpContext.Session.GetInt32("SalesmanId"));
 
             if (string.IsNullOrEmpty(userId))
@@ -40,7 +42,7 @@ namespace SalesMetrics.Controllers
                     return RedirectToAction("Login", "Auth");
 
                 fullName = User.FindFirstValue("FullName");
-                officeLocation = User.FindFirstValue("OfficeLocation");
+                officeLocation = LocationHelper.GetCurrentOfficeCode(HttpContext);
             }
 
             if (!startDate.HasValue || !endDate.HasValue)
@@ -60,7 +62,7 @@ namespace SalesMetrics.Controllers
                 effectiveSalesmanId = salesmanId;  // This is the SalesmanId from session
             }
             // For Admin/SalesAdmin (Role 1 or 3), use the filterSalesmanId if provided
-            else if (roleId == 1 || roleId == 3)
+            else if (roleId == 1 || roleId == 3 || roleId == 4)
             {
                 effectiveSalesmanId = filterSalesmanId ?? 0; // Fallback to 0 if no filter is selected
             }
@@ -68,19 +70,19 @@ namespace SalesMetrics.Controllers
             var selectedUserId = GetUserIdBySalesmanId(effectiveSalesmanId);
 
             // Fetch Sales Data from the CUF ERP Database
-            var salesData = GetSalesData(effectiveSalesmanId, officeLocation, startDate, endDate, roleId);
+            var salesData = GetSalesData(connectionString, effectiveSalesmanId, officeLocation, startDate, endDate, roleId);
             var (weeklyOrders, startOfWeek, endOfWeek) = GetWeeklyOrdersDataWithRange(weekOffset, roleId, effectiveSalesmanId);
-            var transactionSummary = GetTransactionSummary(startDate, endDate, roleId, effectiveSalesmanId);
-            var overdueInvoices = GetOverdueInvoices(roleId, effectiveSalesmanId);
-            var todayTasks = GetTodayTasks(selectedUserId, officeID);
-            var inactiveCustomers = GetInactiveCustomers(roleId, effectiveSalesmanId);
+            var transactionSummary = GetTransactionSummary(connectionString, startDate, endDate, roleId, effectiveSalesmanId);
+            var overdueInvoices = GetOverdueInvoices(connectionString, roleId, effectiveSalesmanId);
+            var todayTasks = GetTodayTasks(selectedUserId, locationId);
+            var inactiveCustomers = GetInactiveCustomers(connectionString, roleId, effectiveSalesmanId);
 
             ViewBag.RoleId = roleId;
             ViewBag.UserId = userId;
 
-            if (roleId == 1 || roleId == 3)
+            if (roleId == 1 || roleId == 3 || roleId == 4)
             {
-                ViewBag.Users = GetActiveUsers(Convert.ToInt32(userId), roleId, Convert.ToInt32(officeID));
+                ViewBag.Users = GetActiveUsers(Convert.ToInt32(userId), roleId, Convert.ToInt32(locationId));
             }
             else if (roleId == 2)
             {
@@ -137,7 +139,7 @@ namespace SalesMetrics.Controllers
             {
                 conn.Open();
 
-                string query = (roleId == 1 || roleId == 3)
+                string query = (roleId == 1 || roleId == 3 || roleId == 4)
                     ? @"SELECT UserID, FirstName, LastName, RoleID, Location, CreatedDate, SalesmanID
                         FROM Users
                         WHERE SalesmanID IS NOT NULL AND Location = @Location"
@@ -147,7 +149,7 @@ namespace SalesMetrics.Controllers
 
                 using (SqlCommand cmd = new SqlCommand(query, conn))
                 {
-                    if (roleId == 1 || roleId == 3)
+                    if (roleId == 1 || roleId == 3 || roleId == 4)
                         cmd.Parameters.AddWithValue("@Location", locationId);
                     else
                         cmd.Parameters.AddWithValue("@UserId", userId);
@@ -189,12 +191,12 @@ namespace SalesMetrics.Controllers
             }
         }
 
-        private Dictionary<string, object> GetSalesData(int salesmanID, string officeLocation, DateTime? startDate, DateTime? endDate, int roleId = 0)
+        private Dictionary<string, object> GetSalesData(string connectionString, int salesmanID, string officeLocation, DateTime? startDate, DateTime? endDate, int roleId = 0)
         {
             var data = new Dictionary<string, object>();
 
             // Get the correct ERP Database connection string based on office location
-            string connectionString = _configuration.GetConnectionString(officeLocation);
+            //string connectionString = _configuration.GetConnectionString(officeLocation);
             if (string.IsNullOrEmpty(connectionString))
             {
                 throw new InvalidOperationException($"Connection string for '{officeLocation}' is not found in appsettings.json.");
@@ -264,7 +266,7 @@ namespace SalesMetrics.Controllers
         private (List<DailyOrderCount> Orders, DateTime Start, DateTime End) GetWeeklyOrdersDataWithRange(int weekOffset = 0, int roleId = 0, int salesmanId = 0)
         {
             var orders = new List<DailyOrderCount>();
-            var officeLocation = User.FindFirstValue("OfficeLocation");
+            string officeLocation = LocationHelper.GetCurrentOfficeCode(HttpContext);
             var connectionString = _configuration.GetConnectionString(officeLocation);
 
             var userId = HttpContext.Session.GetString("UserId") ?? User.FindFirstValue("UserId");
@@ -336,11 +338,9 @@ namespace SalesMetrics.Controllers
             return Json(orders);
         }
 
-        private TransactionSummary GetTransactionSummary(DateTime? startDate, DateTime? endDate, int roleId = 0, int salesmanId = 0)
+        private TransactionSummary GetTransactionSummary(string connectionString, DateTime? startDate, DateTime? endDate, int roleId = 0, int salesmanId = 0)
         {
             var summary = new TransactionSummary { TopDelinquentCustomers = new List<CustomerOutstanding>() };
-            var officeLocation = User.FindFirstValue("OfficeLocation");
-            var connectionString = _configuration.GetConnectionString(officeLocation);
 
             using (var conn = new SqlConnection(connectionString))
             {
@@ -521,11 +521,9 @@ namespace SalesMetrics.Controllers
             return summary;
         }
 
-        private List<OverdueInvoice> GetOverdueInvoices(int roleId = 0, int salesmanId = 0)
+        private List<OverdueInvoice> GetOverdueInvoices(string connectionString, int roleId = 0, int salesmanId = 0)
         {
             var overdueList = new List<OverdueInvoice>();
-            var officeLocation = User.FindFirstValue("OfficeLocation");
-            var connectionString = _configuration.GetConnectionString(officeLocation);
             var userId = Convert.ToInt32(User.FindFirstValue("UserId"));
 
             using (var conn = new SqlConnection(connectionString))
@@ -557,8 +555,12 @@ namespace SalesMetrics.Controllers
                     WHERE A.ARO_INVOICE_BALANCE_DUE > 0
 	                    AND DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) > 30
 	                    AND A.ARO_DATE_PAID_IN_FULL IS NULL
-                        AND I.IHF_SMNMAS_ORDER <> 24
                     ";
+
+                if (connectionString == "LAX")
+                {
+                    sql += " AND I.IHF_SMNMAS_ORDER<> 24";
+                }
 
                 if (salesmanId > 0)
                 {
@@ -600,7 +602,7 @@ namespace SalesMetrics.Controllers
         [HttpGet]
         public IActionResult GetOrderDetails(int invoiceNumber)
         {
-            var officeLocation = User.FindFirstValue("OfficeLocation");
+            string officeLocation = LocationHelper.GetCurrentOfficeCode(HttpContext);
             var connectionString = _configuration.GetConnectionString(officeLocation);
             var viewModel = new InvoiceDetailViewModel();
 
@@ -702,7 +704,7 @@ namespace SalesMetrics.Controllers
 
         public IActionResult GetWorkOrdersByDay(string dayOfWeek, int weekOffset = 0, int? filterSalesmanId = null)
         {
-            var officeLocation = User.FindFirstValue("OfficeLocation");
+            var officeLocation = LocationHelper.GetCurrentOfficeCode(HttpContext);
             var connectionString = _configuration.GetConnectionString(officeLocation);
             var results = new List<WorkOrderViewModel>();
 
@@ -934,7 +936,7 @@ namespace SalesMetrics.Controllers
         {
             var mtdResults = new List<SalesRanking>();
             var ytdResults = new List<SalesRanking>();
-            var officeLocation = User.FindFirstValue("OfficeLocation");
+            string officeLocation = LocationHelper.GetCurrentOfficeCode(HttpContext);
             var connectionString = _configuration.GetConnectionString(officeLocation);
 
             DateTime today = DateTime.Today;
@@ -1117,11 +1119,8 @@ namespace SalesMetrics.Controllers
             return (groupedMTDResults, groupedYTDResults, mtdStart, today, ytdStart, today);
         }
 
-        public List<InactiveCustomerViewModel> GetInactiveCustomers(int roleId = 0, int salesmanId = 0)
+        public List<InactiveCustomerViewModel> GetInactiveCustomers(string connectionString, int roleId = 0, int salesmanId = 0)
         {
-            var officeLocation = User.FindFirstValue("OfficeLocation");
-            var connectionString = _configuration.GetConnectionString(officeLocation);
-
             DateTime today = DateTime.Today;
             DateTime CutOffStart = today.AddDays(-31);
             DateTime CutOffEnd = today.AddMonths(-14).AddDays(today.Day - 1);

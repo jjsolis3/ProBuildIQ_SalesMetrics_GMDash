@@ -30,7 +30,7 @@ namespace SalesMetrics.Controllers
             if (string.IsNullOrEmpty(userId))
             {
                 userId = User.FindFirstValue("UserID");
-                officeLocation = User.FindFirstValue("OfficeLocation");
+                officeLocation = LocationHelper.GetCurrentOfficeCode(HttpContext);
 
                 if (string.IsNullOrEmpty(userId))
                     return RedirectToAction("Login", "Auth");
@@ -310,7 +310,7 @@ namespace SalesMetrics.Controllers
         [HttpGet]
         public IActionResult WorkOrderDetailsPartial(string orderId)
         {
-            var officeLocation = User.FindFirstValue("OfficeLocation");
+            string officeLocation = LocationHelper.GetCurrentOfficeCode(HttpContext);
             var connectionString = _configuration.GetConnectionString(officeLocation);
             //var viewModel = new InvoiceDetailViewModel();
             var viewModel = new WorkOrderDetailViewModel();

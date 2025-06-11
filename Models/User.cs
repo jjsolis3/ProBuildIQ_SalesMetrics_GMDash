@@ -1,4 +1,6 @@
-﻿using Microsoft.EntityFrameworkCore.Query.SqlExpressions;
+﻿using Azure.Core.Pipeline;
+using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.EntityFrameworkCore.Query.SqlExpressions;
 using Microsoft.Identity.Client;
 
 namespace SalesMetrics.Models
@@ -42,12 +44,15 @@ namespace SalesMetrics.Models
         public string LastName { get; set; }
         public string Email { get; set; }
         public string Username { get; set; }
-        public string Password { get; set; }
+        public string? Password { get; set; }
+        public int Users_Id { get; set; }
         public int UserId { get; set; }
         public int RoleId { get; set; }
         public int LocationId { get; set; }
         public int? SalesmanId { get; set; }
         public string? SalesmanNumber { get; set; }
+        public List<int> AssignedLocationIds { get; set; } = new();
+        public List<SelectListItem> AllLocations { get; set; } = new();
     }
 
     public class FlaggedUserViewModel
@@ -74,6 +79,5 @@ namespace SalesMetrics.Models
         }
 
     }
-
 
 }

@@ -1,0 +1,115 @@
+﻿@model SalesMetrics.Models.GMRecapCardViewModel
+
+@{
+    ViewBag.Title = "GM Weekly Recap Entry";
+    var recapFields = new[] {
+        "Wins", "Loses", "Needs", "The Team", "Actual vs Projected Sales #'s",
+        "Average Jobs per Day", "Reschedules", "A/R Update", "New Accounts",
+        "Lost Accounts", "Customer Events", "Customer Visits",
+        "1-1's with Sales Reps", "Ride-along with Sales Reps"
+    };
+
+    // Auto-calculate the current week's Monday as the WeekStartDate
+    var today = DateTime.Today;
+    var weekStart = today.AddDays(-(int)today.DayOfWeek + (int)DayOfWeek.Monday);
+    Model.WeekStartDate = weekStart;
+}
+
+@section styles {
+    <style>
+        .bg-orange {
+            background-color: darkorange !important;
+        }
+
+        .sticky-submit {
+            position: sticky;
+            bottom: 0;
+            background: white;
+            padding: 1rem;
+            text-align: right;
+            z-index: 10;
+            border-top: 1px solid #ccc;
+        }
+    </style>
+}
+
+<h3 class="mb-4">📋 GM Weekly Recap</h3>
+
+<form asp-action="SubmitWeeklyRecap" asp-controller="GMRecap" method="post">
+    <input type="hidden" name="GMUserID" value="@User.FindFirst("Users_ID")?.Value" />
+    <input type="hidden" name="LocationID" value="@User.FindFirst("Location")?.Value" />
+    <input type="hidden" name="WeekStartDate" value="@Model.WeekStartDate.ToString("yyyy-MM-dd")" />
+
+    <div class="col-6 alert alert-info fs-5">
+        <span><strong>Note: </strong> You are entering a recap for the week starting on  <strong> @Model.WeekStartDate.ToString(" MMMM dd, yyyy")</strong>.</span>
+    </div>
+
+    <div class="row g-3">
+        @for (int i = 0; i < recapFields.Length; i++)
+        {
+            <div class="col-sm-12 col-md-6 col-xl-4">
+                <div class="card shadow-sm border-info h-100">
+                    <div class="card-header bg-orange text-white fw-semibold">
+                        @recapFields[i]
+                    </div>
+                    <div class="card-body">
+                        <!-- These two inputs bind to RecapField -->
+                        <input type="hidden" name="Fields[@i].FieldName" value="@recapFields[i]" />
+                        <textarea name="Fields[@i].FieldValue" class="form-control" rows="3"
+                                  placeholder="Enter @recapFields[i] here..."></textarea>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <div class="sticky-submit mt-4">
+        <button type="submit" class="btn btn-success btn-lg">✅ Submit Recap</button>
+    </div>
+</form>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <script>
+            Swal.fire({
+                icon: 'warning',
+                title: 'Missing Input',
+                text: '@TempData["ErrorMessage"]'
+            });
+        </script>
+    }
+
+    @if (TempData["RecapSubmitted"] != null)
+    {
+        <script>
+            Swal.fire({
+                icon: 'success',
+                title: 'Recap Submitted!',
+                text: 'Would you like to submit another recap or view all recaps?',
+                showCancelButton: true,
+                confirmButtonText: 'Submit Another',
+                cancelButtonText: 'View All Recaps'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    window.location.href = '@Url.Action("RecapEntry", "GMRecap")';
+                } else {
+                    window.location.href = '@Url.Action("RecapList", "GMRecap")';
+                }
+            });
+        </script>
+    }
+
+    @if (TempData["PartialSubmittedWarning"] != null)
+    {
+        <script>
+            Swal.fire({
+                icon: 'info',
+                title: 'Some fields were skipped',
+                html: '@TempData["PartialSubmittedWarning"]'
+            });
+        </script>
+    }
+
+}

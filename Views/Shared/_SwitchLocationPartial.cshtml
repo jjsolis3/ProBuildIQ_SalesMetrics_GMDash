@@ -1,0 +1,27 @@
+﻿@model SalesMetrics.Models.UserLocationSwitcherViewModel
+
+<form asp-controller="Accounts" asp-action="SwitchLocation" method="post" class="d-block w-100">
+    @if (Model.AvailableLocations != null && Model.AvailableLocations.Any())
+    {
+        <div class="d-flex align-items-center bg-light border rounded-pill px-3 py-1 shadow-sm" style="min-width: 200px;">
+            <i class="fas fa-map-marker-alt text-primary me-2"></i>
+            <select name="selectedLocation"
+                    class="form-select form-select-sm border-0 bg-transparent fw-bold text-dark p-0 rounded-pill"
+                    style="width: auto; min-width: 120px;"
+                    onchange="this.form.submit()">
+                @foreach (var loc in Model.AvailableLocations)
+                {
+                    <option value="@loc.Value" selected="@(loc.Selected ? "selected" : null)">
+                        @loc.Text
+                    </option>
+                }
+            </select>
+        </div>
+    }
+    else
+    {
+        <div class="text-muted small py-1 ps-2">
+            <i class="fas fa-info-circle me-1"></i> No assigned locations
+        </div>
+    }
+</form>

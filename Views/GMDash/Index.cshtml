@@ -58,6 +58,11 @@
             background-color: #fcf8e3;
         }
 
+        #installerRange:hover {
+            border-color: var(--bs-orange);
+            background-color: #fff3e0;
+        }
+
     </style>
 }
 
@@ -331,40 +336,36 @@
     <div class="col-6">
         <div class="card shadow mt-4">
             <div class="card-header">
-                <h5>Installer Completion Rate by Branch (Weekly)</h5>
+
+                <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-5">
+                    <h5 class="mb-0 text-nowrap">
+                        Installer Completion Rate by Branch
+                    </h5>
+
+                    <div class="input-group input-group-sm w-auto gap-2">
+                        <label class="input-group-text text-dark " for="installerRange">
+                            Date Range
+                        </label>
+                        <select id="installerRange" class="form-select border-secondary shadow-sm rounded-pill"
+                                style="min-width: 140px;">
+                            <option value="week" selected="@(ViewBag.InstallerRange == "week")">This Week</option>
+                            <option value="lastweek" selected="@(ViewBag.InstallerRange == "lastweek")">Last Week</option>
+                            <option value="mtd" selected="@(ViewBag.InstallerRange == "mtd")">MTD</option>
+                            <option value="lastmonth" selected="@(ViewBag.InstallerRange == "lastmonth")">Last Month</option>
+                            <option value="lastquarter" selected="@(ViewBag.InstallerRange == "lastquarter")">Last Quarter</option>
+                            <option value="ytd" selected="@(ViewBag.InstallerRange == "ytd")">YTD</option>
+                        </select>
+                    </div>
+                </div>
+
+
             </div>
             <div class="card-body table-responsive p-2">
-                <table class="table table-bordered table-striped text-end">
-                    <thead class="table-light text-center">
-                        <tr>
-                            <th class="header-sf-orange fw-bold">Location</th>
-                            <th class="header-orange-subtle">Total Orders</th>
-                            <th class="header-orange-subtle">Completed</th>
-                            <th class="header-blue">Whs Arrival</th>
-                            <th class="header-blue">Whs Depart</th>
-                            <th class="header-yellow">Order Arrival</th>
-                            <th class="header-yellow">Order Completed</th>
-                            <th>Cancelled</th>
-                            <th>% Completion</th>
-                        </tr>
-                    </thead>
-                    <tbody class="text-center">
-                        @foreach (var row in Model.InstallerCompletionMetrics)
-                        {
-                            <tr class="text-center">
-                                <td class="text-start text-center fw-bold">@row.Location</td>
-                                <td>@row.TotalOrders</td>
-                                <td>@row.CompletedOrders</td>
-                                <td>@row.WhsArrivalCount</td>
-                                <td>@row.WhsDepartCount</td>
-                                <td>@row.OrderArrivalCount</td>
-                                <td>@row.OrderCompletedCount</td>
-                                <td>@row.OrderCancelledCount</td>
-                                <td>@row.CompletionRate.ToString("0.0")%</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
+
+                <div id="installerTableContainer">
+                    @await Html.PartialAsync("~/Views/GMDash/_InstallerTablePartial.cshtml", Model.InstallerCompletionMetrics)
+                </div>
+
             </div>
         </div>
     </div>
@@ -489,44 +490,65 @@
     <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.dataTables.min.css" />
 
     <script>
-        $(document).ready(function () {
-            $("table[id^='rtjTable_']").each(function () {
-                $(this).DataTable({
-                    order: [[0, 'desc']],
-                    responsive: true,
-                    paging: true,
-                    sort: 
-                    pageLength: 10,
-                    lengthMenu: [5, 10, 25, 50, 100],
-                    dom: `
-                        <"top d-flex justify-content-between align-items-center mb-3" lBf>
-                        rt
-                        <"bottom d-flex justify-content-between align-items-center mt-3" ip>
-                    `,
-                    buttons: [
-                        {
-                            extend: 'excelHtml5',
-                            text: '<i class="bi bi-file-earmark-excel"></i> Export to Excel',
-                            className: 'btn btn-outline-success rounded-pill shadow-sm me-3',
-                            title: 'RTJ Adjustment Details',
-                            exportOptions: {
-                                format: {
-                                    body: function (data, row, column, node) {
-                                        // If it's the status column (index 6), return selected text from <select>
-                                        if (column === 6) {
-                                            const $select = $('<div>' + data + '</div>').find('select');
-                                            return $select.length ? $select.find('option:selected').text() : data;
+        $(document).ready(function ()
+        {
+            // When a modal opens, initialize DataTable inside it (once)
+            $('[id^=rtjModal_]').on('shown.bs.modal', function ()
+            {
+                const tableId = $(this).find("table").attr("id");
+                const table = $("#" + tableId);
+
+                if (!$.fn.DataTable.isDataTable(table))
+                {
+                    table.DataTable({
+                        order: [[0, 'desc']],
+                        responsive: true,
+                        paging: true,
+                        pageLength: 10,
+                        lengthMenu: [5, 10, 25, 50, 100],
+                        searching: true,
+                        dom: `
+                            <"top d-flex justify-content-between align-items-center mb-2" lBf>
+                            rt
+                            <"bottom d-flex justify-content-between align-items-center mt-2"ip>
+                        `,
+                        buttons: [
+                            {
+                                extend: 'excelHtml5',
+                                text: '<i class="bi bi-file-earmark-excel"></i> Export to Excel',
+                                className: 'btn btn-outline-success rounded-pill shadow-sm me-3',
+                                title: 'RTJ Adjustment Details',
+                                exportOptions: {
+                                    format: {
+                                        body: function (data, row, column, node)
+                                        {
+                                            if (column === 6)
+                                            {
+                                                const $select = $('<div>' + data + '</div>').find('select');
+                                                return $select.length ? $select.find('option:selected').text() : data;
+                                            }
+                                            return $('<div>').html(data).text();
                                         }
-                                        // Otherwise, return plain text (strip HTML)
-                                        return $('<div>').html(data).text();
                                     }
                                 }
                             }
-                        }
-                    ]
-                });
+                        ] // <-- CLOSE buttons array
+                    }); // <-- CLOSE DataTable()
+                }
             });
         });
     </script>
 
+      
+    <script>
+        $(document).ready(function () {
+            $('#installerRange').change(function () {
+                var selected = $(this).val();
+
+                $.get('/GMDash/GetInstallerTable', { range: selected }, function (html) {
+                    $('#installerTableContainer').html(html);
+                });
+            });
+        });
+    </script>
 }

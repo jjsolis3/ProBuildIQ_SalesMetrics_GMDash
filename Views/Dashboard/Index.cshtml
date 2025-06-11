@@ -9,7 +9,6 @@
 @section styles {
     <!-- DataTables -->
     <link href="~/assets/libs/datatables.net-bs5/css/dataTables.bootstrap5.min.css" rel="stylesheet" type="text/css" />
-
     <link href="~/assets/libs/bootstrap-datepicker/css/bootstrap-datepicker.min.css" rel="stylesheet">
 
     <!-- buttons datatable -->
@@ -68,11 +67,11 @@
         <!-- 🔥 Filter Row (Dropdown + Toggle) -->
         <div class="row mb-3 align-items-center">
 
-            @if (ViewBag.RoleId == 1 || ViewBag.RoleId == 3)
+            @if (ViewBag.RoleId == 1 || ViewBag.RoleId == 3 || ViewBag.RoleId == 4)
             {
                 <!-- Admin/SalesAdmin: User Filter -->
                 <div class="col-auto">
-                    <label for="userFilter" class="form-label fw-bold mb-1">Filter by User:</label>
+                    <label for="userFilter" class="form-label fw-bold mb-1">Filter by Salesperson:</label>
                     <select id="userFilter" class="form-select fw-bold" style="min-width: 200px;">
                         <option value="">All Users</option>
 
@@ -594,7 +593,8 @@
                             <th>Mgmt Co</th>
                             <th>Amount</th>
                             <th>Due Date</th>
-                            @if (ViewBag.roleId == 1 || ViewBag.roleId == 3) {
+                            @if (ViewBag.roleId == 1 || ViewBag.roleId == 3 || ViewBag.roleId == 4)
+                            {
                                 <th>Salesperson</th>
                             }
                             <th>Aging</th>
@@ -620,7 +620,7 @@
                                 <td>@invoice.MgmtCo</td>
                                 <td>@String.Format("{0:C}", invoice.OutstandingAmount)</td>
                                 <td data-order="@invoice.DueDate.ToString("yyyy-MM-ddTHH:mm:ss")">@invoice.DueDate.ToString("d")</td>
-                                @if (ViewBag.RoleId == 1 || ViewBag.RoleId == 3)
+                                @if (ViewBag.RoleId == 1 || ViewBag.RoleId == 3 || ViewBag.RoleId == 4)
                                 {
                                     <td>@invoice.Salesperson</td>
                                 }

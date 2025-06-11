@@ -1,10 +1,12 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using SalesMetrics.Models;
 using SalesMetrics.Models.EFCore;
 using SalesMetrics.Services;
+using SalesMetrics.Services.Helpers;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -42,6 +44,7 @@ namespace SalesMetrics.Controllers
                         LastName = reader["LastName"].ToString(),
                         Username = reader["Username"].ToString(),
                         Email = reader["Email"].ToString(),
+                        UserId = Convert.ToInt32(reader["UserID"]),
                         RoleId = Convert.ToInt32(reader["RoleID"]),
                         Location = Convert.ToInt32(reader["Location"]),
                         CreatedDate = Convert.ToDateTime(reader["CreatedDate"]),
@@ -81,7 +84,6 @@ namespace SalesMetrics.Controllers
                     model.GoogleEmail = reader["GoogleEmail"]?.ToString();
                     model.GoogleAccessToken = reader["GoogleAccessToken"]?.ToString();
                     model.GoogleRefreshToken = reader["GoogleRefreshToken"]?.ToString();
-
                 }
             }
 
@@ -225,6 +227,32 @@ namespace SalesMetrics.Controllers
                     };
                     ViewBag.IsActive = Convert.ToBoolean(reader["IsActive"]);
                 }
+                reader.Close();                
+
+                // Fetch assigned locations
+                var assignedLocations = new List<int>();
+                var locationCmd = new SqlCommand(@"
+                    SELECT LocationID 
+                    FROM UserLocationAssignments 
+                    WHERE UserID = @UserId AND IsActive = 'YES'
+                ", conn);
+                locationCmd.Parameters.AddWithValue("@UserId", user.UserId);
+                using (var locReader = locationCmd.ExecuteReader())
+                {
+                    while (locReader.Read())
+                        assignedLocations.Add(Convert.ToInt32(locReader["LocationID"]));
+                }
+                user.AssignedLocationIds = assignedLocations;
+
+                // Populate all possible locations for checkboxes
+                user.AllLocations = new List<SelectListItem>
+                {
+                    new("LAX", "1"),
+                    new("LSV", "2"),
+                    new("CHN", "3"),
+                    new("PHX", "4"),
+                    new("SND", "5")
+                };
             }
 
             return PartialView("_EditUserModal", user);
@@ -245,33 +273,90 @@ namespace SalesMetrics.Controllers
             {
                 conn.Open();
 
-                var cmd = new SqlCommand(@"
-                    UPDATE Users
-                    SET FirstName = @FirstName,
-                        LastName = @LastName,
-                        Username = @Username,
-                        Email = @Email,
-                        RoleID = @RoleID,
-                        Location = @LocationID,
-                        SalesmanID = @SalesmanID,
-                        SalesmanNumber = @SalesmanNumber,
-                        IsActive = @IsActive,
-                        ModifiedDate = GETDATE()
-                    WHERE Users_ID = @UserID
-                ", conn);
+                var updates = new List<string>();
+                var cmd = new SqlCommand();
+                cmd.Connection = conn;
 
-                cmd.Parameters.AddWithValue("@FirstName", model.FirstName ?? "");
-                cmd.Parameters.AddWithValue("@LastName", model.LastName ?? "");
-                cmd.Parameters.AddWithValue("@Username", model.Username ?? "");
-                cmd.Parameters.AddWithValue("@Email", model.Email ?? "");
-                cmd.Parameters.AddWithValue("@RoleID", model.RoleId);
-                cmd.Parameters.AddWithValue("@LocationID", model.LocationId);
-                cmd.Parameters.AddWithValue("@SalesmanID", (object?)model.SalesmanId ?? DBNull.Value);
-                cmd.Parameters.AddWithValue("@SalesmanNumber", (object?)model.SalesmanNumber ?? DBNull.Value);
+                if (!string.IsNullOrWhiteSpace(model.FirstName))
+                {
+                    updates.Add("FirstName = @FirstName");
+                    cmd.Parameters.AddWithValue("@FirstName", model.FirstName);
+                }
+                if (!string.IsNullOrWhiteSpace(model.LastName))
+                {
+                    updates.Add("LastName = @LastName");
+                    cmd.Parameters.AddWithValue("@LastName", model.LastName);
+                }
+                if (!string.IsNullOrWhiteSpace(model.Username))
+                {
+                    updates.Add("Username = @Username");
+                    cmd.Parameters.AddWithValue("@Username", model.Username ?? "");
+                }
+                if (!string.IsNullOrWhiteSpace(model.Email))
+                {
+                    updates.Add("Email = @Email");
+                    cmd.Parameters.AddWithValue("@Email", model.Email ?? "");
+                }
+
+                if (!string.IsNullOrWhiteSpace(model.Password))
+                {
+                    updates.Add("Password = @Password");
+                    cmd.Parameters.AddWithValue("@Password", model.Password ?? "");
+                }
+                if (!string.IsNullOrWhiteSpace(model.UserId.ToString()))
+                {
+                    updates.Add("UserID = @UserId");
+                    cmd.Parameters.AddWithValue("@UserId", model.UserId.ToString() ?? "");
+                }
+                if (!string.IsNullOrWhiteSpace(model.RoleId.ToString()))
+                {
+                    updates.Add("RoleID = @RoleId");
+                    cmd.Parameters.AddWithValue("@RoleId", model.RoleId.ToString() ?? "");
+                }
+                if (!string.IsNullOrWhiteSpace(model.LocationId.ToString()))
+                {
+                    updates.Add("Location = @LocationId");
+                    cmd.Parameters.AddWithValue("@LocationId", model.LocationId.ToString() ?? "");
+                }
+                if (!string.IsNullOrWhiteSpace(model.SalesmanId.ToString()))
+                {
+                    updates.Add("SalesmanID = @SalesmanId");
+                    cmd.Parameters.AddWithValue("@SalesmanId", model.SalesmanId.ToString() ?? "");
+                }
+                if (!string.IsNullOrWhiteSpace(model.SalesmanNumber))
+                {
+                    updates.Add("SalesmanNumber = @SalesmanNumber");
+                    cmd.Parameters.AddWithValue("@SalesmanNumber", model.SalesmanNumber ?? "");
+                }
+
+                // Always include:
+                updates.Add("ModifiedDate = GETDATE()");
+                updates.Add("IsActive = @IsActive");
                 cmd.Parameters.AddWithValue("@IsActive", IsActive);
-                cmd.Parameters.AddWithValue("@UserID", model.UserId);
+                cmd.Parameters.AddWithValue("@Users_ID", model.Users_Id);
+
+                string updateSql = $"UPDATE Users SET {string.Join(", ", updates)} WHERE Users_ID = @Users_ID";
+                cmd.CommandText = updateSql;
 
                 cmd.ExecuteNonQuery();
+
+                // Remove all previous location assignments
+                var deleteCmd = new SqlCommand("DELETE FROM UserLocationAssignments WHERE UserID = @UserId", conn);
+                deleteCmd.Parameters.AddWithValue("@UserId", model.UserId);
+                deleteCmd.ExecuteNonQuery();
+
+                // Reinsert selected location (for now just Users.Location — you'll update UI for multi-check support soon)
+                foreach (var locId in model.AssignedLocationIds)
+                {
+                    var insertCmd = new SqlCommand(@"
+                        INSERT INTO UserLocationAssignments (UserID, LocationID, IsActive, DateAssigned)
+                        VALUES (@UserId, @LocationId, 'YES', GETDATE())
+                    ", conn);
+                    insertCmd.Parameters.AddWithValue("@UserId", model.UserId);
+                    insertCmd.Parameters.AddWithValue("@LocationId", locId);
+                    insertCmd.ExecuteNonQuery();
+                }
+
             }
 
             TempData["Success"] = "User updated successfully.";
@@ -321,8 +406,19 @@ namespace SalesMetrics.Controllers
             cmd.Parameters.AddWithValue("@SalesmanNumber", (object?)model.SalesmanNumber ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@PasswordHash", hash);
             cmd.Parameters.AddWithValue("@Salt", salt);
-
             cmd.ExecuteNonQuery();
+
+            // 🔻 assigned multiple locations for user
+            foreach (var locId in model.AssignedLocationIds)
+            {
+                var insertCmd = new SqlCommand(@"
+                    INSERT INTO UserLocationAssignments (UserID, LocationID, IsActive, DateAssigned)
+                    VALUES (@UserId, @LocationId, 'YES', GETDATE())
+                ", conn);
+                insertCmd.Parameters.AddWithValue("@UserId", model.UserId);
+                insertCmd.Parameters.AddWithValue("@LocationId", locId);
+                insertCmd.ExecuteNonQuery();
+            }
 
             TempData["Success"] = "New user created.";
             return RedirectToAction("Index");
@@ -387,8 +483,6 @@ namespace SalesMetrics.Controllers
                         Reason = reason
                     });
                 }
-
-                
             }
 
             return flaggedUsers;
@@ -451,6 +545,25 @@ namespace SalesMetrics.Controllers
             return RedirectToAction("Index");
         }
 
+        [HttpPost]
+        public IActionResult SwitchLocation(string selectedLocation)
+        {
+            selectedLocation = selectedLocation ?? "LAX"; // or your default
 
+            var roleId = int.Parse(User.FindFirst("RoleId")?.Value ?? "0");
+
+            // Allow switching only for Admins and GMs
+            if ((roleId == 1 || roleId == 4) && !string.IsNullOrEmpty(selectedLocation))
+            {
+                HttpContext.Session.SetString("OfficeLocation", selectedLocation);
+
+                // ✅ NEW: Also store LocationId for use across controllers
+                int locationId = LocationHelper.GetLocationId(selectedLocation);
+                HttpContext.Session.SetString("LocationId", locationId.ToString());
+            }
+
+            var referrer = Request.Headers["Referer"].ToString();
+            return Redirect(!string.IsNullOrEmpty(referrer) ? referrer : "/");
+        }
     }
 }

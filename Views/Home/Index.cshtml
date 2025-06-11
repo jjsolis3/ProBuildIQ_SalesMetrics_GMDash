@@ -53,7 +53,7 @@
         <!-- 🔥 Filter Row (Dropdown + Toggle) -->
         <div class="row mb-3 align-items-center">
 
-            @if (ViewBag.RoleId == 1 || ViewBag.RoleId == 3)
+            @if (ViewBag.RoleId == 1 || ViewBag.RoleId == 3 || ViewBag.RoleId == 4)
             {
                 <!-- Admin/SalesAdmin: User Filter -->
                 <div class="col-auto">
@@ -451,7 +451,7 @@
                 <h4 class="card-title mb-0">Inactive Customers (No Orders in 30-480 Days)</h4>
             </div>
             <div class="card-body">
-                @if (ViewBag.RoleId == 1 || ViewBag.RoleId == 3)
+                @if (ViewBag.RoleId == 1 || ViewBag.RoleId == 3 || ViewBag.RoleId == 4)
                 {
                     <div id="repFilterWrapper" class="mb-3 d-flex justify-content-end align-items-center">
                         <label for="repFilter" class="me-2 mb-0"><strong>Filter by Salesperson:</strong></label>
@@ -529,7 +529,8 @@
                             <th>Mgmt Co</th>
                             <th>Amount</th>
                             <th>Due Date</th>
-                            @if (ViewBag.roleId == 1 || ViewBag.roleId == 3) {
+                            @if (ViewBag.roleId == 1 || ViewBag.roleId == 3 || ViewBag.RoleId == 4)
+                            {
                                 <th>Salesperson</th>
                             }
                             <th>Aging</th>
@@ -553,7 +554,7 @@
                                 <td>@invoice.MgmtCo</td>
                                 <td>@String.Format("{0:C}", invoice.OutstandingAmount)</td>
                                 <td data-order="@invoice.DueDate.ToString("yyyy-MM-ddTHH:mm:ss")">@invoice.DueDate.ToString("g")</td>
-                                @if (ViewBag.RoleId == 1 || ViewBag.RoleId == 3)
+                                @if (ViewBag.RoleId == 1 || ViewBag.RoleId == 3 || ViewBag.RoleId == 4)
                                 {
                                     <td>@invoice.Salesperson</td>
                                 }

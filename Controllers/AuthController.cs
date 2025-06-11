@@ -68,6 +68,7 @@ namespace SalesMetrics.Controllers
             string fullName = string.Empty;
             string role = "Guest";
             int salesMetricsUserId = 0;
+            int users_Id = 0; // SalesMetrics Users_ID
             int roleId = 0;
             int salesmanId = 0;
             string? salesmanNumber = string.Empty;
@@ -79,6 +80,7 @@ namespace SalesMetrics.Controllers
             // Authenticate user in SalesMetrics
             var cmd = new SqlCommand(@"
                 SELECT 
+                    Users_ID, 
                     UserID,
                     RoleID,
                     Location,
@@ -107,7 +109,9 @@ namespace SalesMetrics.Controllers
 
             // ✅ Move this up to make sure salesMetricsUserId is populated
             salesMetricsUserId = Convert.ToInt32(reader["UserID"]);
+            users_Id = Convert.ToInt32(reader["Users_ID"]);
             roleId = Convert.ToInt32(reader["RoleID"]);
+            role = GetUserRole(roleId);
             locationId = Convert.ToInt32(reader["Location"]);
             salesmanId = reader.IsDBNull(reader.GetOrdinal("SalesmanID")) ? 0 : Convert.ToInt32(reader["SalesmanID"]);
             salesmanNumber = reader.IsDBNull(reader.GetOrdinal("SalesmanNumber")) ? "" : reader["SalesmanNumber"].ToString();
@@ -181,6 +185,7 @@ namespace SalesMetrics.Controllers
                 new Claim("FullName", fullName),
                 new Claim("OfficeLocation", officeLocation),
                 new Claim("UserId", salesMetricsUserId.ToString()),
+                new Claim("Users_ID", users_Id.ToString()), // SalesMetrics Users_ID
                 new Claim("SalesmanId", salesmanId.ToString()), 
                 new Claim("RoleId", roleId.ToString()),
                 new Claim("LocationId", locationId.ToString())
@@ -201,6 +206,7 @@ namespace SalesMetrics.Controllers
             );
 
             // Save to Session
+            HttpContext.Session.SetString("Users_ID", users_Id.ToString());
             HttpContext.Session.SetString("UserId", salesMetricsUserId.ToString());
             HttpContext.Session.SetString("FullName", fullName);
             HttpContext.Session.SetString("Username", username);
@@ -225,6 +231,30 @@ namespace SalesMetrics.Controllers
             updateCmd.Parameters.AddWithValue("@UserID", salesMetricsUserId);
             updateCmd.Parameters.AddWithValue("@locationId", locationId);
             await updateCmd.ExecuteNonQueryAsync();
+
+            // After setting all session variables
+            using (var conn2 = new SqlConnection(_configuration.GetConnectionString("SalesMetrics")))
+            {
+                conn2.Open();
+
+                var locationCmd = new SqlCommand(@"
+                    SELECT LocationID 
+                    FROM UserLocationAssignments 
+                    WHERE UserID = @UserId AND IsActive = 'YES'
+                ", conn2);
+                locationCmd.Parameters.AddWithValue("@UserId", users_Id);
+
+                var assignedLocations = new List<string>();
+                using (var reader2 = locationCmd.ExecuteReader())
+                {
+                    while (reader2.Read())
+                    {
+                        assignedLocations.Add(reader2["LocationID"].ToString());
+                    }
+                }
+
+                HttpContext.Session.SetString("AssignedLocations", string.Join(",", assignedLocations));
+            }
 
             return RedirectToAppropriatePage(role);
         }
@@ -311,12 +341,6 @@ namespace SalesMetrics.Controllers
             return HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown";
         }
 
-        public static string GenerateSalt()
-        {
-            byte[] saltBytes = RandomNumberGenerator.GetBytes(16); // Generates a 128-bit salt
-            return Convert.ToBase64String(saltBytes);
-        }
-
         private IActionResult RedirectToAppropriatePage(string userRole)
         {
             switch (userRole)
@@ -328,7 +352,7 @@ namespace SalesMetrics.Controllers
                 case "SALES":
                     return RedirectToAction("Index", "Dashboard");
                 case "GENERAL MANAGER":
-                    return RedirectToAction("Index", "GM");
+                    return RedirectToAction("Index", "GMDash");
                 default:
                     return RedirectToAction("Index", "Home");
             }

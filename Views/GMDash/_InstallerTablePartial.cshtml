@@ -1,0 +1,34 @@
+﻿@model List<InstallerCompletionMetric>
+
+<table class="table table-bordered table-striped text-end">
+    <thead>
+        <tr>
+            <th>Location</th>
+            <th>Total Orders</th>
+            <th>Completed</th>
+            <th>Whs Arrival</th>
+            <th>Whs Depart</th>
+            <th>Order Arrival</th>
+            <th>Order Completed</th>
+            <th>Cancelled</th>
+            <th>% Completion</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var row in Model)
+        {
+            var percent = row.TotalOrders > 0 ? (decimal)row.CompletedOrders / row.TotalOrders * 100 : 0;
+            <tr>
+                <td>@row.Location</td>
+                <td>@row.TotalOrders</td>
+                <td>@row.CompletedOrders</td>
+                <td>@row.WhsArrivalCount</td>
+                <td>@row.WhsDepartCount</td>
+                <td>@row.OrderArrivalCount</td>
+                <td>@row.OrderCompletedCount</td>
+                <td>@row.OrderCancelledCount</td>
+                <td>@percent.ToString("0.0")%</td>
+            </tr>
+        }
+    </tbody>
+</table>

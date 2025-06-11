@@ -124,7 +124,7 @@ namespace SalesMetrics.Controllers
             List<SalesTask> tasks;
             List<User> users;
 
-            if (roleId == 1 || roleId == 3)
+            if (roleId == 1 || roleId == 3 || roleId == 4)
             {
                 tasks = GetAllTasksByLocation(locationId);
                 users = GetAllUsersForTaskDisplay(locationId, roleId);
@@ -403,7 +403,7 @@ namespace SalesMetrics.Controllers
                         FROM Users
                         WHERE Location = @Location";
                 }
-                else if (roleId == 3)
+                else if (roleId == 3 || roleId == 4)
                 {
                     // Admins and Sales Admins see all users at the same location
                     query = @"SELECT UserID, FirstName, LastName, RoleID, Location, CreatedDate, SalesmanID
@@ -415,15 +415,15 @@ namespace SalesMetrics.Controllers
                     // Sales reps only see themselves
                     query = @"SELECT UserID, FirstName, LastName, RoleID, Location, CreatedDate, SalesmanID
                         FROM Users
-                        WHERE UserID = @UserId";
+                        WHERE UserID = @UserId and Location = @Location";
                 }
 
                 using (SqlCommand cmd = new SqlCommand(query, conn))
                 {
-                    if (roleId == 1 || roleId == 3)
-                        cmd.Parameters.AddWithValue("@Location", locationId);
-                    else
+                    if (roleId == 2)
                         cmd.Parameters.AddWithValue("@UserId", userId);
+
+                    cmd.Parameters.AddWithValue("@Location", locationId);
 
                     using (SqlDataReader reader = cmd.ExecuteReader())
                     {
@@ -463,7 +463,7 @@ namespace SalesMetrics.Controllers
                         FROM Users
                         WHERE Location = @Location";
                 }
-                else if (roleId == 3)
+                else if (roleId == 3 || roleId == 4)
                 {
                     query = @"
                         SELECT UserID, FirstName, LastName, RoleID, Location, CreatedDate, SalesmanID
@@ -646,7 +646,7 @@ namespace SalesMetrics.Controllers
         {
             var assignedUser = users.FirstOrDefault(u => u.UserID == task.AssignedTo);
 
-            if (roleId == 1 || roleId == 3) // Admin or Sales Admin
+            if (roleId == 1 || roleId == 3 || roleId == 4) // Admin or Sales Admin
             {
                 return (assignedUser != null ? assignedUser.NameandInitial() + " - " : "") + task.Title;
             }
@@ -731,7 +731,7 @@ namespace SalesMetrics.Controllers
             int locationId = Convert.ToInt32(HttpContext.Session.GetString("LocationId"));
             SalesTask? task;
 
-            if (roleId == 1 || roleId == 3)
+            if (roleId == 1 || roleId == 3 || roleId == 4)
             {
                 // Admins and Sales Admins can see all tasks by location
                 task = GetAllTasksByLocation(locationId).FirstOrDefault(t => t.TaskID == id);
@@ -1126,7 +1126,7 @@ namespace SalesMetrics.Controllers
 
             var roleId = Convert.ToInt32(HttpContext.Session.GetString("RoleId"));
 
-            if (roleId == 1 || roleId == 3)
+            if (roleId == 1 || roleId == 3 || roleId == 4)
             {
                 if (model.AssignedTo == null || model.AssignedTo == 0)
                 {
@@ -1210,14 +1210,14 @@ namespace SalesMetrics.Controllers
                     CreatedBy = HttpContext.Session.GetString("Username") ?? "system",
                     CreatedDate = DateTime.Now,
                     Location = int.TryParse(HttpContext.Session.GetString("LocationId"), out var locId) ? locId : 0,
-                    AssignedTo = (roleId == 1 || roleId == 3) ? model.AssignedTo : Convert.ToInt32(HttpContext.Session.GetString("UserId"))
+                    AssignedTo = (roleId == 1 || roleId == 3 || roleId == 4) ? model.AssignedTo : Convert.ToInt32(HttpContext.Session.GetString("UserId"))
                 };
 
                 // Handle nullable session-based properties
                 //if (int.TryParse(HttpContext.Session.GetString("LocationId"), out var locId))
                 //    task.Location = locId;
 
-                if (roleId == 1 || roleId == 3)
+                if (roleId == 1 || roleId == 3 || roleId == 4)
                 {
                     task.AssignedTo = (int)model.AssignedTo;
                 }
@@ -1275,7 +1275,7 @@ namespace SalesMetrics.Controllers
                 // Determine AssignedTo
                 Console.WriteLine("AssignedTo in CreateFromWorkOrder: " + model.AssignedTo);
 
-                int assignedTo = ((roleId == 1 || roleId == 3) ? model.AssignedTo : sessionUserId);
+                int assignedTo = ((roleId == 1 || roleId == 3 || roleId == 4) ? model.AssignedTo : sessionUserId);
 
                 if (assignedTo == 0)
                 {
@@ -1343,7 +1343,7 @@ namespace SalesMetrics.Controllers
             List<SalesTask> tasks;
             List<User> users;
 
-            if (roleId == 1 || roleId == 3)  // Admin or Sales Admin
+            if (roleId == 1 || roleId == 3 || roleId == 4)  // Admin or Sales Admin
             {
                 tasks = GetAllTasksByLocation(locationId);
                 users = GetAllUsersForTaskDisplay(locationId, roleId);

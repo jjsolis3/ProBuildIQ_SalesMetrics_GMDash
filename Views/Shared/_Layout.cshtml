@@ -44,7 +44,39 @@
         }
     </style>
 </head>
+
+@using SalesMetrics.Services.Helpers
+@using SalesMetrics.Data
+@inject SalesMetricsDbContext DbContext
+
+@{
+    var userId = int.Parse(Context.User.FindFirst("Users_ID")?.Value ?? "0");
+    var currentLocation = Context.Session.GetString("OfficeLocation") ?? "LAX";
+    var assignedLocs = DbContext.UserLocationAssignments
+        .Where(x => x.UserID == userId && x.IsActive == "YES")
+        .Select(x => x.LocationID)
+        .ToList();
+
+    var switchModel = new SalesMetrics.Models.UserLocationSwitcherViewModel
+            {
+                CurrentLocation = currentLocation,
+                AvailableLocations = assignedLocs.Select(loc => new SelectListItem
+                {
+                    Value = LocationHelper.GetBranchCode(loc),
+                    Text = LocationHelper.GetLocationName(loc),
+                    Selected = LocationHelper.GetBranchCode(loc) == currentLocation
+                }).ToList()
+            };
+}
+
 <body>
+    @{
+        var currentBranchCode = Context.Session.GetString("OfficeLocation") ?? "LAX";
+        var currentBranchName = SalesMetrics.Services.Helpers.LocationHelper.GetLocationName(
+            SalesMetrics.Services.Helpers.LocationHelper.GetLocationId(currentBranchCode)
+        );
+    }
+
     <div id="layout-wrapper">
         <!-- Loading Overlay -->
         @{
@@ -52,7 +84,7 @@
             var currentAction = ViewContext.RouteData.Values["action"]?.ToString();
 
             var showOverlay =
-                (currentController == "GM" && currentAction == "Index") ||
+                (currentController == "GMDash" && currentAction == "Index") ||
                 (currentController == "Dashboard" && currentAction == "Index") ||
                 (currentController == "Properties" && currentAction == "Properties") ||
                 (currentController == "Dashboard" && currentAction == "Index") ||
@@ -66,8 +98,7 @@
         {
             @Html.Partial("~/Views/Shared/loading.cshtml")
         }
-
-        
+                
         @Html.Partial("~/Views/Shared/menu.cshtml")
 
         <div class="main-content">
@@ -100,6 +131,17 @@
             </div>
         </div>
     </div>
+
+    <!-- Switch Location Modal -->
+    @* <partial name="_SwitchLocationModal" model="switchModel" /> *@
+    @if ((User.IsInRole("Admin") || User.IsInRole("GM") || User.FindFirst("RoleId")?.Value == "1" || User.FindFirst("RoleId")?.Value == "4")
+    && !(ViewContext.RouteData.Values["controller"]?.ToString() == "GMDash"
+    && ViewContext.RouteData.Values["action"]?.ToString() == "Index"))
+    {
+        @await Component.InvokeAsync("UserLocationSwitcher", new { viewName = "_SwitchLocationModal" })
+    }
+
+
 
     <!-- Journal Entry Modal -->
     @await Html.PartialAsync("_JournalCreateModal", new SalesMetrics.Models.Journal.JournalEntry())

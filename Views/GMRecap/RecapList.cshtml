@@ -1,0 +1,115 @@
+﻿<!-- GMRecapListAndDetail.cshtml -->
+@model List<SalesMetrics.Models.GMRecapCardViewModel>
+
+@{
+    ViewBag.Title = "GM Weekly Recap Dashboard";
+}
+
+<div class="row">
+    <!-- LEFT SIDE: Entry List -->
+    <div class="col-md-8" style="overflow-y:auto; max-height:80vh;">
+        <h4>🗂️ GM Weekly Entries</h4>
+
+        <div class="col-4 mb-3">
+            <label>Filter by Week:</label>
+            <select class="form-select" id="weekFilter">
+                <option value="all">All Weeks</option>
+                @foreach (var week in Model.Select(x => x.WeekStartDate).Distinct().OrderByDescending(d => d))
+                {
+                    <option value="@week.ToString("yyyy-MM-dd")">@week.ToString("MMMM dd")</option>
+                }
+            </select>
+        </div>
+
+        @foreach (var group in Model
+        .GroupBy(x => x.WeekStartDate)
+        .OrderByDescending(g => g.Key))
+        {
+            <div class="week-group" data-week="@group.Key.ToString("yyyy-MM-dd")">
+                <h5 class="mt-4 text-primary border-bottom pb-1">📅 Week of @group.Key.ToString("MMMM dd, yyyy")</h5>
+
+                <div class="row">
+                    @foreach (var entry in group)
+                    {
+                        var groupedFieldNames = entry.Fields
+                        .GroupBy(f => f.FieldName)
+                        .Select(g => g.Key)
+                        .ToList();
+                        var totalUniqueFields = groupedFieldNames.Count;
+                        var totalEntries = entry.Fields.Count;
+                        var fieldNamesSummary = string.Join(", ", groupedFieldNames);
+
+                        <div class="col-md-6">
+                            <div class="card mb-3 recap-entry-card" data-week="@entry.WeekStartDate.ToString("yyyy-MM-dd")" onclick="loadRecapDetails(@entry.RecapID)">
+                                <div class="card-header bg-success text-white d-flex justify-content-between">
+                                    <span class="fs-6">Recap by: @entry.GMName</span>
+                                    <span class="fs-6">Entered: @totalEntries fields</span>
+                                </div>
+                                <div class="card-body">
+                                    <p>
+                                        <strong>Total Fields:</strong> @totalUniqueFields <br/>( @fieldNamesSummary )
+                                    </p>
+                                    <p class="text-muted mb-0">Click to view more</p>
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                </div>
+            </div>
+        }
+
+    </div>
+
+    <!-- RIGHT SIDE: Entry Details -->
+    <div class="col-md-4">
+        <h4>🔎 Recap Details</h4>
+        <div id="recap-details" class="border rounded p-3" style="min-height:300px;">
+            <p class="text-muted">Select a recap entry to view details.</p>
+        </div>
+    </div>
+</div>
+
+
+<!-- MODAL SECTION -->
+
+
+@section Scripts {
+    <script>
+        function loadRecapDetails(recapId) {
+            fetch(`/GMRecap/GetRecapDetails?recapId=${recapId}`)
+                .then(res => res.text())
+                .then(html => {
+                    document.getElementById("recap-details").innerHTML = html;
+                });
+        }
+
+        document.getElementById("weekFilter").addEventListener("change", function () {
+            const selected = this.value;
+            document.querySelectorAll(".week-group").forEach(group => {
+                const week = group.getAttribute("data-week");
+                group.style.display = (selected === "all" || week === selected) ? "block" : "none";
+            });
+        });
+    </script>
+    <script>
+        function loadEditRecapModal(recapId) {
+            fetch(`/GMRecap/EditRecapModal?recapId=${recapId}`)
+                .then(res => res.text())
+                .then(html => {
+                    const modalContainer = document.createElement("div");
+                    modalContainer.innerHTML = html;
+                    document.body.appendChild(modalContainer);
+                    const modal = new bootstrap.Modal(modalContainer.querySelector("#editRecapModal"));
+                    modal.show();
+
+                    modalContainer.addEventListener("hidden.bs.modal", () => {
+                        modal.dispose();
+                        modalContainer.remove();
+                    });
+                });
+        }
+
+    </script>
+
+}

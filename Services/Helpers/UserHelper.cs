@@ -24,7 +24,7 @@ namespace SalesMetrics.Services.Helpers
 
                 string query;
 
-                if (roleId == 1 || roleId == 3)
+                if (roleId == 1 || roleId == 3 || roleId == 4)
                 {
                     query = @"SELECT UserID, FirstName, LastName, RoleID, Location, CreatedDate
                           FROM Users
@@ -39,7 +39,7 @@ namespace SalesMetrics.Services.Helpers
 
                 using (SqlCommand cmd = new SqlCommand(query, conn))
                 {
-                    if (roleId == 1 || roleId == 3)
+                    if (roleId == 1 || roleId == 3 || roleId == 4)
                         cmd.Parameters.AddWithValue("@Location", locationId);
                     else
                         cmd.Parameters.AddWithValue("@UserId", userId);

@@ -43,5 +43,29 @@ namespace SalesMetrics.Services.Helpers
 
         public static string? GetLocationCode(int id) => Locations.ContainsKey(id) ? Locations[id].Code : null;
         public static string GetLocationName(int id) => Locations.ContainsKey(id) ? Locations[id].Name : "Unknown";
+
+        public static string GetBranchCode(int locationId)
+        {
+            return locationId switch
+            {
+                1 => "LAX",
+                2 => "LSV",
+                3 => "CHN",
+                4 => "PHX",
+                5 => "SND",
+                _ => "LAX"
+            };
+        }
+
+        public static int GetCurrentLocationId(HttpContext context)
+        {
+            return int.TryParse(context.Session.GetString("LocationId"), out var locId) ? locId : 0;
+        }
+
+        public static string GetCurrentOfficeCode(HttpContext context)
+        {
+            return context.Session.GetString("OfficeLocation") ?? "LAX";
+        }
+
     }
 }

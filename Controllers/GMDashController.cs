@@ -94,6 +94,7 @@ namespace SalesMetrics.Controllers
             var installerTasks = locations.Select(loc => GetInstallerMetricsForWeek(loc, ytdStart, today));
             var installerResults = await Task.WhenAll(installerTasks);
             model.InstallerCompletionMetrics = installerResults.SelectMany(r => r).ToList();
+            ViewBag.InstallerRange = "ytd";
 
             // RECENT RTJS
             var rtjTasks = locations.Select(loc => GetRecentRTJEntries(ytdStart, loc));
@@ -482,6 +483,48 @@ namespace SalesMetrics.Controllers
             return metrics;
         }
 
+        [HttpGet]
+        public async Task<IActionResult> GetInstallerTable(string range = "week", int locationId = 0)
+        {
+            var today = DateTime.Today;
+            DateTime startDate, endDate = today;
+
+            switch (range)
+            {
+                case "lastweek":
+                    startDate = today.AddDays(-(int)today.DayOfWeek - 7 + 1);
+                    endDate = startDate.AddDays(6);
+                    break;
+                case "mtd":
+                    startDate = new DateTime(today.Year, today.Month, 1);
+                    break;
+                case "lastmonth":
+                    startDate = new DateTime(today.Year, today.Month, 1).AddMonths(-1);
+                    endDate = startDate.AddMonths(1).AddDays(-1);
+                    break;
+                case "lastquarter":
+                    int quarter = (today.Month - 1) / 3;
+                    startDate = new DateTime(today.Year, quarter * 3 + 1, 1).AddMonths(-3);
+                    endDate = startDate.AddMonths(3).AddDays(-1);
+                    break;
+                case "ytd":
+                    startDate = new DateTime(today.Year, 1, 1);
+                    break;
+                default: // this week
+                    int daysToSunday = (int)today.DayOfWeek;
+                    startDate = today.AddDays(-daysToSunday);
+                    break;
+            }
+
+            var locations = LocationHelper.GetLocationQueryList(locationId);
+            var installerTasks = locations.Select(loc => GetInstallerMetricsForWeek(loc, startDate, endDate));
+            var installerResults = await Task.WhenAll(installerTasks);
+            var metrics = installerResults.SelectMany(x => x).ToList();
+
+            return PartialView("_InstallerTablePartial", metrics);
+        }
+
+
         private async Task<List<RTJEntry>> GetRecentRTJEntries(DateTime startDate, string location)
         {
             var result = new List<RTJEntry>();
@@ -501,6 +544,9 @@ namespace SalesMetrics.Controllers
                     AND G.GLJ_TRANSACTION_DATE >= @StartDate
                     AND G.GLJ_WAREHOUSE_NUMBER IN (1, 2, 3, 6, 11, 86, 90)
                     AND G.GLJ_REFERENCE_NUMBER LIKE '%RTJ%'
+                    AND G.GLJ_REFERENCE_NUMBER NOT LIKE '%1226%'
+	                AND G.GLJ_REFERENCE_NUMBER NOT LIKE '%12to 6%'
+	                AND G.GLJ_REFERENCE_NUMBER NOT LIKE '%12 to 6%'
                 ORDER BY G.GLJ_DEBIT_AMOUNT DESC, G.GLJ_CREDIT_AMOUNT ASC
             ", conn);
 

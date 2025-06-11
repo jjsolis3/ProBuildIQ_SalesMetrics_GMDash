@@ -195,5 +195,7 @@ public partial class SalesMetricsDbContext : DbContext
         OnModelCreatingPartial(modelBuilder);
     }
 
+    public DbSet<UserLocationAssignment> UserLocationAssignments { get; set; }
+
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder);
 }

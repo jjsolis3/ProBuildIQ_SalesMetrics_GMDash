@@ -1,0 +1,38 @@
+﻿@model SalesMetrics.Models.UserLocationSwitcherViewModel
+
+<div class="modal fade" id="switchLocationModal" tabindex="-1" aria-labelledby="switchLocationModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+    @* <div class="modal-dialog modal-dialog-centered"> *@
+        <div class="modal-content shadow">
+            <div class="modal-header bg-orange text-white">
+                <h5 class="modal-title" id="switchLocationModalLabel">
+                    <i class="fas fa-map-marker-alt me-2"></i> Switch Office Location
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form asp-controller="Accounts" asp-action="SwitchLocation" method="post">
+                    @if (Model.AvailableLocations != null && Model.AvailableLocations.Any())
+                    {
+                        <select name="selectedLocation"
+                                class="form-select form-select-sm fw-semibold rounded-pill text-dark border bg-light px-3 py-2"
+                                onchange="this.form.submit()">
+                            @foreach (var loc in Model.AvailableLocations)
+                            {
+                                <option value="@loc.Value" selected="@(loc.Selected ? "selected" : null)">
+                                    @loc.Text
+                                </option>
+                            }
+                        </select>
+                    }
+                    else
+                    {
+                        <div class="alert alert-warning mb-0">
+                            You don’t have access to any locations yet.
+                        </div>
+                    }
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

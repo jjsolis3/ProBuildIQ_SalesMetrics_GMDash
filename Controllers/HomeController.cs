@@ -8,6 +8,7 @@ using System.Reflection.Metadata.Ecma335;
 using Microsoft.AspNetCore.Authorization;
 using SalesMetrics.Models.EFCore;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions;
+using SalesMetrics.Services.Helpers;
 
 namespace SalesMetrics.Controllers
 {
@@ -40,7 +41,7 @@ namespace SalesMetrics.Controllers
                     return RedirectToAction("Login", "Auth");
 
                 fullName = User.FindFirstValue("FullName");
-                officeLocation = User.FindFirstValue("OfficeLocation");                
+                officeLocation = LocationHelper.GetCurrentOfficeCode(HttpContext);
             }
 
             if (!startDate.HasValue || !endDate.HasValue)
@@ -228,7 +229,7 @@ namespace SalesMetrics.Controllers
         private (List<DailyOrderCount> Orders, DateTime Start, DateTime End) GetWeeklyOrdersDataWithRange(int weekOffset = 0, int roleId = 0)
         {
             var orders = new List<DailyOrderCount>();
-            var officeLocation = User.FindFirstValue("OfficeLocation");
+            var officeLocation = LocationHelper.GetCurrentOfficeCode(HttpContext);
             var connectionString = _configuration.GetConnectionString(officeLocation);
 
             var userId = HttpContext.Session.GetString("UserId") ?? User.FindFirstValue("UserId");
@@ -304,7 +305,7 @@ namespace SalesMetrics.Controllers
         private TransactionSummary GetTransactionSummary(DateTime? startDate, DateTime? endDate, int roleId = 0)
         {
             var summary = new TransactionSummary { TopDelinquentCustomers = new List<CustomerOutstanding>() };
-            var officeLocation = User.FindFirstValue("OfficeLocation");
+            var officeLocation = LocationHelper.GetCurrentOfficeCode(HttpContext);
             var connectionString = _configuration.GetConnectionString(officeLocation);
             int salesmanId = int.Parse(User.FindFirst("SalesmanId")?.Value ?? "0");
 
@@ -469,7 +470,7 @@ namespace SalesMetrics.Controllers
         private List<OverdueInvoice> GetOverdueInvoices()
         {
             var overdueList = new List<OverdueInvoice>();
-            var officeLocation = User.FindFirstValue("OfficeLocation");
+            string officeLocation = LocationHelper.GetCurrentOfficeCode(HttpContext);
             var connectionString = _configuration.GetConnectionString(officeLocation);
             var userId = Convert.ToInt32(User.FindFirstValue("UserId"));
             int roleId = int.Parse(User.FindFirst("roleId")?.Value ?? "0");
@@ -544,7 +545,7 @@ namespace SalesMetrics.Controllers
         [HttpGet]
         public IActionResult GetOrderDetails(int invoiceNumber)
         {
-            var officeLocation = User.FindFirstValue("OfficeLocation");
+            string officeLocation = LocationHelper.GetCurrentOfficeCode(HttpContext);
             var connectionString = _configuration.GetConnectionString(officeLocation);
             var viewModel = new InvoiceDetailViewModel();
 
@@ -642,7 +643,7 @@ namespace SalesMetrics.Controllers
 
         public IActionResult GetWorkOrdersByDay(string dayOfWeek, int weekOffset = 0)
         {
-            var officeLocation = User.FindFirstValue("OfficeLocation");
+            string officeLocation = LocationHelper.GetCurrentOfficeCode(HttpContext);
             var connectionString = _configuration.GetConnectionString(officeLocation);
             var results = new List<WorkOrderViewModel>();
             int salesmanId = int.Parse(User.FindFirst("SalesmanId")?.Value ?? "0");
@@ -854,7 +855,7 @@ namespace SalesMetrics.Controllers
         {
             var mtdResults = new List<SalesRanking>();
             var ytdResults = new List<SalesRanking>();
-            var officeLocation = User.FindFirstValue("OfficeLocation");
+            string officeLocation = LocationHelper.GetCurrentOfficeCode(HttpContext);
             var connectionString = _configuration.GetConnectionString(officeLocation);
 
             DateTime today = DateTime.Today;
@@ -943,7 +944,7 @@ namespace SalesMetrics.Controllers
         {
             int salesmanId = int.Parse(User.FindFirst("SalesmanId")?.Value ?? "0");
             int roleId = int.Parse(User.FindFirst("RoleId")?.Value ?? "0");
-            var officeLocation = User.FindFirstValue("OfficeLocation");
+            string officeLocation = LocationHelper.GetCurrentOfficeCode(HttpContext);
             var connectionString = _configuration.GetConnectionString(officeLocation);
 
             DateTime today = DateTime.Today;

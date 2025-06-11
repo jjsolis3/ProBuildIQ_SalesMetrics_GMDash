@@ -1,0 +1,39 @@
+﻿@model SalesMetrics.Models.GMRecapCardViewModel
+
+<div class="modal fade" id="editRecapModal" tabindex="-1" aria-labelledby="editRecapModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <form id="editRecapForm" asp-action="UpdateRecap" asp-controller="GMRecap" method="post">
+                <div class="modal-header bg-warning text-white">
+                    <h5 class="modal-title">Edit Recap - Week of @Model.WeekStartDate.ToString("MMMM dd, yyyy")</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="RecapID" value="@Model.RecapID" />
+                    <input type="hidden" name="WeekStartDate" value="@Model.WeekStartDate.ToString("yyyy-MM-dd")" />
+
+                    <div class="row g-4">
+                        @for (int i = 0; i < Model.Fields.Count; i++)
+                        {
+                            <div class="col-md-6">
+                                <div class="card border-info">
+                                    <div class="card-header bg-primary text-white">
+                                        @Model.Fields[i].FieldName
+                                    </div>
+                                    <div class="card-body">
+                                        <input type="hidden" name="Fields[@i].FieldName" value="@Model.Fields[i].FieldName" />
+                                        <textarea name="Fields[@i].FieldValue" class="form-control" rows="3">@Model.Fields[i].FieldValue</textarea>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-success">💾 Save Changes</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

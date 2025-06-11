@@ -47,7 +47,7 @@ namespace SalesMetrics.Controllers
             if (string.IsNullOrEmpty(userId))
             {
                 userId = User.FindFirstValue("UserID");
-                officeLocation = User.FindFirstValue("OfficeLocation");
+                officeLocation = LocationHelper.GetCurrentOfficeCode(HttpContext);
 
                 if (string.IsNullOrEmpty(userId))
                     return RedirectToAction("Login", "Auth");

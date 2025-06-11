@@ -43,20 +43,19 @@
                             new { Value = 1, Text = "ADMIN" },
                             new { Value = 2, Text = "SALES" },
                             new { Value = 3, Text = "SALES ADMIN" },
-                            new { Value = 4, Text = "OFFICE" }
+                            new { Value = 4, Text = "GENERAL MANAGER" },
+                            new { Value = 5, Text = "OFFICE" }
                             }, "Value", "Text"), "Select Role", new { @class = "form-select" })
                         </div>
                         <div class="col-md-3 mb-3">
-                            @Html.LabelFor(m => m.LocationId)
-                            @Html.DropDownListFor(m => m.LocationId, new SelectList(new[] {
-                            new { Value = 1, Text = "LAX" },
-                            new { Value = 2, Text = "LSV" },
-                            new { Value = 3, Text = "CHN" },
-                            new { Value = 4, Text = "PHX" },
-                            new { Value = 5, Text = "SND" }
-                            }, "Value", "Text"), "Select Office", new { @class = "form-select" })
+                            @Html.LabelFor(m => m.UserId)
+                            @Html.TextBoxFor(m => m.UserId, new { @class = "form-control" })
                         </div>
                     </div>
+
+                    <!-- LOCATION SELECTOR PARTIAL -->
+                    @await Html.PartialAsync("_UserLocationSelector", Model)
+
                 </div>
                 <div class="modal-footer">
                     <button type="submit" class="btn btn-primary">Create User</button>

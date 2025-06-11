@@ -1,0 +1,27 @@
+﻿@model SalesMetrics.Models.RegisterViewModel
+
+<div class="row">
+    <!-- Default location dropdown -->
+    <div class="col-md-6 mb-3">
+        <label class="form-label">Default Location (Primary)</label>
+        @Html.DropDownListFor(m => m.LocationId, Model.AllLocations, "Select Default", new { @class = "form-select" })
+    </div>
+
+    <!-- Assigned locations as checkboxes -->
+    <div class="col-md-6 mb-3">
+        <label class="form-label">Assigned Locations</label>
+        <div class="d-flex flex-wrap gap-3">
+            @foreach (var loc in Model.AllLocations)
+            {
+                <div class="form-check me-3">
+                    <input type="checkbox"
+                           class="form-check-input"
+                           name="AssignedLocationIds"
+                           value="@loc.Value"
+                    @(Model.AssignedLocationIds.Contains(int.Parse(loc.Value)) ? "checked" : "") />
+                    <label class="form-check-label">@loc.Text</label>
+                </div>
+            }
+        </div>
+    </div>
+</div>

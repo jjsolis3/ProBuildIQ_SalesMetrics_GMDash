@@ -4,22 +4,33 @@
     Layout = "~/Views/Shared/_Layout.cshtml";
 }
 
-@model SalesMetrics.Models.UserProfileViewModel
+@* @model SalesMetrics.Models.UserProfileViewModel *@
+@model SalesMetrics.Models.SalesRepProfilePageViewModel
 
 <div class="row">
     <div class="col-xl-4">
         <div class="card overflow-hidden">
-            <div class="bg-primary-subtle">
+            <div class="bg-orange-subtle">
                 <div class="row align-items-center">
                     <div class="col-6">
                         <div class="text-primary p-3 mb-3">
-                            <h5 class="text-primary">Welcome @Model.FirstName!</h5>
-                            <p class="mb-0"></p>
+                            <h5 class="text-orange mb-4">Welcome @Model.UserProfile.FirstName!</h5>
+                            <p class="mb-3 mt-3"> </p>
+                            <div class="align-self-end">
+                            <form method="post" action="/auth/logout" asp-antiforgery="true" class="d-inline">
+                                <button type="submit" class="btn btn-label-danger w-75">
+                                    <i class="mdi mdi-logout me-1"></i> Sign out
+                                </button>
+                            </form>
+                            </div>
                         </div>
                     </div>
-                    <div class="col-6">
-                        <div class="align-self-end">
-                            <img src="~/assets/images/contact.png" alt="" class="img-fluid">
+                    <div class="col-6 d-flex justify-content-end pe-4">
+                        <div class="avatar avatar-xl avatar-circle border-2 border-primary bg-light p-1 mt-4 mb-4">
+                            <img src="~/assets/images/users/@($"{Model.UserProfile.FirstName}{Model.UserProfile.LastName}.jpg")"
+                                 onerror="this.onerror=null;this.src='~/assets/images/users/GenericPhoto.png';"
+                                 alt="@Model.UserProfile.FullName"
+                                 class="img-fluid rounded-circle" />
                         </div>
                     </div>
                 </div>
@@ -27,10 +38,10 @@
             <div class="card-body pt-0">
                 <div class="row align-items-end">
                     <div class="col-sm-4">
-                        <div class="avatar-md mb-3 mt-n4">
+                        @* <div class="avatar-lg mb-3 mt-3">
                             <img src="~/assets/images/users/@($"{Model.FirstName}{Model.LastName}.jpg")" onerror="this.onerror=null;this.src='~/assets/images/users/GenericPhoto.png';" alt="" class="img-fluid avatar-circle bg-light p-2 border-2 border-primary">
-                        </div>
-                        <h5 class="fs-16 mb-1 text-truncate">@Model.FullName</h5>
+                        </div> *@
+                        <h5 class="fs-16 mt-4 mb-1 text-truncate">@Model.UserProfile.FullName</h5>
                         <p class="text-muted mb-0 text-truncate">Seamless Rep.</p>
                     </div>
 
@@ -57,18 +68,18 @@
                         <tbody>
                             <tr>
                                 <th scope="row"><i class="mdi mdi-account align-middle text-primary me-2"></i> Full Name :</th>
-                                <td>@Model.FullName</td>
+                                <td>@Model.UserProfile.FullName</td>
                             </tr>
                             <tr>
                                 <th scope="row"><i class="mdi mdi-email text-primary me-2"></i> E-mail :</th>
-                                <td>@Model.Email</td>
+                                <td>@Model.UserProfile.Email</td>
                             </tr>
                             <tr>
                                 <th scope="row"><i class="mdi mdi-google text-danger me-2"></i> Google :</th>
                                 <td>
-                                    @if (string.IsNullOrEmpty(Model.GoogleEmail)
-                                    || string.IsNullOrEmpty(Model.GoogleAccessToken)
-                                    || string.IsNullOrEmpty(Model.GoogleRefreshToken))
+                                    @if (string.IsNullOrEmpty(Model.UserProfile.GoogleEmail)
+                                    || string.IsNullOrEmpty(Model.UserProfile.GoogleAccessToken)
+                                    || string.IsNullOrEmpty(Model.UserProfile.GoogleRefreshToken))
                                     {
                                         <a href="/auth/connect-google" class="btn btn-danger btn-sm">
                                             <i class="mdi mdi-google me-1"></i> Connect to Google Calendar
@@ -76,7 +87,7 @@
                                     }
                                     else
                                     {
-                                        <span class="badge bg-success">Connected as @Model.GoogleEmail</span>
+                                        <span class="badge bg-success">Connected as @Model.UserProfile.GoogleEmail</span>
                                     }
 
                                 </td>
@@ -145,6 +156,87 @@
                @*  <div id="column_rotated_labels" data-colors='["--bs-primary"]' class="apex-charts" dir="ltr"></div> *@
             </div>
         </div>
+        <div class="row text-center">
+            <div class="col-md-4">
+                <div class="card card-animate">
+                    <div class="card-body">
+                        <p class="text-muted mb-2">New Accounts</p>
+                        <h4 class="mb-0">@Model.Metrics.NewAccounts</h4>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card card-animate">
+                    <div class="card-body">
+                        <p class="text-muted mb-2">Total Orders</p>
+                        <h4 class="mb-0">@Model.Metrics.OrdersCount</h4>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card card-animate">
+                    <div class="card-body">
+                        <p class="text-muted mb-2">Total Invoices</p>
+                        <h4 class="mb-0">@Model.Metrics.InvoicesCount</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row text-center mt-2">
+            <div class="col-md-6">
+                <div class="card card-animate">
+                    <div class="card-body">
+                        <p class="text-muted mb-2">Total Sales Amount</p>
+                        <h4 class="mb-0 text-success fw-bold">$@Model.Metrics.TotalSalesAmount.ToString("N0")</h4>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card card-animate">
+                    <div class="card-body">
+                        <p class="text-muted mb-2">Total Invoice Amount</p>
+                        <h4 class="mb-0 text-info fw-bold">$@Model.Metrics.TotalInvoiceAmount.ToString("N0")</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header bg-orange text-white">
+                <h5 class="card-title mb-0">New Account Property Details</h5>
+            </div>
+            <div class="card-body">
+                <table id="propertyDetailsTable" class="table table-striped table-bordered w-100">
+                    <thead>
+                        <tr>
+                            <th>Property</th>
+                            <th>Mgmt Co</th>
+                            <th>Established</th>
+                            <th>Orders</th>
+                            <th>Sales $</th>
+                            <th>Invoices</th>
+                            <th>Invoice $</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model.Metrics.PropertyDetails)
+                        {
+                            <tr>
+                                <td>@item.Property</td>
+                                <td>@item.ManagementCompany</td>
+                                <td>@item.EstablishedDate.ToShortDateString()</td>
+                                <td>@item.Orders</td>
+                                <td>@item.TotalSalesAmount.ToString("N0")</td>
+                                <td>@item.Invoices</td>
+                                <td>@item.TotalInvoiceAmount.ToString("N0")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
 
         @* <div class="row">
             <div class="col-md-4">
@@ -229,27 +321,6 @@
                             <td>15</td>
                             <td>$12</td>
                         </tr>
-                        <tr>
-                            <td>02</td>
-                            <td>Dashboard</td>
-                            <td>2011/07/25</td>
-                            <td>10</td>
-                            <td>$23</td>
-                        </tr>
-                        <tr>
-                            <td>03</td>
-                            <td>Pages</td>
-                            <td>2009/01/12</td>
-                            <td>20</td>
-                            <td>$36</td>
-                        </tr>
-                        <tr>
-                            <td>04</td>
-                            <td>Apps</td>
-                            <td>2012/03/29</td>
-                            <td>19</td>
-                            <td>$42</td>
-                        </tr>
                     </tbody>
                 </table>
             </div>
@@ -279,5 +350,43 @@
         return Redirect("/auth/connect-google");
     </script>
 
+    <script>
+        $(document).ready(function () {
+            $('#propertyDetailsTable').DataTable({
+                order: [[0, 'desc']],
+                responsive: true,
+                paging: true,
+                pageLength: 10,
+                lengthMenu: [5, 10, 25, 50, 100],
+                searching: true,
+                dom: `
+                    <"top d-flex justify-content-between align-items-center mb-2" lBf>
+                    rt
+                    <"bottom d-flex justify-content-between align-items-center mt-2"ip>
+                `,
+                buttons: [
+                    {
+                        extend: 'excelHtml5',
+                        text: '<i class="bi bi-file-earmark-excel"></i> Export to Excel',
+                        className: 'btn btn-outline-success rounded-pill shadow-sm me-3',
+                        title: 'New Accounts',
+                        exportOptions: {
+                            format: {
+                                body: function (data, row, column, node)
+                                {
+                                    if (column === 6)
+                                    {
+                                        const $select = $('<div>' + data + '</div>').find('select');
+                                        return $select.length ? $select.find('option:selected').text() : data;
+                                    }
+                                    return $('<div>').html(data).text();
+                                }
+                            }
+                        }
+                    }
+                ] // <-- CLOSE buttons array
+            }); // <-- CLOSE DataTable()
+        });
+    </script>
 
 }

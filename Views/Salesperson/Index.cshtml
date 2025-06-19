@@ -1,0 +1,273 @@
+﻿@{
+    ViewBag.Title = "Salesperson Metrics";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+@model SalesMetrics.Models.SalesRepProfilePageViewModel
+
+@section styles {
+    <style>
+        .avatar-sales-badge {
+            width: 220px;
+            border-radius: 12px;
+            border: 4px solid #f57c00;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            object-fit: cover;
+        }
+    </style>
+
+}
+
+<div class="row mb-3">
+    <div class="col-md-6 offset-md-3 text-center">
+        <form method="get" asp-controller="Salesperson" asp-action="Index" class="d-flex align-items-center justify-content-center">
+            <label for="salesmanSelect" class="me-2 fw-bold">Select Salesperson:</label>
+            <select id="salesmanSelect" name="selectedSalesmanId" class="form-select w-auto me-2">
+                <option value="">-- Select Sales Rep --</option>
+                @foreach (var rep in Model.SalesReps)
+                {
+                    var isSelected = int.TryParse(rep.Value, out var val) && Model.SelectedSalesmanId == val;
+                    <option value="@rep.Value" selected="@(isSelected ? "selected" : null)">@rep.Text</option>
+                }
+            </select>
+            <label for="startDate" class="fw-bold">From:</label>
+            <input type="date" id="startDate" name="startDate" value="@Model.StartDate.ToString("yyyy-MM-dd")" class="form-control w-auto">
+
+            <label for="endDate" class="fw-bold">To:</label>
+            <input type="date" id="endDate" name="endDate" value="@Model.EndDate.ToString("yyyy-MM-dd")" class="form-control w-auto">
+
+            <button type="submit" class="btn btn-info text-white">Load</button>
+        </form>
+    </div>
+</div>
+
+
+<div class="row">
+    <div class="col-xl-4">
+        <div class="card overflow-hidden text-center">
+            @if (Model.UserProfile != null)
+            {
+                <div class="card-body">
+
+                    <div class="mb-3">
+                        <img src="~/assets/images/users/@($"{Model.UserProfile.FirstName}{Model.UserProfile.LastName}.jpg")"
+                        onerror="this.onerror=null;this.src='~/assets/images/users/GenericPhoto.png';"
+                        alt="@Model.UserProfile.FullName"
+                        class="avatar-sales-badge"
+                        />
+                    </div>
+                    <h5 class="fw-bold mb-1 fs-4">@Model.UserProfile.FullName</h5>
+                    <p class="text-muted mb-2 fs-6">Seamless Rep.</p>
+                </div>
+
+                <div class="card-body border-top">
+                    <h5 class="card-title mb-3 text-start">About</h5>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-borderless mb-0">
+                            <tbody>
+                                <tr>
+                                    <th><i class="mdi mdi-account text-primary me-2"></i> Full Name:</th>
+                                    <td>@Model.UserProfile?.FullName</td>
+                                </tr>
+                                <tr>
+                                    <th><i class="mdi mdi-email text-primary me-2"></i> Email:</th>
+                                    <td>@Model.UserProfile?.Email</td>
+                                </tr>
+
+                                <tr>
+                                    <th><i class="mdi mdi-map-marker text-primary me-2"></i> Location:</th>
+                                    <td>@Model.UserProfile?.LocationName()</td>
+                                </tr>
+                                <tr>
+                                    <th><i class="mdi mdi-card-account-details-outline text-primary me-2"></i> Salesman ID:</th>
+                                    <td>@Model.UserProfile?.SalesmanID</td>
+                                </tr>
+                                <tr>
+                                    <th><i class="mdi mdi-numeric text-primary me-2"></i> Salesman #:</th>
+                                    <td>@Model.UserProfile?.SalesmanNumber</td>
+                                </tr>
+                                <tr></tr>
+                                <tr>
+                                    <th><i class="mdi mdi-google text-danger me-2"></i> Google Status:</th>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(Model.UserProfile?.GoogleAccessToken))
+                                        {
+                                            <span class="text-success">Connected</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-danger">Not Connected</span>
+                                        }
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                }
+            </div>
+        <!-- end card -->
+    </div>
+
+    <div class="col-xl-8">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title">Activity</h4>
+            </div>
+            <div class="card-body">
+                @*  <div id="column_rotated_labels" data-colors='["--bs-primary"]' class="apex-charts" dir="ltr"></div> *@
+            </div>
+        </div>
+        @if (Model.Metrics != null)
+        {
+            <div class="row text-center">
+                <div class="col-md-4">
+                    <div class="card card-animate">
+                        <div class="card-body">
+                            <p class="text-muted mb-2">New Accounts</p>
+                            <h4 class="mb-0">@Model.Metrics.NewAccounts</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card card-animate">
+                        <div class="card-body">
+                            <p class="text-muted mb-2">Total Orders</p>
+                            <h4 class="mb-0">@Model.Metrics.OrdersCount</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card card-animate">
+                        <div class="card-body">
+                            <p class="text-muted mb-2">Total Invoices</p>
+                            <h4 class="mb-0">@Model.Metrics.InvoicesCount</h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row text-center mt-2">
+                <div class="col-md-6">
+                    <div class="card card-animate">
+                        <div class="card-body">
+                            <p class="text-muted mb-2">Total Sales Amount</p>
+                            <h4 class="mb-0 text-success fw-bold">$@Model.Metrics.TotalSalesAmount.ToString("N0")</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card card-animate">
+                        <div class="card-body">
+                            <p class="text-muted mb-2">Total Invoice Amount</p>
+                            <h4 class="mb-0 text-info fw-bold">$@Model.Metrics.TotalInvoiceAmount.ToString("N0")</h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mt-4">
+                <div class="card-header bg-orange text-white">
+                    <h5 class="card-title mb-0">New Account Property Details</h5>
+                </div>
+                <div class="card-body">
+                    <table id="propertyDetailsTable" class="table table-hover table-striped table-bordered dt-responsive w-100">
+                        <thead>
+                            <tr>
+                                <th>Property</th>
+                                <th>Mgmt Co</th>
+                                <th>Established</th>
+                                <th>Orders</th>
+                                <th>Sales $</th>
+                                <th>Invoices</th>
+                                <th>Invoice $</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in Model.Metrics.PropertyDetails)
+                            {
+                                <tr>
+                                    <td>
+                                        <a asp-controller="Properties" asp-action="PropertyDetails" asp-route-id="@item.PropertyId">
+                                            @item.Property
+                                        </a>
+                                    </td>
+                                    <td>@item.ManagementCompany</td>
+                                    <td>@item.EstablishedDate.ToShortDateString()</td>
+                                    <td>@item.Orders</td>
+                                    <td>@item.TotalSalesAmount.ToString("N0")</td>
+                                    <td>@item.Invoices</td>
+                                    <td>@item.TotalInvoiceAmount.ToString("N0")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+        else
+        {
+            
+        }
+    </div>
+</div>
+
+@section scripts {
+
+    <!-- apexcharts -->
+    <script src="~/assets/libs/apexcharts/apexcharts.min.js"></script>
+    <!-- Required datatable js -->
+    <script src="~/assets/libs/datatables.net/js/jquery.dataTables.min.js"></script>
+    <script src="~/assets/libs/datatables.net-bs5/js/dataTables.bootstrap5.min.js"></script>
+
+    <!-- Responsive examples -->
+    <script src="~/assets/libs/datatables.net-responsive/js/dataTables.responsive.min.js"></script>
+    <script src="~/assets/libs/datatables.net-responsive-bs5/js/responsive.bootstrap5.min.js"></script>
+
+    <!-- contact init js -->
+    <script src="~/assets/js/pages/profile.init.js"></script>
+
+    <!-- Datatable init js -->
+    <script src="~/assets/js/pages/datatables-base.init.js"></script>
+
+
+    <script>
+        $(document).ready(function () {
+            $('#propertyDetailsTable').DataTable({
+                order: [[0, 'desc']],
+                responsive: true,
+                paging: true,
+                pageLength: 25,
+                lengthMenu: [25, 50, 100],
+                searching: true,
+                dom: `
+                    <"top d-flex justify-content-between align-items-center mb-2" lBf>
+                    rt
+                    <"bottom d-flex justify-content-between align-items-center mt-2"ip>
+                `,
+                buttons: [
+                    {
+                        extend: 'excelHtml5',
+                        text: '<i class="bi bi-file-earmark-excel"></i> Export to Excel',
+                        className: 'btn btn-outline-success rounded-pill shadow-sm me-3',
+                        title: 'New Accounts',
+                        exportOptions: {
+                            format: {
+                                body: function (data, row, column, node)
+                                {
+                                    if (column === 6)
+                                    {
+                                        const $select = $('<div>' + data + '</div>').find('select');
+                                        return $select.length ? $select.find('option:selected').text() : data;
+                                    }
+                                    return $('<div>').html(data).text();
+                                }
+                            }
+                        }
+                    }
+                ] // <-- CLOSE buttons array
+            }); // <-- CLOSE DataTable()
+        });
+    </script>
+
+}

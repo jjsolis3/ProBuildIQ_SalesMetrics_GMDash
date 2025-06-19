@@ -7,6 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Content Remove="bundleconfig.json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Content Include="wwwroot\assets\libs\block-ui\node_modules\jquery\AUTHORS.txt" />
     <Content Include="wwwroot\assets\libs\block-ui\node_modules\jquery\LICENSE.txt" />
     <Content Include="wwwroot\assets\libs\datatables.net-autofill-bs5\node_modules\jquery\AUTHORS.txt" />
@@ -239,6 +243,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="bundleconfig.json" />
     <None Include="wwwroot\assets\libs\block-ui\node_modules\jquery\jquery.min.js" />
     <None Include="wwwroot\assets\libs\block-ui\node_modules\jquery\jquery.slim.min.js" />
     <None Include="wwwroot\assets\libs\datatables.net-autofill-bs5\node_modules\jquery\external\sizzle\sizzle.min.js" />

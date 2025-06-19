@@ -36,7 +36,8 @@ namespace SalesMetrics.Controllers
                 return RedirectToAction("Login", "Auth");
 
             int roleId = int.Parse(User.FindFirst("RoleId")?.Value ?? "0");
-            int locationId = int.Parse(User.FindFirst("LocationId")?.Value ?? "0");
+            //int locationId = int.Parse(User.FindFirst("LocationId")?.Value ?? "0");
+            int locationId = LocationHelper.GetCurrentLocationId(HttpContext);
             int salesmanId = int.Parse(User.FindFirst("SalesmanId")?.Value ?? "0");
 
             var tasks = GetAllTasksByLocation(Convert.ToInt32(locationId));
@@ -78,7 +79,8 @@ namespace SalesMetrics.Controllers
             if (string.IsNullOrEmpty(userId))
                 return RedirectToAction("Login", "Auth");
             
-            int locationId = int.Parse(User.FindFirst("locationId")?.Value ?? "0");
+            //int locationId = int.Parse(User.FindFirst("locationId")?.Value ?? "0");
+            int locationId = LocationHelper.GetCurrentLocationId(HttpContext);
             int roleId = int.Parse(User.FindFirst("roleId")?.Value ?? "0");
             int salesmanId = int.Parse(User.FindFirst("SalesmanId")?.Value ?? "0");
 
@@ -119,7 +121,7 @@ namespace SalesMetrics.Controllers
         {
             int userId = Convert.ToInt32(HttpContext.Session.GetString("UserId"));
             int roleId = int.Parse(User.FindFirst("roleId")?.Value ?? "0");
-            int locationId = int.Parse(User.FindFirst("locationId")?.Value ?? "0");
+            int locationId = LocationHelper.GetCurrentLocationId(HttpContext);
             
             List<SalesTask> tasks;
             List<User> users;
@@ -172,7 +174,7 @@ namespace SalesMetrics.Controllers
 
             int roleId = int.Parse(User.FindFirst("roleId")?.Value ?? "0");
             int salesmanId = int.Parse(User.FindFirst("SalesmanId")?.Value ?? "0");
-            int locationId = int.Parse(User.FindFirst("locationId")?.Value ?? "0");
+            int locationId = LocationHelper.GetCurrentLocationId(HttpContext);
 
             // In Task() action and any other that renders the task modal:
             ViewBag.UserId = userId;
@@ -204,7 +206,7 @@ namespace SalesMetrics.Controllers
             var model = modal.Task;
             int userId = int.Parse(User.FindFirst("UserId")?.Value ?? "0");
             int salesmanId = int.Parse(User.FindFirst("SalesmanId")?.Value ?? "0");
-            int locationId = int.Parse(User.FindFirst("locationId")?.Value ?? "0");
+            int locationId = LocationHelper.GetCurrentLocationId(HttpContext);
 
             if (!string.IsNullOrEmpty(model.DueDateDate) && !string.IsNullOrEmpty(model.DueDateTime))
             {
@@ -728,7 +730,8 @@ namespace SalesMetrics.Controllers
 
             int userId = Convert.ToInt32(HttpContext.Session.GetString("UserId"));
             int roleId = Convert.ToInt32(HttpContext.Session.GetString("RoleId"));
-            int locationId = Convert.ToInt32(HttpContext.Session.GetString("LocationId"));
+            //int locationId = Convert.ToInt32(HttpContext.Session.GetString("LocationId"));
+            int locationId = LocationHelper.GetCurrentLocationId(HttpContext);
             SalesTask? task;
 
             if (roleId == 1 || roleId == 3 || roleId == 4)
@@ -1004,7 +1007,8 @@ namespace SalesMetrics.Controllers
         public async Task<IActionResult> Delete(int taskId)
         {
             var userId = Convert.ToInt32(HttpContext.Session.GetString("UserId"));
-            var locationId = Convert.ToInt32(HttpContext.Session.GetString("LocationId"));
+            //var locationId = Convert.ToInt32(HttpContext.Session.GetString("LocationId"));
+            int locationId = LocationHelper.GetCurrentLocationId(HttpContext);
 
             try
             {
@@ -1338,7 +1342,8 @@ namespace SalesMetrics.Controllers
         {
             int userId = Convert.ToInt32(HttpContext.Session.GetString("UserId"));
             int roleId = int.Parse(User.FindFirst("RoleId")?.Value ?? "0");
-            int locationId = int.Parse(User.FindFirst("LocationId")?.Value ?? "0");
+            //int locationId = int.Parse(User.FindFirst("LocationId")?.Value ?? "0");
+            int locationId = LocationHelper.GetCurrentLocationId(HttpContext);
 
             List<SalesTask> tasks;
             List<User> users;

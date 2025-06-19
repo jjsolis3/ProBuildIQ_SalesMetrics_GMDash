@@ -358,8 +358,10 @@ namespace SalesMetrics.Controllers
             }
         }
 
-        [HttpGet]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> Logout()
+
         {
             // Clear session
             HttpContext.Session.Clear();

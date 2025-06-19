@@ -36,6 +36,22 @@ namespace SalesMetrics.Models
         public string? GoogleEmail { get; set; }
         public string? GoogleAccessToken { get; set; }
         public string? GoogleRefreshToken { get; set; }
+        public int SalesmanID { get; set; } // Maps to ERP SalemanID
+        public string? SalesmanNumber { get; set; } // Maps to ERP Salesman Number
+
+        public int LocationId { get; set; }
+        public string LocationName()
+        {
+            return LocationId switch
+            {
+                1 => "Los Angeles",
+                2 => "Las Vegas",
+                3 => "Chino",
+                4 => "Phoenix",
+                5 => "San Diego",
+                _ => "Unknown"
+            };
+        }
     }
 
     public class RegisterViewModel

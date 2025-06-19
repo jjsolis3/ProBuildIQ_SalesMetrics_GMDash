@@ -1,0 +1,22 @@
+[
+  {
+    "outputFileName": "wwwroot/assets/css/app.min.css",
+    "inputFiles": [
+      "wwwroot/assets/css/app.css"
+    ],
+    "minify": {
+      "enabled": true,
+      "renameLocals": true,
+    }
+  },
+  {
+    "outputFileName": "wwwroot/assets/css/bootstrap.min.css",
+    "inputFiles": [
+      "wwwroot/assets/css/bootstrap.css"
+    ],
+    "minify": {
+      "enabled": true,
+      "renameLocals": true
+    }
+  }
+]

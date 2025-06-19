@@ -24,7 +24,8 @@ namespace SalesMetrics.Controllers
             var officeLocation = HttpContext.Session.GetString("OfficeLocation");
 
             int roleId = int.Parse(User.FindFirst("RoleId")?.Value ?? "0");
-            int locationId = int.Parse(User.FindFirst("LocationId")?.Value ?? "0");
+            //int locationId = int.Parse(User.FindFirst("LocationId")?.Value ?? "0");
+            int locationId = LocationHelper.GetCurrentLocationId(HttpContext);
             int salesmanId = int.Parse(User.FindFirst("SalesmanId")?.Value ?? "0");
 
             if (string.IsNullOrEmpty(userId))
@@ -174,7 +175,8 @@ namespace SalesMetrics.Controllers
             var userId = HttpContext.Session.GetString("UserId");
             var officeLocation = HttpContext.Session.GetString("OfficeLocation");
             int roleId = int.Parse(User.FindFirst("RoleId")?.Value ?? "0");
-            int locationId = int.Parse(User.FindFirst("LocationId")?.Value ?? "0");
+            //int locationId = int.Parse(User.FindFirst("LocationId")?.Value ?? "0");
+            int locationId = LocationHelper.GetCurrentLocationId(HttpContext);
             int salesmanId = int.Parse(User.FindFirst("SalesmanId")?.Value ?? "0");
 
             var connectionString = _configuration.GetConnectionString(officeLocation);

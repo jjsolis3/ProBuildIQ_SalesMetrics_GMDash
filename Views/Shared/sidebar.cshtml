@@ -103,7 +103,19 @@
                         <i class="mdi mdi-briefcase-account "></i>
                         <span>Yardi Properties</span>
                     </a>
-                </li>                
+                </li>     
+
+                @if (roleId != "2")
+                {
+                    <!-- SALESPERSON METRICS -->
+                    <li class="menu-title">📊 SALES REPS</li>
+                    <li class="ms-3">
+                        <a href="/Salesperson/Index">
+                            <i class="fa fa-users"></i>
+                            <span>Sales Reps</span>
+                        </a>
+                    </li>
+                }
 
                 <!-- User / Profile -->
                 <li class="menu-title">👤 Account</li>

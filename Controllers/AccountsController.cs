@@ -64,30 +64,130 @@ namespace SalesMetrics.Controllers
         {
             var userId = HttpContext.Session.GetString("UserId");
             var locationId = Convert.ToInt32(HttpContext.Session.GetString("LocationId"));
+            var salesmanName = User.FindFirst("FullName")?.Value ?? "";
+
+            var userProfile = new UserProfileViewModel();
+            var metrics = new SalesRepMetricsViewModel
+            {
+                PropertyDetails = new List<SalesRepNewAccountSummaryViewModel>()
+            };
 
             using var conn = new SqlConnection(_configuration.GetConnectionString("SalesMetrics"));
             conn.Open();
-            var cmd = new SqlCommand("SELECT FirstName, LastName, Email, GoogleEmail, GoogleAccessToken, GoogleRefreshToken FROM Users WHERE UserID = @UserID and Location = @LocationId", conn);
+
+            // -- Fetch User Profile Info --
+            var cmd = new SqlCommand(@"
+                SELECT FirstName, LastName, Email, GoogleEmail, GoogleAccessToken, GoogleRefreshToken, SalesmanID, SalesmanNumber 
+                FROM Users 
+                WHERE UserID = @UserID and Location = @LocationId
+            ", conn);
             cmd.Parameters.AddWithValue("@UserID", userId);
             cmd.Parameters.AddWithValue("@LocationId", locationId);
-
-            var model = new UserProfileViewModel();
 
             using (var reader = cmd.ExecuteReader())
             {
                 if (reader.Read())
                 {
-                    model.FirstName = reader["FirstName"]?.ToString();
-                    model.LastName = reader["LastName"]?.ToString();
-                    model.FullName = reader["FirstName"] + " " + reader["LastName"];
-                    model.Email = reader["Email"]?.ToString();
-                    model.GoogleEmail = reader["GoogleEmail"]?.ToString();
-                    model.GoogleAccessToken = reader["GoogleAccessToken"]?.ToString();
-                    model.GoogleRefreshToken = reader["GoogleRefreshToken"]?.ToString();
+                    userProfile.FirstName = reader["FirstName"]?.ToString();
+                    userProfile.LastName = reader["LastName"]?.ToString();
+                    userProfile.FullName = reader["FirstName"] + " " + reader["LastName"];
+                    userProfile.Email = reader["Email"]?.ToString();
+                    userProfile.GoogleEmail = reader["GoogleEmail"]?.ToString();
+                    userProfile.GoogleAccessToken = reader["GoogleAccessToken"]?.ToString();
+                    userProfile.GoogleRefreshToken = reader["GoogleRefreshToken"]?.ToString();
+                    userProfile.SalesmanID = reader["SalesmanID"] != DBNull.Value ? Convert.ToInt32(reader["SalesmanID"]) : 0;
+                    userProfile.SalesmanNumber = reader["SalesmanNumber"]?.ToString();
                 }
             }
 
-            return View(model);
+            // -- Fetch Sales Rep Metrics Query --
+            DateTime startDate = DateTime.UtcNow.AddDays(-30); // Last 30 days
+            DateTime endDate = DateTime.UtcNow;
+
+            //int locationId = LocationHelper.GetCurrentLocationId(HttpContext);
+            string officeLocation = LocationHelper.GetCurrentOfficeCode(HttpContext);
+            var connectionString = _configuration.GetConnectionString(officeLocation);
+
+            using var CUFconn = new SqlConnection(connectionString);
+            CUFconn.Open();
+
+            var metricsCmd = new SqlCommand(@"
+                -- Main report
+                WITH NewAccounts AS (
+                    SELECT
+                        C.CUM_CUSTOMER_NAME AS Property,
+                        PC.IPC_DESCRIPTION AS [Mgmt Co],
+                        SM.SMN_SALESMAN_NAME AS Salesperson,
+                        SH.SOH_NUMBER AS [Order#],
+                        IH.IHF_INVOICE_NUMBER AS [Invoice#],
+                        CAST(C.CUM_ESTABLISHED_DATE AS DATE) AS [Date Created],
+                        CAST(SH.SOH_DELIVERY_DATE AS DATE) AS [Date Installed],
+                        ISNULL(SOH_TOTAL_AMOUNT, 0) AS OrderAmount,
+                        ISNULL(IHF_TOTAL_AMOUNT, 0) AS InvoiceAmount
+                    FROM CUSTOMER_MASTER C
+                    LEFT JOIN SALESMAN_MASTER SM ON C.CUM_SMNMAS_ID = SM.SMN_SMNMAS_ID
+                    LEFT JOIN PRICE_CODES PC ON C.CUM_PRICE_CODE = PC.IPC_PRICE_CODE
+                    LEFT JOIN SALES_HEADER SH ON C.CUM_CUSTOMER_NUMBER = SH.SOH_CUSTOMER_NUMBER
+                    LEFT JOIN INVOICE_HEADER IH ON SH.SOH_NUMBER = IH.IHF_ORDER_NUMBER
+                    WHERE
+                        C.CUM_ESTABLISHED_DATE >= @startDate
+                        AND C.CUM_ESTABLISHED_DATE < @endDate
+                        AND SH.SOH_CANCELED_DATE IS NULL
+                        AND SH.SOH_WHSMAS_ID = 1
+                        AND SM.SMN_SALESMAN_NAME = @salesperson
+                )
+
+                SELECT
+                    Property,
+                    [Mgmt Co] AS ManagementCompany,
+                    MAX([Date Created]) as Established,
+                    COUNT(DISTINCT [Order#]) AS Orders,
+                    SUM(OrderAmount) AS TotalSalesAmount,
+                    COUNT(DISTINCT [Invoice#]) AS Invoices,
+                    SUM(InvoiceAmount) AS TotalInvoiceAmount
+                FROM NewAccounts
+                GROUP BY Property, [Mgmt Co]
+                ORDER BY Property
+            ", CUFconn);
+
+            metricsCmd.Parameters.AddWithValue("@startDate", startDate);
+            metricsCmd.Parameters.AddWithValue("@endDate", endDate);
+            metricsCmd.Parameters.AddWithValue("@salesperson", salesmanName);
+
+            using (var metricsReader = metricsCmd.ExecuteReader())
+            {
+                while (metricsReader.Read())
+                {
+                    var item = new SalesRepNewAccountSummaryViewModel
+                    {
+                        Property = metricsReader["Property"].ToString() ?? "",
+                        ManagementCompany = metricsReader["ManagementCompany"].ToString() ?? "",
+                        EstablishedDate = Convert.ToDateTime(metricsReader["Established"]),
+                        Orders = Convert.ToInt32(metricsReader["Orders"]),
+                        TotalSalesAmount = Convert.ToDecimal(metricsReader["TotalSalesAmount"]),
+                        Invoices = Convert.ToInt32(metricsReader["Invoices"]),
+                        TotalInvoiceAmount = Convert.ToDecimal(metricsReader["TotalInvoiceAmount"])
+                    };
+                    metrics.PropertyDetails.Add(item);
+                }
+            }
+
+            // -- Fetch Sales Rep Metrics Summary --
+            metrics.NewAccounts = metrics.PropertyDetails.Count;
+            metrics.OrdersCount = metrics.PropertyDetails.Sum(x => x.Orders);
+            metrics.InvoicesCount = metrics.PropertyDetails.Sum(x => x.Invoices);
+            metrics.TotalSalesAmount = metrics.PropertyDetails.Sum(x => x.TotalSalesAmount);
+            metrics.TotalInvoiceAmount = metrics.PropertyDetails.Sum(x => x.TotalInvoiceAmount);
+            metrics.WithoutOrders = metrics.PropertyDetails.Count(x => x.Orders == 0);
+
+            // -- Return Composite Model --
+            var pageModel = new SalesRepProfilePageViewModel
+            {
+                UserProfile = userProfile,
+                Metrics = metrics
+            };
+
+            return View(pageModel);
         }
 
         // KANBAN PAGE

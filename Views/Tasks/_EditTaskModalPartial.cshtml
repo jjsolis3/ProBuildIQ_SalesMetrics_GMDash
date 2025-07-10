@@ -9,9 +9,9 @@
     <input type="hidden" name="Task.TaskID" value="@Model.Task.TaskID" />
     <input type="hidden" name="ReturnUrl" value="@ViewBag.ReturnUrl" />
 
-    <div class="modal-header">
-        <h5 class="modal-title">Edit Task</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    <div class="modal-header bg-orange">
+        <h5 class="modal-title text-white">Edit Task</h5>
+        <button type="button" class="btn-close bg-light-subtle" data-bs-dismiss="modal"></button>
     </div>
     <div class="modal-body">
         <div class="mb-3">
@@ -72,19 +72,14 @@
                 <span asp-validation-for="Task.Status" class="text-danger"></span>
             </div>
             <div class="mb-3 col-6">
-                <label class="form-label">Task Type</label>
-                <select name="Task.Type" class="form-select">
-                    @{
-                        var taskType = Model.Task.Type;
-                    }
-                    <option value="Measure" selected="@(taskType == "Measure")">Measure</option>
-                    <option value="Follow Up" selected="@(taskType == "Follow Up")">Follow Up</option>
-                    <option value="QC" selected="@(taskType == "QC")">Quality Check</option>
-                    <option value="Other" selected="@(taskType == "Other")">Other</option>
+                <label asp-for="Task.Type" class="form-label" for="Type">Task Type</label>
+                <select asp-for="Task.Type" name="Task.Type" asp-items="Model.TaskTypes" class="form-select">
+                    <option value="">-- Select Type --</option>
                 </select>
                 <span asp-validation-for="Task.Type" class="text-danger"></span>
             </div>
         </div>
+
 
         <div class="mb-3">
             <label class="form-label">Property</label>
@@ -106,10 +101,7 @@
                     <option value="@Model.LoggedInUserId">Myself</option>
                     @foreach (var user in Model.Users)
                     {
-                        @*< option value="@user.UserID" @(user.UserID == Model.Task.AssignedTo ? "selected" : "")>
-                            @user.FirstName @user.LastName
-                        </option> *@
-                        <option value="@user.UserID" selected="@(assignedTo == user.UserID)">@user.FirstName @user.LastName</option>
+                        <option value="@user.Users_ID" selected="@(assignedTo == user.Users_ID)">@user.FirstName @user.LastName</option>
                     }
                 </select>
                 <span asp-validation-for="Task.AssignedTo" class="text-danger"></span>
@@ -123,7 +115,7 @@
 
     </div>
     <div class="modal-footer">
-        <button type="submit" class="btn btn-success">Save Changes</button>
+        <button type="submit" class="btn btn-orange">Save Changes</button>
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
     </div>
 </form>

@@ -4,15 +4,23 @@
 <div class="modal fade" id="createTaskModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
     <div class="modal-dialog">
         <div class="modal-content">
-
-            <form asp-action="Create" method="post">
+            
+            <form asp-controller="Tasks" asp-action="DynamicCreate" method="post">
                 @Html.AntiForgeryToken()
                 @Html.ValidationSummary(true, "", new { @class = "text-danger" })
-                <input type="hidden" name="ReturnUrl" value="@ViewBag.ReturnUrl" />
 
-                <div class="modal-header">
-                    <h5 class="modal-title">Create Task</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <!-- Hiddent Fields -->
+                <input type="hidden" name="ReturnUrl" value="@ViewBag.ReturnUrl" />
+                <input type="hidden" asp-for="Task.PropertyID" />
+                <input type="hidden" asp-for="Task.Source" value="@Model.Task?.Source ?? " default"" />
+                <input type="hidden" asp-for="Task.OrderID" />
+                <input type="hidden" asp-for="Task.Unit" />
+                <input type="hidden" asp-for="Task.Balance" />
+                <input type="hidden" asp-for="Task.DaysInactive" />
+
+                <div class="modal-header bg-orange">
+                    <h5 class="modal-title text-white">Create @Model.Task.Source Task</h5>
+                    <button type="button" class="btn-close bg-light-subtle" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <div class="mb-3">
@@ -27,14 +35,22 @@
                     </div>
                     <div class="row">
                         <div class="mb-3 col-6">
-                            <label asp-for="Task.DueDateDate" class="form-label">Task Date</label>
+                            <label asp-for="Task.DueDateDate" class="form-label">Task Due Date</label>
                             <input asp-for="Task.DueDateDate" name="Task.DueDateDate" type="date" class="form-control" />
                             <span asp-validation-for="Task.DueDateDate" class="text-danger"></span>
                         </div>
                         <div class="mb-3 col-6">
                             <label asp-for="Task.DueDateTime" class="form-label">Start Time</label>
                             <select asp-for="Task.DueDateTime" name="Task.DueDateTime" class="form-select">
-                                <option value="">-- Select Time --</option>
+                                @if (Model.Task.DueDateTime != null)
+                                {
+                                    <option value="">-- Select Time --</option>
+                                    <option value="@Model.Task.DueDateTime">@Model.Task.DueDateTime</option>
+                                    <option value="">--  --</option>
+                                }
+                                else {
+                                    <option value="">-- Select Time --</option>
+                                }
                                 @{
                                     for (int hour = 0; hour < 24; hour++)
                                     {
@@ -66,17 +82,14 @@
                     <div class="mb-3">
                         <label class="form-label" for="Property">Property</label>
                         <input asp-for="Task.Property" name="Task.Property" class="form-control" />
+                        <input type="hidden" asp-for="Task.PropertyID" />
                     </div>
 
                     <div class="mb-3">
                         <label asp-for="Task.Type" class="form-label" for="Type">Task Type</label>
                         <select asp-for="Task.Type" name="Task.Type" asp-items="Model.TaskTypes" class="form-select">
                             <option value="">-- Select Type --</option>
-                            @* <option disabled selected value="">-- Select User --</option>
-                            <option value="Measure">Measure</option>
-                            <option value="Follow Up">Follow Up</option>
-                            <option value="QC">Quality Check</option>
-                            <option value="Other">Other</option> *@
+                            
                         </select>
                         <span asp-validation-for="Task.Type" class="text-danger"></span>
                     </div>
@@ -90,7 +103,7 @@
                                 <option value="@Model.LoggedInUserId">Myself</option>
                                 @foreach (var user in Model.Users)
                                 {
-                                    <option value="@user.UserID">@user.FirstName @user.LastName</option>
+                                    <option value="@user.Users_ID">@user.FirstName @user.LastName</option>
                                 }
                             </select>
                             <span asp-validation-for="Task.AssignedTo" class="text-danger"></span>
@@ -104,7 +117,8 @@
                 </div>
 
                 <div class="modal-footer">
-                    <button type="submit" class="btn btn-primary">Create Task</button>
+                    <button type="submit" class="btn btn-orange">                        
+                        Task</button>
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 </div>
             </form>

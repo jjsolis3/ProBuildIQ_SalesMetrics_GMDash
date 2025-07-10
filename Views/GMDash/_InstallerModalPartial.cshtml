@@ -1,0 +1,37 @@
+﻿@model List<SalesMetrics.Models.InstallerDetails>
+
+<table class="table table-striped table-bordered table-nowrap" id="installerDetailTable">
+    <thead class="table-light text-center">
+        <tr>
+            <th>Installer</th>
+            <th>Order #</th>
+            <th>Date</th>
+            <th>WHS Arrive</th>
+            <th>Material Confirm</th>
+            <th>WHS Loading</th>
+            <th>Arrival at Job</th>
+            <th>Distance from WHS</th>
+            <th>Job Duration</th>
+            <th>Completed Time</th>
+            <th>Cancelled</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var row in Model)
+        {
+            <tr>
+                <td>@row.Installer</td>
+                <td>@row.OrderId</td>
+                <td>@(row.OrderDate?.ToShortDateString() ?? "-")</td>
+                <td>@(row.WhsArrive?.ToString("hh:mm tt") ?? "-")</td>
+                <td>@(row.MaterialConfirm?.ToString("hh:mm tt") ?? "-")</td>
+                <td>@row.WhsLoading</td>
+                <td>@(row.JobArrival?.ToString("hh:mm tt") ?? "-")</td>
+                <td>@row.DistanceFromWhs</td>
+                <td>@row.JobDuration</td>
+                <td>@(row.JobCompleted?.ToString("hh:mm tt") ?? "-")</td>
+                <td>@(row.JobCancelled?.ToString("hh:mm tt") ?? "-")</td>
+            </tr>
+        }
+    </tbody>
+</table>

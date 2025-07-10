@@ -1,7 +1,13 @@
 ﻿@model List<InstallerCompletionMetric>
+@if (ViewBag.installerRangeLabel != null)
+{
+    <p class="text-muted small installer-range-label" style="display:none;">
+        Showing: @ViewBag.installerRangeLabel
+    </p>
+}
 
 <table class="table table-bordered table-striped text-end">
-    <thead>
+    <thead class="table-light text-center">
         <tr>
             <th>Location</th>
             <th>Total Orders</th>
@@ -14,19 +20,28 @@
             <th>% Completion</th>
         </tr>
     </thead>
-    <tbody>
+    <tbody class="text-center">
         @foreach (var row in Model)
         {
             var percent = row.TotalOrders > 0 ? (decimal)row.CompletedOrders / row.TotalOrders * 100 : 0;
             <tr>
-                <td>@row.Location</td>
-                <td>@row.TotalOrders</td>
-                <td>@row.CompletedOrders</td>
-                <td>@row.WhsArrivalCount</td>
-                <td>@row.WhsDepartCount</td>
-                <td>@row.OrderArrivalCount</td>
-                <td>@row.OrderCompletedCount</td>
-                <td>@row.OrderCancelledCount</td>
+                <td class="fw-bold text-start">
+                    <a href="#"
+                       class="text-decoration-underline text-info fw-bold"
+                       data-bs-toggle="modal"
+                       data-bs-target="#installerModal"
+                       data-office="@row.Location">
+                        @row.Location
+                    </a>
+                </td>
+
+                <td>@row.TotalOrders.ToString("N0")</td>
+                <td>@row.CompletedOrders.ToString("N0")</td>
+                <td>@row.WhsArrivalCount.ToString("N0")</td>
+                <td>@row.WhsDepartCount.ToString("N0")</td>
+                <td>@row.OrderArrivalCount.ToString("N0")</td>
+                <td>@row.OrderCompletedCount.ToString("N0")</td>
+                <td>@row.OrderCancelledCount.ToString("N0")</td>
                 <td>@percent.ToString("0.0")%</td>
             </tr>
         }

@@ -6,6 +6,8 @@
 
 @model SalesMetrics.Models.PropertyDetailsViewModel
 
+
+
 <div class="row">
     <div class="col-xl-4">
         <div class="card overflow-hidden">
@@ -317,6 +319,9 @@
     <!-- apexcharts -->
     <script src="~/assets/libs/apexcharts/apexcharts.min.js"></script>
 
+    <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.dataTables.min.css" />
+
+
     <script>
         @* C# Razor block to prepare labels and data *@
         @{
@@ -412,39 +417,36 @@
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.5/js/jquery.dataTables.min.js"></script>
 
+    <!-- ✅ Required for export buttons -->
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
+
     <script>
         $(document).ready(function () {
             // Initialize DataTable for the property orders table
             var propTable = $('#propertyOrderTable').DataTable({
                 order: [
-                    [5,'desc'], // 3 Delivery Date
+                    [5,'desc'], // 5 Delivery Date
                     [1,'asc']   // 1 Order Number
                 ],
+                dom: `
+                  <"top mb-2"P>
+                  <"top d-flex justify-content-between mb-3" lBf>
+                  rt
+                  <"bottom d-flex justify-content-between align-items-center mt-3" ip>
+                `,
                 scrollX: true,
                 scrollY: '500px',
                 scrollCollapse: true,
                 pageLength: 50,
-                dom: `
-                  <"top mb-2"P>
-                  <"top d-flex justify-content-between align-items-center mb-3" lBf>
-                  rt
-                  <"bottom d-flex justify-content-between align-items-center mt-3" ip>
-                `,
                 buttons: [
                     {
-                        extend: 'colvis',
-                        text: '<i class="bi bi-eye"></i> Show/Hide Columns',
-                        className: 'btn btn-outline-primary rounded-pill shadow-sm me-2'
-                    },
-                    {
                         extend: 'excelHtml5',
-                        text: '<i class="bi bi-file-earmark-excel"></i> Excel',
+                        text: '<i class="bi bi-file-earmark-excel"></i> Export to Excel',
                         className: 'btn btn-outline-success rounded-pill shadow-sm me-2'
-                    },
-                    {
-                        extend: 'pdfHtml5',
-                        text: '<i class="bi bi-file-earmark-pdf"></i> PDF',
-                        className: 'btn btn-outline-danger rounded-pill shadow-sm'
                     }
                 ]
             });

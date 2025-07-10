@@ -1,0 +1,122 @@
+﻿@model TaskModalViewModel
+
+<!-- Modal -->
+<div class="modal-content">
+    <form asp-controller="Tasks" asp-action="DynamicCreate" method="post">
+        @Html.AntiForgeryToken()
+        @Html.ValidationSummary(true, "", new { @class = "text-danger" })
+
+        <!-- Hiddent Fields -->
+        <input type="hidden" name="ReturnUrl" value="@ViewBag.ReturnUrl" />
+        <input type="hidden" asp-for="Task.PropertyID" />
+        <input type="hidden" asp-for="Task.Source" value="@Model.Task?.Source ?? " default"" />
+        <input type="hidden" asp-for="Task.OrderID" />
+        <input type="hidden" asp-for="Task.Unit" />
+        <input type="hidden" asp-for="Task.Balance" />
+        <input type="hidden" asp-for="Task.DaysInactive" />
+
+        <div class="modal-header bg-orange">
+            <h5 class="modal-title text-white">Duplicate @Model.Task.Source Task</h5>
+            <button type="button" class="btn-close bg-light" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+            <div class="mb-3">
+                <label class="form-label" for="Title">Title</label>
+                <input asp-for="Task.Title" class="form-control" />
+                <span asp-validation-for="Task.Title" name="Task.Title" class="text-danger"></span>
+            </div>
+            <div class="mb-3">
+                <label class="form-label" for="Description">Description</label>
+                <textarea asp-for="Task.Description" class="form-control"></textarea>
+                <span asp-validation-for="Task.Description" name="Task.Description" class=" text-danger"></span>
+            </div>
+            <div class="row">
+                <div class="mb-3 col-6">
+                    <label asp-for="Task.DueDateDate" class="form-label">Task Due Date</label>
+                    <input asp-for="Task.DueDateDate" name="Task.DueDateDate" type="date" class="form-control" />
+                    <span asp-validation-for="Task.DueDateDate" class="text-danger"></span>
+                </div>
+                <div class="mb-3 col-6">
+                    <label asp-for="Task.DueDateTime" class="form-label">Start Time</label>
+                    <select asp-for="Task.DueDateTime" name="Task.DueDateTime" class="form-select">
+                        @if (Model.Task.DueDateTime != null)
+                        {
+                            <option value="">-- Select Time --</option>
+                            <option value="@Model.Task.DueDateTime">@Model.Task.DueDateTime</option>
+                            <option value="">--  --</option>
+                        }
+                        else
+                        {
+                            <option value="">-- Select Time --</option>
+                        }
+                        @{
+                            for (int hour = 0; hour < 24; hour++)
+                            {
+                                for (int min = 0; min < 60; min += 30)
+                                {
+                                    var time = new TimeOnly(hour, min);
+                                    <option value="@time.ToString("HH:mm")">@time.ToString("hh:mm tt")</option>
+                                }
+                            }
+                        }
+                    </select>
+                    <span asp-validation-for="Task.DueDateTime" class="text-danger"></span>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label" for="Status">Status</label>
+                <select asp-for="Task.Status" name="Task.Status" class=" form-select">
+                    <option disabled selected value="">-- Select Status --</option>
+                    <option value="Assigned">Assigned</option>
+                    <option value="Pending">Pending</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="In Review">In Review</option>
+                    <option value="Completed">Completed</option>
+                </select>
+                <span asp-validation-for="Task.Status" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label" for="Property">Property</label>
+                <input asp-for="Task.Property" name="Task.Property" class="form-control" />
+                <input type="hidden" asp-for="Task.PropertyID" />
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="Task.Type" class="form-label" for="Type">Task Type</label>
+                <select asp-for="Task.Type" name="Task.Type" asp-items="Model.TaskTypes" class="form-select">
+                    <option value="">-- Select Type --</option>
+
+                </select>
+                <span asp-validation-for="Task.Type" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Assign To</label>
+                @if (Model.RoleId == 1 || Model.RoleId == 3 || Model.RoleId == 4)
+                {
+                    <select asp-for="Task.AssignedTo" class="form-select" name="Task.AssignedTo">
+                        <option disabled selected value="">-- Select User --</option>
+                        <option value="@Model.LoggedInUserId">Myself</option>
+                        @foreach (var user in Model.Users)
+                        {
+                            <option value="@user.Users_ID">@user.FirstName @user.LastName</option>
+                        }
+                    </select>
+                    <span asp-validation-for="Task.AssignedTo" class="text-danger"></span>
+                }
+                else
+                {
+                    <input type="hidden" asp-for="Task.AssignedTo" value="@Model.LoggedInUserId" />
+                    <p class="form-control-plaintext text-muted">Assigned to You</p>
+                }
+            </div>
+        </div>
+
+        <div class="modal-footer">
+            <button type="submit" class="btn btn-orange"> Save </button>
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"> Cancel </button>
+        </div>
+    </form>
+</div>

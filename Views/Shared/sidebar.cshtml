@@ -41,44 +41,42 @@
                         <span>Dashboard</span>
                     </a>
                 </li>
-                <!-- SALES ACTIVITIES -->
-                <li class="menu-title">📋 TASKS</li>
-                @if (roleId == "1" || roleId == "3")
-                {   
+                @if (roleId != "5" && roleId != "6")
+                {
+                    <!-- SALES ACTIVITIES -->
+                    <li class="menu-title">📋 TASKS</li>
+                    @if (roleId == "1" || roleId == "3" || roleId == "4")
+                    {
+                        <li class="ms-3">
+                            <a href="/Tasks/AdminTask">
+                                <i class="fa fa-clipboard-check"></i>
+                                <span>View All Tasks</span>
+                            </a>
+                        </li>
+                    }
+
                     <li class="ms-3">
-                        <a href="/Tasks/AdminTask">
-                            <i class="fa fa-clipboard-check"></i>
-                            <span>View All Tasks</span>
+                        <a href="/Tasks/Task">
+                            <i class="fa fa-tasks"></i>
+                            <span>My Tasks</span>
+                        </a>
+                    </li>
+                    <li class="ms-3">
+                        <a href="/Tasks/Schedule">
+                            <i class="fa fa-calendar"></i>
+                            <span>Calendar</span>
                         </a>
                     </li>
                 }
-                <li class="ms-3">
-                    <a href="/Tasks/Task">
-                        <i class="fa fa-tasks"></i>
-                        <span>My Tasks</span>
-                    </a>
-                </li>
-                <li class="ms-3">
-                    <a href="/Tasks/Schedule">
-                        <i class="fa fa-calendar"></i>
-                        <span>Calendar</span>
-                    </a>
-                </li>
+
+                <li class="menu-title">✎ JOURNAL</li>
                 <li class="ms-3">
                     <a href="/Journal/Index">
                         <i class="fa fa-book"></i>
                         <span>My Journal</span>
                     </a>
                 </li>
-                @if (roleId == "10")
-                {
-                    <li class="ms-3">
-                        <a href="/Tasks/TaskKanban">
-                            <i class="fa fa-clipboard-list"></i>
-                            <span>Task Manger</span>
-                        </a>
-                    </li>
-                }
+
                 <li class="menu-title">🗓️ JOB SCHEDULE</li>
                 <li class="ms-3">
                     <a href="/Orders/Orders">
@@ -112,7 +110,7 @@
                     <li class="ms-3">
                         <a href="/Salesperson/Index">
                             <i class="fa fa-users"></i>
-                            <span>Sales Reps</span>
+                            <span>New Accounts</span>
                         </a>
                     </li>
                 }

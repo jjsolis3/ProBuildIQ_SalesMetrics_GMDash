@@ -1,0 +1,41 @@
+﻿@{
+    var salesData = ViewBag.SalesData as Dictionary<string, object>;
+}
+
+<div class="row">
+    <div class="col-md-6 mt-2">
+        <!-- ✅ Full-width row container -->
+        <!-- Total Sales -->
+        <div class="col-12 mb-3">
+            <div class="kpi-tile bg-orange text-white shadow-lg rounded p-1 d-flex flex-column justify-content-center align-items-start">
+                <p class="kpi-label mb-1">Total Sales</p>
+                <h3 class="kpi-value m-auto">$@Convert.ToDecimal(salesData["TotalSales"]).ToString("N2")</h3>
+            </div>
+        </div>
+
+        <!-- Total Invoices -->
+        <div class="col-12 mb-3">
+            <div class="kpi-tile bg-orange text-white shadow-lg rounded p-1 d-flex flex-column justify-content-center align-items-start">
+                <p class="kpi-label mb-1">Total Invoices</p>
+                <h3 class="kpi-value m-auto">@Convert.ToInt32(salesData["TotalInvoices"]).ToString("N0")</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 mt-2">
+        <!-- Total Due -->
+        <div class="col-12 mb-3">
+            <div class="kpi-tile bg-orange text-white shadow-lg rounded p-1 d-flex flex-column justify-content-center align-items-start">
+                <p class="kpi-label mb-1">Total Due</p>
+                <h3 class="kpi-value m-auto">$@Convert.ToDecimal(salesData["AmountDue"]).ToString("N2")</h3>
+            </div>
+        </div>
+
+        <!-- Active Properties -->
+        <div class="col-12 mb-3">
+            <div class="kpi-tile bg-orange text-white shadow-lg rounded p-1 d-flex flex-column justify-content-center align-items-start">
+                <p class="kpi-label mb-1">Active Properties</p>
+                <h3 class="kpi-value m-auto">@Convert.ToInt32(salesData["PropertyCount"]).ToString("N0")</h3>
+            </div>
+        </div>
+    </div>
+</div>

@@ -11,6 +11,7 @@
         public string? PropertyName { get; set; }
         public string? PropertyAddress { get; set; }
         public string? PropertyCity { get; set; }
+        public string? PropertyCounty { get; set; }
         public string? PropertyState { get; set; }
         public string? PropertyZipCode { get; set; }
         public string? PropertyPhone { get; set; }
@@ -21,6 +22,7 @@
         public string? LocRating { get; set; }
 
         // Owner Info
+        public string? Owner { get; set; }
         public string? OwnerFName { get; set; }
         public string? OwnerLName { get; set; }
         public string? OwnerEmail { get; set; }
@@ -42,6 +44,11 @@
         public string? ManagerPhone { get; set; }
         public string? ManagerWebsite { get; set; }
 
+        // Notes
+        public string? PropertyNotes { get; set; }
+        public string? OwnerNotes { get; set; }
+        public string? ManagerNotes { get; set; }
+
         // Property Details
         public string? PropertyType { get; set; }
         public string? ConstructionType { get; set; }
@@ -62,8 +69,10 @@
         // Metadata
         public string? ImportedBy { get; set; }
         public DateTime? ImportedDate { get; set; }
+        public string? Locations { get; set; }
 
         // Convenience
         public string? Phone => ManagerPhone ?? OwnerPhone;
+        
     }
 }

@@ -1,0 +1,65 @@
+﻿@model SalesMetrics.Models.NewCustomerFormRequest
+
+<div class="row g-3">
+    <div class="col-md-6">
+        <h6 class="mt-2">Accounts Payable</h6>
+        <input type="hidden" asp-for="Billing.AccountsPayable.ContactType" value="Accounts Payable" />
+        <input asp-for="Billing.AccountsPayable.Name" class="form-control mb-1" placeholder="Name" />
+        <input asp-for="Billing.AccountsPayable.Phone" class="form-control mb-1" placeholder="Phone" />
+        <input asp-for="Billing.AccountsPayable.Fax" class="form-control mb-1" placeholder="Fax" />
+        <input asp-for="Billing.AccountsPayable.Email" class="form-control mb-1" placeholder="Email" />
+    </div>
+
+    <div class="col-md-6">
+        <h6 class="mt-2">Alt. AP Contact</h6>
+        <input type="hidden" asp-for="Billing.AlternateAPContact.ContactType" value="AP Contact" />
+        <input asp-for="Billing.AlternateAPContact.Name" class="form-control mb-1" placeholder="Name" />
+        <input asp-for="Billing.AlternateAPContact.Phone" class="form-control mb-1" placeholder="Phone" />
+        <input asp-for="Billing.AlternateAPContact.Fax" class="form-control mb-1" placeholder="Fax" />
+        <input asp-for="Billing.AlternateAPContact.Email" class="form-control mb-1" placeholder="Email" />
+    </div>
+
+    <div class="col-md-6">
+        <label asp-for="Billing.InvoiceEmail" class="form-label">Invoice Email</label>
+        <input asp-for="Billing.InvoiceEmail" class="form-control" />
+    </div>
+
+    <div class="col-md-6">
+        <label asp-for="Billing.ThirdPartyVendor" class="form-label">Third-Party Vendor</label>
+        <input asp-for="Billing.ThirdPartyVendor" class="form-control" />
+    </div>
+
+    <div class="col-md-6">
+        <label asp-for="Billing.InvoiceAddress" class="form-label">Invoice Address</label>
+        <input asp-for="Billing.InvoiceAddress" class="form-control" />
+    </div>
+    <div class="col-md-3">
+        <label asp-for="Billing.InvoiceCity" class="form-label">City</label>
+        <input asp-for="Billing.InvoiceCity" class="form-control" />
+    </div>
+    <div class="col-md-3">
+        <label asp-for="Billing.InvoiceState" class="form-label">State</label>
+        <input asp-for="Billing.InvoiceState" class="form-control" />
+    </div>
+    <div class="col-md-3">
+        <label asp-for="Billing.InvoiceZip" class="form-label">Zip</label>
+        <input asp-for="Billing.InvoiceZip" class="form-control" />
+    </div>
+    <div class="col-md-3">
+        <label asp-for="Billing.InvoiceAttention" class="form-label">Attention</label>
+        <input asp-for="Billing.InvoiceAttention" class="form-control" />
+    </div>
+
+    <div class="col-md-3 form-check">
+        <input asp-for="Billing.RequiresPDFInvoices" class="form-check-input" type="checkbox" />
+        <label class="form-check-label">Requires PDF Invoices</label>
+    </div>
+    <div class="col-md-3 form-check">
+        <input asp-for="Billing.RequiresSpectrumInvoices" class="form-check-input" type="checkbox" />
+        <label class="form-check-label">Requires Spectrum Invoices</label>
+    </div>
+    <div class="col-md-3 form-check">
+        <input asp-for="Billing.RequiresCustomerPO" class="form-check-input" type="checkbox" />
+        <label class="form-check-label">Customer PO Required</label>
+    </div>
+</div>

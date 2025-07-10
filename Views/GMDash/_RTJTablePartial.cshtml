@@ -1,0 +1,51 @@
+﻿@model List<SalesMetrics.Models.RTJEntry>
+@if (ViewBag.RtjRangeLabel != null)
+{
+    <p class="text-muted small rtj-range-label" style="display:none;">
+        Showing: @ViewBag.RtjRangeLabel
+    </p>
+
+}
+
+@{
+    var groupedRTJs = Model
+        .GroupBy(r => r.Location)
+        .Select(g => new
+        {
+            Location = g.Key,
+            Count = g.Count(),
+            TotalDebit = g.Sum(x => x.Debit),
+            TotalCredit = g.Sum(x => x.Credit),
+            Entries = g.ToList()
+        }).ToList();
+}
+
+<table class="table table-bordered table-striped" id="rtjTable">
+    <thead class="table-light text-center">
+        <tr>
+            <th class="header-orange-subtle">Location</th>
+            <th class="header-orange-subtle"># Entries</th>
+            <th class="header-orange-subtle">Total Debit</th>
+            <th class="header-orange-subtle">Total Credit</th>
+            <th class="header-orange-subtle">Details</th>
+        </tr>
+    </thead>
+    <tbody class="text-center">
+        @foreach (var group in groupedRTJs)
+        {
+            <tr>
+                <td class="text-start text-center fw-bold">@group.Location</td>
+                <td>@group.Count.ToString("N0")</td>
+                <td>@group.TotalDebit.ToString("C")</td>
+                <td>@group.TotalCredit.ToString("C")</td>
+                <td>
+                    <button class="btn btn-sm btn-outline-primary"
+                            data-bs-toggle="modal"
+                            data-bs-target="#rtjModal_@group.Location">
+                        View
+                    </button>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>

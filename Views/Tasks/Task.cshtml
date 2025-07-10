@@ -30,7 +30,6 @@
         </button>
     </div>
 </div>
-@*  nowrap *@
 <table id="taskTable" class="table table-hover table-bordered table-striped dt-responsive " style="width: 100%;">
     <thead class="table-dark">
         <tr>
@@ -39,6 +38,7 @@
             <th>Type</th>
             <th>Property</th>
             <th>Location</th>
+            <th>Created Date</th>
             <th>Due Date</th>
             <th>Status</th>
             <th>Actions</th>
@@ -55,6 +55,7 @@
                     <td>@task.Type</td>
                     <td>@task.Property</td>
                     <td>@task.Location</td>
+                    <td data-order="@task.CreatedDate?.ToString("yyyy-MM-ddTHH:mm:ss")">@task.CreatedDate</td>
                     <td data-order="@task.DueDate?.ToString("yyyy-MM-ddTHH:mm:ss")">
                         @(task.DueDate?.ToString("g") ?? "N/A")
                     </td>
@@ -74,6 +75,11 @@
                             <button class="btn btn-sm btn-info" data-bs-toggle="modal" data-bs-target="#editTaskModal" data-task-id="@task.TaskID">
                                 <i class="fa fa-edit fs-14"></i>
                             </button>
+
+                            <button class="btn btn-sm btn-secondary duplicate-task-btn" data-task-id="@task.TaskID" data-bs-toggle="modal" data-bs-target="#duplicateTaskModal" >
+                                <i class="fa fa-copy fs-14" ></i>
+                            </button>
+
                             <form id="deleteForm-@task.TaskID" method="post" asp-action="Delete" asp-controller="Tasks">
                                 <input type="hidden" name="taskId" value="@task.TaskID" />
                                 <button type="button" class="btn btn-sm btn-danger" onclick="confirmDelete(@task.TaskID)">
@@ -98,35 +104,45 @@
 @{
     var taskModel = ViewData.Model is TaskPageViewModel vm && vm.NewTask != null
         ? new TaskModalViewModel
-                {
-                    Task = new TaskCreateViewModel
-                    {
-                        Title = vm.NewTask.Title,
-                        Description = vm.NewTask.Description,
-                        DueDate = vm.NewTask.DueDate ?? DateTime.Now,
-                        DueDateDate = vm.NewTask.DueDate?.ToString("yyyy-MM-dd"),
-                        DueDateTime = vm.NewTask.DueDate?.ToString("HH:mm"),
-                        Status = vm.NewTask.Status,
-                        AssignedTo = vm.NewTask.AssignedTo ?? 0,
-                        Property = vm.NewTask.Property,
-                        Type = vm.NewTask.Type,
-                        PropertyID = vm.NewTask.PropertyID
-                    },
-                    Users = Model.Users ?? new List<User>(),
-                    LoggedInUserId = Convert.ToInt32(ViewBag.UserId),
-                    RoleId = Convert.ToInt32(ViewBag.RoleId),
-                    TaskTypes = TaskTypeHelper.GetTaskTypes("Task")
-                }
+        {
+            Task = new TaskCreateViewModel
+            {
+                Title = vm.NewTask.Title,
+                Description = vm.NewTask.Description,
+                DueDateDate = vm.NewTask.DueDate?.ToString("yyyy-MM-dd"),
+                DueDateTime = vm.NewTask.DueDate?.ToString("HH:mm"),
+                Status = vm.NewTask.Status,
+                AssignedTo = vm.NewTask.AssignedTo ?? 0,
+                Property = vm.NewTask.Property,
+                Type = vm.NewTask.Type,
+                PropertyID = vm.NewTask.PropertyID
+            },
+            Users = Model.Users ?? new List<User>(),
+            LoggedInUserId = Convert.ToInt32(ViewBag.Users_Id),
+            RoleId = Convert.ToInt32(ViewBag.RoleId),
+            TaskTypes = TaskTypeHelper.GetTaskTypes("Task")
+        }
         : new TaskModalViewModel
-                {
-                    Task = new TaskCreateViewModel(),
-                    Users = Model.Users ?? new List<User>(),
-                    LoggedInUserId = Convert.ToInt32(ViewBag.UserId),
-                    RoleId = Convert.ToInt32(ViewBag.RoleId),
-                    TaskTypes = TaskTypeHelper.GetTaskTypes("Task")
-                };
+        {
+            Task = new TaskCreateViewModel(),
+            Users = Model.Users ?? new List<User>(),
+            LoggedInUserId = Convert.ToInt32(ViewBag.Users_Id),
+            RoleId = Convert.ToInt32(ViewBag.RoleId),
+            TaskTypes = TaskTypeHelper.GetTaskTypes("Task")
+        };
 }
-@await Html.PartialAsync("_CreateTaskModal", taskModel)
+
+<!-- DUPLICATE TASKS -->
+<div id="duplicateTaskModal" class="modal fade" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-body text-center">
+                <div class="spinner-border text-primary m-5" role="status"></div>
+                <p>Loading...</p>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- Edit Modal (to be loaded dynamically) -->
 <div id="editTaskModal" class="modal fade" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
@@ -185,6 +201,8 @@
 
         if ($taskTable.length && !$taskTable.hasClass('d-none') && hasDataRows) {
             taskTable = $taskTable.DataTable({
+                // Sort table data by Created Date
+                order: [[5, 'desc']], // Sort by Created Date (index 5) in descending order
                 responsive: true,
                 rowReorder: true,
                 dom: `
@@ -203,11 +221,11 @@
                         text: '<i class="bi bi-file-earmark-excel"></i> Excel',
                         className: 'btn btn-outline-success rounded-pill shadow-sm me-3',
                         exportOptions: {
-                            columns: [0, 1, 2, 3, 4, 5, 6], // Only export up to status
+                            columns: [0, 1, 2, 3, 4, 5, 6, 7], // Only export up to status
                             format: {
                                 body: function (data, row, column, node) {
                                     // If it's the status column (index 6), return selected text from <select>
-                                    if (column === 6) {
+                                    if (column === 7) {
                                         const $select = $('<div>' + data + '</div>').find('select');
                                         return $select.length ? $select.find('option:selected').text() : data;
                                     }
@@ -224,10 +242,10 @@
                         orientation: 'landscape', // ✅ Set landscape mode
                         pageSize: 'A4', // Optional: you can also set other sizes
                         exportOptions: {
-                            columns: [0, 1, 2, 3, 4, 5, 6], // ✅ Exclude the last column (Actions)
+                            columns: [0, 1, 2, 3, 4, 5, 6, 7], // ✅ Exclude the last column (Actions)
                             format: {
                                 body: function (data, row, column, node) {
-                                    if (column === 6) { // Status column
+                                    if (column === 7) { // Status column
                                         const $select = $('<div>' + data + '</div>').find('select');
                                         return $select.length ? $select.find('option:selected').text() : data;
                                     }
@@ -356,6 +374,23 @@
                 });
         });
     </script>
+
+    <script>
+        $('#duplicateTaskModal').on('show.bs.modal', function (event) {
+            const button = $(event.relatedTarget);
+            const taskId = button.data('task-id');
+            if (!taskId) return;
+
+            $.get(`/Tasks/DuplicateTaskModal/${taskId}`)
+                .done(function (html) {
+                    $('#duplicateTaskModal .modal-content').html(html);
+                })
+                .fail(function (xhr) {
+                    $('#duplicateTaskModal .modal-content').html('<div class="p-4 text-danger">Error loading duplicate modal: ' + xhr.responseText + '</div>');
+                });
+        });
+    </script>
+
     <script>
         // Confirm Delete with SweetAlert2
         function confirmDelete(taskId) {

@@ -1,0 +1,229 @@
+﻿@model SalesMetrics.Models.NewCustomerFormRequest
+
+<style>
+    .form-section-title {
+        background-color: #f26522;
+        color: white;
+        padding: 0.5rem 1rem;
+        font-weight: bold;
+        margin-bottom: 10px;
+    }
+
+    .info-grid .row {
+        margin-bottom: 0.5rem;
+    }
+
+    .info-grid .col-label {
+        font-weight: bold;
+    }
+
+    .info-grid .col-value {
+        border-bottom: 1px dotted #ccc;
+        padding-left: 0.5rem;
+    }
+
+    table.product-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 1rem;
+        margin-bottom: 1rem;
+    }
+
+        table.product-table td,
+        table.product-table th {
+            border: 1px solid #ddd;
+            padding: 4px;
+        }
+
+    #printArea table {
+        border-collapse: collapse;
+        width: 90%;
+        font-size: 11px;
+        margin-left: 5%;
+        margin-bottom: 20px;
+    }
+
+    #printArea td, #printArea th {
+        padding: 6px;
+        border: 1px solid #ccc;
+    }
+
+    .print-section-header {
+        background-color: #f26522;
+        color: white;
+        font-weight: bold;
+        padding: 6px;
+        text-align: left;
+    }
+</style>
+
+<div id="printArea" class="container-fluid">
+    <div class="text-center mb-4">
+        <img src="/images/seamless-logo.png" alt="Logo" style="height: 50px;">
+        <h4 class="text-uppercase mt-2">New Customer Set Up Form</h4>
+    </div>
+
+    <table>
+        <tr><td colspan="6" class="print-section-header">Property Information (Company Ship to / Receive Information)</td></tr>
+        <tr><td><strong>Property Name:</strong></td><td colspan="1">Test Property</td><td><strong>Credit Line:</strong></td><td colspan="2">$5,000</td></tr>
+        <tr><td><strong># of Units:</strong></td><td colspan="2">300</td><td colspan="3"></td></tr>
+        <tr><td><strong>Ship To Name:</strong></td><td colspan="2">123 ABC</td><td><strong>Ship To Address:</strong></td><td colspan="2">123 Main Street</td></tr>
+        <tr><td colspan="6" class="print-section-header">Receiving Contact</td></tr>
+        <tr><td><strong>Name:</strong></td><td>Jon</td><td><strong>Phone:</strong></td><td>555-1234</td><td><strong>Fax:</strong></td><td>555-5678</td></tr>
+        <tr><td><strong>Email:</strong></td><td colspan="5">jon@example.com</td></tr>
+        <tr><td colspan="6" class="print-section-header">Property Contact</td></tr>
+        <tr><td><strong>Name:</strong></td><td>Jane</td><td><strong>Phone:</strong></td><td>555-4321</td><td><strong>Fax:</strong></td><td>555-8765</td></tr>
+        <tr><td><strong>Email:</strong></td><td colspan="5">jane@example.com</td></tr>
+    </table>
+
+    <table>
+        <tr><td colspan="6" class="print-section-header">Management Company Information</td></tr>
+        <tr><td><strong>Company Name:</strong></td><td colspan="2">ABC Management</td><td><strong>Address:</strong></td><td colspan="2">456 Management Ave</td></tr>
+        <tr><td colspan="6" class="print-section-header">Regional Manager</td></tr>
+        <tr><td><strong>Name:</strong></td><td>Bob RM</td><td><strong>Phone:</strong></td><td>555-1111</td><td><strong>Fax:</strong></td><td>555-2222</td></tr>
+        <tr><td><strong>Email:</strong></td><td colspan="5">bobrm@example.com</td></tr>
+        <tr><td colspan="6" class="print-section-header">Property Manager</td></tr>
+        <tr><td><strong>Name:</strong></td><td>Alice PM</td><td><strong>Phone:</strong></td><td>555-3333</td><td><strong>Fax:</strong></td><td>555-4444</td></tr>
+        <tr><td><strong>Email:</strong></td><td colspan="5">alicepm@example.com</td></tr>
+    </table>
+
+    <table>
+        <tr><td colspan="6" class="print-section-header">Billing Information</td></tr>
+        <tr><td><strong>Attention:</strong></td><td colspan="2">Billing Dept</td><td><strong>Invoice Email:</strong></td><td colspan="2">billing@example.com</td></tr>
+        <tr><td><strong>Address:</strong></td><td colspan="5">789 Billing Blvd, City, ST 90210</td></tr>
+        <tr><td><strong>PDF Invoicing:</strong></td><td>Yes</td><td><strong>Spectrum:</strong></td><td>Yes</td><td><strong>PO Required:</strong></td><td>No</td></tr>
+    </table>
+
+    <table>
+        <tr><td colspan="6" class="print-section-header">Income Information</td></tr>
+        <tr><td><strong>Monthly Revenue:</strong></td><td>$10,000</td><td><strong>AR Credit Limit:</strong></td><td>$5,000</td><td><strong>Discount %:</strong></td><td>20%</td></tr>
+        <tr><td><strong>Terms:</strong></td><td colspan="5">Net 30</td></tr>
+    </table>
+
+    <table>
+        <tr><td colspan="4" class="print-section-header">Product Information</td></tr>
+        <tr><th>Product Class</th><th>Style</th><th>Color</th><th>Price</th></tr>
+        <tr><td>Carpet</td><td>VG065</td><td>510</td><td>$7.85</td></tr>
+        <tr><td>Vinyl</td><td>VN123</td><td>Gray</td><td>$4.20</td></tr>
+    </table>
+
+    <table>
+        <tr><td colspan="2" class="print-section-header">Notes</td></tr>
+        <tr><td><strong>Special Notes:</strong></td><td>Handle with care, rush order</td></tr>
+        <tr><td><strong>Billing Instructions:</strong></td><td>Send PDF only to billing@example.com</td></tr>
+    </table>
+
+    <table>
+        <tr><td colspan="4" class="print-section-header">Submitted By</td></tr>
+        <tr><td><strong>Submitted By:</strong></td><td>Joe Admin</td><td><strong>Salesperson:</strong></td><td>John Doe</td></tr>
+    </table>
+</div>
+
+
+
+@* <script>
+    window.newCustomerData = {
+        property: {
+            name: "@Model.Property.Name",
+            creditLine: "@Model.Property.CreditLine.ToString("C")",
+            units: "@Model.Property.Units",
+            shipToName: "@Model.Property.ShipToName",
+            shipToAddress: "@Model.Property.ShipToAddress",
+            receivingContact: {
+                name: "@Model.Property.ReceivingContact?.Name",
+                phone: "@Model.Property.ReceivingContact?.Phone",
+                fax: "@Model.Property.ReceivingContact?.Fax",
+                email: "@Model.Property.ReceivingContact?.Email"
+            },
+            propertyContact: {
+                name: "@Model.Property.PropertyContact?.Name",
+                phone: "@Model.Property.PropertyContact?.Phone",
+                fax: "@Model.Property.PropertyContact?.Fax",
+                email: "@Model.Property.PropertyContact?.Email"
+            }
+        },
+        management: {
+            name: "@Model.ManagementCompany.ManagementName",
+            address: "@Model.ManagementCompany.ManagementAddress",
+            regionalManager: {
+                name: "@Model.ManagementCompany.RegionalManager?.Name",
+                phone: "@Model.ManagementCompany.RegionalManager?.Phone",
+                fax: "@Model.ManagementCompany.RegionalManager?.Fax",
+                email: "@Model.ManagementCompany.RegionalManager?.Email"
+            },
+            propertyManager: {
+                name: "@Model.ManagementCompany.PropertyManager?.Name",
+                phone: "@Model.ManagementCompany.PropertyManager?.Phone",
+                fax: "@Model.ManagementCompany.PropertyManager?.Fax",
+                email: "@Model.ManagementCompany.PropertyManager?.Email"
+            }
+        },
+        billing: {
+            apContact: {
+                name: "@Model.Billing.AccountsPayable?.Name",
+                phone: "@Model.Billing.AccountsPayable?.Phone",
+                fax: "@Model.Billing.AccountsPayable?.Fax",
+                email: "@Model.Billing.AccountsPayable?.Email"
+            },
+            altContact: {
+                name: "@Model.Billing.AlternateAPContact?.Name",
+                phone: "@Model.Billing.AlternateAPContact?.Phone",
+                fax: "@Model.Billing.AlternateAPContact?.Fax",
+                email: "@Model.Billing.AlternateAPContact?.Email"
+            },
+            attention: "@Model.Billing.InvoiceAttention",
+            invoiceEmail: "@Model.Billing.InvoiceEmail",
+            invoiceAddress: "@Model.Billing.InvoiceAddress",
+            invoiceCity: "@Model.Billing.InvoiceCity",
+            invoiceState: "@Model.Billing.InvoiceState",
+            invoiceZip: "@Model.Billing.InvoiceZip",
+            thirdPartyVendor: "@Model.Billing.ThirdPartyVendor",
+            requiresPDFInvoices: @Model.Billing.RequiresPDFInvoices.ToString().ToLower(),
+            requiresSpectrumInvoices: @Model.Billing.RequiresSpectrumInvoices.ToString().ToLower(),
+            requiresCustomerPO: @Model.Billing.RequiresCustomerPO.ToString().ToLower()
+        },
+        income: {
+            monthlyRevenue: "@Model.Income.EstimatedMonthlyRevenue.ToString("C")",
+            arCreditLimit: "@Model.Income.ARCreditLimit.ToString("C")",
+            terms: "@Model.Income.Terms",
+            discountPercent: "@Model.Income.DiscountPercent"
+        },
+        products: @Html.Raw(Json.Serialize(Model.Products)),
+        specialNotes: "@Model.SpecialNotes",
+        billingInstructions: "@Model.BillingInstructions",
+        submittedBy: "@Model.SubmittedBy",
+        salesperson: "@Model.Income.SalespersonName"
+    };
+</script> *@
+
+<script>
+    window.downloadRequestPDF = function () {
+        if (!window.jspdf || !window.jspdf.jsPDF) {
+            alert("jsPDF library is not loaded.");
+            return;
+        }
+
+        const { jsPDF } = window.jspdf;
+
+        const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+
+        const printArea = document.getElementById('printArea');
+        if (!printArea) {
+            alert("Printable content not found");
+            return;
+        }
+
+        doc.html(printArea, {
+            x: 40,
+            y: 40,
+            html2canvas: {
+                scale: 0.8,
+                useCORS: true
+            },
+            callback: function (pdf) {
+                pdf.save("NewCustomerRequest.pdf");
+            }
+        });
+    };
+
+</script>

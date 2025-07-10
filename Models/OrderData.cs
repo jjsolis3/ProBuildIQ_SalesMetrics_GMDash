@@ -4,8 +4,8 @@
     {
         public string WeekdayName { get; set; } = string.Empty;
         public int OrdersCount { get; set; }
+        public decimal TotalOrderAmount { get; set; }
     }
-
 
     public class TransactionSummary
     {
@@ -127,9 +127,11 @@
         public string OrderType { get; set; }
         public int NumOfRooms { get; set; }
         public double Qty { get; set; }
+        public decimal OrderTotal { get; set; }
         public string Notes { get; set; }
         public string UnitNumber { get; set; }
         public string UnitType { get; set; }
+        public string OrderDate { get; set; }
         public string DeliveryDate { get; set; }
         public string MoveInDate { get; set; }
         public string PaidInFullDate { get; set; }
@@ -142,6 +144,7 @@
         public string ManagementName { get; set; }
         public string Status { get; set; }
         public string Location { get; set; }
+        public int Warehouse { get; set; }
         public int SalesmanId { get; set; }
         public string SalesmanName { get; set; }
 
@@ -155,7 +158,6 @@
         };
 
         public string LocationName => LocationMap.TryGetValue(Location, out var loc) ? loc : "Unknown";
-
     }
 
 }

@@ -192,42 +192,9 @@
             </div>
         </div>
     </div>
-
-    <!-- Columns 1 -->
-    <div class="col-md-3 mt-2">
-        <!-- Total Sales -->
-        <div class="col-12 mb-3">
-            <div class="kpi-tile bg-orange text-white shadow-lg rounded p-1 d-flex flex-column justify-content-center align-items-start">
-                <p class="kpi-label mb-1">Total Sales</p>
-                <h3 class="kpi-value" style="margin: 0 auto;">$@Convert.ToDecimal(salesData["TotalSales"]).ToString("N2")</h3>
-            </div>
-        </div>
-
-        <!-- Total Invoices -->
-        <div class="col-12 mb-3">
-            <div class="kpi-tile bg-orange text-white shadow-lg rounded p-1 d-flex flex-column justify-content-center align-items-start">
-                <p class="kpi-label mb-1">Total Invoices</p>
-                <h3 class="kpi-value" style="margin: 0 auto;">@Convert.ToInt32(salesData["TotalInvoices"]).ToString("N0")</h3>
-            </div>
-        </div>
-    </div>
-
-    <!-- Columns 2 -->
-    <div class="col-md-3 mt-2">
-        <!-- Total Due -->
-        <div class="col-12 mb-3">
-            <div class="kpi-tile bg-orange text-white shadow-lg rounded p-1 d-flex flex-column justify-content-center align-items-start">
-                <p class="kpi-label mb-1">Total Due</p>
-                <h3 class="kpi-value" style="margin: 0 auto;">$@Convert.ToDecimal(salesData["AmountDue"]).ToString("N2")</h3>
-            </div>
-        </div>
-        <!-- Active Properties -->
-        <div class="col-12 mb-3">
-            <div class="kpi-tile bg-orange text-white shadow-lg rounded p-1 d-flex flex-column justify-content-center align-items-start">
-                <p class="kpi-label mb-1">Active Properties</p>
-                <h3 class="kpi-value" style="margin: 0 auto;">@Convert.ToInt32(salesData["PropertyCount"]).ToString("N0")</h3>
-            </div>
-        </div>
+    <div class="col-md-6 mt-0" id="kpiContainer">
+        <!-- ✅ Moved outside -->
+        @await Html.PartialAsync("_KpiTilesPartial")
     </div>
 </div>
 
@@ -392,12 +359,20 @@
                         var barColor = dayColors.ContainsKey(day) ? dayColors[day] : "bg-primary";
 
                             <div class="mb-1" style="font-size: clamp(0.875rem, .95vw, 1.0rem);">
-                            <div class="d-flex justify-content-between">
-                                @* <span class="text-muted">@order?.OrdersCount (@percentage%)</span> *@
+                            @* <div class="d-flex justify-content-between">
                                 <span class="text-muted">@((order?.OrdersCount ?? 0) + " (" + percentage + "%)")</span>
                                 <a href="#" class="text-muted day-link" data-day="@day">@day</a>
 
+                            </div> *@
+                            <div class="d-flex justify-content-between flex-column">
+                                <div class="d-flex justify-content-between">
+                                    <span class="text-muted fs-5">
+                                        Orders: @(order?.OrdersCount ?? 0) (@percentage%) | @String.Format("{0:C0}", order?.TotalOrderAmount ?? 0)
+                                    </span>
+                                    <a href="#" class="text-muted day-link" data-day="@day">@day</a>
+                                </div>
                             </div>
+
                             <div class="progress" style="height: 6px;">
                                 <div class="progress-bar progress-bar-striped progress-bar-animated @barColor" style="width: @barWidth%;"></div>
                             </div>
@@ -513,8 +488,9 @@
         </div>
     </div>
 </div>
+
 <!-- Inactive Customers Table -->
-<div class="row mt-4">
+<div class="row mt-2">
     <div class="col-12">
         <div class="card">
             <div class="card-header">
@@ -559,8 +535,10 @@
                                 <td data-order="@cust.EstablishedDate?.ToString("yyyy-MM-ddTHH:mm:ss")">@cust.EstablishedDate?.ToString("MM/dd/yyyy")</td>
                                 <td>
                                     <button class="btn btn-sm btn-orange create-task-from-inactive"
-                                            data-property="@cust.CustomerName"
-                                            data-id="@cust.CustomerNumber"
+                                            data-source="Dashboard"
+                                            data-customer="@cust.CustomerName"
+                                            data-customerid="@cust.CustomerId"
+                                            data-balance="@cust.Balance"
                                             data-days="@cust.DaysSinceLastOrder">
                                         Create Task
                                     </button>
@@ -646,6 +624,7 @@
                                 <td>
                                     <button class="btn btn-sm btn-orange create-ar-task"
                                             data-customer="@invoice.CustomerName"
+                                            data-customerid="@invoice.CustomerId"
                                             data-invoice="@invoice.Invoice"
                                             data-balance="@invoice.OutstandingAmount">
                                         Create Task
@@ -674,22 +653,6 @@
     </div>
 </div>
 
-@* <div class="modal fade" id="orderDetailsModal" tabindex="-1" role="dialog" aria-labelledby="orderDetailsModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="orderDetailsModalLabel">Order Details</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <div id="modalContent">
-                    <!-- Dynamic order details go here -->
-                    <div class="text-center text-muted">Loading order details...</div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div> *@
 <!-- JOB SCHEDULE MODAL -->
 <div class="modal fade" id="workOrderModal" tabindex="-1" aria-labelledby="workOrderModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
@@ -708,6 +671,7 @@
                             <th>City</th>
                             <th>Order Type</th>
                             <th>Qty</th>
+                            <th>Order $</th>
                             <th>Unit</th>
                             <th>Type</th>
                             <th>Delivery Date</th>
@@ -784,7 +748,7 @@
                         <div class="form-group">
                             <label>Assigned To:</label>
                             <input type="text" class="form-control" value="Myself" disabled />
-                            <input type="hidden" name="AssignedTo" id="AssignedTo" value="@ViewBag.UserId" />
+                            <input type="hidden" name="AssignedTo" id="AssignedTo" value="@ViewBag.Users_Id" />
                         </div>
                     }
                     else if (ViewBag.Users != null)
@@ -792,10 +756,10 @@
                         <div class="form-group">
                             <label for="AssignedTo">Assign To:</label>
                             <select name="AssignedTo" id="AssignedTo" class="form-control">
-                                <option value="@ViewBag.UserId">Myself</option>
+                                <option value="@ViewBag.Users_Id">Myself</option>
                                 @foreach (var user in ViewBag.Users)
                                 {
-                                    <option value="@user.UserID">@user.FirstName @user.LastName</option>
+                                    <option value="@user.Users_ID">@user.FirstName @user.LastName</option>
                                 }
                             </select>
                         </div>
@@ -821,6 +785,9 @@
         </div>
     </div>
 </div>
+
+<!-- Placeholder to call Create Task Modal -->
+<div id="dynamicTaskModalContainer"></div>
 
 <!-- END MODAL -->
 @Html.Partial("~/Views/Shared/footer.cshtml")
@@ -897,6 +864,7 @@
                                     <td>${row.city}</td>
                                     <td>${row.orderType}</td>
                                     <td>${row.qty}</td>
+                                    <td>${Number(row.orderTotal).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</td>
                                     <td>${row.unitNumber}</td>
                                     <td>${row.unitType}</td>
                                     <td>${row.deliveryDate}</td>
@@ -908,7 +876,7 @@
                                     <td>
                                         <button class="btn btn-sm btn-primary create-workorder-task"
                                                 data-property="${row.propertyName}"
-                                                data-propertyid="${row.propertyCode}"
+                                                data-propertyid="${row.propertyId}"
                                                 data-orderid="${row.orderID}"
                                                 data-unit="${row.unitNumber}"
                                                 data-duedate="${row.deliveryDate}"
@@ -1057,18 +1025,31 @@
             const format = date => date.toISOString().split("T")[0];
             const start = format(startDate);
             const end = format(endDate);
+            
+            $.ajax({
+                url: `/Dashboard/GetKpiTiles`,
+                method: "GET",
+                data: {
+                    startDate: start,
+                    endDate: end,
+                    filterSalesmanId: new URLSearchParams(window.location.search).get("filterSalesmanId") || 0
+                },
+                success: function (html) {
+                    $("#kpiContainer").html(html);
+                    const formatDisplay = (dateStr) => {
+                        const d = new Date(dateStr);
+                        return d.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
+                    };
 
-            // THEN continue with navigation (full reload)
-            const existingParams = new URLSearchParams(window.location.search);
-            const currentSalesmanId = existingParams.get("filterSalesmanId") || "";
-
-            let url = `/Dashboard/Index?startDate=${start}&endDate=${end}&rangeType=${selectedOption}`;
-            if (currentSalesmanId) {
-                url += `&filterSalesmanId=${currentSalesmanId}`;
-            }
-            window.location.href = url;
-
+                    $("#selectedRangeLabel").html(`Selected Range: <br/><strong>${formatDisplay(start)}</strong> to <strong>${formatDisplay(end)}</strong>`);
+                    //$("#selectedRangeLabel").html(`Selected Range: <br/><strong>${start}</strong> to <strong>${end}</strong>`);
+                },
+                error: function () {
+                    Swal.fire("Error", "Unable to load KPI data", "error");
+                }
+            });
         });
+
     </script>
     <script>
         document.querySelectorAll('.week-range-option').forEach(item => {
@@ -1110,67 +1091,36 @@
     <script>
         // JS To Create Task from the Work Order
         $(document).on('click', '.create-workorder-task', function () {
-            const property = $(this).data('property');
-            const propertyID = $(this).data('propertyid');
+            const customer = $(this).data('property');
+            const customerID = $(this).data('propertyid');
+            const assignedTo = $(this).data('assignto');
             const orderID = $(this).data('orderid');
             const unit = $(this).data('unit');
-            const tomorrowAt10AM = new Date();
-            tomorrowAt10AM.setDate(tomorrowAt10AM.getDate() + 1);
-            tomorrowAt10AM.setHours(10, 0, 0, 0); // 10:00 AM sharp
 
-            // ✅ Clean: Property = only the property name
-            $('#Property').val(property);
-            $('#PropertyID').val(propertyID);
+            $.get('/Tasks/GetCreateTaskModal',{
+                // ✅ Set fields in the modal
+                source: "Orders",
+                property: customer,
+                propertyId: customerID,
+                orderID: orderID,
+                unit: unit,
+                assignedTo: assignedTo
+            }).done(function(modalHtml) {
+                $('#dynamicTaskModalContainer').html(modalHtml);
+                // Hide the #workOrdersTable Modal
+                $('#workOrderModal').modal('hide');
 
-            // ✅ Enriched Title/Description for display only
-            $('#Title').val(`Visit ${property} - Unit: ${unit}`);
-            $('#Description').val(`Follow up on Order #${orderID} for Unit ${unit}`);
-            $('#DueDate').val(tomorrowAt10AM.toISOString().slice(0, 16));
-            $('#Type').val('Site Visit');
-            $('#Status').val('Pending');
+                // Show the Task Modal
+                $('#createTaskModal').modal('show');
 
-            $('#workOrderModal').on('hidden.bs.modal', function () {
-                $('#taskModal').modal('show');
+            }).fail(function () {
+                Swal.fire("Error", "Failed to load task modal", "error");
             });
-            $('#workOrderModal').modal('hide');
 
         });
-
     </script>
+    
     <script>
-        $('#taskModal').on('shown.bs.modal', function () {
-            console.log("Task modal is now fully visible.");
-            const roleId = parseInt($('#CurrentRoleId').val());
-            const userId = $('#CurrentUserId').val();
-
-            if (roleId === 2) {
-                $('#AssignedTo').val(userId);
-
-            }
-
-            $('#taskForm').off('submit').on('submit', function (e) {
-                e.preventDefault();
-                console.log("Intercepted form submit");
-
-                const form = $(this);
-                const data = form.serialize();
-
-                $.post('/Tasks/CreateFromWorkOrder', data)
-                    .done(function (res) {
-                        Swal.fire("Success", "Task created", "success");
-                        $('#taskModal').modal('hide');
-                        location.reload();
-                    })
-                    .fail(function (xhr) {
-                        Swal.fire("Error", "Something went wrong", "error");
-                        console.log(xhr.responseText);
-                    });
-            });
-        });
-
-    </script>
-    <script>
-
         // Load Edit Modal
         $('#editTaskModal').on('show.bs.modal', function (event) {
             var button = $(event.relatedTarget);
@@ -1189,49 +1139,65 @@
 
     </script>
     <script>
+        // AR Modal Trigger
         $(document).on('click', '.create-ar-task', function () {
-            const customer = $(this).data('customer');
-            const invoice = $(this).data('invoice');
-            const balance = $(this).data('balance');
+            const customer = $(this).data('customer');  // become Property
+            const customerId = $(this).data('customerid');
+            const invoice = $(this).data('invoice');    // becomes OrderID
+            const balance = $(this).data('balance');    // Option use in future
 
-            const tomorrowAt10AM = new Date();
-            tomorrowAt10AM.setDate(tomorrowAt10AM.getDate() + 1);
-            tomorrowAt10AM.setHours(10, 0, 0, 0);
-
-            // ✅ Set fields in the modal
-            $('#Property').val(customer);
-            $('#PropertyID').val(invoice); // Optional to track Invoice #
-            $('#Title').val(`Follow up on Invoice #${invoice}`);
-            $('#Description').val(`Outstanding balance of ${parseFloat(balance).toFixed(2)} for Invoice #${invoice}`);
-            $('#DueDate').val(tomorrowAt10AM.toISOString().slice(0, 16));
-            $('#Type').val('Email'); // 🧠 Default to Email followup
-            $('#Status').val('Pending');
-
-            // Show the Task Modal
-            $('#taskModal').modal('show');
+            $.get('/Tasks/GetCreateTaskModal',{
+                // ✅ Set fields in the modal
+                source: "AR",
+                property: customer,
+                propertyId: customerId,
+                orderID: invoice,
+                balance: balance
+            }).done(function(modalHtml) {
+                $('#dynamicTaskModalContainer').html(modalHtml);
+                // Show the Task Modal
+                $('#createTaskModal').modal('show');
+            }).fail(function () {
+                Swal.fire("Error", "Failed to load task modal", "error");
+            });
         });
     </script>
     <script>
+        // Inactive Modal Trigger
         $(document).on('click', '.create-task-from-inactive', function () {
-            const property = $(this).data('property');
-            const customerId = $(this).data('id');
+            const customer = $(this).data('customer');
+            const customerId = $(this).data('customerid');
             const daysInactive = $(this).data('days');
 
-            const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            tomorrow.setHours(10, 0, 0, 0);
-
-            $('#Property').val(property);
-            $('#PropertyID').val(customerId);
-            $('#Title').val(`Follow up with ${property}`);
-            $('#Description').val(`No recent activity. Consider outreach. ${property} has not placed an order in over ${daysInactive} days.`);
-            $('#DueDate').val(tomorrow.toISOString().slice(0, 16));
-            $('#Type').val('Email');
-            $('#Status').val('Pending');
-
-            $('#taskModal').modal('show');
+            $.get('/Tasks/GetCreateTaskModal',{
+                // ✅ Set fields in the modal
+                source: "Inactive",
+                property: customer,
+                propertyId: customerId,
+                daysInactive: daysInactive,
+            }).done(function(modalHtml) {
+                $('#dynamicTaskModalContainer').html(modalHtml);
+                // Show the Task Modal
+                $('#createTaskModal').modal('show');
+            }).fail(function () {
+                Swal.fire("Error", "Failed to load task modal", "error");
+            });
         });
     </script>
+    <script>
+        function createTaskModal(source, data) {
+            data.source = source;
 
+            $.get('/Tasks/GetCreateTaskModal', data)
+                .done(function (html) {
+                    $('#dynamicTaskModalContainer').html(html);
+                    $('#createTaskModal').modal('show');
+                })
+                .fail(function () {
+                    Swal.fire("Error", "Failed to load task modal", "error");
+                });
+        }
+
+    </script>
 
 }

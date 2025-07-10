@@ -1,0 +1,364 @@
+﻿@model SalesMetrics.Models.NewCustomerFormRequest
+
+<style>
+    @@media print {
+        body *
+        {
+            visibility: hidden;
+        }
+    }
+
+    body {
+        font-size: 14px;
+    }
+
+    .form-section-title {
+        background-color: #f26522;
+        color: white;
+        padding: 0.5rem 1rem;
+        font-weight: bold;
+        margin: 1rem 0 0.5rem;
+    }
+
+    .info-grid .row {
+        margin-bottom: 0.5rem;
+    }
+
+    .col-label-title {
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+
+    .col-label {
+        font-weight: bold;
+    }
+
+    .col-value {
+        border-bottom: 1px dotted #ccc;
+        padding-left: 0.5rem;
+    }
+
+    .product-table td,
+    .product-table th {
+        border: 1px solid #ddd;
+        padding: 4px;
+    }
+
+    .product-table {
+        width: 100%;
+        margin-top: 1rem;
+        border-collapse: collapse;
+        margin-bottom: 1rem;
+    }
+    
+    #printCustomerModal, #printCustomerModal * {
+        visibility: visible;
+    }
+
+    #printCustomerModal {
+        position: absolute;
+        left: 0;
+        top: 0;
+    }
+</style>
+
+<div class="container-fluid" id="printContentArea">
+    <div class="text-center mb-4">
+        <img src="/images/seamless-logo.png" alt="Logo" style="height: 60px;">
+        <h4 class="text-uppercase mt-2">New Customer Set Up Form</h4>
+    </div>
+
+    <!-- Property Info -->
+    <div class="form-section-title">Property Information (Company Ship-To / Receive Information)</div>
+    <div class="info-grid">
+        <div class="row">
+            <div class="col-2 col-label">Property Name:</div>
+            <div class="col-2">@Model.Property.Name</div>
+            <div class="col-2 col-label">Credit Line:</div>
+            <div class="col-2">@Model.Property.CreditLine.ToString("C")</div>
+            <div class="col-2 col-label"># of Units:</div>
+            <div class="col-2">@Model.Property.Units</div>
+        </div>
+        <div class="row">
+            <div class="col-label col-2">Ship To Name:</div>
+            <div class="col-value col-4">@Model.Property.ShipToName</div>
+            <div class="col-label col-2">Ship To Address:</div>
+            <div class="col-value col-4">@Model.Property.ShipToAddress</div>
+        </div>
+        <div class="row">
+            <div class="col-6">
+                <div class="col-label-title bg-light">Receiving Contact:</div>
+                <div class="row">
+                    <div class="col-1"></div>
+                    <div class="col-11">
+                        <div class="row">
+                            <div class="col-label col-3">Name: </div>
+                            <div class="col-value col-9">@Model.Property.ReceivingContact?.Name</div>
+                        </div>
+                        <div class="row">
+                            <div class="col-label col-3">Phone: </div>
+                            <div class="col-value col-9">@Model.Property.ReceivingContact?.Phone</div>
+                        </div>
+                        <div class="row">
+                            <div class="col-label col-3">Fax: </div>
+                            <div class="col-value col-9">@Model.Property.ReceivingContact?.Fax</div>
+                        </div>
+                        <div class="row">
+                            <div class="col-label col-3">Email: </div>
+                            <div class="col-value col-9">@Model.Property.ReceivingContact?.Email</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="col-label-title bg-light">Property Contact:</div>
+                <div class="row">
+                    <div class="col-1"></div>
+                    <div class="col-11">
+                        <div class="row">
+                            <div class="col-label col-3">Name: </div>
+                            <div class="col-value col-9">@Model.Property.PropertyContact?.Name</div>
+                        </div>
+                        <div class="row">
+                            <div class="col-label col-3">Phone: </div>
+                            <div class="col-value col-9">@Model.Property.PropertyContact?.Phone</div>
+                        </div>
+                        <div class="row">
+                            <div class="col-label col-3">Fax: </div>
+                            <div class="col-value col-9">@Model.Property.PropertyContact?.Fax</div>
+                        </div>
+                        <div class="row">
+                            <div class="col-label col-3">Email: </div>
+                            <div class="col-value col-9">@Model.Property.PropertyContact?.Email</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Management -->
+    <div class="form-section-title">Management Company Information</div>
+    <div class="info-grid">
+        <div class="row">
+            <div class="col-label col-3">Company Name:</div>
+            <div class="col-value col-3">@Model.ManagementCompany.ManagementName</div>
+            <div class="col-label col-3">Address:</div>
+            <div class="col-value col-3">@Model.ManagementCompany.ManagementAddress</div>
+        </div>
+        <div class="row">
+            <div class="col-6">
+                <div class="col-label-title bg-light">Regional Manager:</div>
+                <div class="row">
+                    <div class="col-1"></div>
+                    <div class="col-11">
+                        <div class="row">
+                            <div class="col-label col-3">Name: </div>
+                            <div class="col-value col-9">@Model.ManagementCompany.RegionalManager?.Name</div>
+                        </div>
+                        <div class="row">
+                            <div class="col-label col-3">Phone: </div>
+                            <div class="col-value col-9">@Model.ManagementCompany.RegionalManager?.Phone</div>
+                        </div>
+                        <div class="row">
+                            <div class="col-label col-3">Fax: </div>
+                            <div class="col-value col-9">@Model.ManagementCompany.RegionalManager?.Fax</div>
+                        </div>
+                        <div class="row">
+                            <div class="col-label col-3">Email: </div>
+                            <div class="col-value col-9">@Model.ManagementCompany.RegionalManager?.Email</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="col-label-title bg-light">Manager:</div>
+                <div class="row">
+                    <div class="col-1"></div>
+                    <div class="col-11">
+                        <div class="row">
+                            <div class="col-label col-3">Name: </div>
+                            <div class="col-value col-9">@Model.ManagementCompany.PropertyManager?.Name</div>
+                        </div>
+                        <div class="row">
+                            <div class="col-label col-3">Phone: </div>
+                            <div class="col-value col-9">@Model.ManagementCompany.PropertyManager?.Phone</div>
+                        </div>
+                        <div class="row">
+                            <div class="col-label col-3">Fax: </div>
+                            <div class="col-value col-9">@Model.ManagementCompany.PropertyManager?.Fax</div>
+                        </div>
+                        <div class="row">
+                            <div class="col-label col-3">Email: </div>
+                            <div class="col-value col-9">@Model.ManagementCompany.PropertyManager?.Email</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Billing -->
+    <div class="form-section-title">Company Invoice / Bill to Information</div>
+    <div class="info-grid">
+        <div class="row">
+            <div class="col-6">
+                <div class="col-label-title bg-light">Accounts Payable Contact:</div>
+                <div class="row">
+                    <div class="col-1"></div>
+                    <div class="col-11">
+                        <div class="row">
+                            <div class="col-label col-3">Name: </div>
+                            <div class="col-value col-9">@Model.Billing.AccountsPayable?.Name</div>
+                        </div>
+                        <div class="row">
+                            <div class="col-label col-3">Phone: </div>
+                            <div class="col-value col-9">@Model.Billing.AccountsPayable?.Phone</div>
+                        </div>
+                        <div class="row">
+                            <div class="col-label col-3">Fax: </div>
+                            <div class="col-value col-9">@Model.Billing.AccountsPayable?.Fax</div>
+                        </div>
+                        <div class="row">
+                            <div class="col-label col-3">Email: </div>
+                            <div class="col-value col-9">@Model.Billing.AccountsPayable?.Email</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="col-label-title bg-light">Alt. Accounts Payable Contact:</div>
+                <div class="row">
+                    <div class="col-1"></div>
+                    <div class="col-11">
+                        <div class="row">
+                            <div class="col-label col-3">Name: </div>
+                            <div class="col-value col-9">@Model.Billing.AlternateAPContact?.Name</div>
+                        </div>
+                        <div class="row">
+                            <div class="col-label col-3">Phone: </div>
+                            <div class="col-value col-9">@Model.Billing.AlternateAPContact?.Phone</div>
+                        </div>
+                        <div class="row">
+                            <div class="col-label col-3">Fax: </div>
+                            <div class="col-value col-9">@Model.Billing.AlternateAPContact?.Fax</div>
+                        </div>
+                        <div class="row">
+                            <div class="col-label col-3">Email: </div>
+                            <div class="col-value col-9">@Model.Billing.AlternateAPContact?.Email</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row justify-content-between">
+            <div class="col-label col-2">Attention:</div>
+            <div class="col-value col-4">@Model.Billing.InvoiceAttention</div>
+            <div class="col-label col-2">Invoice Email:</div>
+            <div class="col-value col-4">@Model.Billing.InvoiceEmail</div>
+        </div>
+        <div class="row">
+            <div class="col-6">
+                <div class="row justify-content-between">
+                    <div class="col-label col-4">Invoice Address:</div>
+                    <div class="col-value col-8">@Model.Billing.InvoiceAddress</div>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="row justify-content-between">
+                    <div class="col-label col-2">City:</div>
+                    <div class="col-value col-2">@Model.Billing.InvoiceCity</div>
+                    <div class="col-label col-2">State:</div>
+                    <div class="col-value col-2">@Model.Billing.InvoiceState</div>
+                    <div class="col-label col-2">Zip:</div>
+                    <div class="col-value col-2">@Model.Billing.InvoiceZip</div>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-6">
+                <div class="row">
+                    <div class="col-label col-3">Third Party Vendor:</div>
+                    <div class="col-value col-9">@Model.Billing.ThirdPartyVendor</div>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="row justify-content-between">
+                    <div class="col-label col-2">PDF Invoicing:</div>
+                    <div class="col-value col-2">@(Model.Billing.RequiresPDFInvoices ? "Yes" : "No")</div>
+                    <div class="col-label col-2">Spectrum Invoicing:</div>
+                    <div class="col-value col-2">@(Model.Billing.RequiresSpectrumInvoices ? "Yes" : "No")</div>
+                    <div class="col-label col-2">Customer PO Required:</div>
+                    <div class="col-value col-2">@(Model.Billing.RequiresCustomerPO ? "Yes" : "No")</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Income Info -->
+    <div class="form-section-title">Income Information</div>
+    <div class="info-grid">
+        <div class="row">
+            <div class="col-label col-3">Monthly Revenue:</div>
+            <div class="col-value col-3">@Model.Income.EstimatedMonthlyRevenue.ToString("C")</div>
+            <div class="col-label col-3">AR Credit Limit:</div>
+            <div class="col-value col-3">@Model.Income.ARCreditLimit.ToString("C")</div>
+        </div>
+        <div class="row">
+            <div class="col-label col-3">Terms:</div>
+            <div class="col-value col-3">@Model.Income.Terms</div>
+            <div class="col-label col-3">Discount %:</div>
+            <div class="col-value col-3">@Model.Income.DiscountPercent</div>
+        </div>
+    </div>
+
+    <!-- Products -->
+    @if (Model.Products?.Any() == true)
+    {
+        <div class="form-section-title">Product Information</div>
+        <table class="product-table">
+            <thead class="table-light bg-light">
+                <tr>
+                    <th>Product Class</th>
+                    <th>Style</th>
+                    <th>Color</th>
+                    <th>Price</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var p in Model.Products)
+                {
+                    <tr>
+                        <td>@p.ProductClass</td>
+                        <td>@p.Style</td>
+                        <td>@p.Color</td>
+                        <td>@p.Price.ToString("C")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    <!-- Notes -->
+    <div class="form-section-title">Special Notes or Billing Instructions</div>
+    <div class="border p-3">
+        <div class="row">
+            <div class="col-6">
+                <h6>Special Notes</h6>
+                <p>@Model.SpecialNotes</p>
+            </div>
+            <div class="col-6">
+                <h6>Billing Instructions</h6><br />
+                <p>@Model.BillingInstructions</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Submitted By -->
+    <div class="form-section-title">Submitted By</div>
+    <div class="boder p-3">
+        <p><strong>Submitted By:</strong> @Model.SubmittedBy</p>
+        <p><strong>Salesperson:</strong> @Model.Income.SalespersonName</p>
+    </div>
+</div>

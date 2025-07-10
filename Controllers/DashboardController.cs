@@ -29,20 +29,21 @@ namespace SalesMetrics.Controllers
             string officeLocation = LocationHelper.GetCurrentOfficeCode(HttpContext);
             var connectionString = _configuration.GetConnectionString(officeLocation);
 
+            var users_Id = int.Parse(User.FindFirst("Users_Id")?.Value ?? "0");
             var userId = HttpContext.Session.GetString("UserId");
             var fullName = HttpContext.Session.GetString("FullName");
             int roleId = Convert.ToInt32(HttpContext.Session.GetString("RoleId"));
             int salesmanId = Convert.ToInt32(HttpContext.Session.GetInt32("SalesmanId"));
 
-            if (string.IsNullOrEmpty(userId))
+            if (string.IsNullOrEmpty(userId) || users_Id == 0)
             {
                 // fallback to Claims if session expired but cookie still exists
                 userId = User.FindFirstValue("UserId");
+                users_Id = Convert.ToInt32(HttpContext.Session.GetString("Users_ID"));
                 if (string.IsNullOrEmpty(userId))
                     return RedirectToAction("Login", "Auth");
 
                 fullName = User.FindFirstValue("FullName");
-                officeLocation = LocationHelper.GetCurrentOfficeCode(HttpContext);
             }
 
             if (!startDate.HasValue || !endDate.HasValue)
@@ -67,7 +68,17 @@ namespace SalesMetrics.Controllers
                 effectiveSalesmanId = filterSalesmanId ?? 0; // Fallback to 0 if no filter is selected
             }
 
-            var selectedUserId = GetUserIdBySalesmanId(effectiveSalesmanId);
+            // When using the Selected SalesmanId, we need to get the UserId for that Salesman
+            int selectedUserId;
+
+            if (effectiveSalesmanId > 0)
+            {
+                selectedUserId = GetUserIdBySalesmanId(effectiveSalesmanId, locationId);
+            }
+            else
+            {
+                selectedUserId = users_Id; // Fallback for new users with no SalesmanID
+            }
 
             // Fetch Sales Data from the CUF ERP Database
             var salesData = GetSalesData(connectionString, effectiveSalesmanId, officeLocation, startDate, endDate, roleId);
@@ -79,10 +90,11 @@ namespace SalesMetrics.Controllers
 
             ViewBag.RoleId = roleId;
             ViewBag.UserId = userId;
+            ViewBag.Users_Id = users_Id;
 
             if (roleId == 1 || roleId == 3 || roleId == 4)
             {
-                ViewBag.Users = GetActiveUsers(Convert.ToInt32(userId), roleId, Convert.ToInt32(locationId));
+                ViewBag.Users = GetActiveUsers(Convert.ToInt32(users_Id), roleId, Convert.ToInt32(locationId));
             }
             else if (roleId == 2)
             {
@@ -130,7 +142,7 @@ namespace SalesMetrics.Controllers
             };
         }
 
-        private List<User> GetActiveUsers(int userId, int roleId, int locationId)
+        private List<User> GetActiveUsers(int users_Id, int roleId, int locationId)
         {
             var users = new List<User>();
             var connectionString = _configuration.GetConnectionString("SalesMetrics");
@@ -140,19 +152,19 @@ namespace SalesMetrics.Controllers
                 conn.Open();
 
                 string query = (roleId == 1 || roleId == 3 || roleId == 4)
-                    ? @"SELECT UserID, FirstName, LastName, RoleID, Location, CreatedDate, SalesmanID
+                    ? @"SELECT Users_ID, UserID, FirstName, LastName, RoleID, Location, CreatedDate, SalesmanID
                         FROM Users
                         WHERE SalesmanID IS NOT NULL AND Location = @Location"
-                    : @"SELECT UserID, FirstName, LastName, RoleID, Location, CreatedDate, SalesmanID
+                    : @"SELECT Users_ID, FirstName, LastName, RoleID, Location, CreatedDate, SalesmanID
                         FROM Users
-                        WHERE UserID = @UserId";
+                        WHERE Users_ID = @Users_Id";
 
                 using (SqlCommand cmd = new SqlCommand(query, conn))
                 {
                     if (roleId == 1 || roleId == 3 || roleId == 4)
                         cmd.Parameters.AddWithValue("@Location", locationId);
                     else
-                        cmd.Parameters.AddWithValue("@UserId", userId);
+                        cmd.Parameters.AddWithValue("@Users_Id", users_Id);
 
                     using (SqlDataReader reader = cmd.ExecuteReader())
                     {
@@ -160,13 +172,14 @@ namespace SalesMetrics.Controllers
                         {
                             users.Add(new User
                             {
-                                UserID = reader.GetInt32(0),
-                                FirstName = reader.GetString(1),
-                                LastName = reader.GetString(2),
-                                RoleID = reader.GetInt32(3),
-                                Location = reader.GetInt32(4),
-                                CreatedDate = reader.GetDateTime(5),
-                                SalesmanID = reader.IsDBNull(6) ? 0 : reader.GetInt32(6)
+                                Users_ID = reader.GetInt32("Users_ID"),
+                                UserID = reader.GetInt32("UserID"),
+                                FirstName = reader.GetString("FirstName"),
+                                LastName = reader.GetString("LastName"),
+                                RoleID = reader.GetInt32("RoleID"),
+                                Location = reader.GetInt32("Location"),
+                                CreatedDate = reader.GetDateTime("CreatedDate"),
+                                SalesmanID = reader.IsDBNull("SalesmanID") ? 0 : reader.GetInt32("SalesmanID")
                             });
                         }
                     }
@@ -176,18 +189,25 @@ namespace SalesMetrics.Controllers
             return users;
         }
 
-        private int GetUserIdBySalesmanId(int salesmanId)
+        private int GetUserIdBySalesmanId(int salesmanId, int locationId)
         {
-            if (salesmanId == 0) return Convert.ToInt32(HttpContext.Session.GetString("UserId"));
+            // If no SalesmanID, just return the current user
+            if (salesmanId == 0)
+            {
+                return Convert.ToInt32(HttpContext.Session.GetString("Users_Id"));
+            }
 
             var connectionString = _configuration.GetConnectionString("SalesMetrics");
             using (var conn = new SqlConnection(connectionString))
             {
                 conn.Open();
-                var cmd = new SqlCommand("SELECT UserID FROM Users WHERE SalesmanID = @SalesmanID", conn);
+                var cmd = new SqlCommand("SELECT Users_ID FROM Users WHERE SalesmanID = @SalesmanID AND Location = @LocationID", conn);
                 cmd.Parameters.AddWithValue("@SalesmanID", salesmanId);
+                cmd.Parameters.AddWithValue("@LocationID", locationId);
                 var result = cmd.ExecuteScalar();
-                return result != null ? Convert.ToInt32(result) : Convert.ToInt32(HttpContext.Session.GetString("UserId"));
+
+                // ✅ Fallback to current user if no match found
+                return result != null ? Convert.ToInt32(result) : Convert.ToInt32(HttpContext.Session.GetString("Users_Id"));
             }
         }
 
@@ -262,16 +282,97 @@ namespace SalesMetrics.Controllers
             return data;
         }
 
+        [HttpGet]
+        public IActionResult GetKpiTiles(DateTime startDate, DateTime endDate, int? filterSalesmanId = null)
+        {
+            int roleId = Convert.ToInt32(HttpContext.Session.GetString("RoleId"));
+            int effectiveSalesmanId = 0;
+
+            if (roleId == 2)
+                effectiveSalesmanId = Convert.ToInt32(HttpContext.Session.GetInt32("SalesmanId"));
+            else if (roleId == 1 || roleId == 3 || roleId == 4)
+                effectiveSalesmanId = filterSalesmanId ?? 0;
+
+            string officeLocation = LocationHelper.GetCurrentOfficeCode(HttpContext);
+            var connectionString = _configuration.GetConnectionString(officeLocation);
+
+            var salesData = GetSalesData(connectionString, effectiveSalesmanId, officeLocation, startDate, endDate, roleId);
+            ViewBag.SalesData = salesData;
+
+            return PartialView("_KpiTilesPartial");
+        }
+
         // GET WEEKLY ORDERS LOGIC
+        //private (List<DailyOrderCount> Orders, DateTime Start, DateTime End) GetWeeklyOrdersDataWithRange(int weekOffset = 0, int roleId = 0, int salesmanId = 0)
+        //{
+        //    var orders = new List<DailyOrderCount>();
+        //    string officeLocation = LocationHelper.GetCurrentOfficeCode(HttpContext);
+        //    var connectionString = _configuration.GetConnectionString(officeLocation);
+
+        //    var userId = HttpContext.Session.GetString("UserId") ?? User.FindFirstValue("UserId");
+        //    var users_Id = HttpContext.Session.GetString("Users_Id") ?? User.FindFirstValue("Users_Id");
+        //    if (string.IsNullOrEmpty(users_Id)) return (new List<DailyOrderCount>(), DateTime.Today, DateTime.Today);
+
+        //    int daysToSunday = (int)DateTime.Today.DayOfWeek;
+        //    DateTime sunday = DateTime.Today.AddDays(-daysToSunday).Date.AddDays(weekOffset * 7);
+        //    DateTime saturday = sunday.AddDays(6);
+
+        //    using (var conn = new SqlConnection(connectionString))
+        //    {
+        //        var query = @"
+        //            SELECT 
+        //                DATENAME(WEEKDAY, SH.SOH_DELIVERY_DATE) AS WeekdayName,
+        //                COUNT(DISTINCT SH.SOH_NUMBER) AS OrdersCount
+        //            FROM SALES_HEADER AS SH
+        //            WHERE 
+        //                SH.SOH_DELIVERY_DATE >= @StartDate
+        //                AND SH.SOH_DELIVERY_DATE <= @EndDate
+        //        ";
+
+        //        if (salesmanId > 0)
+        //        {
+        //            query += " AND SH.SOH_SMNMAS_ID = @SalesmanID";
+        //        }
+
+        //        query += @"
+        //            GROUP BY 
+        //                DATENAME(WEEKDAY, SH.SOH_DELIVERY_DATE),
+        //                DATEPART(WEEKDAY, SH.SOH_DELIVERY_DATE)
+        //            ORDER BY DATEPART(WEEKDAY, SH.SOH_DELIVERY_DATE);
+        //        ";
+
+        //        var cmd = new SqlCommand(query, conn);
+
+        //        if (salesmanId > 0)
+        //        {
+        //            cmd.Parameters.AddWithValue("@SalesmanID", salesmanId);
+        //        }
+
+        //        cmd.Parameters.AddWithValue("@StartDate", sunday);
+        //        cmd.Parameters.AddWithValue("@EndDate", saturday);
+
+
+        //        conn.Open();
+        //        using (var reader = cmd.ExecuteReader())
+        //        {
+        //            while (reader.Read())
+        //            {
+        //                orders.Add(new DailyOrderCount
+        //                {
+        //                    WeekdayName = reader.GetString(0),
+        //                    OrdersCount = reader.GetInt32(1)
+        //                });
+        //            }
+        //        }
+        //    }
+
+        //    return (orders, sunday, saturday);
+        //}
         private (List<DailyOrderCount> Orders, DateTime Start, DateTime End) GetWeeklyOrdersDataWithRange(int weekOffset = 0, int roleId = 0, int salesmanId = 0)
         {
             var orders = new List<DailyOrderCount>();
             string officeLocation = LocationHelper.GetCurrentOfficeCode(HttpContext);
             var connectionString = _configuration.GetConnectionString(officeLocation);
-
-            var userId = HttpContext.Session.GetString("UserId") ?? User.FindFirstValue("UserId");
-            if (string.IsNullOrEmpty(userId)) return (new List<DailyOrderCount>(), DateTime.Today, DateTime.Today);
-            
 
             int daysToSunday = (int)DateTime.Today.DayOfWeek;
             DateTime sunday = DateTime.Today.AddDays(-daysToSunday).Date.AddDays(weekOffset * 7);
@@ -280,14 +381,20 @@ namespace SalesMetrics.Controllers
             using (var conn = new SqlConnection(connectionString))
             {
                 var query = @"
-                    SELECT 
-                        DATENAME(WEEKDAY, SH.SOH_DELIVERY_DATE) AS WeekdayName,
-                        COUNT(DISTINCT SH.SOH_NUMBER) AS OrdersCount
-                    FROM SALES_HEADER AS SH
-                    WHERE 
-                        SH.SOH_DELIVERY_DATE >= @StartDate
-                        AND SH.SOH_DELIVERY_DATE <= @EndDate
-                ";
+            SELECT 
+                DATENAME(WEEKDAY, SH.SOH_DELIVERY_DATE) AS WeekdayName,
+                COUNT(DISTINCT SH.SOH_NUMBER) AS OrdersCount,
+                SUM(CASE
+                    WHEN SH.SOH_TOTAL_AMOUNT = 0 AND AR.ARO_INVOICE_AMOUNT IS NOT NULL THEN AR.ARO_INVOICE_AMOUNT
+                    WHEN SH.SOH_TOTAL_AMOUNT = 0 AND AR.ARO_INVOICE_AMOUNT IS NULL THEN 0
+                    ELSE SH.SOH_TOTAL_AMOUNT
+                END) AS TotalOrderAmount
+            FROM SALES_HEADER AS SH
+            LEFT JOIN AR_OPEN_ITEM AR ON SH.SOH_NUMBER = AR.ARO_SALES_ORDER_NUMBER
+            WHERE 
+                SH.SOH_DELIVERY_DATE BETWEEN @StartDate AND @EndDate
+                AND SH.SOH_CURRENT_STATUS <> 4
+                AND SH.SOH_CANCELED_DATE IS NULL";
 
                 if (salesmanId > 0)
                 {
@@ -295,22 +402,16 @@ namespace SalesMetrics.Controllers
                 }
 
                 query += @"
-                    GROUP BY 
-                        DATENAME(WEEKDAY, SH.SOH_DELIVERY_DATE),
-                        DATEPART(WEEKDAY, SH.SOH_DELIVERY_DATE)
-                    ORDER BY DATEPART(WEEKDAY, SH.SOH_DELIVERY_DATE);
-                ";
+            GROUP BY 
+                DATENAME(WEEKDAY, SH.SOH_DELIVERY_DATE),
+                DATEPART(WEEKDAY, SH.SOH_DELIVERY_DATE)
+            ORDER BY DATEPART(WEEKDAY, SH.SOH_DELIVERY_DATE);";
 
                 var cmd = new SqlCommand(query, conn);
-
-                if (salesmanId > 0)
-                {
-                    cmd.Parameters.AddWithValue("@SalesmanID", salesmanId);
-                }
-
                 cmd.Parameters.AddWithValue("@StartDate", sunday);
                 cmd.Parameters.AddWithValue("@EndDate", saturday);
-
+                if (salesmanId > 0)
+                    cmd.Parameters.AddWithValue("@SalesmanID", salesmanId);
 
                 conn.Open();
                 using (var reader = cmd.ExecuteReader())
@@ -320,7 +421,8 @@ namespace SalesMetrics.Controllers
                         orders.Add(new DailyOrderCount
                         {
                             WeekdayName = reader.GetString(0),
-                            OrdersCount = reader.GetInt32(1)
+                            OrdersCount = reader.GetInt32(1),
+                            TotalOrderAmount = reader.IsDBNull(2) ? 0 : Convert.ToDecimal(reader.GetDouble(2))
                         });
                     }
                 }
@@ -330,13 +432,24 @@ namespace SalesMetrics.Controllers
         }
 
         [HttpGet]
-        public JsonResult GetWeeklyOrders(int weekOffset = 0, int salesmanId = 0)
+        public JsonResult GetWeeklyOrders(int weekOffset = 0, int? filterSalesmanId = null)
         {
             int roleId = Convert.ToInt32(HttpContext.Session.GetString("RoleId"));
+            int effectiveSalesmanId = 0;
 
-            var (orders, _, _) = GetWeeklyOrdersDataWithRange(weekOffset, roleId, salesmanId); // Fetch the weekly orders data
+            if (roleId == 2)
+            {
+                effectiveSalesmanId = Convert.ToInt32(HttpContext.Session.GetInt32("SalesmanId"));
+            }
+            else if (roleId == 1 || roleId == 3 || roleId == 4)
+            {
+                effectiveSalesmanId = filterSalesmanId ?? 0;
+            }
+
+            var (orders, _, _) = GetWeeklyOrdersDataWithRange(weekOffset, roleId, effectiveSalesmanId);
             return Json(orders);
         }
+
 
         private TransactionSummary GetTransactionSummary(string connectionString, DateTime? startDate, DateTime? endDate, int roleId = 0, int salesmanId = 0)
         {
@@ -721,12 +834,10 @@ namespace SalesMetrics.Controllers
 
 
             int roleId = int.Parse(User.FindFirst("RoleId")?.Value ?? "0");
-            //var roleId = Convert.ToInt32(HttpContext.Session.GetString("RoleId"));
 
             // Week starts on Sunday
             int daysToSunday = (int)DateTime.Today.DayOfWeek;
             DateTime startOfWeek = DateTime.Today.AddDays(-daysToSunday).Date.AddDays(weekOffset * 7);
-
 
             var daysMap = new Dictionary<string, int>
             {
@@ -764,6 +875,12 @@ namespace SalesMetrics.Controllers
                                AND CASE WHEN ITM_PRIVATE_LABEL = '' THEN ITM_ID_FIRST + '-' + ITM_ID_LAST 
                                         ELSE ITM_PRIVATE_LABEL + ' ' + ITM_PRIVATE_LABEL_2 END NOT LIKE '%Metal%'
                             ), 0.00) AS Qty,
+
+                        CASE 
+                            WHEN S.SOH_TOTAL_AMOUNT = 0 AND AR.ARO_INVOICE_AMOUNT IS NOT NULL THEN AR.ARO_INVOICE_AMOUNT
+                            WHEN S.SOH_TOTAL_AMOUNT = 0 AND AR.ARO_INVOICE_AMOUNT IS NULL THEN 0
+                            ELSE S.SOH_TOTAL_AMOUNT
+                            END as OrderTotal,
 
                         ISNULL((
 		                    SELECT 
@@ -829,6 +946,7 @@ namespace SalesMetrics.Controllers
                         LEFT JOIN dbo.PRICE_CODES as P on CUS.CUM_PRICE_CODE = P.IPC_PRICE_CODE
                         LEFT JOIN [dbo].[WAREHOUSE_MASTER] ON [WHS_WAREHOUSE_NUMBER] = [SOH_WHSMAS_ID]
                         LEFT JOIN [dbo].[SALESMAN_MASTER] as SM on S.SOH_SMNMAS_ID = SM.SMN_SMNMAS_ID
+                        LEFT JOIN dbo.AR_OPEN_ITEM as AR on S.SOH_NUMBER = AR.ARO_SALES_ORDER_NUMBER
 
                     WHERE S.SOH_DELIVERY_DATE = @FromDate 
                       AND SOH_CURRENT_STATUS <> 4
@@ -867,6 +985,7 @@ namespace SalesMetrics.Controllers
                         City = reader["City"]?.ToString(),
                         OrderType = reader["OrderType"]?.ToString(),
                         Qty = Convert.ToDouble(reader["Qty"]),
+                        OrderTotal = Math.Round(Convert.ToDecimal(reader["OrderTotal"]), 2),
                         UnitNumber = reader["UnitNumber"]?.ToString(),
                         UnitType = reader["UnitType"]?.ToString(),
                         DeliveryDate = reader["DeliveryDate"]?.ToString(),
@@ -889,7 +1008,7 @@ namespace SalesMetrics.Controllers
             });
         }
 
-        private List<SalesTask> GetTodayTasks(int userId, int locationId)
+        private List<SalesTask> GetTodayTasks(int users_Id, int locationId)
         {
             var results = new List<SalesTask>();
             var connectionString = _configuration.GetConnectionString("SalesMetrics");
@@ -899,13 +1018,14 @@ namespace SalesMetrics.Controllers
                 var cmd = new SqlCommand(@"
                 SELECT TaskID, Title, Description, DueDate, Status, Property, Type, CreatedBy
                 FROM Tasks
-                WHERE AssignedTo = @UserId
+                WHERE AssignedTo = @Users_Id
                   AND CAST(DueDate AS DATE) >= CAST(GETDATE() AS DATE)
                   AND (CancelledDate IS NULL AND CompletedDate IS NULL)
                   AND Location = @LocationId
+                  AND Status <> 'Deleted'
                 ORDER BY DueDate", conn);
 
-                cmd.Parameters.AddWithValue("@UserId", userId);
+                cmd.Parameters.AddWithValue("@Users_Id", users_Id);
                 cmd.Parameters.AddWithValue("@LocationId", locationId);
 
                 conn.Open();

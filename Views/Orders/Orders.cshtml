@@ -63,10 +63,11 @@
                 <th>City</th>
                 <th>Order Type</th>
                 <th>Qty</th>
+                <th>Order $</th>
                 <th>Unit #</th>
                 <th>Unit Type</th>
-                <th>Delivery</th>
-                <th>Move-In</th>
+                <th>Order Date</th>
+                <th>Install Date</th>
                 <th>Class</th>
                 <th>Description</th>
                 <th>Ordered By</th>
@@ -90,15 +91,23 @@
                         <td>@o.City</td>
                         <td>@o.OrderType</td>
                         <td>@o.Qty</td>
+                        <td data-order="@o.OrderTotal">@o.OrderTotal?.ToString("C")</td>
                         <td>@o.UnitNumber</td>
                         <td>@o.UnitType</td>
-                        <td>@o.DeliveryDate</td>
-                        <td>@o.MoveInDate</td>
+                        <td data-order="@o.OrderDate)">@o.OrderDate</td>
+                        <td data-order="@o.DeliveryDate">@o.DeliveryDate</td>
                         <td>@o.ProductClass</td>
                         <td>@o.ProductDescription</td>
                         <td>@o.OrderedBy</td>
                         <td>@o.LocationName</td>
-                        <td></td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-orange create-task" 
+                                data-property="@o.PropertyName"
+                                data-propertyid="@o.PropertyId"
+                                data-orderid="@o.OrderID">
+                                Create Task
+                            </button>
+                        </td>
                     </tr>
                 }
             }
@@ -110,57 +119,7 @@
     </table>
 </div>
 
-@* Task Modal for Work Orders *@
-<div class="modal fade" id="workOrderTaskModal" tabindex="-1" role="dialog">
-    <div class="modal-dialog" role="document">
-        <form id="workOrderTaskForm" asp-controller="Tasks" asp-action="CreateFromWorkOrder" method="post">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Create Task from Work Order</h5>
-                </div>
-                <div class="modal-body">
-                    <div class="form-group">
-                        <label>Title</label>
-                        <input type="text" class="form-control" name="Title" />
-                    </div>
-                    <div class="form-group">
-                        <label>Description</label>
-                        <textarea name="Description" class="form-control"></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label>Due Date</label>
-                        <input type="datetime-local" class="form-control" name="DueDate" />
-                    </div>
-                    <div class="form-group">
-                        <label>Task Type</label>
-                        <select class="form-control" name="Type">
-                            <option>Follow Up</option>
-                            <option>Site Visit</option>
-                            <option>Quality Check</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Property</label>
-                        <input type="text" class="form-control" name="Property" readonly />
-                    </div>
-                    <div class="form-group">
-                        <label>Status</label>
-                        <select class="form-control" name="Status">
-                            <option value="Pending">Pending</option>
-                            <option value="Assigned">Assigned</option>
-                            <option value="In Progress">In Progress</option>
-                            <option value="Completed">Completed</option>
-                        </select>
-                    </div>
-                    <input type="hidden" name="AssignedTo" id="assignedToWorkOrder" />
-                </div>
-                <div class="modal-footer">
-                    <button type="submit" class="btn btn-primary">Save Task</button>
-                </div>
-            </div>
-        </form>
-    </div>
-</div>
+<div id="taskModalContainer"></div>
 
 <!-- Work Order Details Modal -->
 <div class="modal fade" id="workOrderDetailModal" tabindex="-1" role="dialog">
@@ -252,10 +211,15 @@
                     { data: 'city' },
                     { data: 'orderType' },
                     { data: 'qty' },
+                    { 
+                        data: 'orderTotal',
+                        render: $.fn.dataTable.render.number(',', '.', 2, '$'),
+                        className: 'text-end'
+                    },
                     { data: 'unitNumber' },
                     { data: 'unitType' },
+                    { data: 'orderDate' },
                     { data: 'deliveryDate' },
-                    { data: 'moveInDate' },
                     { data: 'productClass' },
                     { data: 'productDescription' },
                     { data: 'orderedBy' },
@@ -264,6 +228,7 @@
                         render: function (data, type, row) {
                             return `<button class="btn btn-sm btn-primary create-task"
                                              data-property="${row.propertyName}"
+                                             data-propertyid="${row.propertyID}"
                                              data-orderid="${row.orderID}">
                                          Create Task
                                     </button>`;
@@ -292,12 +257,10 @@
                     {
                         extend: 'excelHtml5',
                         text: '<i class="bi bi-file-earmark-excel"></i> Excel',
-                        className: 'btn btn-outline-success rounded-pill shadow-sm me-2'
-                    },
-                    {
-                        extend: 'pdfHtml5',
-                        text: '<i class="bi bi-file-earmark-pdf"></i> PDF',
-                        className: 'btn btn-outline-danger rounded-pill shadow-sm'
+                        className: 'btn btn-outline-success rounded-pill shadow-sm me-2',
+                        exportOptions: {
+                            columns: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14]  // exclude the IDBTransaction column
+                        }
                     }
                 ],
                 searchPanes: {
@@ -336,22 +299,31 @@
     <script>
         $(document).ready(function () {
             $('#orderTable').on('click', '.create-task', function () {
-                const property = $(this).data('property');
-                const orderId = $(this).data('orderid');
+                const propertyName = $(this).data('property');
+                const propertyID = $(this).data('propertyid');
+                const orderID = $(this).data('orderid');
 
-                const title = `Follow-up for Order ${orderId}`;
-                const description = `Follow-up task for ${property} (Order ID: ${orderId})`;
-                const dueDate = new Date();
-                dueDate.setHours(dueDate.getHours() + 24);
+                // Use AJAX to load full modal partial
+                // $.get('/Tasks/GetCreateTaskModal?source=Orders&property=' + encodeURIComponent(property) + '&orderId=' + orderId, function (html) {
+                //     $('#taskModalContainer').html(html); // Replace this container with modal HTML
+                //     $('#createTaskModal').modal('show');
+                // });
 
-                $('#workOrderTaskModal input[name="Title"]').val(title);
-                $('#workOrderTaskModal textarea[name="Description"]').val(description);
-                $('#workOrderTaskModal input[name="DueDate"]').val(dueDate.toISOString().slice(0, 16));
-                $('#workOrderTaskModal input[name="Property"]').val(property);
-
-                $('#assignedToWorkOrder').val('@Context.Session.GetString("UserId")');
-
-                $('#workOrderTaskModal').modal('show');
+                $.get('/Tasks/GetCreateTaskModal', {
+                    source: "Orders",
+                    property: propertyName,
+                    propertyId: propertyID,
+                    orderId: orderID
+                }).done(function (html) {
+                    $('#taskModalContainer').html(html); // Replace this container with modal HTML
+                    $('#createTaskModal').modal('show'); // Show the modal
+                }).fail(function () {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error Creating Task from Work Order',
+                        text: 'Failed to load task creation form. Please try again later.'
+                    });
+                })
             });
 
             $('#workOrderTaskForm').on('submit', function (e) {
@@ -399,4 +371,5 @@
             });
         });
     </script>
+    
 }

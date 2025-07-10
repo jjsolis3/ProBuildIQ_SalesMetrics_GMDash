@@ -29,7 +29,7 @@ namespace SalesMetrics.Services
             });
         }
 
-        private async Task<string?> EnsureValidAccessTokenAsync(int userId, string refreshToken)
+        private async Task<string?> EnsureValidAccessTokenAsync(int users_Id, string refreshToken)
         {
             var tokenHelper = new GoogleTokenHelper(_configuration);
             var newToken = await tokenHelper.RefreshAccessTokenAsync(refreshToken);
@@ -39,9 +39,9 @@ namespace SalesMetrics.Services
                 using var conn = new SqlConnection(_configuration.GetConnectionString("SalesMetrics"));
                 await conn.OpenAsync();
 
-                var cmd = new SqlCommand("UPDATE Users SET GoogleAccessToken = @AccessToken WHERE UserID = @UserID", conn);
+                var cmd = new SqlCommand("UPDATE Users SET GoogleAccessToken = @AccessToken WHERE Users_ID = @Users_ID", conn);
                 cmd.Parameters.AddWithValue("@AccessToken", newToken);
-                cmd.Parameters.AddWithValue("@UserID", userId);
+                cmd.Parameters.AddWithValue("@Users_ID", users_Id);
                 await cmd.ExecuteNonQueryAsync();
 
                 return newToken;
@@ -67,7 +67,7 @@ namespace SalesMetrics.Services
                 .Replace("=", ""); // base64url encoding
         }
 
-        public async Task<bool> SendEmailAsync(int userId, string accessToken, string refreshToken, string to, string subject, string body, string fromEmail)
+        public async Task<bool> SendEmailAsync(int users_Id, string accessToken, string refreshToken, string to, string subject, string body, string fromEmail)
         {
             var service = GetService(accessToken);
             var rawMessage = CreateRawEmail(to, fromEmail, subject, body);
@@ -81,7 +81,7 @@ namespace SalesMetrics.Services
             }
             catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == HttpStatusCode.Unauthorized)
             {
-                var refreshed = await EnsureValidAccessTokenAsync(userId, refreshToken);
+                var refreshed = await EnsureValidAccessTokenAsync(users_Id, refreshToken);
                 if (!string.IsNullOrEmpty(refreshed))
                 {
                     var newService = GetService(refreshed);

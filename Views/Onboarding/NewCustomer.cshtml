@@ -1,0 +1,353 @@
+﻿@model SalesMetrics.Models.NewCustomerFormRequest
+
+@{
+    ViewBag.Title = "New Customer Request Form";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+@section styles {
+    <style>
+        #submitButton:disabled {
+            background-color: #ccc;
+            border-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        #progressStatus .nav-link.active {
+            font-weight: bold;
+            color: #0d6efd; /* Bootstrap primary blue */
+        }
+
+        #progressStatus .list-group-item.active {
+            background-color: #e7f1ff;
+            border-color: #b6d4fe;
+        }
+    </style>
+}
+
+<form asp-action="Submit" asp-controller="Onboarding" method="post">
+    <div class="row">
+        <div class="col-md-9">
+            <div class="card">
+                <div class="card-nav shadow">
+                    <!-- Tabs -->
+                    <ul class="nav nav-tabs" id="formTabs" role="tablist">
+                        <li class="nav-item">
+                            <a class="nav-link active" data-bs-toggle="tab" href="#tab-property" role="tab">Property Info</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" data-bs-toggle="tab" href="#tab-management" role="tab">Management Company</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" data-bs-toggle="tab" href="#tab-billing" role="tab">Billing Info</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" data-bs-toggle="tab" href="#tab-income" role="tab">Income Info</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" data-bs-toggle="tab" href="#tab-products" role="tab">Products</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" data-bs-toggle="tab" href="#tab-notes" role="tab">Special Notes</a>
+                        </li>
+                    </ul>
+                </div>
+                <!-- Add Card Header Section -->
+                <div class="card-header bg-orange">
+                    <h5 id="activeTabHeader" class="card-title text-white mb-0">Property Info</h5>
+                </div>
+
+                <!-- Add Card Body Section -->
+                <div class="card-body shadow">
+                    <!-- Tab Content -->
+                    <div class="tab-content p-3 border border-top-0">
+                        <div class="tab-pane fade show active" id="tab-property" role="tabpanel">
+                            @Html.Partial("_TabProperty", Model)
+                        </div>
+                        <div class="tab-pane fade" id="tab-management" role="tabpanel">
+                            @Html.Partial("_TabManagement", Model)
+                        </div>
+                        <div class="tab-pane fade" id="tab-billing" role="tabpanel">
+                            @Html.Partial("_TabBilling", Model)
+                        </div>
+                        <div class="tab-pane fade" id="tab-income" role="tabpanel">
+                            @Html.Partial("_TabIncome", Model)
+                        </div>
+                        <div class="tab-pane fade" id="tab-products" role="tabpanel">
+                            @Html.Partial("_TabProducts", Model)
+                        </div>
+                        <div class="tab-pane fade" id="tab-notes" role="tabpanel">
+                            @Html.Partial("_TabNotes", Model)
+                        </div>
+                    </div>   
+                </div>
+                <div class="card-footer shadow">
+                    <div class="d-flex justify-content-between mt-3">
+                        <button type="button" class="btn btn-outline-secondary" id="prevStep">Previous</button>
+                        <button type="button" class="btn btn-outline-info" id="nextStep">Next</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <!-- Progress Sidebar -->
+            <div class="card position-sticky top-0">
+                <div class="card-body">
+                    <h5 class="card-title">Form Progress</h5>
+                    <ul class="list-group small" id="progressStatus">
+                        <li class="list-group-item d-flex justify-content-between">
+                            <a class="nav-link" data-bs-toggle="tab" href="#tab-property" role="tab">
+                                Property
+                            </a> 
+                            <i class="bi bi-circle text-muted" id="status-property"></i>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between">
+                            <a class="nav-link" data-bs-toggle="tab" href="#tab-management" role="tab">
+                                Management </a>
+                            <i class="bi bi-circle text-muted" id="status-management"></i>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between">
+                            <a class="nav-link" data-bs-toggle="tab" href="#tab-billing" role="tab">
+                            Billing </a><i class="bi bi-circle text-muted" id="status-billing"></i>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between">
+                            <a class="nav-link" data-bs-toggle="tab" href="#tab-income" role="tab">
+                            Income </a><i class="bi bi-circle text-muted" id="status-income"></i>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between">
+                            <a class="nav-link" data-bs-toggle="tab" href="#tab-products" role="tab">
+                            Products </a><i class="bi bi-circle text-muted" id="status-products"></i>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between">
+                            <a class="nav-link" data-bs-toggle="tab" href="#tab-notes" role="tab">
+                            Notes </a><i class="bi bi-circle text-muted" id="status-notes"></i>
+                        </li>
+                    </ul>
+                    <div class="text-end mt-4">
+                        @* <button type="submit" class="btn btn-orange text-white">Submit Request</button> *@
+                        <button type="submit" id="submitButton" class="btn btn-orange text-white" disabled>Submit Request</button>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+        @* SweetAlert success message if available *@
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <text>
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Success!',
+                    text: '@TempData["SuccessMessage"]',
+                    showCancelButton: true,
+                    confirmButtonText: '🆕 Add Another',
+                    cancelButtonText: '📋 View Submissions',
+                    confirmButtonColor: '#198754',
+                    cancelButtonColor: '#0d6efd'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        window.location.href = '/Onboarding/NewCustomer';
+                    } else {
+                        window.location.href = '/Onboarding/Submissions'; // change to your submissions route
+                    }
+                });
+            </text>
+        }
+        });
+    </script>
+    <script>
+        function updateProgress(tabId, iconId) {
+            const inputs = document.querySelectorAll(`#${tabId} input, #${tabId} textarea`);
+            let total = inputs.length;
+            let filled = 0;
+
+            inputs.forEach(input => {
+                if (input.type === 'checkbox' || input.type === 'radio') {
+                    if (input.checked) filled++;
+                } else if (input.value.trim() !== "") {
+                    filled++;
+                }
+            });
+
+            const icon = document.getElementById(iconId);
+            if (filled === 0) {
+                icon.className = "bi bi-circle text-muted";
+                return false;
+            } else if (filled < total) {
+                icon.className = "bi bi-exclamation-circle text-warning";
+                return false;
+            } else {
+                icon.className = "bi bi-check-circle-fill text-success";
+                return true;
+            }
+        }
+
+        // function checkAllTabs() {
+        //     const complete = [
+        //         updateProgress('tab-property', 'status-property'),
+        //         updateProgress('tab-management', 'status-management'),
+        //         updateProgress('tab-billing', 'status-billing'),
+        //         updateProgress('tab-income', 'status-income'),
+        //         updateProgress('tab-products', 'status-products'),
+        //         updateProgress('tab-notes', 'status-notes')
+        //     ];
+
+        //     const allComplete = complete.every(v => v === true);
+        //     const submitBtn = document.getElementById('submitButton');
+        //     if (submitBtn) submitBtn.disabled = !allComplete;
+        // }
+
+        function checkAllTabs() {
+            const tabs = [
+                { id: 'tab-property', icon: 'status-property' },
+                { id: 'tab-management', icon: 'status-management' },
+                { id: 'tab-billing', icon: 'status-billing' },
+                { id: 'tab-income', icon: 'status-income' },
+                { id: 'tab-products', icon: 'status-products' },
+                { id: 'tab-notes', icon: 'status-notes' }
+            ];
+
+            let allComplete = true;
+
+            tabs.forEach(({ id, icon }) => {
+                const valid = updateProgress(id, icon);
+                if (!valid) allComplete = false;
+            });
+
+            const submitBtn = document.getElementById('submitButton');
+            if (submitBtn) {
+                submitBtn.disabled = !allComplete;
+            }
+        }
+
+
+        document.addEventListener('input', checkAllTabs);
+        document.addEventListener('DOMContentLoaded', checkAllTabs);
+
+    </script>
+    <script>
+        function updateActiveTabHeader(title) {
+            const header = document.getElementById("activeTabHeader");
+            if (header) header.textContent = title;
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const navTabs = document.querySelectorAll('#formTabs a[data-bs-toggle="tab"]');
+            const trackerTabs = document.querySelectorAll('#progressStatus a[data-bs-toggle="tab"]');
+
+            function activateTabByHref(href) {
+                const navTarget = Array.from(navTabs).find(tab => tab.getAttribute('href') === href);
+                if (navTarget) {
+                    const tabInstance = bootstrap.Tab.getOrCreateInstance(navTarget);
+                    tabInstance.show();
+                }
+            }
+
+            navTabs.forEach(tab => {
+                tab.addEventListener('shown.bs.tab', function (event) {
+                    const tabText = event.target.textContent.trim();
+                    updateActiveTabHeader(tabText);
+
+                    const href = event.target.getAttribute('href');
+                    document.querySelectorAll('#progressStatus .nav-link').forEach(lnk => lnk.classList.remove('active'));
+                    document.querySelector(`#progressStatus .nav-link[href='${href}']`)?.classList.add('active');
+                });
+            });
+
+            trackerTabs.forEach(link => {
+                link.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    const href = this.getAttribute('href');
+
+                    // Sync nav tab
+                    activateTabByHref(href);
+
+                    // Highlight active tracker tab
+                    document.querySelectorAll('#progressStatus .list-group-item').forEach(li => li.classList.remove('active'));
+                    const activeLink = document.querySelector(`#progressStatus .nav-link[href='${href}']`);
+                    if (activeLink) {
+                        activeLink.classList.add('active');
+                        activeLink.closest('.list-group-item')?.classList.add('active');
+                    }
+                });
+            });
+
+            // Set initial header
+            const activeNav = document.querySelector('#formTabs .nav-link.active');
+
+            if (activeNav) {
+                updateActiveTabHeader(activeNav.textContent.trim());
+            }
+        });
+    </script>
+    <script>
+        const tabList = Array.from(document.querySelectorAll('#formTabs .nav-link'));
+        const nextBtn = document.getElementById('nextStep');
+        const prevBtn = document.getElementById('prevStep');
+
+        function getActiveTabIndex() {
+            return tabList.findIndex(tab => tab.classList.contains('active'));
+        }
+
+        function goToTab(index) {
+            if (index >= 0 && index < tabList.length) {
+                const tab = tabList[index];
+                const tabInstance = bootstrap.Tab.getOrCreateInstance(tab);
+                tabInstance.show();
+            }
+        }
+
+        if (nextBtn && prevBtn) {
+            nextBtn.addEventListener('click', () => {
+                const current = getActiveTabIndex();
+                goToTab(current + 1);
+            });
+
+            prevBtn.addEventListener('click', () => {
+                const current = getActiveTabIndex();
+                goToTab(current - 1);
+            });
+        }
+    </script>
+    <script>
+        let productCount = 0;
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const addBtn = document.getElementById('addProduct');
+            if (!addBtn) return;
+
+            addBtn.addEventListener('click', function () {
+                const tbody = document.querySelector('#productsTable tbody');
+                if (!tbody) return;
+
+                const index = productCount++;
+                const row = `
+                    <tr>
+                        <td><input name="Products[${index}].ProductClass" class="form-control" /></td>
+                        <td><input name="Products[${index}].Style" class="form-control" /></td>
+                        <td><input name="Products[${index}].Color" class="form-control" /></td>
+                        <td><input name="Products[${index}].Price" type="number" step="0.01" class="form-control" /></td>
+                        <td><button type="button" class="btn btn-sm btn-danger remove-product">X</button></td>
+                    </tr>
+                `;
+                tbody.insertAdjacentHTML('beforeend', row);
+            });
+
+            // Remove product row
+            document.addEventListener('click', function (e) {
+                if (e.target.classList.contains('remove-product')) {
+                    e.target.closest('tr')?.remove();
+                }
+            });
+        });
+    </script>
+}

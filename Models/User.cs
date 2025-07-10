@@ -7,7 +7,7 @@ namespace SalesMetrics.Models
 {
     public class User
     {
-        public int User_ID { get; set; }  // This maps to the SQL identity column
+        public int Users_ID { get; set; }  // This maps to the SQL identity column
         public int UserID { get; set; }   // ERP User ID
         public string? FirstName { get; set; }
         public string? LastName { get; set; }
@@ -39,6 +39,7 @@ namespace SalesMetrics.Models
         public int SalesmanID { get; set; } // Maps to ERP SalemanID
         public string? SalesmanNumber { get; set; } // Maps to ERP Salesman Number
 
+        public int RoleId { get; set; }  // Maps to SalesMetrics RoleID
         public int LocationId { get; set; }
         public string LocationName()
         {

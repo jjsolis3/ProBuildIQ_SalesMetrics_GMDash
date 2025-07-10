@@ -8,62 +8,72 @@
 }
 
 @section styles {
-    <style>
-        .daily-task-card {
-            animation: fadeIn 0.3s ease-in;
-        }
+<style>
+    .daily-task-card {
+    animation: fadeIn 0.3s ease-in;
+    }
 
-        .bg-orange {
-            background-color: darkorange;
-        }
+    .bg-orange {
+    background-color: darkorange;
+    }
 
-        .kpi-tile {
-            height: 100%;
-            min-height: 60px;
-            transition: all 0.3s ease-in-out;
-        }
+    .kpi-tile {
+    height: 100%;
+    min-height: 60px;
+    transition: all 0.3s ease-in-out;
+    }
 
-        .kpi-label {
-            font-size: clamp(0.8rem, 1.1vw, 1.8rem);
-            font-weight: 300;
-            opacity: 0.9;
-        }
+    .kpi-label {
+    font-size: clamp(0.8rem, 1.1vw, 1.8rem);
+    font-weight: 300;
+    opacity: 0.9;
+    }
 
-        .kpi-value {
-            font-size: clamp(1.0rem, 1.8vw, 1.5rem);
-            font-weight: 500;
-            line-height: 0.5;
-            word-break: break-word;
-            color: black;
-        }
+    .kpi-value {
+    font-size: clamp(1.0rem, 1.8vw, 1.5rem);
+    font-weight: 500;
+    line-height: 0.5;
+    word-break: break-word;
+    color: black;
+    }
 
-        .table-orange-light {
-            background-color: #ffd1bc !important;
-        }
+    .table-orange-light {
+    background-color: #ffd1bc !important;
+    }
 
-        .header-orange-subtle {
-            background-color: #ffd1bc;
-        }
+    .header-orange-subtle {
+    background-color: #ffd1bc;
+    }
 
-        .header-sf-orange {
-            background-color: #ff6720;
-            color: white;
-        }
+    .header-sf-orange {
+    background-color: #ff6720;
+    color: white;
+    }
 
-        .header-blue {
-            background-color: #d9edf7;
-        }
+    .header-blue {
+    background-color: #d9edf7;
+    }
 
-        .header-yellow {
-            background-color: #fcf8e3;
-        }
+    .header-yellow {
+    background-color: #fcf8e3;
+    }
 
-        #installerRange:hover {
-            border-color: var(--bs-orange);
-            background-color: #fff3e0;
-        }
+    #installerRange:hover {
+        border-color: var(--bs-orange);
+        background-color: #fff3e0;
+    }
 
-    </style>
+    #salesRange:hover {
+        border-color: var(--bs-orange);
+        background-color: #fff3e0;
+    }
+
+    #rtjRange:hover {
+        border-color: var(--bs-orange);
+        background-color: #fff3e0;
+    }
+
+</style>
 }
 
 @{
@@ -98,10 +108,10 @@
 <div class="row">
     <!-- SALES DATA | MTD -->
     <div class="col-xl-3 col-md-3 col-sm-6">
-        <div class="card shadow">
-            <div class="card p-1">
-                <div class="card-header">
-                    <h5 class="mb-0">
+        @* <div class="card shadow"> *@
+            <div class="card p-0">
+            <div class="card-header bg-orange">
+                <h5 class="mb-0 text-white">
                         @(ViewBag.SelectedLocationsId == 0 ? "MTD All Branches" : $"MTD for {ViewBag.LocationFullName}")
                         <span class="badge bg-info ms-2">@ViewBag.MTDStartDateRange</span>
                     </h5>
@@ -113,14 +123,14 @@
                     </div>
                 </div>
             </div>
-        </div>
+        @* </div> *@
     </div>
     <!-- SALES DATA | YTD -->
     <div class="col-xl-3 col-md-3 col-sm-6">
-        <div class="card shadow">
-            <div class="card p-1">
-                <div class="card-header">
-                    <h5 class="mb-0">
+        @* <div class="card shadow"> *@
+            <div class="card p-0">
+            <div class="card-header bg-orange">
+                <h5 class="mb-0 text-white">
                         @(ViewBag.SelectedLocationsId == 0 ? "YTD All Branches" : $"YTD for {ViewBag.LocationFullName}")
                         <span class="badge bg-info ms-2">@ViewBag.YTDStartDateRange</span>
                     </h5>
@@ -132,15 +142,16 @@
                     </div>
                 </div>
             </div>
-        </div>
+        @* </div> *@
     </div>
     <!-- SALES DATA | ONLINE AMOUNT $ -->
     <div class="col-xl-3 col-md-3 col-sm-6">
-        <div class="card shadow">
-            <div class="card p-1">
-                <div class="card-header">
-                    <h5 class="mb-0">
-                        @(ViewBag.SelectedLocationsId == 0 ? "Online Order | All Branches" : $"Online Orders for {ViewBag.LocationFullName}")
+        @* <div class="card shadow"> *@
+            <div class="card p-0">
+            <div class="card-header bg-orange">
+                <h5 class="mb-0 text-white">
+                        @(ViewBag.SelectedLocationsId == 0 ? "Online Order | All Branches " : $"Online Orders for {ViewBag.LocationFullName} ")
+                        <span class="small">(YTD)</span>
                     </h5>
                 </div>
                 <div class="card-body table-responsive p-1 mt-1">
@@ -150,15 +161,16 @@
                     </div>
                 </div>
             </div>
-        </div>
+        @* </div> *@
     </div>
     <!-- SALES DATA | ONLINE PERCENTAGE % -->
     <div class="col-xl-3 col-md-3 col-sm-6">
-        <div class="card shadow">
-            <div class="card p-1">
-                <div class="card-header">
-                    <h5 class="mb-0">
-                        @(ViewBag.SelectedLocationsId == 0 ? "Online % | All Branches" : $"Online % for {ViewBag.LocationFullName}")
+        @* <div class="card shadow"> *@
+            <div class="card p-0">
+                <div class="card-header bg-orange">
+                    <h5 class="mb-0 text-white">
+                        @(ViewBag.SelectedLocationsId == 0 ? "Online % | All Branches " : $"Online % for {ViewBag.LocationFullName} ")
+                        <span class="small">(YTD)</span>
                     </h5>
                 </div>
                 <div class="card-body table-responsive p-1 mt-1">
@@ -168,16 +180,16 @@
                     </div>
                 </div>
             </div>
-        </div>
+        @* </div> *@
     </div>
 </div>
 
-@if (ViewBag.SelectedLocationsId == 0)
-{
+@* @if (ViewBag.SelectedLocationsId == 0)
+{ *@
     <!-- SALES RANKING BY OFFICE -->
     <div class="row" >
         <!-- SALES RANKING BY OFFICE | MTD / YTD -->
-        <div class="col-md-6 col-sm-12">
+        <div class="col-md-5 col-sm-12">
             <div class="card shadow">
                 <div class="card">
                     <div class="card-header">
@@ -206,38 +218,40 @@
             </div>
         </div>
         <!-- Online Ordering by Branch Table -->
-        <div class="col-md-6 col-sm-12">
+        <div class="col-md-7 col-sm-12">
             <div class="card shadow">
                 <div class="card">
-                    <div class="card-header">
-                        <h5>Online Orders by Seamless Branch</h5>
+                    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-5">
+                        <div>
+                            <h5 class="mb-0">Order Summary by Seamless Branch</h5>
+                            <small id="salesRangeLabel" class="text-muted">
+                                @ViewBag.salesRangeLabel
+                            </small>
+
+                        </div>
+
+                        <div class="input-group input-group-sm w-auto gap-2">
+                            <label class="input-group-text text-dark" for="salesRange">Date Range</label>
+                            <select id="salesRange" class="form-select border-secondary shadow-sm rounded-pill" style="min-width: 140px;">
+                                <option value="thisweek" selected="@(ViewBag.SalesRange == "thisweek")">This Week</option>
+                                <option value="lastweek" selected="@(ViewBag.SalesRange == "lastweek")">Last Week</option>
+                                <option value="mtd" selected="@(ViewBag.SalesRange == "mtd")">MTD</option>
+                                <option value="lastmonth" selected="@(ViewBag.SalesRange == "lastmonth")">Last Month</option>
+                                <option value="thisquarter" selected="@(ViewBag.SalesRange == "thisquarter")">This Quarter</option>
+                                <option value="lastquarter" selected="@(ViewBag.SalesRange == "lastquarter")">Last Quarter</option>
+                                <option value="ytd" selected="@(ViewBag.SalesRange == "ytd")">YTD</option>
+
+                            </select>
+                        </div>
                     </div>
-                    <table class="table table-bordered table-striped">
-                        <thead>
-                            <tr>
-                                <th>Location</th>
-                                <th>Online $</th>
-                                <th>Online %</th>
-                                <th>Total $</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var item in Model.BranchSalesMetrics)
-                            {
-                                <tr>
-                                    <td class="text-center" style="font-weight: bold;">@item.LocationFullName</td>
-                                    <td>@item.OnlineOrderAmount.ToString("C")</td>
-                                    <td>@item.OnlineOrderPercentage.ToString("0.0")%</td>
-                                    <td>@item.TotalOrderAmount.ToString("C")</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
+                    <div id="salesSummaryContainer">
+                        @await Html.PartialAsync("_SalesSummaryPartial", Model.BranchSalesMetrics)
+                    </div>
                 </div>
             </div>
         </div>
     </div>
-}
+@* } *@
 
 <div class="row mt-2">
     <!-- AR BREAKDOWN CHART -->
@@ -300,15 +314,39 @@
                         <h5>Inventory Evaluation by Product Class | All Seamless Branches</h5>
                     </div>
                     <div class="card-body table-responsive p-2">
+                        @{
+                            var officeTotals = new Dictionary<string, decimal>
+                        {
+                        { "LAX", Model.InventoryByClass.Sum(x => x.LAX_InventoryCost) },
+                        { "LSV", Model.InventoryByClass.Sum(x => x.LSV_InventoryCost) },
+                        { "CHN", Model.InventoryByClass.Sum(x => x.CHN_InventoryCost) },
+                        { "PHX", Model.InventoryByClass.Sum(x => x.PHX_InventoryCost) },
+                        { "SND", Model.InventoryByClass.Sum(x => x.SND_InventoryCost) }
+                        };
+                        }
                         <table class="table table-bordered table-striped text-end">
                             <thead class="table-light text-center">
                                 <tr>
                                     <th>Product Class</th>
-                                    <th>LAX</th>
-                                    <th>LSV</th>
-                                    <th>CHN</th>
-                                    <th>PHX</th>
-                                    <th>SND</th>
+                                    @foreach (var office in new[] { "LAX", "LSV", "CHN", "PHX", "SND" })
+                                    {
+                                        var hasData = officeTotals[office] > 0;
+                                        <th>
+                                            @if (hasData) 
+                                            {
+                                                <a href="#" class="text-decoration-underline text-info fw-bold"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#inventoryModal"
+                                                data-office="@office">
+                                                    @office
+                                                </a>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-dark fw-bold">@office</span>
+                                            }
+                                        </th>
+                                    }
                                 </tr>
                             </thead>
                             <tbody class="text-center">
@@ -332,23 +370,65 @@
     </div>
 </div>
 <div class="row mt-2 align-items-baseline">
-    <!-- INSTALLER ACTIVITY BREAKDOWN -->
-    <div class="col-6 col-sm-12">
-        <div class="card shadow mt-4">
-            <div class="card-header">
-
-                <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-5">
+    <!-- RECENT RTJ ACTIVITY -->
+    <div class="col-xl-5 col-lg-5 col-md-12">
+        <div class="card shadow">
+            <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-5">
+                <div>
                     <h5 class="mb-0 text-nowrap">
-                        Installer Completion Rate by Branch
+                        Recent Inventory Adjustments (RTJ)
                     </h5>
+                    <small id="rtjRangeLabel" class="text-muted">
+                        @ViewBag.rtjRangeLabel
+                    </small>
+
+                </div>
+                <div class="input-group input-group-sm w-auto gap-2">
+                    <label class="input-group-text text-dark" for="rtjRange">
+                        Date Range
+                    </label>
+                    <select id="rtjRange" class="form-select border-secondary shadow-sm rounded-pill"
+                            style="min-width: 140px;">
+                        <option value="week" selected="@(ViewBag.RTJRange == "thisweek")">This Week</option>
+                        <option value="lastweek" selected="@(ViewBag.RTJRange == "lastweek")">Last Week</option>
+                        <option value="mtd" selected="@(ViewBag.RTJRange == "mtd")">MTD</option>
+                        <option value="lastmonth" selected="@(ViewBag.RTJRange == "lastmonth")">Last Month</option>
+                        <option value="thisquarter" selected="@(ViewBag.RTJRange == "thisquarter")">This Quarter</option>
+                        <option value="lastquarter" selected="@(ViewBag.RTJRange == "lastquarter")">Last Quarter</option>
+                        <option value="ytd" selected="@(ViewBag.RTJRange == "ytd")">YTD</option>
+                    </select>
+                </div>
+            </div>
+            <div class="card-body table-responsive p-2">
+                <!-- RJT MODAL -->
+                <div id="rtjTableContainer">
+                    @await Html.PartialAsync("_RTJTablePartial", Model.RecentRTJs)
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- INSTALLER ACTIVITY BREAKDOWN -->
+    <div class="col-md-12 col-xl-7 col-lg-7">
+        <div class="card shadow">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-5">
+                    <div>
+                        <h5 class="mb-0 text-nowrap">
+                            Installer Completion Rate by Branch
+                        </h5>
+                        <small id="installerRangeLabel" class="text-muted">
+                            @ViewBag.installerRangeLabel
+                        </small>
+                    </div>
 
                     <div class="input-group input-group-sm w-auto gap-2">
-                        <label class="input-group-text text-dark " for="installerRange">
+                        <label class="input-group-text text-dark" for="installerRange">
                             Date Range
                         </label>
                         <select id="installerRange" class="form-select border-secondary shadow-sm rounded-pill"
                                 style="min-width: 140px;">
-                            <option value="week" selected="@(ViewBag.InstallerRange == "week")">This Week</option>
+                            <option value="week" selected="@(ViewBag.InstallerRange == "thisweek")">This Week</option>
                             <option value="lastweek" selected="@(ViewBag.InstallerRange == "lastweek")">Last Week</option>
                             <option value="mtd" selected="@(ViewBag.InstallerRange == "mtd")">MTD</option>
                             <option value="lastmonth" selected="@(ViewBag.InstallerRange == "lastmonth")">Last Month</option>
@@ -357,72 +437,63 @@
                         </select>
                     </div>
                 </div>
+            
+                <div class="card-body table-responsive p-2">
 
+                    <div id="installerTableContainer">
+                        @await Html.PartialAsync("~/Views/GMDash/_InstallerTablePartial.cshtml", Model.InstallerCompletionMetrics)
+                    </div>
 
-            </div>
-            <div class="card-body table-responsive p-2">
-
-                <div id="installerTableContainer">
-                    @await Html.PartialAsync("~/Views/GMDash/_InstallerTablePartial.cshtml", Model.InstallerCompletionMetrics)
                 </div>
-
             </div>
         </div>
     </div>
-    <!-- RECENT RTJ ACTIVITY -->
-    <div class="col-6 col-sm-12">
-        <div class="card shadow mt-4">
-            <div class="card-header">
-                <h5>Recent Inventory Adjustments (RTJ)</h5>
+    
+</div>
+
+<!-- ## MODAL SECTION -->
+<!-- INVENTORY SUMMARY MODAL -->
+<div class="modal fade" id="inventoryModal" tabindex="-1" 
+    data-bs-backdrop="static" 
+    data-bs-keyboard="false" 
+    aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-orange text-white">
+                <h5 class="modal-title">Inventory Details - <span id="inventoryModalTitleOffice"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="card-body table-responsive p-2">
-                @{var groupedRTJs = Model.RecentRTJs
-                        .GroupBy(r => r.Location)
-                        .Select(g => new
-                        {
-                            Location = g.Key,
-                            Count = g.Count(),
-                            TotalDebit = g.Sum(x => x.Debit),
-                            TotalCredit = g.Sum(x => x.Credit),
-                            Entries = g.ToList()
-                        }).ToList();
-                }
-                <table class="table table-bordered table-striped" id="rtjTable">
-                    <thead class="table-light text-center">
-                        <tr>
-                            <th class="header-orange-subtle">Location</th>
-                            <th class="header-orange-subtle"># Entries</th>
-                            <th class="header-orange-subtle">Total Debit</th>
-                            <th class="header-orange-subtle">Total Credit</th>
-                            <th class="header-orange-subtle">Details</th>
-                        </tr>
-                    </thead>
-                    <tbody class="text-center">
-                        @foreach (var group in groupedRTJs)
-                        {
-                            <tr>
-                                <td class="text-start text-center fw-bold">@group.Location</td>
-                                <td>@group.Count</td>
-                                <td>@group.TotalDebit.ToString("C")</td>
-                                <td>@group.TotalCredit.ToString("C")</td>
-                                <td>
-                                    <button class="btn btn-sm btn-outline-primary" 
-                                            data-bs-toggle="modal" 
-                                            data-bs-target="#rtjModal_@group.Location">
-                                        View
-                                    </button>
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
+            <div class="modal-body" id="inventoryModalBody">
+                <p class="text-muted">Loading inventory details...</p>
             </div>
         </div>
     </div>
 </div>
 
-<!-- ## MODAL SECTION -->
-@await Html.PartialAsync("_RTJModalPartial", Model.RecentRTJs)
+<!-- INSTALLER DETAILS MODAL -->
+<div class="modal fade" id="installerModal" 
+    data-bs-backdrop="static"
+    data-bs-keyboard="false"
+    aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-orange text-white">
+                <h5 class="modal-title">Installer Activity Details - <span id="installerModalTitle"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="installerModalBody">
+                <p class="text-muted">Loading installer details...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- RTJ MODALS -->
+<div id="rtjModalContainer">
+    @await Html.PartialAsync("_RTJModalPartial", Model.RecentRTJs)
+</div>
+
+
 
 @section Scripts {
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -490,6 +561,69 @@
     <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.dataTables.min.css" />
 
     <script>
+        // SALES DATE CHANGE
+        $('#salesRange').change(function () {
+            const selected = $(this).val();
+            const locationId = $('#locationId').val();
+
+            $.get('/GMDash/GetSalesSummaryTable', { range: selected, locationId: locationId }, function (html) {
+                $('#salesSummaryContainer').html(html);
+
+                // ✅ Only grab the correct element
+                const newLabel = $('#salesSummaryContainer').find('.sales-range-label').text().replace('Showing:', '').trim();
+                $('#salesRangeLabel').text(newLabel);
+            });
+        });
+
+        // INSTALLER DATE CHANGE
+        $('#installerRange').change(function () {
+            const selected = $(this).val();
+
+            $.get('/GMDash/GetInstallerTable', { range: selected }, function (html) {
+                $('#installerTableContainer').html(html);
+
+                // ✅ Grab only the installer label
+                const newLabel = $('#installerTableContainer').find('.installer-range-label').text().replace('Showing:', '').trim();
+                $('#installerRangeLabel').text(newLabel);
+            });
+        });
+
+        // RJT DATE CHANGE
+        $('#rtjRange').change(function () {
+            const selected = $(this).val();
+
+            $.get('/GMDash/GetRTJTable', { range: selected }, function (html) {
+                $('#rtjTableContainer').html(html);
+
+                // ✅ Grab only the RTJ label
+                const newLabel = $('#rtjTableContainer').find('.rtj-range-label').text().replace('Showing:', '').trim();
+                $('#rtjRangeLabel').text(newLabel);
+            });
+        });
+
+    </script>
+    <script>
+        // ### OPEN INVENTORY MODAL ###
+        $(document).on('click', '[data-bs-target="#inventoryModal"]', function () {
+            const office = $(this).data('office');
+            const officeLabel = $(this).text().trim();
+
+            // Update the modal title dynamically
+            $('#inventoryModalTitleOffice').text(officeLabel);
+            window.currentInventoryOfficeLabel = officeLabel;
+
+            // Show loading text while content is fetched
+            $('#inventoryModalBody').html('<p class="text-muted">Loading inventory details...</p>');
+
+            // Fetch modal content
+            $.get(`/GMDash/GetInventoryModal?office=${office}`, function (html) {
+                $('#inventoryModalBody').html(html);
+            });
+        });
+    </script>
+
+    <script>
+        // ##### RTJ MODAL DATATABLE #####
         $(document).ready(function ()
         {
             // When a modal opens, initialize DataTable inside it (once)
@@ -538,15 +672,88 @@
             });
         });
     </script>
-
-      
     <script>
-        $(document).ready(function () {
-            $('#installerRange').change(function () {
-                var selected = $(this).val();
+        // Initialize DataTable when Inventory Modal content is loaded
+        $(document).on('shown.bs.modal', '#inventoryModal', function () {
+            const $table = $('#inventoryModalBody').find('table');
 
-                $.get('/GMDash/GetInstallerTable', { range: selected }, function (html) {
-                    $('#installerTableContainer').html(html);
+            if ($table.length && !$.fn.DataTable.isDataTable($table)) {
+                $table.DataTable({
+                    order: [[0, 'asc']],
+                    responsive: true,
+                    paging: true,
+                    pageLength: 10,
+                    lengthMenu: [5, 10, 25, 50, 100],
+                    searching: true,
+                    dom: `
+                        <"top d-flex justify-content-between align-items-center mb-2" lBf>
+                        rt
+                        <"bottom d-flex justify-content-between align-items-center mt-2"ip>
+                    `,
+                    buttons: [
+                        {
+                            extend: 'excelHtml5',
+                            text: '<i class="bi bi-file-earmark-excel"></i> Export to Excel',
+                            className: 'btn btn-outline-success rounded-pill shadow-sm me-3',
+                            title: function () {
+                                return 'Inventory Details - ' + (window.currentInventoryOfficeLabel || 'All Branches');
+                            },
+                            filename: function () {
+                                const label = window.currentInventoryOfficeLabel || 'All Branches';
+                                const date = new Date().toISOString().slice(0,10);
+                                return `Inventory_${label}_${date}`;
+                            }
+                        }
+                    ]
+                });
+            }
+        });
+    </script>
+    <script>
+        // INSTALLER COMPLETION JS
+        $(document).on('click', '[data-bs-target="#installerModal"]', function () {
+            const office = $(this).data('office');
+            const selectedRange = $('#installerRange').val();  // <-- get current dropdown value
+
+            // Save to global scope for reuse in DataTable export
+            window.currentInstallerOfficeLabel = office;
+
+            // Update modal title
+            $('#installerModalTitle').text(office);
+            $('#installerModalBody').html('<p class="text-muted">Loading installer details...</p>');
+
+            // Fetch and inject modal content
+            $.get('/GMDash/GetInstallerDetails', { location: office, range: selectedRange }, function (html) {
+                $('#installerModalBody').html(html);
+
+                // Initialize DataTable
+                $('#installerDetailTable').DataTable({
+                    order: [[0, 'asc']],
+                    responsive: true,
+                    paging: true,
+                    pageLength: 10,
+                    lengthMenu: [5, 10, 25, 50, 100],
+                    searching: true,
+                    dom: `
+                        <"top d-flex justify-content-between align-items-center mb-2" lBf>
+                        rt
+                        <"bottom d-flex justify-content-between align-items-center mt-2"ip>
+                    `,
+                    buttons: [
+                        {
+                            extend: 'excelHtml5',
+                            text: '<i class="bi bi-file-earmark-excel"></i> Export to Excel',
+                            className: 'btn btn-outline-success rounded-pill shadow-sm me-3',
+                            title: function () {
+                                return 'Installer Completion Details - ' + (window.currentInstallerOfficeLabel || 'All Branches');
+                            },
+                            filename: function () {
+                                const label = window.currentInstallerOfficeLabel || 'AllBranches';
+                                const date = new Date().toISOString().slice(0, 10);
+                                return `Installer_${label}_${date}`;
+                            }
+                        }
+                    ]
                 });
             });
         });

@@ -90,8 +90,8 @@
                         <td>@(p.PONumberRequired ? "Yes" : "No")</td>
                         <td>
                             <button class="btn btn-sm btn-primary create-task"
-                                    data-id="@p.CustomerId"
-                                    data-name="@p.CustomerName">
+                            data-id="@p.CustomerId"
+                            data-name="@p.CustomerName">
                                 Create Task
                             </button>
                         </td>
@@ -119,21 +119,21 @@
                         <label>Title</label>
                         <input type="text" class="form-control" name="Task.Title" />
                     </div>
+                    <input type="hidden" name="Task.Source" value="Properties" />
                     <div class="form-group">
                         <label>Description</label>
                         <textarea name="Task.Description" class="form-control"></textarea>
                     </div>
-                    @* <div class="form-group">
-                        <label>Due Date</label>
-                        <input type="datetime-local" class="form-control" name="Task.DueDate" />
-                    </div> *@
-                    <div class="form-group">
-                        <label>Due Date</label>
-                        <input type="date" class="form-control" name="Task.DueDateDate" required />
-                    </div>
-                    <div class="form-group">
-                        <label>Due Time</label>
-                        <input type="time" class="form-control" name="Task.DueDateTime" required />
+
+                    <div class="row">
+                        <div class="form-group col-6">
+                            <label>Due Date</label>
+                            <input type="date" class="form-control" name="Task.DueDateDate" required />
+                        </div>
+                        <div class="form-group col-6">
+                            <label>Due Time</label>
+                            <input type="time" class="form-control" name="Task.DueDateTime" required />
+                        </div>
                     </div>
 
                     <div class="form-group">
@@ -169,10 +169,10 @@
                             <label>Assign To</label>
                             <select class="form-control" name="Task.AssignedTo">
                                 <option value="">-- Select User --</option>
-                                <option value="@ViewBag.UserId">Myself</option>
+                                <option value="@ViewBag.Users_Id">Myself</option>
                                 @foreach (var u in userList)
                                 {
-                                    <option value="@u.UserID">@u.FirstName @u.LastName</option>
+                                    <option value="@u.Users_ID">@u.FirstName @u.LastName</option>
                                 }
                             </select>
                         </div>
@@ -180,7 +180,7 @@
                     else
                     {
                         <!-- Hidden field for Sales Role -->
-                        <input type="hidden" name="Task.AssignedTo" id="hiddenAssignedTo" />
+                        <input type="hidden" name="Task.AssignedTo" id="hiddenAssignedTo" value="@Context.Session.GetString("Users_Id")" />
                     }
                 </div>
                 <div class="modal-footer">
@@ -278,16 +278,18 @@
                 const name = $(this).data('name');
                 const title = `Follow up for ${name}`;
                 const due = new Date();
-                due.setHours(due.getHours() + 24);
+                due.setHours(due.getHours() + 48);
 
                 $('#taskModal input[name="Task.Property"]').val(name);
                 $('#taskModal input[name="Task.Title"]').val(title);
-                $('#taskModal input[name="Task.DueDate"]').val(due.toISOString().slice(0, 16));
 
-                const assignedToField = document.getElementById('hiddenAssignedTo');
-                if (assignedToField) {
-                    assignedToField.value = '@Context.Session.GetString("UserId")';
-                }
+                // Set due date/time fields
+                $('#taskModal input[name="Task.DueDateDate"]').val(due.toISOString().split('T')[0]);
+                $('#taskModal input[name="Task.DueDateTime"]').val(due.toTimeString().slice(0, 5));
+
+                // ✅ Set AssignedTo for Salesperson role (in case it's using hidden input)
+                const loggedInUserId = '@Context.Session.GetString("Users_Id")';
+                $('#taskModal input#hiddenAssignedTo').val(loggedInUserId);
 
                 $('#taskModal').modal('show');
             });
@@ -323,6 +325,28 @@
                     });
             });
         });
+    </script>
+
+    <script>
+        .done(function (data) {
+            if (data.success) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Task Created!',
+                    text: 'The task was successfully created from the property.'
+                });
+
+                $('#taskModal').modal('hide');
+                form[0].reset();
+            } else {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Oops!',
+                    text: data.message || 'Something went wrong.'
+                });
+            }
+        })
+
     </script>
 
 }

@@ -1,0 +1,25 @@
+﻿@model SalesMetrics.Models.NewCustomerFormRequest
+
+<div class="row g-3">
+    <div class="col-md-4">
+        <label asp-for="Income.SalespersonName" class="form-label">Salesperson</label>
+        <input asp-for="Income.SalespersonName" class="form-control" />
+    </div>
+    <div class="col-md-4">
+        <label asp-for="Income.EstimatedMonthlyRevenue" class="form-label">Estimated Monthly Revenue</label>
+        <input asp-for="Income.EstimatedMonthlyRevenue" class="form-control" />
+    </div>
+    <div class="col-md-4">
+        <label asp-for="Income.ARCreditLimit" class="form-label">AR Credit Limit</label>
+        <input asp-for="Income.ARCreditLimit" class="form-control" />
+    </div>
+
+    <div class="col-md-6">
+        <label asp-for="Income.Terms" class="form-label">Terms & Conditions</label>
+        <input asp-for="Income.Terms" class="form-control" />
+    </div>
+    <div class="col-md-6">
+        <label asp-for="Income.DiscountPercent" class="form-label">Discount %</label>
+        <input asp-for="Income.DiscountPercent" class="form-control" />
+    </div>
+</div>

@@ -15,6 +15,7 @@ using System.Text;
 using SalesMetrics.Services;
 using Microsoft.EntityFrameworkCore.ValueGeneration.Internal;
 using System.Numerics;
+using Azure.Identity;
 
 
 namespace SalesMetrics.Controllers
@@ -35,12 +36,241 @@ namespace SalesMetrics.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> Login(string username, string password, string officeLocation)
+        public async Task<IActionResult> Login(string email, string password)
+        {
+            // Check if email is entered and entered correctly.  not missing an @ sign or .com, etc...
+            if (string.IsNullOrEmpty(email) || !email.Contains("@") || !email.Contains("."))
+            {
+                ViewBag.Error = "Please enter a valid email address.";
+                return View("Login");
+            }
+            if (string.IsNullOrEmpty(password))
+            {
+                ViewBag.Error = "Please enter a valid email and/or password.";
+                return View("Login");
+            }            
+
+            string fullName = string.Empty;
+            string role = "Guest";
+            string userName = string.Empty; // SalesMetrics Username
+            int salesMetricsUserId = 0;
+            int users_Id = 0; // SalesMetrics Users_ID
+            int roleId = 0;
+            int salesmanId = 0;
+            string? salesmanNumber = string.Empty;
+            int locationId = 0; // SalesMetrics LocationID
+
+            // Assign Connection to SalesMetric DB
+            using var conn = new SqlConnection(_configuration.GetConnectionString("SalesMetrics"));
+            await conn.OpenAsync();
+
+            // Authenticate user in SalesMetrics
+            var cmd = new SqlCommand(@"
+                SELECT 
+                    Users_ID, 
+                    UserID,
+                    Username,
+                    RoleID,
+                    Location,
+                    SalesmanID,
+                    SalesmanNumber,
+                    FirstName,
+                    LastName,
+                    Password,
+                    PasswordHash,
+                    Salt,
+                    Email
+                FROM Users
+                WHERE Email = @Email and IsActive = 1
+                ", conn);                
+
+            cmd.Parameters.AddWithValue("@Email", email.Trim().ToLower());
+
+            using var reader = await cmd.ExecuteReaderAsync();
+            if (!reader.Read())
+            {
+                string errorMsg = "User not found or inactive!";
+                ViewBag.Error = "Access Denied: User not found or Inactive!";
+                LogLoginAttempt(salesMetricsUserId, email, "UNK", false, errorMsg);
+                return View("Login");
+            }
+
+            // ✅ Move this up to make sure salesMetricsUserId is populated
+            salesMetricsUserId = Convert.ToInt32(reader["UserID"]);
+            users_Id = Convert.ToInt32(reader["Users_ID"]);
+            userName = reader["Username"]?.ToString() ?? string.Empty;
+            roleId = Convert.ToInt32(reader["RoleID"]);
+            role = GetUserRole(roleId);
+            locationId = Convert.ToInt32(reader["Location"]);
+            salesmanId = reader.IsDBNull(reader.GetOrdinal("SalesmanID")) ? 0 : Convert.ToInt32(reader["SalesmanID"]);
+            salesmanNumber = reader.IsDBNull(reader.GetOrdinal("SalesmanNumber")) ? "" : reader["SalesmanNumber"].ToString();
+            fullName = $"{reader["FirstName"]} {reader["LastName"]}";
+
+            string officeLocation = locationId switch
+            {
+                1 => "LAX",
+                2 => "LSV",
+                3 => "CHN",
+                4 => "PHX",
+                5 => "SND",
+                _ => "Unk"
+            };
+
+            try
+            {
+                string storedHash = reader["PasswordHash"]?.ToString();
+                string storedSalt = reader["Salt"]?.ToString();
+
+                // Validate Hash
+                if (string.IsNullOrEmpty(storedHash) || string.IsNullOrEmpty(storedSalt))
+                {
+                    string errorMsg = "User is missing a hashed password or salt.";
+                    ViewBag.Error = errorMsg + " Please contact the IT Dept.";
+                    LogLoginAttempt(salesMetricsUserId, userName, officeLocation, false, errorMsg);
+                    return View("Login");
+                }
+
+                string inputHash = PasswordSecurity.HashPassword(password, storedSalt);
+
+                if (!string.Equals(inputHash, storedHash, StringComparison.OrdinalIgnoreCase))
+                {
+                    // Fallback: try legacy hex-based hash comparison
+                    string legacyHash = PasswordSecurity.HashPasswordLegacy(password, storedSalt);
+                    
+
+                    if (!string.Equals(legacyHash, storedHash, StringComparison.OrdinalIgnoreCase))
+                    {
+                        string errorMsg = "Invalid Password!";
+                        ViewBag.Error = errorMsg + " Please try again.";
+                        LogLoginAttempt(salesMetricsUserId, userName, officeLocation, false, errorMsg);
+                    }
+                    else
+                    {
+                        // ✅ Legacy hash matched: upgrade to Base64
+                        var newSalt = PasswordSecurity.GenerateSalt();
+                        var newHash = PasswordSecurity.HashPassword(password, newSalt); // ✅ rehash using the new salt
+
+
+                        using (var upgradeConn = new SqlConnection(_configuration.GetConnectionString("SalesMetrics")))
+                        {
+                            await upgradeConn.OpenAsync();
+                            var upgradeCmd = new SqlCommand("UPDATE Users SET PasswordHash = @NewHash, Salt = @NewSalt, PasswordChangedDate = GetDate() WHERE UserID = @UserID AND Location = @LocationId", upgradeConn);
+                            upgradeCmd.Parameters.AddWithValue("@NewHash", newHash);
+                            upgradeCmd.Parameters.AddWithValue("@NewSalt", newSalt);
+                            upgradeCmd.Parameters.AddWithValue("@UserID", salesMetricsUserId);
+                            upgradeCmd.Parameters.AddWithValue("@LocationId", locationId);
+                            await upgradeCmd.ExecuteNonQueryAsync();
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log the exception (optional)
+                string errorMsg = "An error occurred while validating the password.";
+                ViewBag.Error = errorMsg + " Please try again later.";
+                LogLoginAttempt(salesMetricsUserId, userName, officeLocation, false, errorMsg);
+                return View("Login");
+            }               
+
+            // ✅ Close the reader before reusing the connection
+            reader.Close();
+
+            // Set Claims
+            var claims = new List<Claim>
+            {
+                new Claim(ClaimTypes.Name, userName),
+                new Claim(ClaimTypes.Role, role),
+                new Claim("FullName", fullName),
+                new Claim(ClaimTypes.Email, email),
+                new Claim("OfficeLocation", officeLocation),
+                new Claim("UserId", salesMetricsUserId.ToString()),
+                new Claim("Users_ID", users_Id.ToString()), // SalesMetrics Users_ID
+                new Claim("SalesmanId", salesmanId.ToString()), 
+                new Claim("RoleId", roleId.ToString()),
+                new Claim("LocationId", locationId.ToString())
+            };
+
+            if (salesmanId > 0)
+            {
+                claims.Add(new Claim("SalesmanNumber", salesmanNumber));
+            }
+
+            var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+            var authProperties = new AuthenticationProperties { IsPersistent = true };
+
+            await HttpContext.SignInAsync(
+                CookieAuthenticationDefaults.AuthenticationScheme,
+                new ClaimsPrincipal(claimsIdentity),
+                authProperties
+            );
+
+            // Save to Session
+            HttpContext.Session.SetString("Users_ID", users_Id.ToString());
+            HttpContext.Session.SetString("UserId", salesMetricsUserId.ToString());
+            HttpContext.Session.SetString("FullName", fullName);
+            HttpContext.Session.SetString("Username", userName);
+            HttpContext.Session.SetString("OfficeLocation", officeLocation);
+            HttpContext.Session.SetString("RoleId", roleId.ToString());
+            HttpContext.Session.SetString("RoleName", role);
+            HttpContext.Session.SetString("LocationId", locationId.ToString());
+
+            if (salesmanId > 0)
+            {
+                HttpContext.Session.SetInt32("SalesmanId", salesmanId);
+                HttpContext.Session.SetString("SalesmanNumber", salesmanNumber);
+            }
+
+            LogLoginAttempt(salesMetricsUserId, userName, officeLocation, true);
+
+            // UPDATE LastLoginDate in Users table
+            using var updateCmd = new SqlCommand("UPDATE Users SET LastLoginDate = GETDATE() WHERE UserID = @UserID and Location = @locationId and Email = @Email", conn);
+            updateCmd.Parameters.AddWithValue("@UserID", salesMetricsUserId);
+            updateCmd.Parameters.AddWithValue("@locationId", locationId);
+            updateCmd.Parameters.AddWithValue("@Email", email);
+            await updateCmd.ExecuteNonQueryAsync();
+
+            // After setting all session variables
+            using (var conn2 = new SqlConnection(_configuration.GetConnectionString("SalesMetrics")))
+            {
+                conn2.Open();
+
+                var locationCmd = new SqlCommand(@"
+                    SELECT LocationID 
+                    FROM UserLocationAssignments 
+                    WHERE UserID = @UserId AND IsActive = 'YES'
+                ", conn2);
+                locationCmd.Parameters.AddWithValue("@UserId", users_Id);
+
+                var assignedLocations = new List<string>();
+                using (var reader2 = locationCmd.ExecuteReader())
+                {
+                    while (reader2.Read())
+                    {
+                        assignedLocations.Add(reader2["LocationID"].ToString());
+                    }
+                }
+
+                HttpContext.Session.SetString("AssignedLocations", string.Join(",", assignedLocations));
+            }
+
+            return RedirectToAppropriatePage(role);
+        }
+
+        [HttpGet]
+        public IActionResult Login_Alt()
+        {
+            return View();
+        }
+
+
+        [HttpPost]
+        public async Task<IActionResult> Login_Alt(string username, string password, string officeLocation)
         {
             if (string.IsNullOrEmpty(officeLocation))
             {
                 ViewBag.Error = "Please select an office location!";
-                return View("Login");
+                return View("Login_Alt");
             }
 
             string connectionString = _configuration.GetConnectionString(officeLocation);
@@ -62,7 +292,7 @@ namespace SalesMetrics.Controllers
             if (locationId == 0)
             {
                 ViewBag.Error = "Invalid office location selected!";
-                return View("Login");
+                return View("Login_Alt");
             }
 
             string fullName = string.Empty;
@@ -93,7 +323,7 @@ namespace SalesMetrics.Controllers
                     Salt
                 FROM Users
                 WHERE Username = @username and Location = @LocationId and IsActive = 1
-                ", conn);                
+                ", conn);
 
             cmd.Parameters.AddWithValue("@username", username);
             cmd.Parameters.AddWithValue("@LocationId", locationId);
@@ -104,7 +334,7 @@ namespace SalesMetrics.Controllers
                 string errorMsg = "User not found or inactive!";
                 ViewBag.Error = "Access Denied: User not found or Inactive!";
                 LogLoginAttempt(salesMetricsUserId, username, officeLocation, false, errorMsg);
-                return View("Login");
+                return View("Login_Alt");
             }
 
             // ✅ Move this up to make sure salesMetricsUserId is populated
@@ -137,7 +367,7 @@ namespace SalesMetrics.Controllers
                 {
                     // Fallback: try legacy hex-based hash comparison
                     string legacyHash = PasswordSecurity.HashPasswordLegacy(password, storedSalt);
-                    
+
 
                     if (!string.Equals(legacyHash, storedHash, StringComparison.OrdinalIgnoreCase))
                     {
@@ -171,8 +401,8 @@ namespace SalesMetrics.Controllers
                 string errorMsg = "An error occurred while validating the password.";
                 ViewBag.Error = errorMsg + " Please try again later.";
                 LogLoginAttempt(salesMetricsUserId, username, officeLocation, false, errorMsg);
-                return View("Login");
-            }               
+                return View("Login_Alt");
+            }
 
             // ✅ Close the reader before reusing the connection
             reader.Close();
@@ -186,7 +416,7 @@ namespace SalesMetrics.Controllers
                 new Claim("OfficeLocation", officeLocation),
                 new Claim("UserId", salesMetricsUserId.ToString()),
                 new Claim("Users_ID", users_Id.ToString()), // SalesMetrics Users_ID
-                new Claim("SalesmanId", salesmanId.ToString()), 
+                new Claim("SalesmanId", salesmanId.ToString()),
                 new Claim("RoleId", roleId.ToString()),
                 new Claim("LocationId", locationId.ToString())
             };
@@ -353,26 +583,39 @@ namespace SalesMetrics.Controllers
                     return RedirectToAction("Index", "Dashboard");
                 case "GENERAL MANAGER":
                     return RedirectToAction("Index", "GMDash");
+                case "OFFICE MANAGER":
+                    return RedirectToAction("Index", "Dashboard");
+                case "OFFICE":
+                    return RedirectToAction("Index", "Dashboard");
                 default:
                     return RedirectToAction("Index", "Home");
             }
         }
 
         [HttpPost]
-        [ValidateAntiForgeryToken]
         public async Task<IActionResult> Logout()
-
         {
             // Clear session
             HttpContext.Session.Clear();
-
             // Sign out from cookie authentication
             await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-
             // Redirect to login
-            return RedirectToAction("Login");
+            return RedirectToAction("Login", "Auth");
         }
-               
+
+
+        [HttpGet]
+        public async Task<IActionResult> LogoutSilent()
+        {
+            // Clear session
+            HttpContext.Session.Clear();
+            // Sign out from cookie authentication
+            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            // Redirect to login
+            return RedirectToAction("Login", "Auth");
+        }
+
+
 
         // GOOGLE AUTHENTICATION
         [Authorize]

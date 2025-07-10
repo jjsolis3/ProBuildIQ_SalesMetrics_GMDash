@@ -34,6 +34,7 @@ namespace SalesMetrics.Controllers
         public IActionResult Properties()
         {
             var userId = HttpContext.Session.GetString("UserId");
+            var users_Id = HttpContext.Session.GetString("Users_Id");
             var officeLocation = HttpContext.Session.GetString("OfficeLocation");
             int? roleId = null;
             var roleStr = HttpContext.Session.GetString("RoleId");
@@ -44,12 +45,12 @@ namespace SalesMetrics.Controllers
                 roleId = parsedRole;
             }
 
-            if (string.IsNullOrEmpty(userId))
+            if (string.IsNullOrEmpty(users_Id))
             {
-                userId = User.FindFirstValue("UserID");
+                users_Id = User.FindFirstValue("Users_ID");
                 officeLocation = LocationHelper.GetCurrentOfficeCode(HttpContext);
 
-                if (string.IsNullOrEmpty(userId))
+                if (string.IsNullOrEmpty(users_Id))
                     return RedirectToAction("Login", "Auth");
             }
 
@@ -58,6 +59,7 @@ namespace SalesMetrics.Controllers
 
             ViewBag.Users = userList;
             ViewBag.UserId = userId;
+            ViewBag.Users_Id = users_Id;
             ViewBag.RoleID = roleId;
             ViewBag.SalesmanID = salesmanId;
 
@@ -98,7 +100,7 @@ namespace SalesMetrics.Controllers
                     )
                 ";
 
-            if (roleId == 2)
+            if (roleId == 2 && !string.IsNullOrEmpty(salesmanId.ToString()))
             {
                 baseSql += " AND C.CUM_SMNMAS_ID = @SalesmanId";
             }
@@ -108,7 +110,7 @@ namespace SalesMetrics.Controllers
                 conn.Open();
                 var cmd = new SqlCommand(baseSql, conn);
 
-                if (roleId == 2)
+                if (roleId == 2 && !string.IsNullOrEmpty(salesmanId.ToString()))
                 {
                     cmd.Parameters.AddWithValue("@SalesmanId", salesmanId);
                 }

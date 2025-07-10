@@ -1,0 +1,163 @@
+﻿@model List<SalesMetrics.Models.NewCustomerListItem>
+
+@{
+    ViewBag.Title = "Submitted Customer Requests";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="card">
+    <div class="card-header bg-orange">
+        <h4 class="card-title text-white mb-0">Submitted New Customer Requests</h4>
+    </div>
+    <div class="card-body">
+        <table class="table table-striped" id="submissionsTable">
+            <thead class="table-light">
+                <tr>
+                    <th>#</th>
+                    <th>Property Name</th>
+                    <th>Submitted By</th>
+                    <th>Submitted Date</th>
+                    <th>Salesperson</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @for (int i = 0; i < Model.Count; i++)
+                {
+                    <tr>
+                        <td>@(i + 1)</td>
+                        <td>@Model[i].PropertyName</td>
+                        <td>@Model[i].SubmittedBy</td>
+                        <td>@Model[i].SubmittedDate.ToString("MM/dd/yyyy")</td>
+                        <td>@Model[i].SalespersonName</td>
+                        <td>
+                            <a href="#" class="btn btn-sm btn-primary view-request" data-id="@Model[i].ID">
+                                <i class="bi bi-eye"></i> View
+                            </a>
+
+                            <a href="#" class="btn btn-sm btn-secondary print-request" data-id="@Model[i].ID">
+                                <i class="bi bi-printer"></i> Print
+                            </a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- View Request Modal -->
+<div class="modal fade" id="viewRequestModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-orange text-white">
+                <h5 class="modal-title text-white">Customer Request Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="requestDetailsContainer">
+                <div class="text-center p-5 text-muted">Loading...</div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+                
+                <button type="button" class="btn btn-outline-primary" id="btnDownloadPDF">Download PDF</button>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Print Modal -->
+<div class="modal fade" id="printCustomerModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-orange text-white">
+                <h5 class="modal-title text-white">Print Customer Request</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="printCustomerBody">
+                <div class="text-center p-4 text-muted">Loading...</div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" onclick="window.printContent()">Print</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section scripts {
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+
+    <!-- jsPDF Implementation (with AutoTable) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
+    
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            $('#submissionsTable').DataTable();
+
+            // Bind View modal
+            document.querySelectorAll('.view-request').forEach(button => {
+                button.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    const requestId = this.getAttribute('data-id');
+
+                    const modalBody = document.getElementById('requestDetailsContainer');
+                    if (!modalBody) {
+                        alert("Request container not found");
+                        return;
+                    }
+
+                    modalBody.innerHTML = '<div class="text-center p-4 text-muted">Loading...</div>';
+
+                    fetch(`/Onboarding/ViewRequestPartial/${requestId}`)
+                        .then(res => res.text())
+                        .then(html => {
+                            modalBody.innerHTML = html;
+
+                            const scriptTag = modalBody.querySelector('script');
+                            if (scriptTag) eval(scriptTag.textContent);
+
+                            const pdfButton = document.getElementById('btnDownloadPDF');
+                            if (pdfButton && typeof downloadRequestPDF === 'function') {
+                                pdfButton.onclick = downloadRequestPDF;
+                            }
+
+                            const modal = new bootstrap.Modal(document.getElementById('printCustomerModal'));
+                            modal.show();
+                        })
+                        .catch(() => {
+                            modalBody.innerHTML = '<div class="alert alert-danger">Failed to load request.</div>';
+                        });
+                });
+            });
+
+            // ✅ Bind Print modal inside DOMContentLoaded
+            document.querySelectorAll('.print-request').forEach(button => {
+                button.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    const requestId = this.getAttribute('data-id');
+                    const modalBody = document.getElementById('printCustomerBody');
+
+                    modalBody.innerHTML = '<div class="text-center p-4 text-muted">Loading...</div>';
+
+                    fetch(`/Onboarding/PrintCustomerRequest/${requestId}`)
+                        .then(res => res.text())
+                        .then(html => {
+                            modalBody.innerHTML = html;
+
+                            const modal = new bootstrap.Modal(document.getElementById('printCustomerModal'));
+                            modal.show();
+                        })
+                        .catch(() => {
+                            modalBody.innerHTML = '<div class="alert alert-danger">Failed to load printable request.</div>';
+                        });
+                });
+            });
+        });
+    </script>
+
+}
+

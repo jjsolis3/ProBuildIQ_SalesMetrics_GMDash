@@ -20,7 +20,7 @@ public partial class TaskEntity
     public int Location { get; set; }
 
     public string? Property { get; set; }
-    public int PropertyID { get; set; }
+    public int? PropertyID { get; set; }
 
     public string? Type { get; set; }
 

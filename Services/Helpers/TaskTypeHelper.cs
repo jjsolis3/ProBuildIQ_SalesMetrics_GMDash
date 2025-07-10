@@ -15,8 +15,14 @@ namespace SalesMetrics.Services.Helpers
                     new("Quality Check", "Quality Check"),
                     new("Office - Bids", "Office - Bids"),
                     new("Office - Other", "Office - Other"),
+                    new("Office - Paperwork", "Office - Paperwork"),
                     new("Other", "Other"),
-
+                    new("Site Visit", "Site Visit"),
+                    new("Walkthrough w/ Manager", "Walkthrough w/ Manager"),
+                    new("Email", "Email"),
+                    new("Phone Call", "Phone Call"),
+                    new("QC Visit", "QC Visit"),
+                    new("Escalation AR Follow-up", "Escalation AR Follow-up"),
                 },
 
                 "WorkOrder" or "Yardi" or "Property" => new List<SelectListItem>
@@ -41,7 +47,7 @@ namespace SalesMetrics.Services.Helpers
                     new("Escalation AR Follow-up", "Escalation AR Follow-up"),
                     new("Office - Bids", "Office - Bids"),
                     new("Office - Paperwork", "Office - Paperwork"),
-                    new("Other", "Other"),
+                    new("Other", "Other")
                 },
 
                 _ => new List<SelectListItem>

@@ -1,0 +1,30 @@
+﻿@model SalesMetrics.Models.NewCustomerFormRequest
+
+<div class="row g-3">
+    <div class="col-md-6">
+        <label asp-for="ManagementCompany.ManagementName" class="form-label">Company Name</label>
+        <input asp-for="ManagementCompany.ManagementName" class="form-control" />
+    </div>
+    <div class="col-md-6">
+        <label asp-for="ManagementCompany.ManagementAddress" class="form-label">Company Address</label>
+        <input asp-for="ManagementCompany.ManagementAddress" class="form-control" />
+    </div>
+
+    <div class="col-md-6">
+        <h6 class="mt-3">Regional Manager</h6>
+        <input type="hidden" asp-for="ManagementCompany.RegionalManager.ContactType" value="Regional Manager" />
+        <input asp-for="ManagementCompany.RegionalManager.Name" class="form-control mb-1" placeholder="Name" />
+        <input asp-for="ManagementCompany.RegionalManager.Phone" class="form-control mb-1" placeholder="Phone" />
+        <input asp-for="ManagementCompany.RegionalManager.Fax" class="form-control mb-1" placeholder="Fax" />
+        <input asp-for="ManagementCompany.RegionalManager.Email" class="form-control mb-1" placeholder="Email" />
+    </div>
+
+    <div class="col-md-6">
+        <h6 class="mt-3">Manager</h6>
+        <input type="hidden" asp-for="ManagementCompany.PropertyManager.ContactType" value="Manager" />
+        <input asp-for="ManagementCompany.PropertyManager.Name" class="form-control mb-1" placeholder="Name" />
+        <input asp-for="ManagementCompany.PropertyManager.Phone" class="form-control mb-1" placeholder="Phone" />
+        <input asp-for="ManagementCompany.PropertyManager.Fax" class="form-control mb-1" placeholder="Fax" />
+        <input asp-for="ManagementCompany.PropertyManager.Email" class="form-control mb-1" placeholder="Email" />
+    </div>
+</div>

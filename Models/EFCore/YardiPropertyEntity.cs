@@ -27,6 +27,8 @@ namespace SalesMetrics.Models.EFCore
         public string? PropertyAddress { get; set; }
         [MaxLength(100)]
         public string? PropertyCity { get; set; }
+        [MaxLength(100)]
+        public string? PropertyCounty { get; set; }
         [MaxLength(50)]
         public string? PropertyState { get; set; }
         [MaxLength(20)]
@@ -46,6 +48,8 @@ namespace SalesMetrics.Models.EFCore
         public string? LocRating { get; set; }
 
         // Owner Info
+        [MaxLength(255)]
+        public string? Owner { get; set; }
         [MaxLength(255)]
         public string? OwnerFName { get; set; }
         [MaxLength(255)]
@@ -85,6 +89,14 @@ namespace SalesMetrics.Models.EFCore
         [MaxLength(255)]
         public string? ManagerWebsite { get; set; }
 
+        // Notes
+        [MaxLength(1000)]
+        public string? PropertyNotes { get; set; }
+        [MaxLength(1000)]
+        public string? OwnerNotes { get; set; }
+        [MaxLength(1000)]
+        public string? ManagerNotes { get; set; }
+
         // Other Info
         public int? YearBuilt { get; set; }
         public int? YearRenovated { get; set; }
@@ -105,5 +117,9 @@ namespace SalesMetrics.Models.EFCore
         [MaxLength(100)]
         public string? ImportedBy { get; set; }
         public DateTime? ImportedDate { get; set; }
+
+        // Navigation properties
+        [MaxLength(20)]
+        public string Locations { get; set; }
     }
 }

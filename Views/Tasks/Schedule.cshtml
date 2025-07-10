@@ -15,14 +15,6 @@
     <link href="~/assets/libs/fullcalendar/main.min.css" rel="stylesheet" />
     
     <style>
-        /* .bg-orange {
-            background-color: darkorange;
-        }
-
-        .btn-orange {
-            background-color: #ff6720
-        } */
-
         .fc .fc-event {
             background-color: #198754 !important;
             border: none;
@@ -86,7 +78,6 @@
             border: 2px solid darkorange;
         }
     </style>
-    
 }
 
 <div class="row">
@@ -225,13 +216,13 @@
             },
             Users = ViewBag.AllUsers as List<User> ?? new List<User>(),
             RoleId = ViewBag.RoleId != null ? Convert.ToInt32(ViewBag.RoleId) : 0,
-            LoggedInUserId = ViewBag.UserId != null ? Convert.ToInt32(ViewBag.UserId) : 0,
+            LoggedInUserId = ViewBag.Users_Id != null ? Convert.ToInt32(ViewBag.Users_Id) : 0,
             TaskTypes = TaskTypeHelper.GetTaskTypes("Schedule")
         })
 
-        
     </div> <!-- end col -->
 </div> <!-- end row -->
+
 @section scripts {
     <!-- Bootstrap Datepicker -->
     <script src="~/assets/libs/bootstrap-datepicker/js/bootstrap-datepicker.min.js"></script>
@@ -254,26 +245,32 @@
                 title: 'Success!',
                 text: '@TempData["Success"]'
             }).then(() => {
-                const calendarEl = document.getElementById('calendar');
-                const calendar = FullCalendar.getCalendar(calendarEl);
+                try {
+                    const calendarEl = document.getElementById('calendar');
+                    const calendar = FullCalendar.getCalendar(calendarEl);
 
-                // 🔥 Refresh calendar
-                calendar.refetchEvents();
+                    if (calendar) {
+                        // 🔥 Refresh calendar
+                        calendar.refetchEvents();
 
-                // 🔥 After small delay, highlight the latest added event
-                setTimeout(() => {
-                    const events = window.salesMetricsCalendar.getEvents();
-                    if (events.length > 0) {
-                        // Assume latest event is the last in array (depends on your server order)
-                        const lastEvent = events[events.length - 1];
+                        // 🔥 After small delay, highlight the latest added event
+                        setTimeout(() => {
+                            const events = window.salesMetricsCalendar.getEvents();
+                            if (events.length > 0) {
+                                // Assume latest event is the last in array (depends on your server order)
+                                const lastEvent = events[events.length - 1];
 
-                        const eventEls = document.querySelectorAll(`[data-event-id="${lastEvent.id}"]`);
-                        eventEls.forEach(el => {
-                            el.classList.add('bounce-highlight'); // Add bounce class
-                            setTimeout(() => el.classList.remove('bounce-highlight'), 2000); // Remove after 2 seconds
-                        });
+                                const eventEls = document.querySelectorAll(`[data-event-id="${lastEvent.id}"]`);
+                                eventEls.forEach(el => {
+                                    el.classList.add('bounce-highlight'); // Add bounce class
+                                    setTimeout(() => el.classList.remove('bounce-highlight'), 2000); // Remove after 2 seconds
+                                });
+                            }
+                        }, 1000); // wait for FullCalendar to rerender
                     }
-                }, 1000); // wait for FullCalendar to rerender
+                } catch (error) {
+                    console.error("Failed to refresh calendar events:", error);
+                }
             });
         </script>
     }

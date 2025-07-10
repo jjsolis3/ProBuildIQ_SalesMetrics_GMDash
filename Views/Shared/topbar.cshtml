@@ -7,8 +7,8 @@
     var currentController = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
     var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
 
-    bool hideLocationSwitcher = currentController.Equals("GMDash", StringComparison.OrdinalIgnoreCase)
-                              && currentAction.Equals("Index", StringComparison.OrdinalIgnoreCase);
+    var hideLocationSwitcher = PageHelper.ShouldHideLocationSwitcher(currentController, currentAction);
+
 }
 
 <!-- Start topbar -->
@@ -49,71 +49,105 @@
                         Quick Links
                         <i class="mdi mdi-chevron-down align-middle"></i>
                     </button>
+
                     <div class="dropdown-menu dropdown-menu-start dropdown-menu-animated">
                         <!-- JOURNAL ENTRY -->
                         <div class="dropdown-submenu">
                             <a href="#" class="dropdown-item">
                                 <div class="dropdown-icon"><i class="fa fa-book-open"></i></div>
-                                <span class="dropdown-content">Journal</span>
+                                <span class="dropdown-content">My Journal</span>
                                 <div class="dropdown-addon"><i class="mdi mdi-chevron-right align-middle"></i></div>
                             </a>
                             <div class="dropdown-submenu-menu dropdown-submenu-end">
                                 <a href="/Journal/Index" class="dropdown-item">
-                                    <i class="fa fa-search"></i><span class="dropdown-content text-align-end">  View Timeline</span>
+                                    <i class="fa fa-search me-3"></i><span class="dropdown-content text-align-end">View Timeline</span>
                                 </a>
                                 <a href="javascript:void(0);" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#createJournalModal">
-                                    <i class="fa fa-pen-nib"></i>   <span class="dropdown-content text-align-end">  New Entry</span>
+                                    <i class="fa fa-pen-nib me-3"></i><span class="dropdown-content text-align-end">New Entry</span>
                                 </a>
                             </div>
                         </div>
+                        <!--DIVIDER-- >
+                        < div class="dropdown-divider"></div>
+
+                        <!-- FORMS ENTRY -->
+                    @if (!hideLocationSwitcher && (User.IsInRole("Admin") || User.FindFirst("RoleId")?.Value == "1"))
+                    {
+                        <div class="dropdown-submenu">
+                            <a href="#" class="dropdown-item">
+                                <div class="dropdown-icon"><i class="fa fa-clipboard-list"></i></div>
+                                <span class="dropdown-content">Form Request</span>
+                                <div class="dropdown-addon"><i class="mdi mdi-chevron-right align-middle"></i></div>
+                            </a>
+                            <div class="dropdown-submenu-menu dropdown-submenu-end">
+                                <a href="/Onboarding/NewCustomer" class="dropdown-item">
+                                    <i class="fa fa-address-card me-3"></i><span class="dropdown-content text-align-end">New Customer Form</span>
+                                </a>
+                                <a href="/Onboarding/Submissions" class="dropdown-item">
+                                    <i class="fa fa-table me-3"></i><span class="dropdown-content text-align-end">Submissions</span>
+                                </a>
+                            @* <a href="javascript:void(0);" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#createJournalModal">
+                                <i class="fa fa-pen-nib me-3"></i><span class="dropdown-content text-align-end">New Entry</span>
+                            </a> *@
+                            </div>
+                        </div>
+                    }
                         <!-- DIVIDER -->
-                        <div class="dropdown-divider"></div>
-                        <!-- My Proline Link -->
+                    @* <div class="dropdown-divider"></div> *@
+                    @* <!-- My Proline Link -->
                         <a href="/Accounts/Profile" class="dropdown-item">
                             <div class="dropdown-icon"><i class="fa fa-user-cog"></i></div>
                             <span class="dropdown-content">My Profile</span>
-                        </a>
+                        </a> *@
                     </div>
                 </div>
             </div>
 
             <!-- Current Branch Indicator -->
-            @if (!hideLocationSwitcher)
-            {
-                <div class="d-none d-md-flex align-items-center ms-3">
-                    <button type="button" class="btn btn-orange text-white fw-bold px-3 py-1 rounded-pill fs-14 border-0 shadow-sm" data-bs-toggle="modal" data-bs-target="#switchLocationModal">
-                        <i class="fas fa-map-marker-alt me-1 text-light"></i>
-                        @currentBranchName Branch
-                    </button>
-                </div>
-            }
-            @* else
-            {
-                <!-- Current Branch Indicator -->
-                <div class="d-none d-md-flex align-items-center ms-3">
-                    <span class="badge bg-info text-white fw-bold px-3 py-1 rounded-pill fs-14 border-0 shadow-sm">
-                        <i class="fas fa-map-marker-alt me-1 text-light"></i>
-                        @currentBranchName Branch
-                    </span>
-                </div>
-            } *@
+        @if (!hideLocationSwitcher && (User.IsInRole("Admin") || User.IsInRole("General Manager") || User.IsInRole("Office Manager") || User.FindFirst("RoleId")?.Value == "1" || User.FindFirst("RoleId")?.Value == "4" || User.FindFirst("RoleId")?.Value == "5"))
+        {
+            <!-- Current Branch Indicator Switch Button -->
+            <div class="d-none d-md-flex align-items-center ms-2">
+                <button type="button" class="btn btn-orange text-white fw-bold px-3 py-1 rounded-pill fs-14 border-0 shadow-sm" data-bs-toggle="modal" data-bs-target="#switchLocationModal">
+                    <i class="fas fa-map-marker-alt me-1 text-light"></i>
+                @currentBranchName Branch
+                </button>
+                <p style="display:none;">
+                    Controller: @currentController <br />
+                    Action: @currentAction
+                </p>
+            </div>
+        }
+        else
+        {
+            <!-- Current Branch Indicator -->
+            <div class="d-none d-md-flex align-items-center ms-2">
+                <span class="badge bg-orange text-white fw-bold px-3 py-1 rounded-pill fs-14 border-0 shadow-sm" style="display:none;">
+                    <i class="fas fa-map-marker-alt me-1 text-light"></i>
+                @currentBranchName Branch
+                </span>
+                <p style="display:none;">
+                    Controller: @currentController <br />
+                    Action: @currentAction
+                </p>
+            </div>
+        }
 
             <div class="d-flex align-items-center gap-2">
                 <!--Start App Search-->
-                @* <form class="app-search d-none d-lg-block">
+            @* <form class="app-search d-none d-lg-block">
                     <div class="position-relative">
                         <input type="text" class="form-control" placeholder="Search...">
                         <span class="fab fa-sistrix fs-17 align-middle"></span>
                     </div>
                 </form> *@
                 <!--End App Search-->
-
                 <!-- Start Notification -->
                 <div class="dropdown d-inline-block">
                     <button type="button" class="btn btn-sm top-icon" id="page-header-notifications-dropdown" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="fas fa-bell align-middle"></i>
                         <!-- Notification Dot Marker -->
-                        @* <span class="btn-marker"><i class="marker marker-dot text-danger"></i></span> *@
+                    @* <span class="btn-marker"><i class="marker marker-dot text-danger"></i></span> *@
                     </button>
                     <div class="dropdown-menu dropdown-menu-lg dropdown-menu-md dropdown-menu-end p-0" aria-labelledby="page-header-notifications-dropdown">
                         <div class="p-3 bg-info">
@@ -127,7 +161,7 @@
                             </div>
                         </div>
                         <div data-simplebar style="max-height: 230px;">
-                            @* <a href="" class="text-reset notification-item">
+                        @* <a href="" class="text-reset notification-item">
                                 <div class="d-flex">
                                     <div class="avatar avatar-xs avatar-label-primary me-3">
                                         <span class="rounded fs-16">
@@ -154,7 +188,6 @@
                     </div>
                 </div>
                 <!-- End Notification -->
-
                 <!-- Start Profile -->
                 <div class="dropdown d-inline-block">
                     <button type="button" class="btn btn-sm top-icon p-0" id="page-header-user-dropdown" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
@@ -207,8 +240,8 @@
                                             <span class="grid-nav-content">Journal</span>
                                         </a>
                                     </div>
-                                    @if (User.IsInRole("Admin") || User.IsInRole("GM") || User.FindFirst("RoleId")?.Value == "1" || User.FindFirst("RoleId")?.Value == "4")
-                                    {
+                                @if (User.IsInRole("Admin") || User.IsInRole("GM") || User.FindFirst("RoleId")?.Value == "1" || User.FindFirst("RoleId")?.Value == "4")
+                                {
                                         <div class="grid-nav-item px-3 py-2">
                                             <div class="row">
                                                 <div class="col-2">
@@ -218,20 +251,23 @@
                                                     <div class="d-flex align-items-center w-100">
                                                         <div class="grid-nav-content text-center mt-1 small fw-bold text-secondary">Change Office Location</div>
                                                         <div class="w-100">
-                                                            @await Component.InvokeAsync("UserLocationSwitcher")
+                                                        @await Component.InvokeAsync("UserLocationSwitcher")
                                                         </div>
                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
-                                    }
+                                }
                                 </div>
                                 <div class="card-footer card-footer-bordered rounded-0">
-                                    <form method="post" action="/auth/logout" asp-antiforgery="true" class="d-inline">
+                                    <form method="post" action="/auth/logout" class="d-inline">
+                                    @Html.AntiForgeryToken()
                                         <button type="submit" class="btn btn-label-danger w-100">
                                             <i class="mdi mdi-logout me-1"></i> Sign out
                                         </button>
                                     </form>
+
+
                                 </div>
                             </div>
                         </div>

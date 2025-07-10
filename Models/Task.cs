@@ -15,7 +15,7 @@ namespace SalesMetrics.Models
         public int? AssignedTo { get; set; }
         public int? Location { get; set; }  // NEW
         public string? Property { get; set; }  // NEW
-        public int PropertyID { get; set; } // NEW
+        public int? PropertyID { get; set; } // NEW
         public string? Type { get; set; }  // NEW
         public string? CreatedBy { get; set; }
         public DateTime? CreatedDate { get; set; }
@@ -24,6 +24,7 @@ namespace SalesMetrics.Models
         public DateTime? CancelledDate { get; set; }  // NEW
         public string? GoogleEventId { get; set; } // New property
         public int RoleId { get; set; }
+        public int CreatedById { get; set; } // User ID of the creator
     }
 
     public class TaskPageViewModel
@@ -38,21 +39,34 @@ namespace SalesMetrics.Models
         public int TaskID { get; set; }
         public string? Title { get; set; }
         public string? Description { get; set; }
-        // This is the combined value that will be saved
+
+        // These two fields are used for separate date/time input
+        [BindProperty]
+        public string DueDateDate { get; set; }
+        [BindProperty]
+        public string DueDateTime { get; set; }
+
+        // Final merged datetime field used when saving
+        [BindNever]
         public DateTime DueDate { get; set; }
 
-        //These are form-only fields
-        [BindProperty]
-        public string? DueDateDate { get; set; }
-        [BindProperty]
-        public string? DueDateTime { get; set; }
         public DateTime TaskEndDate { get; set; } // New property for end date
-        public string? Type { get; set; }
-        public string? Status { get; set; }
+
+        public string Type { get; set; }
+        public string Status { get; set; }
+
         public string? Property { get; set; }
-        public int PropertyID { get; set; }
-        [Required]
+        public int? PropertyID { get; set; }
+
         public int AssignedTo { get; set; }
+        public string Source { get; set; } // e.g., "Task", "WorkOrder", "Yardi", etc.
+
+        // Optional context-specific fields
+        public int? DaysInactive { get; set; }
+        public decimal? Balance { get; set; }
+        public string? OrderID { get; set; }
+        public string? Unit { get; set; }
+        public int LocationID { get; set; }
     }
 
     public class TaskModalViewModel

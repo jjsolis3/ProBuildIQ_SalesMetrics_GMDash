@@ -16,7 +16,7 @@ public class GoogleCalendarService
         _configuration = configuration;
     }
 
-    private async Task<string?> EnsureValidAccessTokenAsync(int userId, string refreshToken)
+    private async Task<string?> EnsureValidAccessTokenAsync(int users_Id, string refreshToken)
     {
         var tokenHelper = new GoogleTokenHelper(_configuration);
         var newToken = await tokenHelper.RefreshAccessTokenAsync(refreshToken);
@@ -26,9 +26,9 @@ public class GoogleCalendarService
             using var conn = new SqlConnection(_configuration.GetConnectionString("SalesMetrics"));
             await conn.OpenAsync();
 
-            var cmd = new SqlCommand("UPDATE Users SET GoogleAccessToken = @AccessToken WHERE UserID = @UserID", conn);
+            var cmd = new SqlCommand("UPDATE Users SET GoogleAccessToken = @AccessToken WHERE Users_ID = @Users_ID", conn);
             cmd.Parameters.AddWithValue("@AccessToken", newToken);
-            cmd.Parameters.AddWithValue("@UserID", userId);
+            cmd.Parameters.AddWithValue("@Users_ID", users_Id);
             await cmd.ExecuteNonQueryAsync();
 
             return newToken;
@@ -47,37 +47,54 @@ public class GoogleCalendarService
         });
     }
 
-    public async Task<string?> AddTaskEventAsync(int userId, string accessToken, string refreshToken, string title, string description, DateTime dueDate)
+    public async Task<string?> AddTaskEventAsync(int users_Id, string accessToken, string refreshToken, string taskId, string title, string description, DateTime dueDate)
     {
-        var calendarService = GetService(accessToken);
-
-        var newEvent = new Event
-        {
-            Summary = title,
-            Description = description,
-            Start = new EventDateTime
-            {
-                DateTime = dueDate,
-                TimeZone = "America/Los_Angeles"
-            },
-            End = new EventDateTime
-            {
-                DateTime = dueDate.AddHours(1),
-                TimeZone = "America/Los_Angeles"
-            }
-        };
-
         try
         {
+            var calendarService = GetService(accessToken);
+
+            var newEvent = new Event
+            {
+                Summary = title,
+                Description = $"[Task ID: {taskId}]\n\n{description}",
+                Start = new EventDateTime
+                {
+                    DateTime = dueDate,
+                    TimeZone = "America/Los_Angeles"
+                },
+                End = new EventDateTime
+                {
+                    DateTime = dueDate.AddHours(1),
+                    TimeZone = "America/Los_Angeles"
+                }
+            };
+
             var createdEvent = await calendarService.Events.Insert(newEvent, "primary").ExecuteAsync();
             return createdEvent.Id;
         }
         catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == HttpStatusCode.Unauthorized)
         {
-            var refreshedToken = await EnsureValidAccessTokenAsync(userId, refreshToken);
+            var refreshedToken = await EnsureValidAccessTokenAsync(users_Id, refreshToken);
             if (!string.IsNullOrEmpty(refreshedToken))
             {
                 var newService = GetService(refreshedToken);
+
+                var newEvent = new Event
+                {
+                    Summary = title,
+                    Description = $"[Task ID: {taskId}]\n\n{description}",
+                    Start = new EventDateTime
+                    {
+                        DateTime = dueDate,
+                        TimeZone = "America/Los_Angeles"
+                    },
+                    End = new EventDateTime
+                    {
+                        DateTime = dueDate.AddHours(1),
+                        TimeZone = "America/Los_Angeles"
+                    }
+                };
+
                 var createdEvent = await newService.Events.Insert(newEvent, "primary").ExecuteAsync();
                 return createdEvent.Id;
             }
@@ -91,6 +108,7 @@ public class GoogleCalendarService
             return null;
         }
     }
+
 
     public async Task<bool> UpdateTaskEventAsync(int userId, string accessToken, string refreshToken, string eventId, string title, string description, DateTime dueDate)
     {

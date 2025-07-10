@@ -1,13 +1,44 @@
 ﻿@{
     ViewData["Title"] = "Upload Yardi Matrix Data";
+    var locations = new List<string> { "LAX", "LSV", "CHN", "PHX", "SND" };
 }
 
-<h2>Upload Yardi Matrix Excel File</h2>
 
-<form asp-controller="Yardi" asp-action="Upload" method="post" enctype="multipart/form-data">
-    <input type="file" name="file" class="form-control mb-3" />
-    <button type="submit" class="btn btn-primary">Upload</button>
-</form>
+<div class="col-md-6 justify-content-between mx-auto">
+    <div class="card shadow">
+        <div class="card-header">
+            <h2>Upload Yardi Matrix Excel File</h2>
+        </div>
+        <div class="card-body p-2">
+
+
+
+            <form asp-controller="Yardi" asp-action="Upload" method="post" enctype="multipart/form-data">
+
+                <div class="mb-3">
+                    <div>
+                    <label for="Location" class="form-label fs-5 me-3">Select Office Locations: </label>
+                    </div>
+                    <div class="ms-5">
+                    @foreach (var loc in locations)
+                    {
+                        <div class="form-check form-check-inline">
+                            <input type="checkbox" class="form-check-input" name="selectedLocations" value="@loc" id="loc_@loc" />
+                            <label class="form-check-label fs-5 fw-bold" for="loc_@loc">@loc</label>
+                        </div>
+                    }
+                    </div>
+
+                </div>
+                <div class="mb-3">
+                    <label for="file" class="form-label fs-5">Upload Excel File:</label>
+                    <input type="file" class="form-control fs-5" id="file" name="file" required />
+                </div>
+                <button type="submit" class="btn btn-primary fs-5">Upload</button>
+            </form>
+        </div>
+    </div>
+</div>
 
 @if (TempData["Success"] != null)
 {

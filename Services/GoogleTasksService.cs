@@ -22,7 +22,7 @@ namespace SalesMetrics.Services
             _configuration = config;
         }
 
-        private async Task<TasksService> GetServiceAsync(string accessToken, string refreshToken, string userId)
+        private async Task<TasksService> GetServiceAsync(string accessToken, string refreshToken, string users_Id)
         {
             var token = new TokenResponse
             {
@@ -40,12 +40,12 @@ namespace SalesMetrics.Services
             };
 
             var flow = new GoogleAuthorizationCodeFlow(initializer);
-            var credential = new UserCredential(flow, userId, token);
+            var credential = new UserCredential(flow, users_Id, token);
 
             // Attempt to refresh token if expired
             if (await credential.RefreshTokenAsync(CancellationToken.None))
             {
-                await SaveNewAccessTokenAsync(userId, credential.Token.AccessToken);
+                await SaveNewAccessTokenAsync(users_Id, credential.Token.AccessToken);
             }
 
             return new TasksService(new BaseClientService.Initializer
@@ -55,7 +55,7 @@ namespace SalesMetrics.Services
             });
         }
 
-        private async System.Threading.Tasks.Task SaveNewAccessTokenAsync(string userId, string newAccessToken)
+        private async System.Threading.Tasks.Task SaveNewAccessTokenAsync(string users_Id, string newAccessToken)
         {
             var connStr = _configuration.GetConnectionString("SalesMetrics");
 
@@ -66,17 +66,17 @@ namespace SalesMetrics.Services
                 UPDATE Users 
                 SET GoogleAccessToken = @AccessToken, 
                     GoogleTokenLastUpdated = GETDATE()
-                WHERE UserID = @UserId", conn);
+                WHERE Users_ID = @Users_Id", conn);
 
             cmd.Parameters.AddWithValue("@AccessToken", newAccessToken);
-            cmd.Parameters.AddWithValue("@UserId", userId);
+            cmd.Parameters.AddWithValue("@Users_Id", users_Id);
 
             await cmd.ExecuteNonQueryAsync();
         }
 
-        public async Task<string?> CreateTaskAsync(string accessToken, string refreshToken, string userId, string title, string notes, DateTime? dueDate = null)
+        public async Task<string?> CreateTaskAsync(string accessToken, string refreshToken, string users_Id, string taskId, string title, string notes, DateTime? dueDate = null)
         {
-            var service = await GetServiceAsync(accessToken, refreshToken, userId);
+            var service = await GetServiceAsync(accessToken, refreshToken, users_Id);
 
             // Step 1: Get task lists
             var taskLists = await service.Tasklists.List().ExecuteAsync();
@@ -92,7 +92,7 @@ namespace SalesMetrics.Services
             var task = new GoogleTaskModel
             {
                 Title = title,
-                Notes = notes,
+                Notes = $"[Task ID: {taskId}]\n{notes}",
                 Due = dueDate?.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
             };
 
@@ -116,9 +116,9 @@ namespace SalesMetrics.Services
                 throw;
             }
         }
-        public async Task<List<GoogleTaskListModel>> GetTaskListsAsync(string accessToken, string refreshToken, string userId)
+        public async Task<List<GoogleTaskListModel>> GetTaskListsAsync(string accessToken, string refreshToken, string users_Id)
         {
-            var service = await GetServiceAsync(accessToken, refreshToken, userId);
+            var service = await GetServiceAsync(accessToken, refreshToken, users_Id);
             var result = await service.Tasklists.List().ExecuteAsync();
             return result.Items?.ToList() ?? new List<TaskList>();
         }

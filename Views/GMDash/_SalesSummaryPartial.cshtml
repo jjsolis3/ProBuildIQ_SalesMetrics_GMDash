@@ -1,0 +1,33 @@
+﻿@model List<SalesMetrics.Models.GMBranchSalesMetricsViewModel>
+@if (ViewBag.salesRangeLabel != null)
+{
+    <p class="text-muted small sales-range-label" style="display:none;">
+        Showing: @ViewBag.salesRangeLabel
+    </p>
+
+}
+<table class="table table-striped table-bordered table-nowrap">
+    <thead>
+        <tr>
+            <th>Location</th>
+            <th>Orders Count</th>
+            <th>Orders $</th>
+            <th>Online $</th>
+            <th>Online %</th>
+            <th>Total $</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var item in Model)
+        {
+            <tr>
+                <td class="text-center fw-bold">@item.LocationFullName</td>
+                <td>@item.TotalOrders.ToString("N0")</td>
+                <td>@item.TotalRegularOrderAmountFormatted</td>
+                <td>@item.OnlineOrderAmount.ToString("C")</td>
+                <td>@item.OnlineOrderPercentage.ToString("0.0")%</td>
+                <td>@item.TotalOrderAmount.ToString("C")</td>
+            </tr>
+        }
+    </tbody>
+</table>

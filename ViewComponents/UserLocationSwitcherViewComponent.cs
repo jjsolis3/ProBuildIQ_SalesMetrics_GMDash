@@ -38,7 +38,7 @@ namespace SalesMetrics.ViewComponents
                 }).ToList()
             };
 
-            Console.WriteLine($"[DEBUG] Loaded {locations.Count} locations for user {userId}");
+            //Console.WriteLine($"[DEBUG] Loaded {locations.Count} locations for user {userId}");
 
             return View(viewName, model);
         }

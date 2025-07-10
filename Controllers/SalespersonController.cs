@@ -23,33 +23,44 @@ namespace SalesMetrics.Controllers
             _config = config;
         }
 
+
         [HttpGet]
         public IActionResult Index(int? selectedSalesmanId, DateTime? startDate, DateTime? endDate)
         {
+            var roleId = Convert.ToInt32(HttpContext.Session.GetString("RoleId"));
+            //var locationId = Convert.ToInt32(HttpContext.Session.GetString("LocationId"));
+            var locationId = LocationHelper.GetCurrentLocationId(HttpContext);
+
+            var dateFormat = "MM/dd/yyyy";
+            var culture = System.Globalization.CultureInfo.InvariantCulture;
+
+            // Try to parse, or fallback to defaults
+            var parsedStartDate = startDate ?? DateTime.UtcNow.AddMonths(-1).AddDays(-DateTime.UtcNow.Day + 1);
+            var parsedEndDate = endDate ?? DateTime.UtcNow;
+
+            //###########  
+
             var viewModel = new SalesRepProfilePageViewModel()
             {
                 // Dropdown list of all sales reps
-                SalesReps = GetAllSalesReps(),
+                SalesReps = GetAllSalesReps(roleId, locationId),
+                StartDate = parsedStartDate,
+                EndDate = parsedEndDate
 
-                StartDate = startDate ?? DateTime.UtcNow.AddMonths(-1).AddDays(-(DateTime.UtcNow.Day)),
-                EndDate = endDate ?? DateTime.UtcNow
             };
 
             if (selectedSalesmanId.HasValue)
             {
-                viewModel.Metrics = GetSalesMetrics(selectedSalesmanId.Value, viewModel.StartDate, viewModel.EndDate);
-                viewModel.UserProfile = GetUserProfileBySalesmanId(selectedSalesmanId.Value);
+                viewModel.Metrics = GetSalesMetrics(selectedSalesmanId.Value, locationId, viewModel.StartDate, viewModel.EndDate);
+                viewModel.UserProfile = GetUserProfileBySalesmanId(selectedSalesmanId.Value, locationId);
                 viewModel.SelectedSalesmanId = selectedSalesmanId.Value;
             }
 
             return View(viewModel);
         }
 
-        private List<SelectListItem> GetAllSalesReps()
+        private List<SelectListItem> GetAllSalesReps(int roleId, int locationId)
         {
-            var roleId = Convert.ToInt32(HttpContext.Session.GetString("RoleId"));
-            var locationId = Convert.ToInt32(HttpContext.Session.GetString("LocationId"));
-
             var list = new List<SelectListItem>();
 
             string sqlQuery = @"
@@ -85,7 +96,7 @@ namespace SalesMetrics.Controllers
             return list;
         }
 
-        private UserProfileViewModel GetUserProfileBySalesmanId(int salesmanId)
+        private UserProfileViewModel GetUserProfileBySalesmanId(int salesmanId, int locationId)
         {
             var model = new UserProfileViewModel();
 
@@ -97,8 +108,10 @@ namespace SalesMetrics.Controllers
                        SalesmanID, SalesmanNumber, Location
                 FROM Users
                 WHERE SalesmanID = @SalesmanID
+                    AND Location = @LocationID
             ", conn);
             cmd.Parameters.AddWithValue("@SalesmanID", salesmanId);
+            cmd.Parameters.AddWithValue("@LocationID", locationId);
 
             using var reader = cmd.ExecuteReader();
             if (reader.Read())
@@ -119,7 +132,7 @@ namespace SalesMetrics.Controllers
         }
 
 
-        private SalesRepMetricsViewModel GetSalesMetrics(int salesmanId, DateTime startDate, DateTime endDate)
+        private SalesRepMetricsViewModel GetSalesMetrics(int salesmanId, int locationId, DateTime startDate, DateTime endDate)
         {
             var metrics = new SalesRepMetricsViewModel
             {
@@ -127,57 +140,60 @@ namespace SalesMetrics.Controllers
             };
 
             // Get salesperson full name for query
-            string salesmanName = GetSalespersonFullName(salesmanId);
+            string salesmanName = GetSalespersonFullName(salesmanId, locationId);
             if (string.IsNullOrEmpty(salesmanName))
                 return metrics;
 
-            string officeLocation = LocationHelper.GetCurrentOfficeCode(HttpContext);
+            string officeLocation = LocationHelper.GetLocationCode(locationId);
+            //string officeLocation = LocationHelper.GetCurrentOfficeCode(HttpContext);
             string connectionString = _config.GetConnectionString(officeLocation);
 
             using var conn = new SqlConnection(connectionString);
             conn.Open();
 
             var cmd = new SqlCommand(@"
-        WITH NewAccounts AS (
-            SELECT
-                C.CUM_CUMMAS_ID as PropertyID,
-                C.CUM_CUSTOMER_NAME AS Property,
-                PC.IPC_DESCRIPTION AS [Mgmt Co],
-                SM.SMN_SALESMAN_NAME AS Salesperson,
-                SH.SOH_NUMBER AS [Order#],
-                IH.IHF_INVOICE_NUMBER AS [Invoice#],
-                CAST(C.CUM_ESTABLISHED_DATE AS DATE) AS [Date Created],
-                CAST(SH.SOH_DELIVERY_DATE AS DATE) AS [Date Installed],
-                ISNULL(SOH_TOTAL_AMOUNT, 0) AS OrderAmount,
-                ISNULL(IHF_TOTAL_AMOUNT, 0) AS InvoiceAmount
-            FROM CUSTOMER_MASTER C
-            LEFT JOIN SALESMAN_MASTER SM ON C.CUM_SMNMAS_ID = SM.SMN_SMNMAS_ID
-            LEFT JOIN PRICE_CODES PC ON C.CUM_PRICE_CODE = PC.IPC_PRICE_CODE
-            LEFT JOIN SALES_HEADER SH ON C.CUM_CUSTOMER_NUMBER = SH.SOH_CUSTOMER_NUMBER
-            LEFT JOIN INVOICE_HEADER IH ON SH.SOH_NUMBER = IH.IHF_ORDER_NUMBER
-            WHERE
-                C.CUM_ESTABLISHED_DATE >= @startDate
-                AND C.CUM_ESTABLISHED_DATE < @endDate
-                AND SH.SOH_CANCELED_DATE IS NULL
-                AND SH.SOH_WHSMAS_ID = 1
-                AND SM.SMN_SALESMAN_NAME = @salesperson
-        )
-        SELECT
-            MAX(PropertyID) as PropertyId,
-            Property,
-            [Mgmt Co] AS ManagementCompany,
-            MAX([Date Created]) as Established,
-            COUNT(DISTINCT [Order#]) AS Orders,
-            SUM(OrderAmount) AS TotalSalesAmount,
-            COUNT(DISTINCT [Invoice#]) AS Invoices,
-            SUM(InvoiceAmount) AS TotalInvoiceAmount
-        FROM NewAccounts
-        GROUP BY Property, [Mgmt Co]
-        ORDER BY Property;
-    ", conn);
+                WITH NewAccounts AS (
+                    SELECT
+                        C.CUM_CUMMAS_ID as PropertyID,
+                        C.CUM_CUSTOMER_NAME AS Property,
+                        PC.IPC_DESCRIPTION AS [Mgmt Co],
+                        SM.SMN_SALESMAN_NAME AS Salesperson,
+                        SH.SOH_NUMBER AS [Order#],
+                        IH.IHF_INVOICE_NUMBER AS [Invoice#],
+                        CAST(C.CUM_ESTABLISHED_DATE AS DATE) AS [Date Created],
+                        CAST(SH.SOH_DELIVERY_DATE AS DATE) AS [Date Installed],
+                        ISNULL(SOH_TOTAL_AMOUNT, 0) AS OrderAmount,
+                        ISNULL(IHF_TOTAL_AMOUNT, 0) AS InvoiceAmount
+                    FROM CUSTOMER_MASTER C
+                    LEFT JOIN SALESMAN_MASTER SM ON C.CUM_SMNMAS_ID = SM.SMN_SMNMAS_ID
+                    LEFT JOIN PRICE_CODES PC ON C.CUM_PRICE_CODE = PC.IPC_PRICE_CODE
+                    LEFT JOIN SALES_HEADER SH ON C.CUM_CUSTOMER_NUMBER = SH.SOH_CUSTOMER_NUMBER
+                    LEFT JOIN INVOICE_HEADER IH ON SH.SOH_NUMBER = IH.IHF_ORDER_NUMBER
+                    WHERE
+                        C.CUM_ESTABLISHED_DATE >= @startDate
+                        AND C.CUM_ESTABLISHED_DATE < @endDate
+                        AND SH.SOH_CANCELED_DATE IS NULL
+                        AND SH.SOH_WHSMAS_ID = 1
+                        AND SH.SOH_SMNMAS_ID = @salespersonId
+                        AND SM.SMN_SALESMAN_NAME = @salesperson
+                )
+                SELECT
+                    MAX(PropertyID) as PropertyId,
+                    Property,
+                    [Mgmt Co] AS ManagementCompany,
+                    MAX([Date Created]) as Established,
+                    COUNT(DISTINCT [Order#]) AS Orders,
+                    SUM(OrderAmount) AS TotalSalesAmount,
+                    COUNT(DISTINCT [Invoice#]) AS Invoices,
+                    SUM(InvoiceAmount) AS TotalInvoiceAmount
+                FROM NewAccounts
+                GROUP BY Property, [Mgmt Co]
+                ORDER BY Property;
+            ", conn);
 
             cmd.Parameters.AddWithValue("@startDate", startDate);
             cmd.Parameters.AddWithValue("@endDate", endDate);
+            cmd.Parameters.AddWithValue("@salespersonId", salesmanId);
             cmd.Parameters.AddWithValue("@salesperson", salesmanName);
 
             using var reader = cmd.ExecuteReader();
@@ -208,13 +224,14 @@ namespace SalesMetrics.Controllers
             return metrics;
         }
 
-        private string GetSalespersonFullName(int salesmanId)
+        private string GetSalespersonFullName(int salesmanId, int locationId)
         {
             using var conn = new SqlConnection(_config.GetConnectionString("SalesMetrics"));
             conn.Open();
 
-            var cmd = new SqlCommand("SELECT FirstName + ' ' + LastName AS FullName FROM Users WHERE SalesmanID = @SalesmanID", conn);
+            var cmd = new SqlCommand("SELECT FirstName + ' ' + LastName AS FullName FROM Users WHERE SalesmanID = @SalesmanID AND Location = @LocationID", conn);
             cmd.Parameters.AddWithValue("@SalesmanID", salesmanId);
+            cmd.Parameters.AddWithValue("@LocationID", locationId);
 
             return cmd.ExecuteScalar()?.ToString() ?? string.Empty;
         }

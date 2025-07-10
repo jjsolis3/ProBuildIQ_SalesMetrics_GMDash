@@ -1,4 +1,7 @@
-﻿namespace SalesMetrics.Models
+﻿using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Identity.Client;
+
+namespace SalesMetrics.Models
 {
     public class GMFullDashboardViewModel
     {
@@ -27,9 +30,12 @@
 
         public int TotalOrders { get; set; }
         public int OnlineOrders { get; set; }
+        public int TotalRegularOrders => TotalOrders - OnlineOrders;
 
         public decimal TotalOrderAmount { get; set; }
         public decimal OnlineOrderAmount { get; set; }
+        public decimal TotalRegularOrdersAmount => TotalOrderAmount - OnlineOrderAmount;
+        public string TotalRegularOrderAmountFormatted => TotalRegularOrdersAmount.ToString("C");
 
         public double OnlineOrderPercentage => TotalOrders > 0
             ? (double)OnlineOrderAmount / (double)TotalOrderAmount * 100 
@@ -97,12 +103,18 @@
 
     public class BranchInventorySummary
     {
+        public string OfficeBranch { get; set; }
         public string WarehouseId { get; set; }
         public string ProductClass { get; set; }
         public string Style { get; set; }
         public string Color { get; set; }
         public string Description { get; set; }
         public string Vendor { get; set; }
+        public string RollLot { get; set; }
+        public string UOM { get; set; } // Unit of Measure
+        public string Units { get; set; } // Units / Carton
+        public string Pieces { get; set; } // Pieces / Carton
+        public string RollWidth { get; set; } // Roll Width in Inches
         public decimal QtyAvailable { get; set; }
         public decimal QtyOnHand { get; set; }
         public decimal QtyAllocated { get; set; }
@@ -150,6 +162,42 @@
         public int OrderArrivalCount { get; set; }
         public int OrderCompletedCount { get; set; }
         public int OrderCancelledCount { get; set; }
+    }
+
+    public class InstallerDetails
+    {
+        public string Property { get; set; } // Property Name
+        public string? PropertyId { get; set; } // Property ID
+
+        public string Installer { get; set; }
+        public int InstallerId { get; set; } // Installer ID
+        public int OrderId { get; set; }
+        public DateTime? OrderDate { get; set; }
+        public DateTime? WhsArrive { get; set; }
+        public DateTime? MaterialConfirm { get; set; }
+        public string? WhsLoading { get; set; } // Warehouse Time
+        public string? DistanceFromWhs { get; set; } // Distance from Warehouse
+        public string? TravelTime { get; set; } // Travel Time to Job Site
+        public string? JobLocation { get; set; } // Job Address
+        public DateTime? JobArrival { get; set; }
+        public DateTime? JobCompleted { get; set; }
+        public DateTime? JobDepart { get; set; }
+        public string? JobCompleteLocation { get; set; } // Job Completion Address
+        public string? JobDuration { get; set; } // Job Duration
+        public DateTime? JobCancelled { get; set; } // Job Cancelled Date
+
+        // Calculate Time Between JobArrival and Job Completed
+        public TimeSpan? TimeToCompleteJob => JobCompleted > JobArrival
+            ? JobCompleted - JobArrival
+            : (TimeSpan?)null;
+
+        // Calculate Time between WhsArrival and JobArrival
+        public TimeSpan? TimeToJobArrival => JobArrival > WhsArrive
+            ? JobArrival - WhsArrive
+            : (TimeSpan?)null;
+
+
+
     }
 
     public class RTJEntry

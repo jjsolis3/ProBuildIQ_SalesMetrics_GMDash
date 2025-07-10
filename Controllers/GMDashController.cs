@@ -43,6 +43,7 @@ namespace SalesMetrics.Controllers
             var salesTasks = locations.Select(loc => GetBranchSalesMetrics(loc, mtdStart, ytdStart, today));
             var salesResult = await Task.WhenAll(salesTasks);
             model.BranchSalesMetrics = salesResult.ToList();
+            ViewBag.SalesRange = "ytd";
 
             // AR DATA - aggregate across location
             var arTasks = locations.Select(loc => GetARDataAsync(loc));
@@ -95,18 +96,32 @@ namespace SalesMetrics.Controllers
             var installerResults = await Task.WhenAll(installerTasks);
             model.InstallerCompletionMetrics = installerResults.SelectMany(r => r).ToList();
             ViewBag.InstallerRange = "ytd";
-
+            
             // RECENT RTJS
-            var rtjTasks = locations.Select(loc => GetRecentRTJEntries(ytdStart, loc));
+            var rtjTasks = locations.Select(loc => GetRecentRTJEntries(ytdStart, today, loc));
             var rtjResult = await Task.WhenAll(rtjTasks);
             model.RecentRTJs = rtjResult.SelectMany(r => r).ToList();
-
+            ViewBag.RTJRange = "ytd";
 
             ViewBag.SelectedLocationsId = locationId;
             ViewBag.LocationFullName = locationId == 0 ? "All Branches" : LocationHelper.GetLocationName(locationId);
 
             ViewBag.MTDStartDateRange = mtdStart.ToString("d") + " to " + today.ToString("d");
             ViewBag.YTDStartDateRange = ytdStart.ToString("d") + " to " + today.ToString("d");
+
+            // ADD DATE RANGE LABELS
+            var salesRange = "ytd"; // or "ytd", whatever default you want
+            var installerRange = "ytd";
+            var rtjRange = "ytd";
+
+            var (salesStart, salesEnd) = DateRangeHelper.GetRange(salesRange);
+            var (installerStart, installerEnd) = DateRangeHelper.GetRange(installerRange);
+            var (rtjStart, rtjEnd) = DateRangeHelper.GetRange(rtjRange);
+
+            ViewBag.salesRangeLabel = $"{salesStart.ToString("M/d/yyyy")} to {salesEnd.ToString("M/d/yyyy")}";
+            ViewBag.installerRangeLabel = $"{installerStart.ToString("M/d/yyyy")} to {installerEnd.ToString("M/d/yyyy")}";
+            ViewBag.rtjRangeLabel = $"{rtjStart.ToString("M/d/yyyy")} to {rtjEnd.ToString("M/d/yyyy")}";
+
 
             return View("Index", model);
         }
@@ -135,11 +150,11 @@ namespace SalesMetrics.Controllers
                         CASE WHEN A.ARO_INVOICE_AMOUNT IS NULL THEN S.SOH_TOTAL_AMOUNT ELSE A.ARO_INVOICE_AMOUNT END
                     ELSE 0 END) AS OnlineOrderAmount
                 FROM SALES_HEADER S
-                LEFT JOIN AR_OPEN_ITEM A ON S.SOH_NUMBER = A.ARO_SALES_ORDER_NUMBER
+                    LEFT JOIN AR_OPEN_ITEM A ON S.SOH_NUMBER = A.ARO_SALES_ORDER_NUMBER
                 WHERE S.SOH_DELIVERY_DATE BETWEEN @YTDStart AND @Today
-                  AND S.SOH_CANCELED_DATE IS NULL
-                  AND S.SOH_WHSMAS_ID IN (1)
-                  AND (@Location <> 'LAX' OR S.SOH_SMNMAS_ID <> 24);
+                    AND S.SOH_CANCELED_DATE IS NULL
+                    AND S.SOH_WHSMAS_ID IN (1)
+                    AND (@Location <> 'LAX' OR S.SOH_SMNMAS_ID <> 24);
             ";
 
             using var cmd = new SqlCommand(query, conn);
@@ -161,6 +176,21 @@ namespace SalesMetrics.Controllers
 
             return result;
         }
+
+        [HttpGet]
+        public async Task<IActionResult> GetSalesSummaryTable(string range = "ytd", int locationId = 0)
+        {
+            var (start, end) = DateRangeHelper.GetRange(range);
+            var locations = LocationHelper.GetLocationQueryList(locationId);
+
+            var salesTasks = locations.Select(loc => GetBranchSalesMetrics(loc, start, start, end));
+            var results = await Task.WhenAll(salesTasks);
+
+            ViewBag.salesRangeLabel = $"{start.ToString("M/d/yyyy")} to {end.ToString("M/d/yyyy")}";
+
+            return PartialView("_SalesSummaryPartial", results.ToList());
+        }
+
 
         private async Task<GMARDataViewModel> GetARDataAsync(string location)
         {
@@ -196,28 +226,16 @@ namespace SalesMetrics.Controllers
             return result;
         }
 
-        private async Task<GMInventoryDataViewModel> GetInventoryDataAsync(string location)
+        [HttpGet]
+        public IActionResult GetInventoryModal(string office)
         {
-            var result = new GMInventoryDataViewModel { Location = location };
-            using var conn = new SqlConnection(_configuration.GetConnectionString(location));
-            await conn.OpenAsync();
-
-            var cmd = new SqlCommand(@"
-                SELECT
-                
-            ", conn); // Add inventory query
-            using var reader = await cmd.ExecuteReaderAsync();
-            if (await reader.ReadAsync())
-            {
-                // Fill inventory data
-            }
-
-            return result;
+            var items = GetInventorySummaryByBranch(office);
+            return PartialView("_InventoryModalPartial", items);
         }
 
-        public List<BranchInventorySummary> GetInventorySummaryByBranch()
+        public List<BranchInventorySummary> GetInventorySummaryByBranch(string officeLocation)
         {
-            var officeLocation = User.FindFirstValue("OfficeLocation");
+            //var officeLocation = User.FindFirstValue("OfficeLocation");
             var connectionString = _configuration.GetConnectionString(officeLocation);
 
             var results = new List<BranchInventorySummary>();
@@ -330,12 +348,15 @@ namespace SalesMetrics.Controllers
             {
                 results.Add(new BranchInventorySummary
                 {
+                    OfficeBranch = officeLocation,
                     WarehouseId = reader["WhsID"]?.ToString(),
                     ProductClass = reader["ProductClass"]?.ToString(),
                     Style = reader["Style"]?.ToString(),
                     Color = reader["Color"]?.ToString(),
                     Description = reader["Description"]?.ToString(),
                     Vendor = reader["Vendor"]?.ToString(),
+                    RollLot = reader["Roll-Lot"]?.ToString(),
+                    UOM = reader["UOM"]?.ToString(),
                     QtyAvailable = Convert.ToDecimal(reader["QtyAvailable"]),
                     QtyOnHand = Convert.ToDecimal(reader["QtyOnHand"]),
                     QtyAllocated = Convert.ToDecimal(reader["QtyAllocated"]),
@@ -419,6 +440,7 @@ namespace SalesMetrics.Controllers
 
         }
 
+        // INSTALLER SECTION
         private async Task<List<InstallerCompletionMetric>> GetInstallerMetricsForWeek(string location, DateTime startDate, DateTime endDate )
         {
             var metrics = new List<InstallerCompletionMetric>();
@@ -434,10 +456,10 @@ namespace SalesMetrics.Controllers
                     [WOS].[CANCEL_TIME], 
                     [WOS].[COMPLETE_TIME]
                 FROM [TEMP_INSTALLER_DETAILS] TID
-                INNER JOIN [SALES_HEADER] SOH ON TID.ORDER_ID = SOH.SOH_NUMBER
-                LEFT JOIN [WORK_ORDER_STATUS] WOS ON SOH.SOH_NUMBER = WOS.SOH_NUMBER
-                LEFT JOIN [LOAD_RETURN_STATUS] LRS ON SOH.SOH_NUMBER = LRS.SOH_NUMBER
-                WHERE TID.INSTALL_DATE >= @startDate AND TID.INSTALL_DATE < @endDate
+                    INNER JOIN [SALES_HEADER] SOH ON TID.ORDER_ID = SOH.SOH_NUMBER
+                    LEFT JOIN [WORK_ORDER_STATUS] WOS ON SOH.SOH_NUMBER = WOS.SOH_NUMBER
+                    LEFT JOIN [LOAD_RETURN_STATUS] LRS ON SOH.SOH_NUMBER = LRS.SOH_NUMBER
+                WHERE TID.INSTALL_DATE BETWEEN @startDate AND @endDate
             ", conn);
             cmd.Parameters.AddWithValue("@startDate", startDate);
             cmd.Parameters.AddWithValue("@endDate", endDate);
@@ -482,50 +504,159 @@ namespace SalesMetrics.Controllers
 
             return metrics;
         }
-
+                
         [HttpGet]
-        public async Task<IActionResult> GetInstallerTable(string range = "week", int locationId = 0)
+        public async Task<IActionResult> GetInstallerTable(string range = "thisWeek", int locationId = 0)
         {
-            var today = DateTime.Today;
-            DateTime startDate, endDate = today;
-
-            switch (range)
-            {
-                case "lastweek":
-                    startDate = today.AddDays(-(int)today.DayOfWeek - 7 + 1);
-                    endDate = startDate.AddDays(6);
-                    break;
-                case "mtd":
-                    startDate = new DateTime(today.Year, today.Month, 1);
-                    break;
-                case "lastmonth":
-                    startDate = new DateTime(today.Year, today.Month, 1).AddMonths(-1);
-                    endDate = startDate.AddMonths(1).AddDays(-1);
-                    break;
-                case "lastquarter":
-                    int quarter = (today.Month - 1) / 3;
-                    startDate = new DateTime(today.Year, quarter * 3 + 1, 1).AddMonths(-3);
-                    endDate = startDate.AddMonths(3).AddDays(-1);
-                    break;
-                case "ytd":
-                    startDate = new DateTime(today.Year, 1, 1);
-                    break;
-                default: // this week
-                    int daysToSunday = (int)today.DayOfWeek;
-                    startDate = today.AddDays(-daysToSunday);
-                    break;
-            }
-
+            var (startDate, endDate) = DateRangeHelper.GetRange(range);
+                        
             var locations = LocationHelper.GetLocationQueryList(locationId);
             var installerTasks = locations.Select(loc => GetInstallerMetricsForWeek(loc, startDate, endDate));
             var installerResults = await Task.WhenAll(installerTasks);
             var metrics = installerResults.SelectMany(x => x).ToList();
 
+            ViewBag.installerRangeLabel = $"{startDate.ToString("M/d/yyyy")} to {endDate.ToString("M/d/yyyy")}";
+
             return PartialView("_InstallerTablePartial", metrics);
         }
 
+        [HttpGet]
+        public async Task<IActionResult> GetInstallerDetails(string location, string range = "ytd")
+        {
+            var (startDate, endDate) = DateRangeHelper.GetRange(range);
 
-        private async Task<List<RTJEntry>> GetRecentRTJEntries(DateTime startDate, string location)
+            var data = await GetInstallerDetailEntries(startDate, endDate, location);
+            return PartialView("_InstallerModalPartial", data);
+        }
+
+        private async Task<List<InstallerDetails>> GetInstallerDetailEntries(DateTime startDate, DateTime endDate, string location)
+        {
+            var results = new List<InstallerDetails>();
+
+            var connectionString = _configuration.GetConnectionString(location);
+            if (string.IsNullOrEmpty(connectionString))
+            {
+                throw new InvalidOperationException($"Connection string for location '{location}' is missing.");
+            }
+
+            using var conn = new SqlConnection(connectionString);
+            await conn.OpenAsync();
+
+            var locationPoint = location switch
+            {
+                "LAX" => "geography::Point(34.28298, -118.86938, 4326)",
+                "LSV" => "geography::Point(36.08918, -115.21183, 4326)",
+                "CHN" => "geography::Point(34.00234, -117.67519, 4326)",
+                "SND" => "geography::Point(32.89706, -117.13132, 4326)",
+                "PHX" => "geography::Point(33.40868, -111.88153, 4326)",
+                _ => null
+            };
+
+            if (locationPoint == null) return results;
+
+            var sql = $@"
+                DECLARE @officeLocation geography = {locationPoint};
+                SELECT 
+                    SOH.SOH_SHIP_TO_NAME as [PROPERTY],
+                    TID.ORDER_ID as [ORDERNUMBER],
+                    CONVERT(varchar(10),TID.INSTALL_DATE, 101) as [ORDERDATE],
+                    CONVERT(varchar(8), LRS.ARRIVE_TIME, 108) as [WHS_ARRIVE],
+                    CONVERT(varchar(8), LRS.RECEIVE_TIME, 108) as [MATERIAL_CONFIRM],
+	                DATEDIFF(HOUR, LRS.ARRIVE_TIME, LRS.RECEIVE_TIME) [WHSLOADING],
+                    CASE 
+		                WHEN (DATEDIFF(MINUTE, LRS.ARRIVE_TIME, LRS.RECEIVE_TIME) / 60) > 0 THEN 
+			                CAST((DATEDIFF(MINUTE, LRS.ARRIVE_TIME, LRS.RECEIVE_TIME) / 60) AS NVARCHAR) + ' hours ' + CAST((DATEDIFF(MINUTE, LRS.ARRIVE_TIME, LRS.RECEIVE_TIME) % 60) AS NVARCHAR) + ' minutes' 
+		                ELSE 
+			                CAST((DATEDIFF(MINUTE, LRS.ARRIVE_TIME, LRS.RECEIVE_TIME) % 60) AS NVARCHAR) + ' minutes'
+		                END as [WHS_LOADING],
+                    WOS.ARRIVE_LOC as [JOB_ARRIVE_LOCATION],
+                    CONVERT(varchar(8), WOS.ARRIVAL_TIME, 108) as [JOB_ARRIVE],
+                    CASE 
+                        WHEN WOS.Latitude IS NOT NULL AND WOS.Longitude IS NOT NULL THEN
+                            CONCAT(CAST((@officeLocation.STDistance(geography::Point(WOS.Latitude, WOS.Longitude, 4326)) * 3.28084) as INT) / 5280 , ' miles, ', CAST((@officeLocation.STDistance(geography::Point(WOS.Latitude, WOS.Longitude, 4326)) * 3.28084) as INT) % 5280 , ' feet')
+                        ELSE NULL 
+		                END AS [JOB_DISTANCE_FROM_WHS],
+                    CASE 
+                        WHEN LRS.RECEIVE_TIME < WOS.ARRIVAL_TIME THEN
+			                CASE 
+				                WHEN (DATEDIFF(MINUTE, LRS.RECEIVE_TIME, WOS.ARRIVAL_TIME) / 60) > 0 THEN 
+					                CAST((DATEDIFF(MINUTE, LRS.RECEIVE_TIME, WOS.ARRIVAL_TIME) / 60) AS NVARCHAR) + ' hours ' + CAST((DATEDIFF(MINUTE, LRS.RECEIVE_TIME, WOS.ARRIVAL_TIME) % 60) AS NVARCHAR) + ' minutes'
+				                ELSE
+					                CAST((DATEDIFF(MINUTE, LRS.RECEIVE_TIME, WOS.ARRIVAL_TIME) % 60) AS NVARCHAR) + ' minutes'
+				                END
+                        ELSE 
+			                CASE 
+				                WHEN (DATEDIFF(MINUTE, LRS.ARRIVE_TIME, WOS.ARRIVAL_TIME) / 60) > 0 THEN
+					                CAST((DATEDIFF(MINUTE, LRS.ARRIVE_TIME, WOS.ARRIVAL_TIME) / 60) AS NVARCHAR) + ' hours ' + CAST((DATEDIFF(MINUTE, LRS.ARRIVE_TIME, WOS.ARRIVAL_TIME) % 60) AS NVARCHAR) + ' minutes'
+				                ELSE 
+					                CAST((DATEDIFF(MINUTE, LRS.ARRIVE_TIME, WOS.ARRIVAL_TIME) % 60) AS NVARCHAR) + ' minutes'
+				                END
+		                END AS [TRAVEL_TIME],
+                    CONVERT(varchar(8), WOS.COMPLETE_TIME, 108) as [JOB_COMPLETED],
+                    CONVERT(varchar(8), WOS.DEPART_TIME, 108) as [JOB_DEPARTED],
+                    CASE
+		                WHEN (DATEDIFF(MINUTE, WOS.ARRIVAL_TIME, WOS.DEPART_TIME) / 60) >  0 THEN 
+			                CAST((DATEDIFF(MINUTE, WOS.ARRIVAL_TIME, WOS.DEPART_TIME) / 60) AS VARCHAR) + ' hours ' + CAST((DATEDIFF(MINUTE, WOS.ARRIVAL_TIME, WOS.DEPART_TIME) % 60) AS VARCHAR) + ' minutes'
+		                ELSE	
+			                CAST((DATEDIFF(MINUTE, WOS.ARRIVAL_TIME, WOS.DEPART_TIME) % 60) AS VARCHAR) + ' minutes'
+		                END as [JOB_DURATION],
+                    CASE 
+                        WHEN WOS.COMPLETE_LATITUDE IS NOT NULL AND WOS.COMPLETE_LONGITUDE IS NOT NULL THEN
+                            CONCAT(CAST((@officeLocation.STDistance(geography::Point(WOS.COMPLETE_LATITUDE, WOS.COMPLETE_LONGITUDE, 4326)) * 3.28084) as INT) / 5280 , ' miles, ', CAST((@officeLocation.STDistance(geography::Point(WOS.COMPLETE_LATITUDE, WOS.COMPLETE_LONGITUDE, 4326)) * 3.28084) as INT) % 5280 , ' feet')
+                        ELSE NULL 
+		                END AS [JOB_COMPLETED_FROM_WHS],
+                    WOS.COMPLETE_LOCATION as [JOB_COMPLETED_LOCATION],
+                    CASE WHEN DATEDIFF(MINUTE, WOS.ARRIVAL_TIME, WOS.DEPART_TIME) < 33 THEN 'ERROR' ELSE '' END AS [UsageCheck],
+                    CONVERT(varchar(8), WOS.CANCEL_TIME, 108) as [JOB_CANCELED],
+                    TID.INSTALLER_NAME as [INSTALLER],
+                    TID.INSTALLER_CODE as [INSTALLERID],
+                    WOS.INSTALLER_ID as [ORDER_INSTALLERID]
+
+                FROM TEMP_INSTALLER_DETAILS TID
+                    INNER JOIN SALES_HEADER SOH on TID.ORDER_ID = SOH.SOH_NUMBER
+                    LEFT JOIN WORK_ORDER_STATUS WOS on SOH.SOH_NUMBER = WOS.SOH_NUMBER
+                    LEFT JOIN LOAD_RETURN_STATUS LRS on SOH.SOH_NUMBER = LRS.SOH_NUMBER
+
+                WHERE TID.INSTALL_DATE BETWEEN @FromDate AND @ToDate
+
+                ORDER BY [Installer] ASC, [JOB_ARRIVE] ASC
+            ";
+
+            using var cmd = new SqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@FromDate", startDate);
+            cmd.Parameters.AddWithValue("@ToDate", endDate);
+
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                results.Add(new InstallerDetails
+                {
+                    Property = reader["PROPERTY"]?.ToString(),
+                    OrderId = Convert.ToInt32(reader["ORDERNUMBER"]),
+                    OrderDate = DateTime.TryParse(reader["ORDERDATE"]?.ToString(), out var orderDate) ? orderDate : (DateTime?)null,
+                    WhsArrive = DateTime.TryParse(reader["WHS_ARRIVE"]?.ToString(), out var wa) ? wa : (DateTime?)null,
+                    MaterialConfirm = DateTime.TryParse(reader["MATERIAL_CONFIRM"]?.ToString(), out var mc) ? mc : (DateTime?)null,
+                    WhsLoading = reader["WHS_LOADING"]?.ToString(),
+                    JobLocation = reader["JOB_ARRIVE_LOCATION"]?.ToString(),
+                    JobArrival = DateTime.TryParse(reader["JOB_ARRIVE"]?.ToString(), out var ja) ? ja : (DateTime?)null,
+                    DistanceFromWhs = reader["JOB_DISTANCE_FROM_WHS"]?.ToString(),
+                    TravelTime = reader["TRAVEL_TIME"]?.ToString(),
+                    JobCompleted = DateTime.TryParse(reader["JOB_COMPLETED"]?.ToString(), out var jc) ? jc : (DateTime?)null,
+                    JobDepart = DateTime.TryParse(reader["JOB_DEPARTED"]?.ToString(), out var jd) ? jd : (DateTime?)null,
+                    JobDuration = reader["JOB_DURATION"]?.ToString(),
+                    JobCompleteLocation = reader["JOB_COMPLETED_LOCATION"]?.ToString(),
+                    JobCancelled = DateTime.TryParse(reader["JOB_CANCELED"]?.ToString(), out var cancel) ? cancel : (DateTime?)null,
+                    Installer = reader["INSTALLER"]?.ToString(),
+                    InstallerId = int.TryParse(reader["INSTALLERID"]?.ToString(), out var insId) ? insId : 0
+                });
+
+            }
+
+            return results;
+        }
+        // END INSTALLER SECTION
+        // RTJ SECTION
+        private async Task<List<RTJEntry>> GetRecentRTJEntries(DateTime startDate, DateTime endDate,  string location)
         {
             var result = new List<RTJEntry>();
             using var conn = new SqlConnection(_configuration.GetConnectionString(location));
@@ -541,7 +672,7 @@ namespace SalesMetrics.Controllers
                     G.GLJ_WAREHOUSE_NUMBER as [WarehouseNumber]
                 FROM GL_JOURNAL G
                 WHERE G.GLJ_ACCOUNT_NUMBER = 12970 
-                    AND G.GLJ_TRANSACTION_DATE >= @StartDate
+                    AND G.GLJ_TRANSACTION_DATE BETWEEN @StartDate AND @EndDate
                     AND G.GLJ_WAREHOUSE_NUMBER IN (1, 2, 3, 6, 11, 86, 90)
                     AND G.GLJ_REFERENCE_NUMBER LIKE '%RTJ%'
                     AND G.GLJ_REFERENCE_NUMBER NOT LIKE '%1226%'
@@ -551,9 +682,10 @@ namespace SalesMetrics.Controllers
             ", conn);
 
             cmd.Parameters.AddWithValue("@StartDate", startDate);
+            cmd.Parameters.AddWithValue("@EndDate", endDate);
 
             using var reader = await cmd.ExecuteReaderAsync();
-            Console.WriteLine($"{location}: Reader opened");
+            //Console.WriteLine($"{location}: Reader opened");
             
 
             while (await reader.ReadAsync())
@@ -569,9 +701,69 @@ namespace SalesMetrics.Controllers
                     Location = location // ✅ NEW
                 });
             }
-            Console.WriteLine($"{location}: Reader read complete. Total: {result.Count}");
+            //Console.WriteLine($"{location}: Reader read complete. Total: {result.Count}");
             return result;
         }
 
+        [HttpGet]
+        public async Task<IActionResult> GetRTJTable(string range = "ytd", int locationId = 0)
+        {
+            var (startDate, endDate) = DateRangeHelper.GetRange(range);
+
+            var locations = LocationHelper.GetLocationQueryList(locationId);
+            var rtjTasks = locations.Select(loc => GetRecentRTJEntries(startDate, endDate, loc));
+            var rtjResult = await Task.WhenAll(rtjTasks);
+            var allEntries = rtjResult.SelectMany(r => r).ToList();
+
+            ViewBag.rtjRangeLabel = $"{startDate.ToString("M/d/yyyy")} to {endDate.ToString("M/d/yyyy")}";
+
+            return PartialView("_RTJTablePartial", allEntries);
+        }        
+        // END RTJ SECTION
     }
+
+    // Helpers/DateRangeHelper.cs
+    public static class DateRangeHelper
+    {
+        public static (DateTime StartDate, DateTime EndDate) GetRange(string rangeKey)
+        {
+            var today = DateTime.Today;
+            DateTime startDate, endDate = today;
+
+            switch (rangeKey?.ToLower())
+            {
+                case "lastweek":
+                    startDate = today.AddDays(-(int)today.DayOfWeek - 7 + 1);
+                    endDate = startDate.AddDays(6);
+                    break;
+                case "mtd":
+                    startDate = new DateTime(today.Year, today.Month, 1);
+                    break;
+                case "lastmonth":
+                    startDate = new DateTime(today.Year, today.Month, 1).AddMonths(-1);
+                    endDate = startDate.AddMonths(1).AddDays(-1);
+                    break;
+                case "thisquarter":
+                    int thisQ = (today.Month) / 3;
+                    startDate = new DateTime(today.Year, thisQ * 3 + 1, 1);
+                    endDate = startDate.AddMonths(3).AddDays(-1);
+                    break;
+                case "lastquarter":
+                    int lastQ = (today.Month - 1) / 3;
+                    startDate = new DateTime(today.Year, lastQ * 3 + 1, 1).AddMonths(-3);
+                    endDate = startDate.AddMonths(3).AddDays(-1);
+                    break;
+                case "ytd":
+                    startDate = new DateTime(today.Year, 1, 1);
+                    break;
+                default: // this week
+                    int daysToSunday = (int)today.DayOfWeek;
+                    startDate = today.AddDays(-daysToSunday);
+                    break;
+            }
+
+            return (startDate, endDate);
+        }
+    }
+
 }

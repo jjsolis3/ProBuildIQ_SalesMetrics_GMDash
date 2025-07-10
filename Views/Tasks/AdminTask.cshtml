@@ -47,9 +47,11 @@
                     <th>Property</th>
                     <th>Location</th>
                     <th>Due Date</th>
+                    <th>Completed Date</th>
                     <th>Status</th>
                     <th>Assigned To</th>
                     <th>Created By</th>
+                    <th>Created Date</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -65,6 +67,9 @@
                         <td data-order="@task.DueDate?.ToString("yyyy-MM-ddTHH:mm:ss")">
                             @(task.DueDate?.ToString("g") ?? "N/A")
                         </td>
+                        <td data-order="@task.CompletedDate?.ToString("yyyy-MM-ddTHH:mm:ss")">
+                            @(task.CompletedDate?.ToString("g") ?? "N/A")
+                        </td>
                         <td>
                             <select class="form-select form-select-sm status-dropdown" data-task-id="@task.TaskID">
                                 <option selected disabled>@task.Status</option>
@@ -78,20 +83,25 @@
                         </td>
                         <td>
                             @{
-                                var assignedUser = Model.Users?.FirstOrDefault(u => u.UserID == task.AssignedTo);
+                                var assignedUser = Model.Users?.FirstOrDefault(u => u.Users_ID == task.AssignedTo);
                             }
 
                             @(assignedUser != null ? $"{assignedUser.FirstName} {assignedUser.LastName}" : "Unassigned")
 
                         </td>
                         <td>@task.CreatedBy</td>
+                        <td data-order="@task.CreatedDate?.ToString("yyyy-MM-ddTHH:mm:ss")">@task.CreatedDate?.ToString("g")</td>
                         <td>
                             <div class="d-flex gap-1 align-items-center">
                                 <button class="btn btn-sm btn-info" data-bs-toggle="modal" data-bs-target="#editTaskModal" data-task-id="@task.TaskID">
                                     <i class="fa fa-edit fs-14"></i>
                                 </button>
+                                <button class="btn btn-sm btn-secondary duplicate-task-btn" data-task-id="@task.TaskID" data-bs-toggle="modal" data-bs-target="#duplicateTaskModal">
+                                    <i class="fa fa-copy fs-14"></i>
+                                </button>
                                 <form id="deleteForm-@task.TaskID" method="post" asp-action="Delete" asp-controller="Tasks">
                                     <input type="hidden" name="taskId" value="@task.TaskID" />
+                                    <input type="hidden" name="returnUrl" value="@Context.Request.Path" />
                                     <button type="button" class="btn btn-sm btn-danger" onclick="confirmDelete(@task.TaskID)">
                                         <i class="fa fa-trash"></i>
                                     </button>
@@ -115,10 +125,22 @@
 {
     Task = new TaskCreateViewModel(),
     Users = Model.Users ?? new List<User>(),
-    LoggedInUserId = Convert.ToInt32(ViewBag.UserId),
+    LoggedInUserId = Convert.ToInt32(ViewBag.Users_Id),
     RoleId = Convert.ToInt32(ViewBag.RoleId),
     TaskTypes = TaskTypeHelper.GetTaskTypes("AdminTask")
 })
+
+<!-- DUPLICATE TASKS -->
+<div id="duplicateTaskModal" class="modal fade" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-body text-center">
+                <div class="spinner-border text-primary m-5" role="status"></div>
+                <p>Loading...</p>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- Edit Modal (to be loaded dynamically) -->
 <div id="editTaskModal" class="modal fade" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
@@ -175,7 +197,7 @@
     <script>
         $(document).ready(function () {
             var table = $('#taskTable').DataTable({
-                order: [[5, 'desc'], [7, 'asc']],
+                order: [[10, 'desc'], [8, 'asc']],
                 responsive: true,
                 rowReorder: true,
                 scrollX: true,
@@ -202,11 +224,11 @@
                         text: '<i class="bi bi-file-earmark-excel"></i> Excel',
                         className: 'btn btn-outline-success rounded-pill shadow-sm me-3',
                         exportOptions: {
-                            columns: [0, 1, 2, 3, 4, 5, 6, 7, 8], // Only export up to status
+                            columns: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], // Only export up to status
                             format: {
                                 body: function (data, row, column, node) {
                                     // If it's the status column (index 6), return selected text from <select>
-                                    if (column === 6) {
+                                    if (column === 7) {
                                         const $select = $('<div>' + data + '</div>').find('select');
                                         return $select.length ? $select.find('option:selected').text() : data;
                                     }
@@ -223,10 +245,10 @@
                         orientation: 'landscape', // ✅ Set landscape mode
                         pageSize: 'A4', // Optional: you can also set other sizes
                         exportOptions: {
-                            columns: [0, 1, 2, 3, 4, 5, 6, 7, 8], // ✅ Exclude the last column (Actions)
+                            columns: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], // ✅ Exclude the last column (Actions)
                             format: {
                                 body: function (data, row, column, node) {
-                                    if (column === 6) { // Status column
+                                    if (column === 7) { // Status column
                                         const $select = $('<div>' + data + '</div>').find('select');
                                         return $select.length ? $select.find('option:selected').text() : data;
                                     }
@@ -266,7 +288,7 @@
                     }
                 ],
                 columnDefs: [
-                    { searchPanes: { show: true }, targets: [7, 2, 6] },
+                    { searchPanes: { show: true }, targets: [2, 7, 8] },
                     { searchPanes: { show: false }, targets: '_all' }
                 ],
                 processing: true,
@@ -363,6 +385,23 @@
                 });
         });
     </script>
+
+    <script>
+        $('#duplicateTaskModal').on('show.bs.modal', function (event) {
+            const button = $(event.relatedTarget);
+            const taskId = button.data('task-id');
+            if (!taskId) return;
+
+            $.get(`/Tasks/DuplicateTaskModal/${taskId}`)
+                .done(function (html) {
+                    $('#duplicateTaskModal .modal-content').html(html);
+                })
+                .fail(function (xhr) {
+                    $('#duplicateTaskModal .modal-content').html('<div class="p-4 text-danger">Error loading duplicate modal: ' + xhr.responseText + '</div>');
+                });
+        });
+    </script>
+
     <script>
         // Confirm Delete with SweetAlert2
         function confirmDelete(taskId) {

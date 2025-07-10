@@ -4,9 +4,9 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <form asp-action="Edit" method="post">
-                <div class="modal-header">
-                    <h5 class="modal-title text-orange" id="editJournalModalLabel">Edit Journal Entry</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <div class="modal-header bg-orange">
+                    <h5 class="modal-title text-white" id="editJournalModalLabel">Edit Journal Entry</h5>
+                    <button type="button" class="btn-close bg-light-subtle" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
                     <input type="hidden" asp-for="Journal_ID" />
@@ -24,7 +24,7 @@
                     </div> *@
                 </div>
                 <div class="modal-footer">
-                    <button type="submit" class="btn btn-primary">Update</button>
+                    <button type="submit" class="btn btn-orange text-white">Update</button>
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 </div>
             </form>

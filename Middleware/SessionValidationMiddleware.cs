@@ -29,7 +29,7 @@ public class SessionValidationMiddleware
                 context.Session.Clear();
 
                 // Redirect to login
-                context.Response.Redirect("/Auth/Login");
+                context.Response.Redirect("/Auth/Login?expired=true");
                 return;
             }
         }

@@ -1,0 +1,41 @@
+﻿@model List<SalesMetrics.Models.BranchInventorySummary>
+
+<table class="table table-striped table-bordered table-nowrap" id="inventoryTable">
+    <thead class="table-light text-center ">
+        <tr>
+            <th>Product Class</th>
+            <th>Style</th>
+            <th>Color</th>
+            <th>Description</th>
+            <th>Vendor</th>
+            <th>Roll Lot</th>
+            <th>UOM</th>
+            <th>Qty Available</th>
+            <th>Qty On Hand</th>
+            <th>Qty Allocated</th>
+            <th>Aging (Days)</th>
+            <th>Date Received</th>
+            <th>Office/Branch</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var item in Model)
+        {
+            <tr>
+                <td>@item.ProductClass</td>
+                <td>@item.Style</td>
+                <td>@item.Color</td>
+                <td>@item.Description</td>
+                <td>@item.Vendor</td>
+                <td>@item.RollLot</td>
+                <td>@item.UOM</td>
+                <td>@item.QtyAvailable</td>
+                <td>@item.QtyOnHand</td>
+                <td>@item.QtyAllocated</td>
+                <td>@item.AgingDays</td>
+                <td data-order="@item.DateReceived.ToString("yyyy-MM-dd")">@item.DateReceived.ToShortDateString()</td>
+                <td>@item.OfficeBranch</td>
+            </tr>
+        }
+    </tbody>
+</table>

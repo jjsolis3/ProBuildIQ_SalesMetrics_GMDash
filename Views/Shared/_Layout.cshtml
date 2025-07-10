@@ -134,12 +134,12 @@
     </div>
 
     <!-- Switch Location Modal -->
+    @using SalesMetrics.Services.Helpers
     @{
-        var hideLocationSwitcher = currentController.Equals("GMDash", StringComparison.OrdinalIgnoreCase)
-        && currentAction.Equals("Index", StringComparison.OrdinalIgnoreCase);
+        var hideLocationSwitcher = PageHelper.ShouldHideLocationSwitcher(currentController, currentAction);
 
         var showSwitchLocationModal = !hideLocationSwitcher
-        && (User.IsInRole("Admin") || User.IsInRole("GM") || User.FindFirst("RoleId")?.Value == "1" || User.FindFirst("RoleId")?.Value == "4");
+        && (User.IsInRole("Admin") || User.IsInRole("General Manager") || User.IsInRole("Office Manager") || User.FindFirst("RoleId")?.Value == "1" || User.FindFirst("RoleId")?.Value == "4" || User.FindFirst("RoleId")?.Value == "5");
     }
 
     @if (showSwitchLocationModal)
@@ -159,6 +159,10 @@
 
     <!-- App JS -->
     <script src="~/assets/js/app.js"></script>
+
+    <!-- jsPDF Implementation (with html2canvas) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
 
     <!-- SweetAlert -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -190,8 +194,8 @@
         function showSessionExpiredModal() {
             $('#sessionExpiredModal').modal('show');
             setTimeout(() => {
-                window.location.href = "/Auth/Logout";
-            }, 30000); // redirect after 5 seconds
+                window.location.href = "/Auth/Login";
+            }, 8000); // redirect after 5 seconds
         }
 
         document.addEventListener("DOMContentLoaded", resetSessionTimer);
@@ -215,6 +219,5 @@
             }
         });
     </script>
-
 </body>
 </html>

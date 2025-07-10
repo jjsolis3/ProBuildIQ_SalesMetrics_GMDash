@@ -18,10 +18,10 @@
                         </a>
 
                         <h4 class="mt-4">Welcome Back !</h4>
-                        <p class="text-muted">Sign in to continue to SalesMetrics.</p>
+                        <p class="text-muted fs-5">Sign in to SalesMetrics.</p>
                     </div>
 
-                    <div class="p-2 mt-5">
+                    <div class="p-2 mt-3">
                         @if (ViewBag.Error != null)
                         {
                             <div class="alert alert-danger text-center">@ViewBag.Error</div>
@@ -31,10 +31,20 @@
                             <div class="alert alert-success text-center">@TempData["LoginSuccess"]</div>
                         }
 
+                        <div class="d-flex justify-content-center">
+                            <div class="alert alert-warning text-black mb-3 fs-6 mx-auto" role="alert">
+                                <p class="mb-0 text-center w-100">
+                                    <strong>Notice:</strong><br />
+                                    You must now use your <strong>email address</strong> to log in.<br />
+                                    <span class="small" style="font-style:italic">The username and office location are no longer required.</span>
+                                </p>
+                            </div>
+                        </div> 
+
                         <form asp-controller="Auth" asp-action="Login" method="post">
                             <div class="input-group auth-form-group-custom mb-3">
                                 <span class="input-group-text bg-primary bg-opacity-10 fs-16 " id="basic-addon1"><i class="mdi mdi-account-outline auti-custom-input-icon"></i></span>
-                                <input type="text" class="form-control" name="username" placeholder="Enter username" required>
+                                <input type="text" class="form-control" name="email" placeholder="Enter email address" required>
                             </div>
 
                             <div class="input-group auth-form-group-custom mb-3">
@@ -42,17 +52,6 @@
                                 <input type="password" class="form-control" name="password" placeholder="Enter password" required>
                             </div>
 
-                            <div class="input-group auth-form-group-custom mb-3">
-                                <span class="input-group-text bg-primary bg-opacity-10 fs-16" id="basic-addon3"><i class="mdi mdi-map-marker-outline auti-custom-input-icon"></i></span>
-                                <select class="form-control" name="officeLocation" required>
-                                    <option value="">Select Office Location</option>
-                                    <option value="LAX">Los Angeles</option>
-                                    <option value="LSV">Las Vegas</option>
-                                    <option value="CHN">Chino</option>
-                                    <option value="SND">San Diego</option>
-                                    <option value="PHX">Phoenix</option>
-                                </select>
-                            </div>
 
                             <div class="mb-sm-5">
                                 <div class="form-check float-sm-start">
@@ -68,6 +67,10 @@
                                 <button class="btn btn-primary w-xl waves-effect waves-light" type="submit">Log In</button>
                             </div>
                         </form>
+                    </div>
+
+                    <div class="text-center mt-3">
+                        <a href="@Url.Action("Login_Alt", "Auth")" class="text-primary">Switch to Username Login</a>
                     </div>
 
                     <div class="mt-5 text-center">

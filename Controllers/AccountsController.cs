@@ -60,12 +60,12 @@ namespace SalesMetrics.Controllers
         }
 
         // USER PROFILE PAGE
-        public IActionResult Profile()
+        public IActionResult Profile(DateTime? startDate, DateTime? endDate)
         {
             var userId = HttpContext.Session.GetString("UserId");
             var locationId = Convert.ToInt32(HttpContext.Session.GetString("LocationId"));
             var salesmanName = User.FindFirst("FullName")?.Value ?? "";
-
+            
             var userProfile = new UserProfileViewModel();
             var metrics = new SalesRepMetricsViewModel
             {
@@ -77,7 +77,7 @@ namespace SalesMetrics.Controllers
 
             // -- Fetch User Profile Info --
             var cmd = new SqlCommand(@"
-                SELECT FirstName, LastName, Email, GoogleEmail, GoogleAccessToken, GoogleRefreshToken, SalesmanID, SalesmanNumber 
+                SELECT FirstName, LastName, Email, RoleID, GoogleEmail, GoogleAccessToken, GoogleRefreshToken, SalesmanID, SalesmanNumber 
                 FROM Users 
                 WHERE UserID = @UserID and Location = @LocationId
             ", conn);
@@ -92,6 +92,7 @@ namespace SalesMetrics.Controllers
                     userProfile.LastName = reader["LastName"]?.ToString();
                     userProfile.FullName = reader["FirstName"] + " " + reader["LastName"];
                     userProfile.Email = reader["Email"]?.ToString();
+                    userProfile.RoleId = Convert.ToInt32(reader["RoleID"]);
                     userProfile.GoogleEmail = reader["GoogleEmail"]?.ToString();
                     userProfile.GoogleAccessToken = reader["GoogleAccessToken"]?.ToString();
                     userProfile.GoogleRefreshToken = reader["GoogleRefreshToken"]?.ToString();
@@ -101,8 +102,8 @@ namespace SalesMetrics.Controllers
             }
 
             // -- Fetch Sales Rep Metrics Query --
-            DateTime startDate = DateTime.UtcNow.AddDays(-30); // Last 30 days
-            DateTime endDate = DateTime.UtcNow;
+            var parsedStartDate = startDate ?? DateTime.UtcNow.AddDays(-30); // Default to last 30 days
+            var parsedEndDate = endDate ?? DateTime.UtcNow; // Default to today
 
             //int locationId = LocationHelper.GetCurrentLocationId(HttpContext);
             string officeLocation = LocationHelper.GetCurrentOfficeCode(HttpContext);
@@ -150,8 +151,8 @@ namespace SalesMetrics.Controllers
                 ORDER BY Property
             ", CUFconn);
 
-            metricsCmd.Parameters.AddWithValue("@startDate", startDate);
-            metricsCmd.Parameters.AddWithValue("@endDate", endDate);
+            metricsCmd.Parameters.AddWithValue("@startDate", parsedStartDate);
+            metricsCmd.Parameters.AddWithValue("@endDate", parsedEndDate);
             metricsCmd.Parameters.AddWithValue("@salesperson", salesmanName);
 
             using (var metricsReader = metricsCmd.ExecuteReader())
@@ -184,7 +185,9 @@ namespace SalesMetrics.Controllers
             var pageModel = new SalesRepProfilePageViewModel
             {
                 UserProfile = userProfile,
-                Metrics = metrics
+                Metrics = metrics,
+                StartDate = parsedStartDate,
+                EndDate = parsedEndDate,
             };
 
             return View(pageModel);
@@ -199,12 +202,12 @@ namespace SalesMetrics.Controllers
         [Authorize]
         public async Task<IActionResult> TestGoogleTask()
         {
-            var userId = Convert.ToInt32(HttpContext.Session.GetString("UserId"));
+            var users_Id = Convert.ToInt32(HttpContext.Session.GetString("Users_Id"));
 
             using var conn = new SqlConnection(_configuration.GetConnectionString("SalesMetrics"));
             await conn.OpenAsync();
-            var cmd = new SqlCommand("SELECT GoogleAccessToken, GoogleRefreshToken FROM Users WHERE UserID = @UserID", conn);
-            cmd.Parameters.AddWithValue("@UserID", userId);
+            var cmd = new SqlCommand("SELECT GoogleAccessToken, GoogleRefreshToken FROM Users WHERE Users_ID = @Users_ID", conn);
+            cmd.Parameters.AddWithValue("@Users_ID", users_Id);
 
             string? accessToken = null;
             string? refreshToken = null;
@@ -227,14 +230,14 @@ namespace SalesMetrics.Controllers
             // 👇 Call the service
             var taskService = new GoogleTasksService(_configuration);
             //var result = await taskService.CreateTaskAsync(accessToken, "SalesMetrics Test Task", "This is a test task created from SalesMetrics", "Notes", DateTime.UtcNow.AddHours(1));
-            var result = await taskService.CreateTaskAsync(accessToken, refreshToken, userId.ToString(), "SalesMetrics Test Task", "This is a test task created from SalesMetrics", DateTime.UtcNow.AddHours(1));
+            var result = await taskService.CreateTaskAsync(accessToken, refreshToken, users_Id.ToString(),"**TestTaskID**", "SalesMetrics Test Task", "This is a test task created from SalesMetrics", DateTime.UtcNow.AddHours(1));
 
             if (!string.IsNullOrEmpty(result))
                 TempData["Success"] = $"Google Task created successfully! Task ID: {result}";
             else
                 TempData["Error"] = "Failed to create Google Task.";
 
-            return RedirectToAction("User");
+            return RedirectToAction("Profile");
         }
 
         [HttpPost]
@@ -251,14 +254,14 @@ namespace SalesMetrics.Controllers
 
             string connStr = _configuration.GetConnectionString("SalesMetrics");
 
-            var usersToFix = new List<(int UserId, string Password)>();
+            var usersToFix = new List<(int Users_Id, string Password)>();
 
             // Step 1: Get all users with non-null passwords
             using (var conn = new SqlConnection(connStr))
             {
                 conn.Open();
                 var cmd = new SqlCommand(@"
-                    SELECT UserID, Password 
+                    SELECT Users_ID, Password 
                     FROM Users 
                     WHERE Password IS NOT NULL
                         AND PasswordHash is NULL
@@ -285,11 +288,11 @@ namespace SalesMetrics.Controllers
                     SET PasswordHash = @Hash,
                         Salt = @Salt,
                         PasswordChangedDate = GETDATE()
-                    WHERE UserID = @UserID", conn);
+                    WHERE Users_ID = @Users_ID", conn);
 
                     updateCmd.Parameters.AddWithValue("@Hash", hash);
                     updateCmd.Parameters.AddWithValue("@Salt", salt);
-                    updateCmd.Parameters.AddWithValue("@UserID", user.UserId);
+                    updateCmd.Parameters.AddWithValue("@UserID", user.Users_Id);
 
                     updateCmd.ExecuteNonQuery();
                 }
@@ -315,7 +318,8 @@ namespace SalesMetrics.Controllers
                 {
                     user = new RegisterViewModel
                     {
-                        UserId = Convert.ToInt32(reader["Users_ID"]),
+                        Users_Id = Convert.ToInt32(reader["Users_ID"]),
+                        UserId = Convert.ToInt32(reader["UserID"]),
                         FirstName = reader["FirstName"]?.ToString(),
                         LastName = reader["LastName"]?.ToString(),
                         Username = reader["Username"]?.ToString(),
@@ -367,96 +371,110 @@ namespace SalesMetrics.Controllers
                 return RedirectToAction("Index");
             }
 
-            var connStr = _configuration.GetConnectionString("SalesMetrics");
-
-            using (var conn = new SqlConnection(connStr))
+            try
             {
-                conn.Open();
-
-                var updates = new List<string>();
-                var cmd = new SqlCommand();
-                cmd.Connection = conn;
-
-                if (!string.IsNullOrWhiteSpace(model.FirstName))
+                // Validate that the user exists
+                if (model.Users_Id == 0)
                 {
-                    updates.Add("FirstName = @FirstName");
-                    cmd.Parameters.AddWithValue("@FirstName", model.FirstName);
-                }
-                if (!string.IsNullOrWhiteSpace(model.LastName))
-                {
-                    updates.Add("LastName = @LastName");
-                    cmd.Parameters.AddWithValue("@LastName", model.LastName);
-                }
-                if (!string.IsNullOrWhiteSpace(model.Username))
-                {
-                    updates.Add("Username = @Username");
-                    cmd.Parameters.AddWithValue("@Username", model.Username ?? "");
-                }
-                if (!string.IsNullOrWhiteSpace(model.Email))
-                {
-                    updates.Add("Email = @Email");
-                    cmd.Parameters.AddWithValue("@Email", model.Email ?? "");
+                    TempData["Error"] = "Invalid user ID.";
+                    return RedirectToAction("Index");
                 }
 
-                if (!string.IsNullOrWhiteSpace(model.Password))
-                {
-                    updates.Add("Password = @Password");
-                    cmd.Parameters.AddWithValue("@Password", model.Password ?? "");
-                }
-                if (!string.IsNullOrWhiteSpace(model.UserId.ToString()))
-                {
-                    updates.Add("UserID = @UserId");
-                    cmd.Parameters.AddWithValue("@UserId", model.UserId.ToString() ?? "");
-                }
-                if (!string.IsNullOrWhiteSpace(model.RoleId.ToString()))
-                {
-                    updates.Add("RoleID = @RoleId");
-                    cmd.Parameters.AddWithValue("@RoleId", model.RoleId.ToString() ?? "");
-                }
-                if (!string.IsNullOrWhiteSpace(model.LocationId.ToString()))
-                {
-                    updates.Add("Location = @LocationId");
-                    cmd.Parameters.AddWithValue("@LocationId", model.LocationId.ToString() ?? "");
-                }
-                if (!string.IsNullOrWhiteSpace(model.SalesmanId.ToString()))
-                {
-                    updates.Add("SalesmanID = @SalesmanId");
-                    cmd.Parameters.AddWithValue("@SalesmanId", model.SalesmanId.ToString() ?? "");
-                }
-                if (!string.IsNullOrWhiteSpace(model.SalesmanNumber))
-                {
-                    updates.Add("SalesmanNumber = @SalesmanNumber");
-                    cmd.Parameters.AddWithValue("@SalesmanNumber", model.SalesmanNumber ?? "");
-                }
+                var connStr = _configuration.GetConnectionString("SalesMetrics");
 
-                // Always include:
-                updates.Add("ModifiedDate = GETDATE()");
-                updates.Add("IsActive = @IsActive");
-                cmd.Parameters.AddWithValue("@IsActive", IsActive);
-                cmd.Parameters.AddWithValue("@Users_ID", model.Users_Id);
-
-                string updateSql = $"UPDATE Users SET {string.Join(", ", updates)} WHERE Users_ID = @Users_ID";
-                cmd.CommandText = updateSql;
-
-                cmd.ExecuteNonQuery();
-
-                // Remove all previous location assignments
-                var deleteCmd = new SqlCommand("DELETE FROM UserLocationAssignments WHERE UserID = @UserId", conn);
-                deleteCmd.Parameters.AddWithValue("@UserId", model.UserId);
-                deleteCmd.ExecuteNonQuery();
-
-                // Reinsert selected location (for now just Users.Location — you'll update UI for multi-check support soon)
-                foreach (var locId in model.AssignedLocationIds)
+                using (var conn = new SqlConnection(connStr))
                 {
-                    var insertCmd = new SqlCommand(@"
+                    conn.Open();
+
+                    var updates = new List<string>();
+                    var cmd = new SqlCommand();
+                    cmd.Connection = conn;
+
+                    if (!string.IsNullOrWhiteSpace(model.FirstName))
+                    {
+                        updates.Add("FirstName = @FirstName");
+                        cmd.Parameters.AddWithValue("@FirstName", model.FirstName);
+                    }
+                    if (!string.IsNullOrWhiteSpace(model.LastName))
+                    {
+                        updates.Add("LastName = @LastName");
+                        cmd.Parameters.AddWithValue("@LastName", model.LastName);
+                    }
+                    if (!string.IsNullOrWhiteSpace(model.Username))
+                    {
+                        updates.Add("Username = @Username");
+                        cmd.Parameters.AddWithValue("@Username", model.Username ?? "");
+                    }
+                    if (!string.IsNullOrWhiteSpace(model.Email))
+                    {
+                        updates.Add("Email = @Email");
+                        cmd.Parameters.AddWithValue("@Email", model.Email ?? "");
+                    }
+                    if (!string.IsNullOrWhiteSpace(model.Password))
+                    {
+                        updates.Add("Password = @Password");
+                        cmd.Parameters.AddWithValue("@Password", model.Password ?? "");
+                    }
+                    if (!string.IsNullOrWhiteSpace(model.UserId.ToString()))
+                    {
+                        updates.Add("UserID = @UserId");
+                        cmd.Parameters.AddWithValue("@UserId", model.UserId.ToString() ?? "");
+                    }
+                    if (!string.IsNullOrWhiteSpace(model.RoleId.ToString()))
+                    {
+                        updates.Add("RoleID = @RoleId");
+                        cmd.Parameters.AddWithValue("@RoleId", model.RoleId.ToString() ?? "");
+                    }
+                    if (!string.IsNullOrWhiteSpace(model.LocationId.ToString()))
+                    {
+                        updates.Add("Location = @LocationId");
+                        cmd.Parameters.AddWithValue("@LocationId", model.LocationId.ToString() ?? "");
+                    }
+                    if (!string.IsNullOrWhiteSpace(model.SalesmanId.ToString()))
+                    {
+                        updates.Add("SalesmanID = @SalesmanId");
+                        cmd.Parameters.AddWithValue("@SalesmanId", model.SalesmanId.ToString() ?? "");
+                    }
+                    if (!string.IsNullOrWhiteSpace(model.SalesmanNumber))
+                    {
+                        updates.Add("SalesmanNumber = @SalesmanNumber");
+                        cmd.Parameters.AddWithValue("@SalesmanNumber", model.SalesmanNumber ?? "");
+                    }
+
+                    // Always include:
+                    updates.Add("ModifiedDate = GETDATE()");
+                    updates.Add("IsActive = @IsActive");
+                    cmd.Parameters.AddWithValue("@IsActive", IsActive);
+                    cmd.Parameters.AddWithValue("@Users_ID", model.Users_Id);
+
+                    string updateSql = $"UPDATE Users SET {string.Join(", ", updates)} WHERE Users_ID = @Users_ID";
+                    cmd.CommandText = updateSql;
+
+                    cmd.ExecuteNonQuery();
+
+                    // Remove all previous location assignments
+                    var deleteCmd = new SqlCommand("DELETE FROM UserLocationAssignments WHERE UserID = @UserId", conn);
+                    deleteCmd.Parameters.AddWithValue("@UserId", model.Users_Id);
+                    deleteCmd.ExecuteNonQuery();
+
+                    // Reinsert selected location (for now just Users.Location — you'll update UI for multi-check support soon)
+                    foreach (var locId in model.AssignedLocationIds)
+                    {
+                        var insertCmd = new SqlCommand(@"
                         INSERT INTO UserLocationAssignments (UserID, LocationID, IsActive, DateAssigned)
                         VALUES (@UserId, @LocationId, 'YES', GETDATE())
                     ", conn);
-                    insertCmd.Parameters.AddWithValue("@UserId", model.UserId);
-                    insertCmd.Parameters.AddWithValue("@LocationId", locId);
-                    insertCmd.ExecuteNonQuery();
-                }
+                        insertCmd.Parameters.AddWithValue("@UserId", model.Users_Id);
+                        insertCmd.Parameters.AddWithValue("@LocationId", locId);
+                        insertCmd.ExecuteNonQuery();
+                    }
 
+                }
+            }
+            catch (Exception ex)
+            {
+                TempData["Error"] = $"Error updating user: {ex.Message}";
+                return RedirectToAction("Index");
             }
 
             TempData["Success"] = "User updated successfully.";
@@ -515,7 +533,7 @@ namespace SalesMetrics.Controllers
                     INSERT INTO UserLocationAssignments (UserID, LocationID, IsActive, DateAssigned)
                     VALUES (@UserId, @LocationId, 'YES', GETDATE())
                 ", conn);
-                insertCmd.Parameters.AddWithValue("@UserId", model.UserId);
+                insertCmd.Parameters.AddWithValue("@UserId", model.Users_Id);
                 insertCmd.Parameters.AddWithValue("@LocationId", locId);
                 insertCmd.ExecuteNonQuery();
             }

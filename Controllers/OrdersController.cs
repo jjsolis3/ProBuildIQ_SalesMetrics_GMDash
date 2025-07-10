@@ -21,11 +21,11 @@ namespace SalesMetrics.Controllers
         public IActionResult Orders()
         {
             var userId = HttpContext.Session.GetString("UserId");
-            var officeLocation = HttpContext.Session.GetString("OfficeLocation");
+            var users_Id = int.Parse(User.FindFirst("Users_Id")?.Value ?? "0");
 
             int roleId = int.Parse(User.FindFirst("RoleId")?.Value ?? "0");
-            //int locationId = int.Parse(User.FindFirst("LocationId")?.Value ?? "0");
             int locationId = LocationHelper.GetCurrentLocationId(HttpContext);
+            var officeLocation = LocationHelper.GetConnectionName(locationId) ?? "LAX"; // Default to LAX if not found
             int salesmanId = int.Parse(User.FindFirst("SalesmanId")?.Value ?? "0");
 
             if (string.IsNullOrEmpty(userId))
@@ -64,8 +64,15 @@ namespace SalesMetrics.Controllers
                           END NOT LIKE '%Metal%'
                     ), 0.00) AS Qty,
 
+                    CASE
+		                WHEN S.SOH_TOTAL_AMOUNT = 0 AND AR.ARO_INVOICE_AMOUNT IS NOT NULL THEN AR.ARO_INVOICE_AMOUNT
+		                WHEN S.SOH_TOTAL_AMOUNT = 0 AND AR.ARO_INVOICE_AMOUNT IS NULL THEN 0
+		                ELSE S.SOH_TOTAL_AMOUNT
+		                END as OrderTotal,
+
                     B.BuildingNumber + ' - ' + A.ApartmentNumber AS UnitNumber, 
                     APT.Description AS UnitType,
+                    CONVERT(VARCHAR, S.SOH_ORDER_DATE, 101) AS OrderDate,
                     CONVERT(VARCHAR, S.SOH_DELIVERY_DATE, 101) AS DeliveryDate,
                     CONVERT(VARCHAR, S.SOH_MOVING_DATE, 101) AS MoveInDate,
                     ISNULL(AR.ARO_DATE_PAID_IN_FULL, '') AS PaidInFullDate,
@@ -103,7 +110,7 @@ namespace SalesMetrics.Controllers
 				                END
 		                ELSE 'NOT INVOICED'
 		                END as Status,
-                    WHS_WAREHOUSE_NUMBER AS Location
+                    WHS_WAREHOUSE_NUMBER AS Warehouse
 
                 FROM SALES_HEADER AS S
                     LEFT JOIN Apartments AS A ON S.SOH_APARTMENT_ID = A.Id 
@@ -125,7 +132,7 @@ namespace SalesMetrics.Controllers
                     )
             ";
 
-            if (roleId == 2) // Salesman
+            if (roleId == 2 && salesmanId != 0) // Salesman
             {
                 sql += " AND SOH_SMNMAS_ID = @SalesmanID";
             }
@@ -135,7 +142,7 @@ namespace SalesMetrics.Controllers
                 conn.Open();
                 SqlCommand cmd = new SqlCommand(sql, conn);
                 cmd.Parameters.AddWithValue("@FromDate", fromDate);
-                if (roleId == 2)
+                if (roleId == 2 && salesmanId != 0)
                     cmd.Parameters.AddWithValue("@SalesmanID", salesmanId);
 
                 using var reader = cmd.ExecuteReader();
@@ -152,8 +159,10 @@ namespace SalesMetrics.Controllers
                         City = reader["City"]?.ToString(),
                         OrderType = reader["OrderType"]?.ToString(),
                         Qty = Convert.ToDouble(reader["Qty"]),
+                        OrderTotal = Convert.ToDecimal(reader["OrderTotal"]),
                         UnitNumber = reader["UnitNumber"]?.ToString(),
                         UnitType = reader["UnitType"]?.ToString(),
+                        OrderDate = reader["OrderDate"]?.ToString(),
                         DeliveryDate = reader["DeliveryDate"]?.ToString(),
                         MoveInDate = reader["MoveInDate"]?.ToString(),
                         PaidInFullDate = reader["PaidInFullDate"]?.ToString(),
@@ -161,7 +170,8 @@ namespace SalesMetrics.Controllers
                         ProductDescription = reader["ProductDescription"]?.ToString(),
                         OrderedBy = reader["OrderedBy"]?.ToString(),
                         Status = reader["Status"]?.ToString(),
-                        Location = reader["Location"]?.ToString()
+                        Warehouse = Convert.ToInt32(reader["Warehouse"]),
+                        Location = locationId.ToString()
                     });
                 }
             }
@@ -173,10 +183,11 @@ namespace SalesMetrics.Controllers
         public JsonResult GetWorkOrdersByDate(DateTime? date)
         {
             var userId = HttpContext.Session.GetString("UserId");
-            var officeLocation = HttpContext.Session.GetString("OfficeLocation");
+            var users_Id = int.Parse(User.FindFirst("Users_Id")?.Value ?? "0");
+
             int roleId = int.Parse(User.FindFirst("RoleId")?.Value ?? "0");
-            //int locationId = int.Parse(User.FindFirst("LocationId")?.Value ?? "0");
             int locationId = LocationHelper.GetCurrentLocationId(HttpContext);
+            var officeLocation = LocationHelper.GetConnectionName(locationId) ?? "LAX"; // Default to LAX if not found
             int salesmanId = int.Parse(User.FindFirst("SalesmanId")?.Value ?? "0");
 
             var connectionString = _configuration.GetConnectionString(officeLocation);
@@ -206,8 +217,15 @@ namespace SalesMetrics.Controllers
                           END NOT LIKE '%Metal%'
                     ), 0.00) AS Qty,
 
+                    CASE
+		                WHEN S.SOH_TOTAL_AMOUNT = 0 AND AR.ARO_INVOICE_AMOUNT IS NOT NULL THEN AR.ARO_INVOICE_AMOUNT
+		                WHEN S.SOH_TOTAL_AMOUNT = 0 AND AR.ARO_INVOICE_AMOUNT IS NULL THEN 0
+		                ELSE S.SOH_TOTAL_AMOUNT
+		                END as OrderTotal,
+
                     B.BuildingNumber + ' - ' + A.ApartmentNumber AS UnitNumber, 
                     APT.Description AS UnitType,
+                    CONVERT(VARCHAR, S.SOH_ORDER_DATE, 101) AS OrderDate,
                     CONVERT(VARCHAR, S.SOH_DELIVERY_DATE, 101) AS DeliveryDate,
                     CONVERT(VARCHAR, S.SOH_MOVING_DATE, 101) AS MoveInDate,
                     ISNULL(AR.ARO_DATE_PAID_IN_FULL, '') AS PaidInFullDate,
@@ -245,7 +263,7 @@ namespace SalesMetrics.Controllers
 				                END
 		                ELSE 'NOT INVOICED'
 		                END as Status,
-                    WHS_WAREHOUSE_NUMBER AS Location
+                    WHS_WAREHOUSE_NUMBER AS Warehouse
 
                 FROM SALES_HEADER AS S
                     LEFT JOIN Apartments AS A ON S.SOH_APARTMENT_ID = A.Id 
@@ -267,7 +285,7 @@ namespace SalesMetrics.Controllers
                     )
             ";
 
-            if (roleId == 2)
+            if (roleId == 2 && salesmanId != 0)
                 sql += " AND SOH_SMNMAS_ID = @SalesmanID";
 
             using (SqlConnection conn = new SqlConnection(connectionString))
@@ -275,7 +293,7 @@ namespace SalesMetrics.Controllers
                 conn.Open();
                 SqlCommand cmd = new SqlCommand(sql, conn);
                 cmd.Parameters.AddWithValue("@FromDate", fromDate);
-                if (roleId == 2)
+                if (roleId == 2 && salesmanId != 0)
                     cmd.Parameters.AddWithValue("@SalesmanID", salesmanId);
 
                 using var reader = cmd.ExecuteReader();
@@ -292,8 +310,10 @@ namespace SalesMetrics.Controllers
                         City = reader["City"]?.ToString(),
                         OrderType = reader["OrderType"]?.ToString(),
                         Qty = Convert.ToDouble(reader["Qty"]),
+                        OrderTotal = Convert.ToDecimal(reader["OrderTotal"]),
                         UnitNumber = reader["UnitNumber"]?.ToString(),
                         UnitType = reader["UnitType"]?.ToString(),
+                        OrderDate = reader["OrderDate"]?.ToString(),
                         DeliveryDate = reader["DeliveryDate"]?.ToString(),
                         MoveInDate = reader["MoveInDate"]?.ToString(),
                         PaidInFullDate = reader["MoveInDate"]?.ToString(),
@@ -301,7 +321,8 @@ namespace SalesMetrics.Controllers
                         ProductDescription = reader["ProductDescription"]?.ToString(),
                         OrderedBy = reader["OrderedBy"]?.ToString(),
                         Status = reader["Status"]?.ToString(),
-                        Location = reader["Location"]?.ToString()
+                        Warehouse = Convert.ToInt32(reader["Warehouse"]),
+                        Location = locationId.ToString()
                     });
                 }
             }
@@ -314,7 +335,7 @@ namespace SalesMetrics.Controllers
         {
             string officeLocation = LocationHelper.GetCurrentOfficeCode(HttpContext);
             var connectionString = _configuration.GetConnectionString(officeLocation);
-            //var viewModel = new InvoiceDetailViewModel();
+            
             var viewModel = new WorkOrderDetailViewModel();
 
             using (var conn = new SqlConnection(connectionString))

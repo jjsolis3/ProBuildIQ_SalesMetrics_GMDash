@@ -102,6 +102,9 @@ namespace SalesMetrics.Controllers
                     ), '') AS ProductDescription,
 
                     S.SOH_ORDERED_BY AS OrderedBy, 
+                    S.SOH_SMNMAS_ID AS SalespersonId,
+	                SMN.SMN_SALESMAN_NUMBER as SalespersonNumber,
+	                SMN.SMN_SALESMAN_NAME as Salesperson,
                     CASE 
 		                WHEN AR.ARO_INVOICE_NUMBER IS NOT NULL THEN 
 			                CASE 
@@ -120,6 +123,7 @@ namespace SalesMetrics.Controllers
                     LEFT JOIN PRICE_CODES AS P ON CUS.CUM_PRICE_CODE = P.IPC_PRICE_CODE
                     LEFT JOIN WAREHOUSE_MASTER ON WHS_WAREHOUSE_NUMBER = SOH_WHSMAS_ID
                     LEFT JOIN AR_OPEN_ITEM as AR on S.SOH_NUMBER = AR.ARO_SALES_ORDER_NUMBER
+                    LEFT JOIN SALESMAN_MASTER as SMN on S.SOH_SMNMAS_ID = SMN.SMN_SMNMAS_ID
                 WHERE 
                     S.SOH_DELIVERY_DATE = @FromDate
                     AND S.SOH_CURRENT_STATUS <> 4
@@ -169,6 +173,8 @@ namespace SalesMetrics.Controllers
                         ProductClass = reader["ProductClass"]?.ToString(),
                         ProductDescription = reader["ProductDescription"]?.ToString(),
                         OrderedBy = reader["OrderedBy"]?.ToString(),
+                        SalesmanId = Convert.ToInt32(reader["SalespersonId"]),
+                        SalesmanName = reader["Salesperson"].ToString(),
                         Status = reader["Status"]?.ToString(),
                         Warehouse = Convert.ToInt32(reader["Warehouse"]),
                         Location = locationId.ToString()
@@ -254,7 +260,10 @@ namespace SalesMetrics.Controllers
                           END NOT LIKE '%Metal%'
                     ), '') AS ProductDescription,
 
-                    S.SOH_ORDERED_BY AS OrderedBy, 
+                    S.SOH_ORDERED_BY AS OrderedBy,
+                    S.SOH_SMNMAS_ID AS SalespersonId,
+	                SMN.SMN_SALESMAN_NUMBER as SalespersonNumber,
+	                SMN.SMN_SALESMAN_NAME as Salesperson,
                     CASE 
 		                WHEN AR.ARO_INVOICE_NUMBER IS NOT NULL THEN 
 			                CASE 
@@ -273,6 +282,7 @@ namespace SalesMetrics.Controllers
                     LEFT JOIN PRICE_CODES AS P ON CUS.CUM_PRICE_CODE = P.IPC_PRICE_CODE
                     LEFT JOIN WAREHOUSE_MASTER ON WHS_WAREHOUSE_NUMBER = SOH_WHSMAS_ID
                     LEFT JOIN AR_OPEN_ITEM as AR on S.SOH_NUMBER = AR.ARO_SALES_ORDER_NUMBER
+                    LEFT JOIN SALESMAN_MASTER as SMN on S.SOH_SMNMAS_ID = SMN.SMN_SMNMAS_ID
                 WHERE 
                     S.SOH_DELIVERY_DATE = @FromDate
                     AND S.SOH_CURRENT_STATUS <> 4
@@ -320,6 +330,8 @@ namespace SalesMetrics.Controllers
                         ProductClass = reader["ProductClass"]?.ToString(),
                         ProductDescription = reader["ProductDescription"]?.ToString(),
                         OrderedBy = reader["OrderedBy"]?.ToString(),
+                        SalesmanId = Convert.ToInt32(reader["SalespersonId"]),
+                        SalesmanName = reader["Salesperson"].ToString(),
                         Status = reader["Status"]?.ToString(),
                         Warehouse = Convert.ToInt32(reader["Warehouse"]),
                         Location = locationId.ToString()

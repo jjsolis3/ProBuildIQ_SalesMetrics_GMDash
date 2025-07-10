@@ -71,6 +71,7 @@
                 <th>Class</th>
                 <th>Description</th>
                 <th>Ordered By</th>
+                <th>Salesperson</th>
                 <th>Location</th>
                 <th>Action</th>
             </tr>
@@ -99,6 +100,7 @@
                         <td>@o.ProductClass</td>
                         <td>@o.ProductDescription</td>
                         <td>@o.OrderedBy</td>
+                        <td>@o.SalesmanName</td>
                         <td>@o.LocationName</td>
                         <td>
                             <button class="btn btn-sm btn-outline-orange create-task" 
@@ -223,6 +225,7 @@
                     { data: 'productClass' },
                     { data: 'productDescription' },
                     { data: 'orderedBy' },
+                    { data: 'salesmanName' },
                     { data: 'locationName' },
                     { data: null,
                         render: function (data, type, row) {
@@ -259,7 +262,7 @@
                         text: '<i class="bi bi-file-earmark-excel"></i> Excel',
                         className: 'btn btn-outline-success rounded-pill shadow-sm me-2',
                         exportOptions: {
-                            columns: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14]  // exclude the IDBTransaction column
+                            columns: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]  // exclude the IDBTransaction column
                         }
                     }
                 ],

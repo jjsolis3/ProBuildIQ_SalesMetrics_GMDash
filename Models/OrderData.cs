@@ -147,6 +147,7 @@
         public int Warehouse { get; set; }
         public int SalesmanId { get; set; }
         public string SalesmanName { get; set; }
+        public string? SalesmanNumber { get; set; }
 
         private static readonly Dictionary<string, string> LocationMap = new()
         {

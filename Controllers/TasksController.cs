@@ -1867,7 +1867,7 @@ namespace SalesMetrics.Controllers
                         Type = reader["Type"]?.ToString(),
                         AssignedTo = reader.GetInt32(reader.GetOrdinal("AssignedTo")),
                         // add IsSyncedToGoogle bit from SQL
-                        IsSyncedToGoogle = reader.GetBoolean("IsSyncedToGoogle")
+                        IsSyncedToGoogle = reader.IsDBNull(reader.GetOrdinal("IsSyncedToGoogle")) ? false : reader.GetBoolean(reader.GetOrdinal("IsSyncedToGoogle"))
                     };
                 }
             }

@@ -24,13 +24,13 @@
     }
 
     .kpi-label {
-    font-size: clamp(0.8rem, 1.1vw, 1.8rem);
+    font-size: clamp(0.5rem, 0.7vw, 0.9rem);
     font-weight: 300;
     opacity: 0.9;
     }
 
     .kpi-value {
-    font-size: clamp(1.0rem, 1.8vw, 1.5rem);
+    font-size: clamp(0.8rem, 1.5vw, 1.7rem);
     font-weight: 500;
     line-height: 0.5;
     word-break: break-word;
@@ -59,18 +59,18 @@
     }
 
     #installerRange:hover {
-        border-color: var(--bs-orange);
-        background-color: #fff3e0;
+    border-color: var(--bs-orange);
+    background-color: #fff3e0;
     }
 
     #salesRange:hover {
-        border-color: var(--bs-orange);
-        background-color: #fff3e0;
+    border-color: var(--bs-orange);
+    background-color: #fff3e0;
     }
 
     #rtjRange:hover {
-        border-color: var(--bs-orange);
-        background-color: #fff3e0;
+    border-color: var(--bs-orange);
+    background-color: #fff3e0;
     }
 
 </style>
@@ -79,6 +79,8 @@
 @{
     var mtd = Model.BranchSalesMetrics.Sum(x => x.MTDSales);
     var ytd = Model.BranchSalesMetrics.Sum(x => x.YTDSales);
+    var mtdOrders = Model.BranchSalesMetrics.Sum(x => x.MTDOrders);
+    var ytdOrders = Model.BranchSalesMetrics.Sum(x => x.YTDOrders);
     var totalOrders = Model.BranchSalesMetrics.Sum(x => x.TotalOrders);
     var onlineOrders = Model.BranchSalesMetrics.Sum(x => x.OnlineOrders);
     var totalAmount = Model.BranchSalesMetrics.Sum(x => x.TotalOrderAmount);
@@ -107,150 +109,188 @@
 <!-- KPI TOP BUBBLES -->
 <div class="row">
     <!-- SALES DATA | MTD -->
-    <div class="col-xl-3 col-md-3 col-sm-6">
+    <div class="col-xxl-2 col-xl-4 col-md-6 col-sm-12">
         @* <div class="card shadow"> *@
-            <div class="card p-0">
-            <div class="card-header bg-orange">
-                <h5 class="mb-0 text-white">
-                        @(ViewBag.SelectedLocationsId == 0 ? "MTD All Branches" : $"MTD for {ViewBag.LocationFullName}")
-                        <span class="badge bg-info ms-2">@ViewBag.MTDStartDateRange</span>
-                    </h5>
-                </div>
-                <div class="card-body table-responsive p-1 mt-1">
-                    <div class="kpi-tile shadow-lg rounded p-0 d-flex flex-column justify-content-center align-items-start">
-                        <h5 class="kpi-value" style="margin: 0 auto;">@mtd.ToString("C")</h5>
-                        <p style="margin: 0 auto;"></p>
-                    </div>
+        <div class="card p-0">
+            <div class="card-header bg-orange d-flex flex-column align-items-start p-2 kpi-label">
+                <h5 class="mb-1 text-white">
+                    @(ViewBag.SelectedLocationsId == 0 ? "MTD $ | All" : $"MTD $ | {ViewBag.LocationFullName}")
+                </h5>
+                <small id="salesRangeLabel" class="badge bg-info">
+                    @ViewBag.MTDStartDateRange
+                </small>
+            </div>
+            <div class="card-body table-responsive p-1 mt-1">
+                <div class="kpi-tile shadow-lg rounded p-0 d-flex flex-column justify-content-center align-items-start">
+                    <h5 class="kpi-value" style="margin: 0 auto;">@mtd.ToString("C")</h5>
                 </div>
             </div>
+        </div>
         @* </div> *@
     </div>
     <!-- SALES DATA | YTD -->
-    <div class="col-xl-3 col-md-3 col-sm-6">
+    <div class="col-xxl-2 col-xl-4 col-md-6 col-sm-12">
         @* <div class="card shadow"> *@
-            <div class="card p-0">
-            <div class="card-header bg-orange">
+        <div class="card p-0">
+            <div class="card-header bg-orange d-flex flex-column align-items-start p-2 kpi-label">
                 <h5 class="mb-0 text-white">
-                        @(ViewBag.SelectedLocationsId == 0 ? "YTD All Branches" : $"YTD for {ViewBag.LocationFullName}")
-                        <span class="badge bg-info ms-2">@ViewBag.YTDStartDateRange</span>
-                    </h5>
-                </div>
-                <div class="card-body table-responsive p-1 mt-1">
-                    <div class="kpi-tile shadow-lg rounded p-0 d-flex flex-column justify-content-center align-items-start">
-                        <h5 class="kpi-value" style="margin: 0 auto;">@ytd.ToString("C")</h5>
-                        <p style="margin: 0 auto;"></p>
-                    </div>
+                    @(ViewBag.SelectedLocationsId == 0 ? "YTD $ | All" : $"YTD $ | {ViewBag.LocationFullName}")
+                </h5>
+                <small id="salesRangeLabel" class="badge bg-info">
+                    @ViewBag.YTDStartDateRange
+                </small>
+            </div>
+            <div class="card-body table-responsive p-1 mt-1">
+                <div class="kpi-tile shadow-lg rounded p-0 d-flex flex-column justify-content-center align-items-start">
+                    <h5 class="kpi-value" style="margin: 0 auto;">@ytd.ToString("C")</h5>
                 </div>
             </div>
+        </div>
         @* </div> *@
     </div>
     <!-- SALES DATA | ONLINE AMOUNT $ -->
-    <div class="col-xl-3 col-md-3 col-sm-6">
+    <div class="col-xxl-2 col-xl-4 col-md-6 col-sm-12">
         @* <div class="card shadow"> *@
-            <div class="card p-0">
-            <div class="card-header bg-orange">
+        <div class="card p-0">
+            <div class="card-header bg-orange d-flex flex-column align-items-start p-2 kpi-label">
                 <h5 class="mb-0 text-white">
-                        @(ViewBag.SelectedLocationsId == 0 ? "Online Order | All Branches " : $"Online Orders for {ViewBag.LocationFullName} ")
-                        <span class="small">(YTD)</span>
-                    </h5>
-                </div>
-                <div class="card-body table-responsive p-1 mt-1">
-                    <div class="kpi-tile shadow-lg rounded p-0 d-flex flex-column justify-content-center align-items-start">
-                        <h5 class="kpi-value" style="margin: 0 auto;">@onlineAmount.ToString("C")</h5>
-                        <p style="margin: 0 auto;"></p>
-                    </div>
+                    @(ViewBag.SelectedLocationsId == 0 ? "Online $ | All" : $"Online $ | {ViewBag.LocationFullName} ")
+                </h5>
+                <span class="small text-white">(YTD)</span>
+
+            </div>
+            <div class="card-body table-responsive p-1 mt-1">
+                <div class="kpi-tile shadow-lg rounded p-0 d-flex flex-column justify-content-center align-items-start">
+                    <h5 class="kpi-value" style="margin: 0 auto;">@onlineAmount.ToString("C")</h5>
                 </div>
             </div>
+        </div>
         @* </div> *@
     </div>
-    <!-- SALES DATA | ONLINE PERCENTAGE % -->
-    <div class="col-xl-3 col-md-3 col-sm-6">
+    <!-- ORDERS COUNT | MTD -->
+    <div class="col-xxl-2 col-xl-4 col-md-6 col-sm-12">
         @* <div class="card shadow"> *@
-            <div class="card p-0">
-                <div class="card-header bg-orange">
-                    <h5 class="mb-0 text-white">
-                        @(ViewBag.SelectedLocationsId == 0 ? "Online % | All Branches " : $"Online % for {ViewBag.LocationFullName} ")
-                        <span class="small">(YTD)</span>
-                    </h5>
-                </div>
-                <div class="card-body table-responsive p-1 mt-1">
-                    <div class="kpi-tile shadow-lg rounded p-0 d-flex flex-column justify-content-center align-items-start">
-                        <h5 class="kpi-value" style="margin: 0 auto;">@onlinePercent.ToString("0.0")%</h5>
-                        <p style="margin: 0 auto;"></p>
-                    </div>
+        <div class="card p-0">
+            <div class="card-header bg-orange d-flex flex-column align-items-start p-2 kpi-label">
+                <h5 class="mb-1 text-white">
+                    @(ViewBag.SelectedLocationsId == 0 ? "MTD Orders | All" : $"MTD Orders | {ViewBag.LocationFullName}")
+                </h5>
+                <span class="small text-white">(MTD)</span>
+                
+            </div>
+            <div class="card-body table-responsive p-1 mt-1">
+                <div class="kpi-tile shadow-lg rounded p-0 d-flex flex-column justify-content-center align-items-start">
+                    <h5 class="kpi-value" style="margin: 0 auto;">@mtdOrders.ToString("N0")</h5>
                 </div>
             </div>
+        </div>
+        @* </div> *@
+    </div>
+    <!-- ORDER COUNT | YTD -->
+    <div class="col-xxl-2 col-xl-4 col-md-6 col-sm-12">
+        @* <div class="card shadow"> *@
+        <div class="card p-0">
+            <div class="card-header bg-orange d-flex flex-column align-items-start p-2 kpi-label">
+                <h5 class="mb-0 text-white">
+                    @(ViewBag.SelectedLocationsId == 0 ? "YTD Orders | All" : $"YTD Orders | {ViewBag.LocationFullName}")
+                </h5>
+                <span class="small text-white">(YTD)</span>
+            </div>
+            <div class="card-body table-responsive p-1 mt-1">
+                <div class="kpi-tile shadow-lg rounded p-0 d-flex flex-column justify-content-center align-items-start">
+                    <h5 class="kpi-value" style="margin: 0 auto;">@ytdOrders.ToString("N0")</h5>
+                </div>
+            </div>
+        </div>
+        @* </div> *@
+    </div>
+    <!-- SALES DATA | ONLINE ORDERS -->
+    <div class="col-xxl-2 col-xl-4 col-md-6 col-sm-12">
+        @* <div class="card shadow"> *@
+        <div class="card p-0">
+            <div class="card-header bg-orange d-flex flex-column align-items-start p-2 kpi-label">
+                <h5 class="mb-0 text-white">
+                    @(ViewBag.SelectedLocationsId == 0 ? "Online Orders | All" : $"Online Orders | {ViewBag.LocationFullName} ")
+                </h5>
+                <span class="small text-white">(YTD)</span>
+            </div>
+            <div class="card-body table-responsive p-1 mt-1">
+                <div class="kpi-tile shadow-lg rounded p-0 d-flex flex-column justify-content-center align-items-start">
+                    <h5 class="kpi-value" style="margin: 0 auto;">@onlineOrders.ToString("N0")</h5>
+                </div>
+            </div>
+        </div>
         @* </div> *@
     </div>
 </div>
 
 @* @if (ViewBag.SelectedLocationsId == 0)
 { *@
-    <!-- SALES RANKING BY OFFICE -->
-    <div class="row" >
-        <!-- SALES RANKING BY OFFICE | MTD / YTD -->
-        <div class="col-md-5 col-sm-12">
-            <div class="card shadow">
-                <div class="card">
-                    <div class="card-header">
-                        <h5>Sales Ranking by Seamless Branch</h5>
-                    </div>
-                    <table class="table table-bordered table-striped">
-                        <thead>
-                            <tr>
-                                <th>Location</th>
-                                <th>MTD</th>
-                                <th>YTD</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var item in Model.BranchSalesMetrics)
-                            {
-                                <tr>
-                                    <td class="text-center" style="font-weight: bold;">@item.LocationFullName</td>
-                                    <td>@item.MTDSales.ToString("C")</td>
-                                    <td>@item.YTDSales.ToString("C")</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
+<!-- SALES RANKING BY OFFICE -->
+<div class="row">
+    <!-- SALES RANKING BY OFFICE | MTD / YTD -->
+    <div class="col-md-5 col-sm-12">
+        <div class="card shadow">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Sales Ranking by Seamless Branch</h5>
                 </div>
+                <table class="table table-bordered table-striped">
+                    <thead>
+                        <tr>
+                            <th>Location</th>
+                            <th>MTD</th>
+                            <th>YTD</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model.BranchSalesMetrics)
+                        {
+                            <tr>
+                                <td class="text-center" style="font-weight: bold;">@item.LocationFullName</td>
+                                <td>@item.MTDSales.ToString("C")</td>
+                                <td>@item.YTDSales.ToString("C")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
             </div>
         </div>
-        <!-- Online Ordering by Branch Table -->
-        <div class="col-md-7 col-sm-12">
-            <div class="card shadow">
-                <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-5">
-                        <div>
-                            <h5 class="mb-0">Order Summary by Seamless Branch</h5>
-                            <small id="salesRangeLabel" class="text-muted">
-                                @ViewBag.salesRangeLabel
-                            </small>
+    </div>
+    <!-- Online Ordering by Branch Table -->
+    <div class="col-md-7 col-sm-12">
+        <div class="card shadow">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-5">
+                    <div>
+                        <h5 class="mb-0">Order Summary by Seamless Branch</h5>
+                        <small id="salesRangeLabel" class="text-muted">
+                            @ViewBag.salesRangeLabel
+                        </small>
 
-                        </div>
-
-                        <div class="input-group input-group-sm w-auto gap-2">
-                            <label class="input-group-text text-dark" for="salesRange">Date Range</label>
-                            <select id="salesRange" class="form-select border-secondary shadow-sm rounded-pill" style="min-width: 140px;">
-                                <option value="thisweek" selected="@(ViewBag.SalesRange == "thisweek")">This Week</option>
-                                <option value="lastweek" selected="@(ViewBag.SalesRange == "lastweek")">Last Week</option>
-                                <option value="mtd" selected="@(ViewBag.SalesRange == "mtd")">MTD</option>
-                                <option value="lastmonth" selected="@(ViewBag.SalesRange == "lastmonth")">Last Month</option>
-                                <option value="thisquarter" selected="@(ViewBag.SalesRange == "thisquarter")">This Quarter</option>
-                                <option value="lastquarter" selected="@(ViewBag.SalesRange == "lastquarter")">Last Quarter</option>
-                                <option value="ytd" selected="@(ViewBag.SalesRange == "ytd")">YTD</option>
-
-                            </select>
-                        </div>
                     </div>
-                    <div id="salesSummaryContainer">
-                        @await Html.PartialAsync("_SalesSummaryPartial", Model.BranchSalesMetrics)
+
+                    <div class="input-group input-group-sm w-auto gap-2">
+                        <label class="input-group-text text-dark" for="salesRange">Date Range</label>
+                        <select id="salesRange" class="form-select border-secondary shadow-sm rounded-pill" style="min-width: 140px;">
+                            <option value="thisweek" selected="@(ViewBag.SalesRange == "thisweek")">This Week</option>
+                            <option value="lastweek" selected="@(ViewBag.SalesRange == "lastweek")">Last Week</option>
+                            <option value="mtd" selected="@(ViewBag.SalesRange == "mtd")">MTD</option>
+                            <option value="lastmonth" selected="@(ViewBag.SalesRange == "lastmonth")">Last Month</option>
+                            <option value="thisquarter" selected="@(ViewBag.SalesRange == "thisquarter")">This Quarter</option>
+                            <option value="lastquarter" selected="@(ViewBag.SalesRange == "lastquarter")">Last Quarter</option>
+                            <option value="ytd" selected="@(ViewBag.SalesRange == "ytd")">YTD</option>
+
+                        </select>
                     </div>
+                </div>
+                <div id="salesSummaryContainer">
+                    @await Html.PartialAsync("_SalesSummaryPartial", Model.BranchSalesMetrics)
                 </div>
             </div>
         </div>
     </div>
+</div>
 @* } *@
 
 <div class="row mt-2">
@@ -332,12 +372,12 @@
                                     {
                                         var hasData = officeTotals[office] > 0;
                                         <th>
-                                            @if (hasData) 
+                                            @if (hasData)
                                             {
                                                 <a href="#" class="text-decoration-underline text-info fw-bold"
-                                                data-bs-toggle="modal"
-                                                data-bs-target="#inventoryModal"
-                                                data-office="@office">
+                                                   data-bs-toggle="modal"
+                                                   data-bs-target="#inventoryModal"
+                                                   data-office="@office">
                                                     @office
                                                 </a>
                                             }
@@ -437,7 +477,7 @@
                         </select>
                     </div>
                 </div>
-            
+
                 <div class="card-body table-responsive p-2">
 
                     <div id="installerTableContainer">
@@ -448,15 +488,15 @@
             </div>
         </div>
     </div>
-    
+
 </div>
 
 <!-- ## MODAL SECTION -->
 <!-- INVENTORY SUMMARY MODAL -->
-<div class="modal fade" id="inventoryModal" tabindex="-1" 
-    data-bs-backdrop="static" 
-    data-bs-keyboard="false" 
-    aria-hidden="true">
+<div class="modal fade" id="inventoryModal" tabindex="-1"
+     data-bs-backdrop="static"
+     data-bs-keyboard="false"
+     aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-orange text-white">
@@ -471,10 +511,10 @@
 </div>
 
 <!-- INSTALLER DETAILS MODAL -->
-<div class="modal fade" id="installerModal" 
-    data-bs-backdrop="static"
-    data-bs-keyboard="false"
-    aria-hidden="true">
+<div class="modal fade" id="installerModal"
+     data-bs-backdrop="static"
+     data-bs-keyboard="false"
+     aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-orange text-white">
@@ -578,8 +618,9 @@
         // INSTALLER DATE CHANGE
         $('#installerRange').change(function () {
             const selected = $(this).val();
+            const locationId = $('#locationId').val();
 
-            $.get('/GMDash/GetInstallerTable', { range: selected }, function (html) {
+            $.get('/GMDash/GetInstallerTable', { range: selected, locationId: locationId }, function (html) {
                 $('#installerTableContainer').html(html);
 
                 // ✅ Grab only the installer label
@@ -591,8 +632,9 @@
         // RJT DATE CHANGE
         $('#rtjRange').change(function () {
             const selected = $(this).val();
+            const locationId = $('#locationId').val();
 
-            $.get('/GMDash/GetRTJTable', { range: selected }, function (html) {
+            $.get('/GMDash/GetRTJTable', { range: selected, locationId: locationId }, function (html) {
                 $('#rtjTableContainer').html(html);
 
                 // ✅ Grab only the RTJ label

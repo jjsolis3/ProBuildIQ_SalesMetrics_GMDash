@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Authorization;
 using SalesMetrics.Models.EFCore;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions;
 using SalesMetrics.Services.Helpers;
+using static Microsoft.EntityFrameworkCore.DbLoggerCategory;
 
 namespace SalesMetrics.Controllers
 {
@@ -23,7 +24,7 @@ namespace SalesMetrics.Controllers
         //private bool IsSalesPerson(int roleId) => roleId == 2;
 
         [Authorize]
-        public IActionResult Index(DateTime? startDate, DateTime? endDate, int weekOffset = 0, int? rangeType = 0, int? filterSalesmanId = null)
+        public IActionResult Index(DateTime? startDate, DateTime? endDate, int weekOffset = 0, int? rangeType = 0, int? filterSalesmanId = null, int whsId = 0)
         {
             int locationId = LocationHelper.GetCurrentLocationId(HttpContext);
             string officeLocation = LocationHelper.GetCurrentOfficeCode(HttpContext);
@@ -81,12 +82,12 @@ namespace SalesMetrics.Controllers
             }
 
             // Fetch Sales Data from the CUF ERP Database
-            var salesData = GetSalesData(connectionString, effectiveSalesmanId, officeLocation, startDate, endDate, roleId);
-            var (weeklyOrders, startOfWeek, endOfWeek) = GetWeeklyOrdersDataWithRange(weekOffset, roleId, effectiveSalesmanId);
-            var transactionSummary = GetTransactionSummary(connectionString, startDate, endDate, roleId, effectiveSalesmanId);
-            var overdueInvoices = GetOverdueInvoices(connectionString, roleId, effectiveSalesmanId);
+            var salesData = GetSalesData(connectionString, effectiveSalesmanId, officeLocation, startDate, endDate, roleId, whsId);
+            var (weeklyOrders, startOfWeek, endOfWeek) = GetWeeklyOrdersDataWithRange(weekOffset, roleId, effectiveSalesmanId, whsId);
+            var transactionSummary = GetTransactionSummary(connectionString, startDate, endDate, roleId, effectiveSalesmanId, whsId);
+            var overdueInvoices = GetOverdueInvoices(connectionString, roleId, effectiveSalesmanId, whsId);
             var todayTasks = GetTodayTasks(selectedUserId, locationId);
-            var inactiveCustomers = GetInactiveCustomers(connectionString, roleId, effectiveSalesmanId);
+            var inactiveCustomers = GetInactiveCustomers(connectionString, roleId, effectiveSalesmanId, whsId);
 
             ViewBag.RoleId = roleId;
             ViewBag.UserId = userId;
@@ -101,6 +102,9 @@ namespace SalesMetrics.Controllers
                 ViewBag.Users = new List<User>();
                 ViewBag.SalespersonId = salesmanId;
             }
+
+            ViewBag.SelectedWhsId = whsId;
+            ViewBag.WhsList = GetWarehouseID(connectionString);
 
             ViewBag.TodayTasks = todayTasks;
             ViewBag.Username = fullName.Split(' ')[0];
@@ -117,7 +121,7 @@ namespace SalesMetrics.Controllers
             ViewBag.StartDate = startDate?.ToString("MM/dd/yyyy");
             ViewBag.EndDate = endDate?.ToString("MM/dd/yyyy");
 
-            var (mtdRanking, ytdRanking, mtdStart, mtdEnd, ytdStart, ytdEnd) = GetSalesRanking();
+            var (mtdRanking, ytdRanking, mtdStart, mtdEnd, ytdStart, ytdEnd) = GetSalesRanking(whsId);
             ViewBag.MTDRanking = mtdRanking;
             ViewBag.YTDRanking = ytdRanking;
             ViewBag.MTDRange = $"{mtdStart:MMM d} - {mtdEnd:MMM d} {mtdStart.Year}";
@@ -129,6 +133,36 @@ namespace SalesMetrics.Controllers
             ViewBag.TaskTypes = TaskTypeHelper.GetTaskTypes("Dashboard");
 
             return View();
+        }
+
+        private List<Warehouses> GetWarehouseID(string connectionString)
+        {
+            var whsList = new List<Warehouses>();
+
+            using (var conn = new SqlConnection(connectionString))
+            {
+                var sql = @"
+                    SELECT WHS_WAREHOUSE_NUMBER as [WhsId],
+	                    WHS_WAREHOUSE_NAME as [WhsName]
+                    FROM WAREHOUSE_MASTER
+                    WHERE WHS_WAREHOUSE_NUMBER < 10
+                ";
+
+                var cmd = new SqlCommand(sql, conn);
+
+                conn.Open();
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    whsList.Add(new Warehouses
+                    {
+                        WhsID = reader.GetInt32(0),
+                        WhsName = reader.GetString(1)
+                    });
+                }
+            }
+
+            return whsList;
         }
 
         private string GetGreeting()
@@ -211,7 +245,7 @@ namespace SalesMetrics.Controllers
             }
         }
 
-        private Dictionary<string, object> GetSalesData(string connectionString, int salesmanID, string officeLocation, DateTime? startDate, DateTime? endDate, int roleId = 0)
+        private Dictionary<string, object> GetSalesData(string connectionString, int salesmanID, string officeLocation, DateTime? startDate, DateTime? endDate, int roleId = 0, int whsId = 0)
         {
             var data = new Dictionary<string, object>();
 
@@ -246,6 +280,11 @@ namespace SalesMetrics.Controllers
                         AND I.IHF_CANCELED_DATE IS NULL
                 ";
 
+                if (whsId > 0)
+                {
+                    query += $" AND I.IHF_WHSMAS_ID = @WhsId";
+                }
+
                 if (salesmanID > 0)
                 {
                     query += " AND SM.SMN_SMNMAS_ID = @SalesmanID";
@@ -255,6 +294,11 @@ namespace SalesMetrics.Controllers
 
                 cmd.Parameters.AddWithValue("@StartDate", startDate ?? DateTime.Today.AddDays(-30));
                 cmd.Parameters.AddWithValue("@EndDate", endDate ?? DateTime.Today);
+
+                if (whsId > 0)
+                {
+                    cmd.Parameters.AddWithValue("@WhsId", whsId);
+                }
 
                 if (salesmanID > 0)
                 {
@@ -283,7 +327,7 @@ namespace SalesMetrics.Controllers
         }
 
         [HttpGet]
-        public IActionResult GetKpiTiles(DateTime startDate, DateTime endDate, int? filterSalesmanId = null)
+        public IActionResult GetKpiTiles(DateTime startDate, DateTime endDate, int? filterSalesmanId = null, int whsId = 0)
         {
             int roleId = Convert.ToInt32(HttpContext.Session.GetString("RoleId"));
             int effectiveSalesmanId = 0;
@@ -296,7 +340,7 @@ namespace SalesMetrics.Controllers
             string officeLocation = LocationHelper.GetCurrentOfficeCode(HttpContext);
             var connectionString = _configuration.GetConnectionString(officeLocation);
 
-            var salesData = GetSalesData(connectionString, effectiveSalesmanId, officeLocation, startDate, endDate, roleId);
+            var salesData = GetSalesData(connectionString, effectiveSalesmanId, officeLocation, startDate, endDate, roleId, whsId);
             ViewBag.SalesData = salesData;
 
             return PartialView("_KpiTilesPartial");
@@ -368,7 +412,7 @@ namespace SalesMetrics.Controllers
 
         //    return (orders, sunday, saturday);
         //}
-        private (List<DailyOrderCount> Orders, DateTime Start, DateTime End) GetWeeklyOrdersDataWithRange(int weekOffset = 0, int roleId = 0, int salesmanId = 0)
+        private (List<DailyOrderCount> Orders, DateTime Start, DateTime End) GetWeeklyOrdersDataWithRange(int weekOffset = 0, int roleId = 0, int salesmanId = 0, int whsId = 0)
         {
             var orders = new List<DailyOrderCount>();
             string officeLocation = LocationHelper.GetCurrentOfficeCode(HttpContext);
@@ -381,20 +425,25 @@ namespace SalesMetrics.Controllers
             using (var conn = new SqlConnection(connectionString))
             {
                 var query = @"
-            SELECT 
-                DATENAME(WEEKDAY, SH.SOH_DELIVERY_DATE) AS WeekdayName,
-                COUNT(DISTINCT SH.SOH_NUMBER) AS OrdersCount,
-                SUM(CASE
-                    WHEN SH.SOH_TOTAL_AMOUNT = 0 AND AR.ARO_INVOICE_AMOUNT IS NOT NULL THEN AR.ARO_INVOICE_AMOUNT
-                    WHEN SH.SOH_TOTAL_AMOUNT = 0 AND AR.ARO_INVOICE_AMOUNT IS NULL THEN 0
-                    ELSE SH.SOH_TOTAL_AMOUNT
-                END) AS TotalOrderAmount
-            FROM SALES_HEADER AS SH
-            LEFT JOIN AR_OPEN_ITEM AR ON SH.SOH_NUMBER = AR.ARO_SALES_ORDER_NUMBER
-            WHERE 
-                SH.SOH_DELIVERY_DATE BETWEEN @StartDate AND @EndDate
-                AND SH.SOH_CURRENT_STATUS <> 4
-                AND SH.SOH_CANCELED_DATE IS NULL";
+                SELECT 
+                    DATENAME(WEEKDAY, SH.SOH_DELIVERY_DATE) AS WeekdayName,
+                    COUNT(DISTINCT SH.SOH_NUMBER) AS OrdersCount,
+                    SUM(CASE
+                        WHEN SH.SOH_TOTAL_AMOUNT = 0 AND AR.ARO_INVOICE_AMOUNT IS NOT NULL THEN AR.ARO_INVOICE_AMOUNT
+                        WHEN SH.SOH_TOTAL_AMOUNT = 0 AND AR.ARO_INVOICE_AMOUNT IS NULL THEN 0
+                        ELSE SH.SOH_TOTAL_AMOUNT
+                    END) AS TotalOrderAmount
+                FROM SALES_HEADER AS SH
+                LEFT JOIN AR_OPEN_ITEM AR ON SH.SOH_NUMBER = AR.ARO_SALES_ORDER_NUMBER
+                WHERE 
+                    SH.SOH_DELIVERY_DATE BETWEEN @StartDate AND @EndDate
+                    AND SH.SOH_CURRENT_STATUS <> 4
+                    AND SH.SOH_CANCELED_DATE IS NULL";
+
+                if (whsId > 0)
+                {
+                    query += $" AND SH.SOH_WHSMAS_ID = @WhsId";
+                }
 
                 if (salesmanId > 0)
                 {
@@ -402,14 +451,17 @@ namespace SalesMetrics.Controllers
                 }
 
                 query += @"
-            GROUP BY 
-                DATENAME(WEEKDAY, SH.SOH_DELIVERY_DATE),
-                DATEPART(WEEKDAY, SH.SOH_DELIVERY_DATE)
-            ORDER BY DATEPART(WEEKDAY, SH.SOH_DELIVERY_DATE);";
+                    GROUP BY 
+                        DATENAME(WEEKDAY, SH.SOH_DELIVERY_DATE),
+                        DATEPART(WEEKDAY, SH.SOH_DELIVERY_DATE)
+                    ORDER BY DATEPART(WEEKDAY, SH.SOH_DELIVERY_DATE);";
 
                 var cmd = new SqlCommand(query, conn);
                 cmd.Parameters.AddWithValue("@StartDate", sunday);
                 cmd.Parameters.AddWithValue("@EndDate", saturday);
+
+                if (whsId > 0)
+                    cmd.Parameters.AddWithValue("@WhsId", whsId);
                 if (salesmanId > 0)
                     cmd.Parameters.AddWithValue("@SalesmanID", salesmanId);
 
@@ -432,7 +484,7 @@ namespace SalesMetrics.Controllers
         }
 
         [HttpGet]
-        public JsonResult GetWeeklyOrders(int weekOffset = 0, int? filterSalesmanId = null)
+        public JsonResult GetWeeklyOrders(int weekOffset = 0, int? filterSalesmanId = null, int whsId = 0)
         {
             int roleId = Convert.ToInt32(HttpContext.Session.GetString("RoleId"));
             int effectiveSalesmanId = 0;
@@ -446,12 +498,12 @@ namespace SalesMetrics.Controllers
                 effectiveSalesmanId = filterSalesmanId ?? 0;
             }
 
-            var (orders, _, _) = GetWeeklyOrdersDataWithRange(weekOffset, roleId, effectiveSalesmanId);
+            var (orders, _, _) = GetWeeklyOrdersDataWithRange(weekOffset, roleId, effectiveSalesmanId, whsId);
             return Json(orders);
         }
 
 
-        private TransactionSummary GetTransactionSummary(string connectionString, DateTime? startDate, DateTime? endDate, int roleId = 0, int salesmanId = 0)
+        private TransactionSummary GetTransactionSummary(string connectionString, DateTime? startDate, DateTime? endDate, int roleId = 0, int salesmanId = 0, int whsId = 0)
         {
             var summary = new TransactionSummary { TopDelinquentCustomers = new List<CustomerOutstanding>() };
 
@@ -468,6 +520,10 @@ namespace SalesMetrics.Controllers
 	                    LEFT JOIN INVOICE_HEADER as I on A.ARO_INVOICE_NUMBER = I.IHF_INVOICE_NUMBER
                     WHERE ARO_INVOICE_BALANCE_DUE > 0 
 	                    AND ARO_DATE_PAID_IN_FULL IS NULL";
+                if (whsId > 0)
+                {
+                    query += $" AND ARO_WHSMAS_ID = @WhsId";
+                }
 
                 if (salesmanId > 0)
                 {
@@ -486,6 +542,10 @@ namespace SalesMetrics.Controllers
                         AND A.ARO_DATE_PAID_IN_FULL IS NULL 
                         AND DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) BETWEEN 30 AND 59";
 
+                if (whsId > 0)
+                {
+                    query += $" AND ARO_WHSMAS_ID = @WhsId";
+                }
 
                 if (salesmanId > 0)
                 {
@@ -504,6 +564,11 @@ namespace SalesMetrics.Controllers
                         AND A.ARO_DATE_PAID_IN_FULL IS NULL 
                         AND DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) BETWEEN 60 AND 89";
 
+                if (whsId > 0)
+                {
+                    query += $" AND ARO_WHSMAS_ID = @WhsId";
+                }
+
                 if (salesmanId > 0)
                 {
                     query += " AND I.IHF_SMNMAS_ORDER = @SalesmanID";
@@ -520,6 +585,11 @@ namespace SalesMetrics.Controllers
                         A.ARO_INVOICE_BALANCE_DUE > 0 
                         AND A.ARO_DATE_PAID_IN_FULL IS NULL 
                         AND DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) BETWEEN 90 AND 120";
+
+                if (whsId > 0)
+                {
+                    query += $" AND ARO_WHSMAS_ID = @WhsId";
+                }
 
                 if (salesmanId > 0)
                 {
@@ -538,6 +608,11 @@ namespace SalesMetrics.Controllers
                         AND A.ARO_DATE_PAID_IN_FULL IS NULL 
                         AND DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) > 120";
 
+                if (whsId > 0)
+                {
+                    query += $" AND ARO_WHSMAS_ID = @WhsId";
+                }
+
                 if (salesmanId > 0)
                 {
                     query += " AND I.IHF_SMNMAS_ORDER = @SalesmanID";
@@ -545,6 +620,9 @@ namespace SalesMetrics.Controllers
 
                 using (var cmd = new SqlCommand(query, conn))
                 {
+                    if (whsId > 0)
+                        cmd.Parameters.AddWithValue("@WhsId", whsId);
+
                     if (salesmanId > 0)
                     {
                         cmd.Parameters.AddWithValue("@SalesmanID", salesmanId);
@@ -584,8 +662,6 @@ namespace SalesMetrics.Controllers
                         summary.DueOver120 = reader["DueOver120"] != DBNull.Value ? Convert.ToInt32(reader["DueOver120"]) : 0;
                         summary.DueOver120Amount = reader["DueOver120Amount"] != DBNull.Value ? Convert.ToDouble(reader["DueOver120Amount"]) : 0;
                     }
-
-
                 }
 
                 // Query C - Top 5 Delinquents
@@ -601,6 +677,11 @@ namespace SalesMetrics.Controllers
                     WHERE A.ARO_INVOICE_BALANCE_DUE > 0
 	                    AND A.ARO_DATE_PAID_IN_FULL IS NULL";
 
+                if (whsId > 0)
+                {
+                    query += $" AND ARO_WHSMAS_ID = @WhsId";
+                }
+
                 if (salesmanId > 0)
                 {
                     queryDel += " AND I.IHF_SMNMAS_ORDER = @SalesmanID";
@@ -612,10 +693,11 @@ namespace SalesMetrics.Controllers
 
                 using (var cmd = new SqlCommand(queryDel, conn))
                 {
+                    if (whsId > 0)
+                        cmd.Parameters.AddWithValue("@WhsId", whsId);
+
                     if (salesmanId > 0)
-                    {
                         cmd.Parameters.AddWithValue("SalesmanID", salesmanId);
-                    }
 
                     using var reader = cmd.ExecuteReader();
                     while (reader.Read())
@@ -634,7 +716,7 @@ namespace SalesMetrics.Controllers
             return summary;
         }
 
-        private List<OverdueInvoice> GetOverdueInvoices(string connectionString, int roleId = 0, int salesmanId = 0)
+        private List<OverdueInvoice> GetOverdueInvoices(string connectionString, int roleId = 0, int salesmanId = 0, int whsId = 0)
         {
             var overdueList = new List<OverdueInvoice>();
             var userId = Convert.ToInt32(User.FindFirstValue("UserId"));
@@ -675,6 +757,11 @@ namespace SalesMetrics.Controllers
                     sql += " AND I.IHF_SMNMAS_ORDER<> 24";
                 }
 
+                if (whsId > 0)
+                {
+                    sql += $" AND ARO_WHSMAS_ID = @WhsId";
+                }
+
                 if (salesmanId > 0)
                 {
                     sql += " AND I.IHF_SMNMAS_ORDER = @SalesmanID";
@@ -684,10 +771,11 @@ namespace SalesMetrics.Controllers
 
                 var cmd = new SqlCommand(sql, conn);
 
+                if (whsId > 0)
+                    cmd.Parameters.AddWithValue("@WhsId", whsId);
+                
                 if (salesmanId > 0)
-                {
                     cmd.Parameters.AddWithValue("@SalesmanID", salesmanId);
-                }
 
                 conn.Open();
                 using var reader = cmd.ExecuteReader();
@@ -815,7 +903,7 @@ namespace SalesMetrics.Controllers
             return PartialView("_OrderDetailsPartial", viewModel);
         }
 
-        public IActionResult GetWorkOrdersByDay(string dayOfWeek, int weekOffset = 0, int? filterSalesmanId = null)
+        public IActionResult GetWorkOrdersByDay(string dayOfWeek, int weekOffset = 0, int? filterSalesmanId = null, int whsId = 0)
         {
             var officeLocation = LocationHelper.GetCurrentOfficeCode(HttpContext);
             var connectionString = _configuration.GetConnectionString(officeLocation);
@@ -831,7 +919,6 @@ namespace SalesMetrics.Controllers
             {
                 salesmanId = 0; // fallback default
             }
-
 
             int roleId = int.Parse(User.FindFirst("RoleId")?.Value ?? "0");
 
@@ -857,7 +944,8 @@ namespace SalesMetrics.Controllers
 
             using (var conn = new SqlConnection(connectionString))
             {
-                var sqlQuery = @"SELECT   
+                var sqlQuery = @"
+                    SELECT   
 	                    SOH_NUMBER AS OrderID,
                         CUS.CUM_CUMMAS_ID AS PropertyID,
                         CUS.CUM_CUSTOMER_NUMBER AS PropertyNumber,
@@ -957,6 +1045,12 @@ namespace SalesMetrics.Controllers
                             LEFT JOIN dbo.ITEM_MASTER ON ITM_ID_FIRST = SDT_ITEM_FIRST AND ITM_ID_LAST = SDT_ITEM_LAST
                           WHERE SDT_SALOHD_ID = SOH_NUMBER 
                       )";
+
+                if (whsId > 0)
+                {
+                    sqlQuery += $" AND S.SOH_WHSMAS_ID = @whsId";
+                }
+
                 if (salesmanId > 0)
                 {
                     sqlQuery += " AND SOH_SMNMAS_ID = @SalesmanID";
@@ -967,6 +1061,11 @@ namespace SalesMetrics.Controllers
 
                 var cmd = new SqlCommand(sqlQuery, conn);
                 cmd.Parameters.AddWithValue("@FromDate", fromDate);
+                if (whsId > 0)
+                {
+                    cmd.Parameters.AddWithValue("@whsId", whsId);
+                }
+
                 if (salesmanId > 0)
                 {
                     cmd.Parameters.AddWithValue("@SalesmanID", salesmanId);
@@ -1052,7 +1151,7 @@ namespace SalesMetrics.Controllers
         }
 
         // SALES RANKING SECTION
-        private (List<SalesRanking> MTD, List<SalesRanking> YTD, DateTime mtdStart, DateTime mtdEnd, DateTime ytdStart, DateTime ytdEnd) GetSalesRanking()
+        private (List<SalesRanking> MTD, List<SalesRanking> YTD, DateTime mtdStart, DateTime mtdEnd, DateTime ytdStart, DateTime ytdEnd) GetSalesRanking(int whsId = 0)
         {
             var mtdResults = new List<SalesRanking>();
             var ytdResults = new List<SalesRanking>();
@@ -1083,7 +1182,7 @@ namespace SalesMetrics.Controllers
                         IHF.IHF_INVOICE_DATE BETWEEN @MTD_Start AND @MTD_End
                         AND IHF.IHF_CANCELED_DATE IS NULL
                         AND ARO.ARO_INVOICE_TYPE = 'I'
-                        AND ARO.ARO_WHSMAS_ID = 1
+                        AND (@WhsId = 0 OR ARO.ARO_WHSMAS_ID = @WhsId)
                         AND ARO.ARO_INVOICE_AMOUNT <> 0
                     GROUP BY SM.SMN_SALESMAN_NAME, IHF.IHF_SMNMAS_ORDER
                     ORDER BY MTDSales DESC;
@@ -1100,7 +1199,7 @@ namespace SalesMetrics.Controllers
                         IHF.IHF_INVOICE_DATE BETWEEN @YTD_Start AND @YTD_End
                         AND IHF.IHF_CANCELED_DATE IS NULL
                         AND ARO.ARO_INVOICE_TYPE = 'I'
-                        AND ARO.ARO_WHSMAS_ID = 1
+                        AND (@WhsId = 0 OR ARO.ARO_WHSMAS_ID = @WhsId)
                         AND ARO.ARO_INVOICE_AMOUNT <> 0
                     GROUP BY SM.SMN_SALESMAN_NAME, IHF.IHF_SMNMAS_ORDER
                     ORDER BY YTDSales DESC;
@@ -1109,6 +1208,7 @@ namespace SalesMetrics.Controllers
                 cmd.Parameters.AddWithValue("@pMTD_Start", mtdStart);
                 cmd.Parameters.AddWithValue("@pYTD_Start", ytdStart);
                 cmd.Parameters.AddWithValue("@pToday", today);
+                cmd.Parameters.AddWithValue("@whsId", whsId);
 
                 conn.Open();
                 using (var reader = cmd.ExecuteReader())
@@ -1239,7 +1339,7 @@ namespace SalesMetrics.Controllers
             return (groupedMTDResults, groupedYTDResults, mtdStart, today, ytdStart, today);
         }
 
-        public List<InactiveCustomerViewModel> GetInactiveCustomers(string connectionString, int roleId = 0, int salesmanId = 0)
+        public List<InactiveCustomerViewModel> GetInactiveCustomers(string connectionString, int roleId = 0, int salesmanId = 0, int whsId = 0)
         {
             DateTime today = DateTime.Today;
             DateTime CutOffStart = today.AddDays(-31);
@@ -1278,7 +1378,7 @@ namespace SalesMetrics.Controllers
                             LEFT OUTER JOIN SALESMAN_MASTER AS SM ON S.[SOH_SMNMAS_ID] = SM.[SMN_SMNMAS_ID]
 		                    LEFT OUTER JOIN Complex as COM on C.CUM_CUMMAS_ID = COM.Customer_id
                         WHERE  
-                            I.[IHF_WHSMAS_ID] = 1
+                            (@WhsId = 0 OR I.[IHF_WHSMAS_ID] = @WhsId)
                             AND S.[SOH_CANCELED_DATE] IS NULL
                             AND C.[CUM_CUSTOMER_NAME] IS NOT NULL
                     ),
@@ -1305,7 +1405,6 @@ namespace SalesMetrics.Controllers
 	                    FROM AR_OPEN_ITEM A
 	                    GROUP BY ARO_CUSTOMER_NUMBER
                     )
-
                     SELECT 
                         CAD.CUM_CUMMAS_ID as [CustomerID],
                         CAD.CUM_CUSTOMER_NUMBER AS [Customer#], 
@@ -1325,7 +1424,7 @@ namespace SalesMetrics.Controllers
 	                    MAX(A.ARO_INVOICE_BALANCE_DUE) as [AR Balance],
                         MAX(CAD.SMN_SMNMAS_ID) as [SalespersonID],
 	                    MAX(CAD.SMN_SALESMAN_NAME) as [Salesperson],
-                        CAD.IHF_WHSMAS_ID AS WhsID,
+                        CAD.IHF_WHSMAS_ID AS [WhsID],
 	                    CAST(Max(C.CUM_ESTABLISHED_DATE) as DATE) as [Established Date]
                     FROM 
                         CustomerActivityData AS CAD
@@ -1339,6 +1438,7 @@ namespace SalesMetrics.Controllers
 		                    FROM INSTALLER_MASTER IM 
 		                    WHERE IM.INS_INSTALLER_NUMBER = CAD.CUM_CUSTOMER_NUMBER
 	                    )";
+
                 if (salesmanId > 0)
                 {
                     sql += " AND CAD.SMN_SMNMAS_ID = @SalesmanID";
@@ -1361,7 +1461,8 @@ namespace SalesMetrics.Controllers
 
                 cmd.Parameters.AddWithValue("@InactiveStartDate", CutOffEnd);
                 cmd.Parameters.AddWithValue("@InactiveEndDate", CutOffStart);
-
+                cmd.Parameters.AddWithValue("@WhsId", whsId);
+                
                 if (salesmanId > 0)
                 {
                     cmd.Parameters.AddWithValue("@SalesmanID", salesmanId);

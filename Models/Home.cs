@@ -22,5 +22,11 @@ namespace SalesMetrics.Models
         public decimal YTDSales { get; set; }
     }
 
+    public class Warehouses
+    {
+        public int WhsID { get; set; }
+        public string WhsName { get; set; }
+    }
+
 
 }

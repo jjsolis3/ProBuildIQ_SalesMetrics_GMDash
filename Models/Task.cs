@@ -24,7 +24,10 @@ namespace SalesMetrics.Models
         public DateTime? CancelledDate { get; set; }  // NEW
         public string? GoogleEventId { get; set; } // New property
         public int RoleId { get; set; }
-        public int CreatedById { get; set; } // User ID of the creator
+        public int? CreatedById { get; set; } // User ID of the creator
+        // add Google Sync Bit [IsSyncedToGoogle]
+        public bool IsSyncedToGoogle { get; set; } // Indicates if the task is synced with Google Calendar
+
     }
 
     public class TaskPageViewModel

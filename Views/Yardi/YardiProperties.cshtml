@@ -9,23 +9,23 @@
 @model IEnumerable<SalesMetrics.Models.YardiPropertyViewModel>
 
 @section styles {
-    <link href="~/assets/libs/datatables.net-searchpanes-bs5/css/searchPanes.bootstrap5.min.css" rel="stylesheet" />
-    <link href="~/assets/libs/select2/css/select2.min.css" rel="stylesheet" />
+<link href="~/assets/libs/datatables.net-searchpanes-bs5/css/searchPanes.bootstrap5.min.css" rel="stylesheet" />
+<link href="~/assets/libs/select2/css/select2.min.css" rel="stylesheet" />
 }
 
 <style>
     table.dataTable thead th {
-        background-color: darkorange !important;
-        color: white !important;
+    background-color: darkorange !important;
+    color: white !important;
     }
 
     div.dataTables_length {
-        margin-right: 1.5rem;
+    margin-right: 1.5rem;
     }
 
     div.dataTables_filter {
-        max-width: 300px;
-        margin-left: auto;
+    max-width: 300px;
+    margin-left: auto;
     }
 
 </style>
@@ -59,7 +59,19 @@
                 <tr>
                     <td>@p.Market</td>
                     <td>@p.Submarket</td>
-                    <td>@p.PropertyName</td>
+                    <td>
+                        @{
+                            var site = "https://matrix.pi-ei.com/PropertyDetail/All?";
+                            var MarkID = $"MarketID={p.YardiMarketID}&";
+                            var PropId = $"PropertyID={p.YardiPropertyID}";
+                            var propSiteUrl = $"{site}{MarkID}{PropId}";
+                            if (!string.IsNullOrEmpty(propSiteUrl) && !propSiteUrl.StartsWith("http"))
+                            {
+                                propSiteUrl = "https://" + propSiteUrl;
+                            }
+                        }
+                        <a href="@propSiteUrl" style="color:darkblue" target="_blank">@p.PropertyName</a>
+                    </td>
                     <td>@p.PropertyAddress</td>
                     <td>@p.PropertyCity</td>
                     <td>@p.PropertyState</td>

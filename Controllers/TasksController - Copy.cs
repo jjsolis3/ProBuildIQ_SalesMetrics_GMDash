@@ -9,11 +9,17 @@
 //using User = SalesMetrics.Models.User;
 //using EfUser = SalesMetrics.Models.EFCore.UserEntity;
 //using Calendar = SalesMetrics.Models.Calendar;
+
 //using Microsoft.Extensions.Localization;
 //using SalesMetrics.Services;
+//using SalesMetrics.Services.Helpers;
+
 //using Google.Apis.Tasks.v1.Data;
 //using System.Diagnostics.CodeAnalysis;
-//using SalesMetrics.Services.Helpers;
+//using Azure.Identity;
+//using Microsoft.Extensions.Diagnostics.HealthChecks;
+//using System.Data;
+
 
 //namespace SalesMetrics.Controllers
 //{
@@ -29,6 +35,49 @@
 //            _context = context;
 //        }
 
+//        private UserContext GetUserContext()
+//        {
+//            return new UserContext
+//            {
+//                Users_Id = int.Parse(User.FindFirst("Users_Id")?.Value ?? "0"),
+//                UserId = int.Parse(User.FindFirst("UserId")?.Value ?? "0"),
+//                RoleId = int.Parse(User.FindFirst("RoleId")?.Value ?? "0"),
+//                SalesmanId = int.Parse(User.FindFirst("SalesmanId")?.Value ?? "0"),
+//                LocationId = LocationHelper.GetCurrentLocationId(HttpContext),
+//                Username = HttpContext.Session.GetString("Username") ?? "system",
+//                FullName = HttpContext.Session.GetString("FullName") ?? ""
+//            };
+//        }
+
+//        private void SetUserViewBags(UserContext user)
+//        {
+//            ViewBag.Users_Id = user.Users_Id;
+//            ViewBag.UserId = user.UserId;
+//            ViewBag.RoleId = user.RoleId;
+//            ViewBag.SalesmanId = user.SalesmanId;
+//            ViewBag.LocationId = user.LocationId;
+//        }
+
+//        private List<SalesTask> FilterTasks(List<SalesTask> tasks, string filter)
+//        {
+//            return filter switch
+//            {
+//                "active" => tasks.Where(t => t.Status != "Completed" && t.Status != "Deleted").ToList(),
+//                "completed" => tasks.Where(t => t.Status == "Completed").ToList(),
+//                _ => tasks
+//            };
+//        }
+
+//        private DateTime? ParseDueDate(TaskCreateViewModel model)
+//        {
+//            if (!string.IsNullOrEmpty(model.DueDateDate) && !string.IsNullOrEmpty(model.DueDateTime))
+//            {
+//                var combined = $"{model.DueDateDate} {model.DueDateTime}";
+//                return DateTime.TryParse(combined, out var parsed) ? parsed : null;
+//            }
+//            return null;
+//        }
+
 //        public IActionResult AdminTask(string filter = "all")
 //        {
 //            var userId = HttpContext.Session.GetString("UserId");
@@ -40,7 +89,7 @@
 //            int locationId = LocationHelper.GetCurrentLocationId(HttpContext);
 //            int salesmanId = int.Parse(User.FindFirst("SalesmanId")?.Value ?? "0");
 
-//            var tasks = GetAllTasksByLocation(Convert.ToInt32(locationId));
+//            var tasks = GetAllTasksByLocation(locationId);
 //            // Backend Filtering
 //            if (filter == "active")
 //            {
@@ -64,6 +113,7 @@
 //            };
 
 //            // In Task() action and any other that renders the task modal:
+
 //            ViewBag.Users_Id = users_Id;
 //            ViewBag.UserId = userId;
 //            ViewBag.RoleId = roleId;
@@ -125,7 +175,7 @@
 //            int users_Id = int.Parse(User.FindFirst("Users_Id")?.Value ?? "0");
 //            int roleId = int.Parse(User.FindFirst("roleId")?.Value ?? "0");
 //            int locationId = LocationHelper.GetCurrentLocationId(HttpContext);
-            
+
 //            List<SalesTask> tasks;
 //            List<User> users;
 
@@ -167,7 +217,7 @@
 //                DueDate = t.DueDate,
 //                AssignedTo = users.FirstOrDefault(u => u.Users_ID == t.AssignedTo) is var u && u != null ? $"{u.FirstName} {u.LastName}" : "Unassigned"
 //            }).ToList();
-            
+
 //            return View(calendarTasks); // Updated model
 //        }
 
@@ -204,19 +254,38 @@
 //            return View("TaskKanban", viewModel); // 👈 This matches your .cshtml file
 //        }
 
+//        public UserContext GetAssignedUserContext(int? assignedTo)
+//        {
+//            var loggedIn = GetUserContext();
+
+//            // Sales can't assign to others, so return themselves
+//            if (loggedIn.RoleId == 2 || assignedTo == null || assignedTo == 0 || assignedTo == loggedIn.Users_Id)
+//                return loggedIn;
+
+//            var assigned = GetUserData((int)assignedTo, loggedIn.LocationId).FirstOrDefault();
+//            if (assigned == null)
+//                return loggedIn;
+
+//            return new UserContext
+//            {
+//                Users_Id = assigned.Users_ID,
+//                UserId = assigned.UserID,
+//                RoleId = assigned.RoleID,
+//                SalesmanId = assigned.SalesmanID,
+//                LocationId = assigned.Location,
+//                Username = assigned.Username
+//            };
+//        }
+
 //        // Add methods like Create, Update Status, Delete, etc
 //        [HttpPost]
 //        public async Task<IActionResult> Create(TaskModalViewModel modal)
 //        {
 //            modal.TaskTypes = TaskTypeHelper.GetTaskTypes("Task"); // 👈 Key line
-
 //            var model = modal.Task;
-//            int users_Id = int.Parse(User.FindFirst("Users_Id")?.Value ?? "0");
-//            int roleId = int.Parse(User.FindFirst("RoleId")?.Value ?? "0");
-//            int salesmanId = int.Parse(User.FindFirst("SalesmanId")?.Value ?? "0");
-//            int locationId = LocationHelper.GetCurrentLocationId(HttpContext);
 
-//            var usersData = GetUserData(modal.Task.AssignedTo, locationId);
+//            var user = GetUserContext();
+//            var assignedUser = GetAssignedUserContext(model.AssignedTo);
 
 //            if (!string.IsNullOrEmpty(model.DueDateDate) && !string.IsNullOrEmpty(model.DueDateTime))
 //            {
@@ -245,7 +314,7 @@
 //                // Reload page with existing task/user list
 //                var viewModel = new TaskPageViewModel
 //                {
-//                    Tasks = GetTasksByUserId(users_Id, locationId),
+//                    Tasks = GetTasksByUserId(assignedUser.Users_Id, assignedUser.LocationId),
 //                    Users = GetActiveUsers(),
 //                    NewTask = new SalesTask
 //                    {
@@ -253,28 +322,26 @@
 //                        Description = model.Description,
 //                        DueDate = model.DueDate,
 //                        Status = model.Status,
-//                        AssignedTo = users_Id,
+//                        AssignedTo = assignedUser.Users_Id,
 //                        Property = model.Property,
 //                        Type = model.Type,
 //                        PropertyID = model.PropertyID,
-//                        Location = locationId,
-//                        RoleId = roleId
+//                        Location = assignedUser.LocationId,
+//                        RoleId = assignedUser.RoleId
 //                    }
 //                };
 
-//                ViewBag.UserId = users_Id;
-//                ViewBag.Users_Id = users_Id;
-//                ViewBag.RoleId = roleId;
-//                ViewBag.SalesmanId = salesmanId;
+//                SetUserViewBags(assignedUser);
+
 //                ViewBag.TaskTypes = TaskTypeHelper.GetTaskTypes("Task");
-//                ViewBag.LoggedInUserId = users_Id;
+//                ViewBag.LoggedInUserId = assignedUser.Users_Id;
 
 //                return View("Task", viewModel);
 //            }
 
 //            if (model.AssignedTo == 0)
 //            {
-//                model.AssignedTo = users_Id;
+//                model.AssignedTo = assignedUser.Users_Id;
 //            }
 
 //            var task = new SalesTask
@@ -287,17 +354,15 @@
 //                Property = model.Property,
 //                PropertyID = model.PropertyID,
 //                Type = model.Type,
-//                CreatedBy = HttpContext.Session.GetString("Username") ?? "admin",
+//                CreatedBy = GetUserContext().Username ?? "admin",
 //                CreatedDate = DateTime.Now,
-//                RoleId = roleId,
-//                Location = locationId
+//                RoleId = assignedUser.RoleId,
+//                Location = assignedUser.LocationId,
+//                CreatedById = GetUserContext().Users_Id // Store the ID of the user who created the task
 //            };
 
-//            Console.WriteLine($"AssignedTo from modal: {model.AssignedTo}");
-
-//            var locationStr = HttpContext.Session.GetString("LocationId");
-//            if (int.TryParse(locationStr, out var locId))
-//                task.Location = locId;
+//            var locationName = LocationHelper.GetLocationName(assignedUser.LocationId);
+//            Console.WriteLine($"New Task Created for {assignedUser.FullName} (id: {model.AssignedTo} ) from the {locationName} branch");
 
 //            int taskId = SaveTaskToDatabase(task);
 
@@ -322,7 +387,7 @@
 //                        {
 //                            var tasksService = new GoogleTasksService(_configuration);
 //                            googleTaskId = await tasksService.CreateTaskAsync(
-//                                accessToken, refreshToken, model.AssignedTo.ToString(), task.TaskID.ToString(), task.Title, task.Description, task.DueDate
+//                                accessToken, refreshToken, model.AssignedTo.ToString(), taskId.ToString(), task.Title, task.Description, task.DueDate
 //                            );
 
 //                            // Add to Google Calendar
@@ -336,6 +401,16 @@
 
 //                            if (!string.IsNullOrEmpty(googleEventId) || !string.IsNullOrEmpty(googleTaskId))
 //                            {
+//                                var updateCmd = new SqlCommand(@"
+//                                    UPDATE Tasks
+//                                    SET GoogleTaskId = @GoogleTaskId,
+//                                        GoogleEventId = @GoogleEventId,
+//                                        IsSyncedToGoogle = 1
+//                                    WHERE TaskID = @TaskID
+//                                        AND Title = @Title 
+//                                        AND AssignedTo = @AssignedTo 
+//                                        AND CreatedDate = @CreatedDate
+//                                ", conn);
 //                                TempData["Success"] = "Task created and synced to Google Task & Calendar.";
 //                            }
 //                            else if (!string.IsNullOrEmpty(googleEventId) && string.IsNullOrEmpty(googleTaskId))
@@ -420,14 +495,15 @@
 //                        {
 //                            users.Add(new User
 //                            {
-//                                Users_ID = reader.GetInt32(0),
-//                                UserID = reader.GetInt32(1),
-//                                FirstName = reader.GetString(2),
-//                                LastName = reader.GetString(3),
-//                                RoleID = reader.GetInt32(4),
-//                                Location = reader.GetInt32(5),
-//                                CreatedDate = reader.GetDateTime(6),
-//                                SalesmanID = reader.IsDBNull(7) ? 0 : reader.GetInt32(7)
+//                                Users_ID = reader.GetInt32(reader.GetOrdinal("Users_ID")),
+//                                UserID = reader.GetInt32(reader.GetOrdinal("UserId")),
+//                                FirstName = reader.GetString(reader.GetOrdinal("FirstName")),
+//                                LastName = reader.GetString(reader.GetOrdinal("LastName")),
+//                                RoleID = reader.GetInt32(reader.GetOrdinal("RoleID")),
+//                                Location = reader.GetInt32(reader.GetOrdinal("Location")),
+//                                CreatedDate = reader.GetDateTime(reader.GetOrdinal("CreatedDate")),
+//                                SalesmanID = reader.IsDBNull(reader.GetOrdinal("SalesmanID")) ? 0 : reader.GetInt32(reader.GetOrdinal("SalesmanID")),
+//                                SalesmanNumber = reader.IsDBNull(reader.GetOrdinal("SalesmanNumber")) ? null : reader.GetString(reader.GetOrdinal("SalesmanNumber"))
 //                            });
 //                        }
 //                    }
@@ -438,12 +514,7 @@
 
 //        private List<User> GetActiveUsers()
 //        {
-//            var userId = Convert.ToInt32(HttpContext.Session.GetString("UserId"));
-//            int users_Id = int.Parse(User.FindFirst("Users_Id")?.Value ?? "0");
-//            int roleId = int.Parse(User.FindFirst("RoleId")?.Value ?? "0");
-
-//            var locationId = Convert.ToInt32(HttpContext.Session.GetString("LocationId"));
-
+//            var user = GetUserContext();
 //            var users = new List<User>();
 
 //            using (SqlConnection conn = new SqlConnection(_configuration.GetConnectionString("SalesMetrics")))
@@ -452,14 +523,14 @@
 
 //                string query;
 
-//                if (roleId == 1)
+//                if (user.RoleId == 1)
 //                {
 //                    // Admins and Sales Admins see all users at the same location
 //                    query = @"SELECT Users_ID, UserID, FirstName, LastName, RoleID, Location, CreatedDate, SalesmanID
 //                        FROM Users
 //                        WHERE Location = @Location";
 //                }
-//                else if (roleId == 3 || roleId == 4)
+//                else if (user.RoleId == 3 || user.RoleId == 4)
 //                {
 //                    // Admins and Sales Admins see all users at the same location
 //                    query = @"SELECT Users_ID, UserID, FirstName, LastName, RoleID, Location, CreatedDate, SalesmanID
@@ -476,10 +547,10 @@
 
 //                using (SqlCommand cmd = new SqlCommand(query, conn))
 //                {
-//                    if (roleId != 3 || roleId != 4)
-//                        cmd.Parameters.AddWithValue("@Users_Id", users_Id);
+//                    if (user.RoleId != 3 || user.RoleId != 4)
+//                        cmd.Parameters.AddWithValue("@Users_Id", user.Users_Id);
 
-//                    cmd.Parameters.AddWithValue("@Location", locationId);
+//                    cmd.Parameters.AddWithValue("@Location", user.LocationId);
 
 //                    using (SqlDataReader reader = cmd.ExecuteReader())
 //                    {
@@ -535,28 +606,28 @@
 //                        WHERE RoleId = 2 AND Location = @Location";
 //                }
 
-//                    using (SqlCommand cmd = new SqlCommand(query, conn))
-//                    {
-//                        cmd.Parameters.AddWithValue("@Location", locationId);
+//                using (SqlCommand cmd = new SqlCommand(query, conn))
+//                {
+//                    cmd.Parameters.AddWithValue("@Location", locationId);
 
-//                        using (SqlDataReader reader = cmd.ExecuteReader())
+//                    using (SqlDataReader reader = cmd.ExecuteReader())
+//                    {
+//                        while (reader.Read())
 //                        {
-//                            while (reader.Read())
+//                            users.Add(new User
 //                            {
-//                                users.Add(new User
-//                                {
-//                                    Users_ID = reader.GetInt32(0),
-//                                    UserID = reader.GetInt32(1),
-//                                    FirstName = reader.GetString(2),
-//                                    LastName = reader.GetString(3),
-//                                    RoleID = reader.GetInt32(4),
-//                                    Location = reader.GetInt32(5),
-//                                    CreatedDate = reader.GetDateTime(6),
-//                                    SalesmanID = reader.IsDBNull(7) ? 0 : reader.GetInt32(7)
-//                                });
-//                            }
+//                                Users_ID = reader.GetInt32(0),
+//                                UserID = reader.GetInt32(1),
+//                                FirstName = reader.GetString(2),
+//                                LastName = reader.GetString(3),
+//                                RoleID = reader.GetInt32(4),
+//                                Location = reader.GetInt32(5),
+//                                CreatedDate = reader.GetDateTime(6),
+//                                SalesmanID = reader.IsDBNull(7) ? 0 : reader.GetInt32(7)
+//                            });
 //                        }
 //                    }
+//                }
 //            }
 
 //            return users;
@@ -716,7 +787,6 @@
 
 //        private int SaveTaskToDatabase(SalesTask task)
 //        {
-//            int userId = int.Parse(User.FindFirst("UserId")?.Value ?? "0");
 //            try
 //            {
 //                using (SqlConnection conn = new SqlConnection(_configuration.GetConnectionString("SalesMetrics")))
@@ -746,10 +816,9 @@
 //                        cmd.Parameters.AddWithValue("@CancelledDate", (object?)task.CancelledDate ?? DBNull.Value);
 //                        cmd.Parameters.AddWithValue("@RoleId", (object?)task.RoleId ?? DBNull.Value);
 //                        cmd.Parameters.AddWithValue("@PropertyId", (object?)task.PropertyID ?? DBNull.Value);
-//                        cmd.Parameters.AddWithValue("@ArchiveAssignedID", (object?)userId ?? DBNull.Value);
+//                        cmd.Parameters.AddWithValue("@ArchiveAssignedID", (object?)task.CreatedById ?? DBNull.Value);
 
 //                        //cmd.ExecuteNonQuery();
-
 //                        return (int)cmd.ExecuteScalar();
 //                    }
 //                }
@@ -762,11 +831,13 @@
 //        }
 
 //        [HttpGet]
-//        public IActionResult GetCreateTaskModal( string source = "Orders", string? property = null, string? orderId = null, int? propertyId = null, decimal? balance = null, int? daysInactive = null, int? assignedTo = null, string? unit = null)
+//        public IActionResult GetCreateTaskModal(string source = "Orders", string? property = null, string? orderId = null, int? propertyId = null, decimal? balance = null, int? daysInactive = null, int? assignedTo = null, string? unit = null)
 //        {
-//            var userId = Convert.ToInt32(HttpContext.Session.GetString("UserId"));
-//            int users_Id = int.Parse(User.FindFirst("Users_Id")?.Value ?? "0");
-//            var roleId = Convert.ToInt32(HttpContext.Session.GetString("RoleId"));
+//            var assignedUser = GetAssignedUserContext(assignedTo);
+
+//            //var userId = Convert.ToInt32(HttpContext.Session.GetString("UserId"));
+//            //int users_Id = int.Parse(User.FindFirst("Users_Id")?.Value ?? "0");
+//            //var roleId = Convert.ToInt32(HttpContext.Session.GetString("RoleId"));
 
 //            var defaultDueDate = DateTime.Now.AddDays(1);
 //            var calcDueDate = defaultDueDate.ToString("yyyy-MM-dd");
@@ -797,11 +868,11 @@
 //                case "orders":
 //                default:
 //                    title = orderId != null ? $"Follow-up for Order {orderId} from {property}" : "New Task";
-//                    description = orderId != null 
-//                        ? $"Follow-up task for {property} (Order ID: {orderId})" 
+//                    description = orderId != null
+//                        ? $"Follow-up task for {property} (Order ID: {orderId})"
 //                        : null;
 //                    break;
-//            }            
+//            }
 
 //            var modalVM = new TaskModalViewModel
 //            {
@@ -813,18 +884,18 @@
 //                    DueDateTime = calcDueTime,
 //                    DueDate = defaultDueDate, // Default to 1 day from now
 //                    Property = property,
-//                    PropertyID = propertyId, 
+//                    PropertyID = propertyId,
 //                    Source = source
 //                },
 //                Users = users,
-//                LoggedInUserId = users_Id,
-//                RoleId = roleId,
+//                LoggedInUserId = assignedUser.Users_Id,
+//                RoleId = assignedUser.RoleId,
 //                TaskTypes = TaskTypeHelper.GetTaskTypes(source)
 //            };
 
 //            return PartialView("_CreateTaskModal", modalVM);
 //        }
-        
+
 //        [HttpGet]
 //        public IActionResult EditModalPartial(int id, string? returnUrl = null)
 //        {
@@ -1013,7 +1084,7 @@
 //        public async Task<IActionResult> Update(TaskModalViewModel modal)
 //        {
 //            string connStr = _configuration.GetConnectionString("SalesMetrics");
-            
+
 //            var userId = Convert.ToInt32(HttpContext.Session.GetString("UserId"));
 //            int users_Id = int.Parse(User.FindFirst("Users_Id")?.Value ?? "0");
 //            var roleId = Convert.ToInt32(HttpContext.Session.GetString("RoleId"));
@@ -1121,11 +1192,10 @@
 //        }
 
 //        [HttpPost]
-//        public async Task<IActionResult> Delete(int taskId)
+//        public async Task<IActionResult> Delete(int taskId, string? returnUrl = null)
 //        {
 //            var userId = Convert.ToInt32(HttpContext.Session.GetString("UserId"));
 //            int users_Id = int.Parse(User.FindFirst("Users_Id")?.Value ?? "0");
-//            //var locationId = Convert.ToInt32(HttpContext.Session.GetString("LocationId"));
 //            int locationId = LocationHelper.GetCurrentLocationId(HttpContext);
 
 //            try
@@ -1155,7 +1225,6 @@
 //                }
 
 //                // Delete from DB
-//                //var deleteCmd = new SqlCommand("DELETE FROM Tasks WHERE TaskID = @TaskID", conn);
 //                var deleteCmd = new SqlCommand(@"
 //                    UPDATE Tasks
 //                    SET Status = 'Deleted',
@@ -1173,6 +1242,17 @@
 //                TempData["Error"] = $"Error deleting taskID({taskId}) : {ex.Message}";
 //            }
 
+//            if (!string.IsNullOrEmpty(returnUrl))
+//                return Redirect(returnUrl);
+
+//            // ✅ Try to redirect back to the referring page
+//            var referer = Request.Headers["Referer"].ToString();
+//            if (!string.IsNullOrEmpty(referer))
+//            {
+//                return Redirect(referer);
+//            }
+
+//            // Fallback redirect to Task View Page
 //            return RedirectToAction("Task");
 //        }
 
@@ -1292,31 +1372,43 @@
 //                }
 //                else
 //                {
-//                    ModelState.AddModelError("DueDate", "Invalid date/time.");
+//                    //ModelState.AddModelError("DueDate", "Invalid date/time.");
+//                    return Json(new { success = false, message = "Invalid date/time." });
 //                }
 //            }
 //            else
 //            {
-//                ModelState.AddModelError("DueDate", "Date and time are required.");
+//                //ModelState.AddModelError("DueDate", "Date and time are required.");
+//                return Json(new { success = false, message = "Date and time are required." });
 //            }
 
 
 //            if (model == null || string.IsNullOrWhiteSpace(model.Property))
 //            {
 //                TempData["Error"] = "Invalid property info.";
-//                return RedirectToAction("YardiProperties", "Yardi");
+//                //return RedirectToAction("Properties", "Properties");
+//                return Json(new { success = false, message = "Invalid property info." });
 //            }
 
 //            if (!ModelState.IsValid)
 //            {
 //                TempData["Error"] = "Form is missing required fields.";
-//                return RedirectToAction("YardiProperties", "Yardi");
+//                return RedirectToAction("Properties", "Properties");
+//            }
+
+//            // ✅ ADD THIS BLOCK before the try-catch
+//            if (model.AssignedTo == null || model.AssignedTo == 0)
+//            {
+//                model.AssignedTo = int.TryParse(HttpContext.Session.GetString("Users_ID"), out var fallbackAssignedTo)
+//                    ? fallbackAssignedTo
+//                    : 0;
 //            }
 
 //            try
 //            {
 //                int roleId = int.Parse(User.FindFirst("roleId")?.Value ?? "0");
 //                int salesmanId = int.Parse(User.FindFirst("SalesmanId")?.Value ?? "0");
+//                int locationId = int.TryParse(HttpContext.Session.GetString("LocationId"), out var locId) ? locId : 0;
 
 //                // ✅ Convert TaskCreateViewModel ➜ TaskEntity
 //                var task = new SalesTask
@@ -1330,27 +1422,18 @@
 //                    Type = model.Type ?? "Follow Up",
 //                    CreatedBy = HttpContext.Session.GetString("Username") ?? "system",
 //                    CreatedDate = DateTime.Now,
-//                    Location = int.TryParse(HttpContext.Session.GetString("LocationId"), out var locId) ? locId : 0,
-//                    AssignedTo = (roleId == 1 || roleId == 3 || roleId == 4) ? model.AssignedTo : Convert.ToInt32(HttpContext.Session.GetString("Users_Id"))
+//                    Location = locationId,
+//                    AssignedTo = (roleId == 2)
+//                        ? Convert.ToInt32(HttpContext.Session.GetString("Users_ID"))
+//                        : (model.AssignedTo > 0 ? model.AssignedTo : 0)
+
 //                };
 
-//                // Handle nullable session-based properties
-//                //if (int.TryParse(HttpContext.Session.GetString("LocationId"), out var locId))
-//                //    task.Location = locId;
-
-//                if (roleId == 1 || roleId == 3 || roleId == 4)
+//                if (task.AssignedTo == null || task.AssignedTo == 0)
 //                {
-//                    task.AssignedTo = (int)model.AssignedTo;
-//                }
-//                else
-//                {
-//                    // fallback for Sales role (2) using hidden input
-//                    if (!int.TryParse(HttpContext.Session.GetString("Users_Id"), out var assignedTo))
-//                    {
-//                        TempData["Error"] = "Unable to determine assigned user.";
-//                        return RedirectToAction("Login", "Auth");
-//                    }
-//                    task.AssignedTo = assignedTo;
+//                    TempData["Error"] = "Assigned user is missing or invalid.";
+//                    //return RedirectToAction("Properties", "Properties");
+//                    return Json(new { success = false, message = "Assigned user is missing or invalid." });
 //                }
 
 //                //_context.Tasks.Add(task);
@@ -1358,13 +1441,15 @@
 //                int TaskID = SaveTaskToDatabase(task);
 
 //                TempData["Success"] = $"Task created successfully for {task.Property} | Task ID: {TaskID}";
-//                return RedirectToAction("Properties", "Sales");
+//                //return RedirectToAction("Properties", "Properties");
+//                return Json(new { success = true, taskId = TaskID });
 //            }
 //            catch (Exception ex)
 //            {
 //                Console.WriteLine($"Error creating task: {ex.Message}");
 //                TempData["Error"] = $"Error creating Task for {model.Property}";
-//                return StatusCode(500, $"Internal server error: {ex.Message}");
+//                //return StatusCode(500, $"Internal server error: {ex.Message}");
+//                return Json(new { success = false, message = "Internal server error." });
 //            }
 //        }
 
@@ -1418,7 +1503,7 @@
 //                int TaskID = SaveTaskToDatabase(task);
 
 //                TempData["Success"] = $"Task created successfully. Task ID: {TaskID}";
-//                return RedirectToAction("Index", "Dashboard");
+//                return RedirectToAction("Schedule", "Tasks");
 //            }
 //            catch (Exception ex)
 //            {
@@ -1512,7 +1597,7 @@
 //                return Json(new { success = false, message = ex.Message });
 //            }
 //        }
-                
+
 //        [HttpGet]
 //        public JsonResult GetCalendarEvents(bool hideCompleted = false)
 //        {
@@ -1634,7 +1719,207 @@
 //            return await Create(modal);
 //        }
 
+//        [HttpGet]
+//        public IActionResult DuplicateTaskModal(int id)
+//        {
+//            int users_Id = int.Parse(User.FindFirst("Users_Id")?.Value ?? "0");
+//            int userId = int.Parse(User.FindFirst("UserId")?.Value ?? "0");
+//            int roleId = int.Parse(User.FindFirst("RoleId")?.Value ?? "0");
+
+//            var locationId = LocationHelper.GetCurrentLocationId(HttpContext);
+//            var task = GetAllTasksByLocation(locationId).FirstOrDefault(t => t.TaskID == id);
+//            if (task == null)
+//                return Content("Task not found.");
+
+//            var due = DateTime.Now.AddHours(2);
+
+//            var modalVM = new TaskModalViewModel
+//            {
+//                Task = new TaskCreateViewModel
+//                {
+//                    Title = task.Title,
+//                    Description = task.Description,
+//                    DueDate = due,
+//                    DueDateDate = due.ToString("yyyy-MM-dd"), // ✅ Fix for HTML5 <input type="date">
+//                    DueDateTime = due.ToString("hh:mm tt"),
+//                    Type = task.Type,
+//                    Status = "Pending",
+//                    Property = task.Property,
+//                    PropertyID = task.PropertyID,
+//                    AssignedTo = task.AssignedTo ?? users_Id
+//                },
+//                Users = GetActiveUsers(),
+//                LoggedInUserId = users_Id,
+//                RoleId = roleId,
+//                TaskTypes = TaskTypeHelper.GetTaskTypes("Task")
+//            };
+
+//            return PartialView("_DuplicateTaskModal", modalVM);
+//        }
+
+//        private async Task<(string? GoogleTaskId, string? GoogleEventId)> TryGoogleSyncTaskAsync(SalesTask task)
+//        {
+//            string? googleTaskId = null;
+//            string? googleEventId = null;
+
+//            using (var conn = new SqlConnection(_configuration.GetConnectionString("SalesMetrics")))
+//            {
+//                await conn.OpenAsync();
+
+//                var tokenCmd = new SqlCommand("SELECT GoogleAccessToken, GoogleRefreshToken FROM Users WHERE Users_ID = @Users_ID", conn);
+//                tokenCmd.Parameters.AddWithValue("@Users_ID", task.AssignedTo ?? 0);
+
+//                string? accessToken = null, refreshToken = null;
+//                using (var reader = await tokenCmd.ExecuteReaderAsync())
+//                {
+//                    if (await reader.ReadAsync())
+//                    {
+//                        accessToken = reader["GoogleAccessToken"]?.ToString();
+//                        refreshToken = reader["GoogleRefreshToken"]?.ToString();
+//                    }
+//                }
+
+//                if (!string.IsNullOrWhiteSpace(accessToken) && !string.IsNullOrWhiteSpace(refreshToken))
+//                {
+//                    var tasksService = new GoogleTasksService(_configuration);
+//                    googleTaskId = await tasksService.CreateTaskAsync(
+//                        accessToken, refreshToken, task.AssignedTo.ToString(), task.TaskID.ToString(), task.Title, task.Description, task.DueDate
+//                    );
+
+//                    if (task.Type?.Equals("QC", StringComparison.OrdinalIgnoreCase) == true || task.Type?.Equals("Site Visit", StringComparison.OrdinalIgnoreCase) == true)
+//                    {
+//                        var calendarService = new GoogleCalendarService(_configuration);
+//                        googleEventId = await calendarService.AddTaskEventAsync(
+//                            task.AssignedTo ?? 0, accessToken, refreshToken, task.TaskID.ToString(), task.Title, task.Description, task.DueDate ?? DateTime.Now
+//                        );
+//                    }
+
+//                    // Update DB with Google info
+//                    var updateCmd = new SqlCommand(@"
+//                UPDATE Tasks
+//                SET GoogleTaskId = @GoogleTaskId,
+//                    GoogleEventId = @GoogleEventId,
+//                    IsSyncedToGoogle = 1
+//                WHERE TaskID = @TaskID
+//            ", conn);
+
+//                    updateCmd.Parameters.AddWithValue("@GoogleTaskId", (object?)googleTaskId ?? DBNull.Value);
+//                    updateCmd.Parameters.AddWithValue("@GoogleEventId", (object?)googleEventId ?? DBNull.Value);
+//                    updateCmd.Parameters.AddWithValue("@TaskID", task.TaskID);
+
+//                    await updateCmd.ExecuteNonQueryAsync();
+//                }
+//            }
+
+//            return (googleTaskId, googleEventId);
+//        }
+
+
+//        [HttpPost]
+//        public async Task<IActionResult> ManualGoogleSync(int taskId)
+//        {
+//            var user = GetUserContext();
+
+//            using var conn = new SqlConnection(_configuration.GetConnectionString("SalesMetrics"));
+//            await conn.OpenAsync();
+
+//            // Fetch the task
+//            SalesTask? task = null;
+//            var fetchCmd = new SqlCommand("SELECT * FROM Tasks WHERE TaskID = @TaskID", conn);
+//            fetchCmd.Parameters.AddWithValue("@TaskID", taskId);
+
+//            using (var reader = await fetchCmd.ExecuteReaderAsync())
+//            {
+//                if (await reader.ReadAsync())
+//                {
+//                    task = new SalesTask
+//                    {
+//                        TaskID = reader.GetInt32(reader.GetOrdinal("TaskID")),
+//                        Title = reader.GetString(reader.GetOrdinal("Title")),
+//                        Description = reader["Description"]?.ToString(),
+//                        DueDate = reader.GetDateTime(reader.GetOrdinal("DueDate")),
+//                        Type = reader["Type"]?.ToString(),
+//                        AssignedTo = reader.GetInt32(reader.GetOrdinal("AssignedTo")),
+//                        // add IsSyncedToGoogle bit from SQL
+//                        IsSyncedToGoogle = reader.GetBoolean("IsSyncedToGoogle")
+//                    };
+//                }
+//            }
+
+//            if (task == null)
+//            {
+//                TempData["Error"] = "Task not found.";
+//                return RedirectToAction("Task");
+//            }
+
+//            // Fetch Google tokens
+//            string? accessToken = null, refreshToken = null;
+//            var tokenCmd = new SqlCommand("SELECT GoogleAccessToken, GoogleRefreshToken FROM Users WHERE Users_ID = @Users_ID", conn);
+//            tokenCmd.Parameters.AddWithValue("@Users_ID", task.AssignedTo);
+//            using (var reader = await tokenCmd.ExecuteReaderAsync())
+//            {
+//                if (await reader.ReadAsync())
+//                {
+//                    accessToken = reader["GoogleAccessToken"]?.ToString();
+//                    refreshToken = reader["GoogleRefreshToken"]?.ToString();
+//                }
+//            }
+
+//            if (string.IsNullOrWhiteSpace(accessToken) || string.IsNullOrWhiteSpace(refreshToken))
+//            {
+//                TempData["Error"] = "User is not linked to Google.";
+//                return RedirectToAction("Task");
+//            }
+
+//            // Perform Google sync
+//            var tasksService = new GoogleTasksService(_configuration);
+//            var calendarService = new GoogleCalendarService(_configuration);
+
+//            var googleTaskId = await tasksService.CreateTaskAsync(accessToken, refreshToken, task.AssignedTo.ToString(), task.TaskID.ToString(), task.Title, task.Description, task.DueDate);
+//            string? googleEventId = null;
+
+//            if (task.Type?.Equals("QC", StringComparison.OrdinalIgnoreCase) == true || task.Type?.Equals("Site Visit", StringComparison.OrdinalIgnoreCase) == true)
+//            {
+//                googleEventId = await calendarService.AddTaskEventAsync(task.AssignedTo.Value, accessToken, refreshToken, task.TaskID.ToString(), task.Title, task.Description, task.DueDate.Value);
+//            }
+//            else
+//            {
+//                TempData["Error"] = "Missing AssignedTo or DueDate — cannot sync with Google Calendar.";
+//                return RedirectToAction("Task");
+//            }
+
+//            var updateCmd = new SqlCommand(@"
+//                UPDATE Tasks SET
+//                    GoogleTaskId = @GoogleTaskId,
+//                    GoogleEventId = @GoogleEventId,
+//                    IsSyncedToGoogle = 1
+//                WHERE TaskID = @TaskID
+//            ", conn);
+
+//            updateCmd.Parameters.AddWithValue("@GoogleTaskId", (object?)googleTaskId ?? DBNull.Value);
+//            updateCmd.Parameters.AddWithValue("@GoogleEventId", (object?)googleEventId ?? DBNull.Value);
+//            updateCmd.Parameters.AddWithValue("@TaskID", taskId);
+
+//            await updateCmd.ExecuteNonQueryAsync();
+
+//            TempData["Success"] = "Task synced with Google.";
+//            return RedirectToAction("Task");
+//        }
 
 //        // END CLASS
+//    }
+
+//    public class UserContext
+//    {
+//        public int Users_Id { get; set; }
+//        public int UserId { get; set; }
+//        public int RoleId { get; set; }
+//        public int SalesmanId { get; set; }
+//        public int LocationId { get; set; }
+//        public string Username { get; set; }
+//        public string FName { get; set; }
+//        public string LName { get; set; }
+//        public string Email { get; set; }
+//        public string FullName { get; set; }
 //    }
 //}

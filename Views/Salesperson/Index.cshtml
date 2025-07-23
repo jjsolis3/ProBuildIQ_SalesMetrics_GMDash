@@ -9,22 +9,59 @@
     <link href="~/assets/libs/daterangepicker/daterangepicker.css" rel="stylesheet" />
     <style>
         .avatar-sales-badge {
-        width: 220px;
-        border-radius: 12px;
-        border: 4px solid #f57c00;
-        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-        object-fit: cover;
+            width: 200px;
+            border-radius: 12px;
+            border: 4px solid #f57c00;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            object-fit: cover;
         }
+
+        .border-left-divider {
+            border-left: 3px solid #f57c00 !important; /* Bootstrap light gray */
+        }
+
+        .Pos-Diff {
+            font-weight: bold;
+            color: limegreen;
+        }
+
+        .Neg-Diff {
+            font-weight: bold;
+            color: red;
+        }
+
+        .custom-table-header {
+            display: flex !important;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+            .custom-table-header .dataTables_length,
+            .custom-table-header .dt-buttons,
+            .custom-table-header .dataTables_filter {
+                flex: 1 1 auto;
+            }
+
+            .custom-table-header .dataTables_filter {
+                text-align: right;
+            }
+
+                .custom-table-header .dataTables_filter input {
+                    width: 300px;
+                }
+
     </style>
 }
 
-<div class="row mb-3">
+<div class="row mb-1">
     <div class="col-md-6 offset-md-3 text-center">
         <form method="get" asp-controller="Salesperson" asp-action="Index" class="mb-4 row align-items-end">
             <div class="col-md-4">
                 <label for="salesmanSelect" class="form-label">Select Salesperson:</label>
                 <select id="salesmanSelect" name="selectedSalesmanId" class="form-select shadow-sm">
-                    <option value="">-- Select Sales Rep --</option>
+                    <option value="" selected disabled>-- Select Sales Rep --</option>
                     @foreach (var rep in Model.SalesReps)
                     {
                         bool repIsSelected;
@@ -33,17 +70,16 @@
 
                         <option value="@rep.Value" selected="@(repIsSelected ? "selected" : null)">@rep.Text</option>
                     }
-
                 </select>
             </div>
-            
+
             <div class="col-md-4">
                 @await Html.PartialAsync("_DateRangePicker", (Model.StartDate, Model.EndDate))
             </div>
 
             <div class="col-md-2">
                 <button type="submit" class="btn btn-primary w-100 mt-1">Load</button>
-            </div> 
+            </div>
         </form>
     </div>
 </div>
@@ -55,16 +91,14 @@
             <div class="card overflow-hidden text-center">
 
                 <div class="card-body">
-
                     <div class="mb-3">
                         <img src="~/assets/images/users/@($"{Model.UserProfile.FirstName}{Model.UserProfile.LastName}.jpg")"
-                        onerror="this.onerror=null;this.src='~/assets/images/users/GenericPhoto.png';"
-                        alt="@Model.UserProfile.FullName"
-                        class="avatar-sales-badge"
-                        />
+                             onerror="this.onerror=null;this.src='~/assets/images/users/GenericPhoto.png';"
+                             alt="@Model.UserProfile.FullName"
+                             class="avatar-sales-badge" />
                     </div>
                     <h5 class="fw-bold mb-1 fs-4">@Model.UserProfile.FullName</h5>
-                    <p class="text-muted mb-2 fs-6">Seamless Rep.</p>
+                    <p class="text-muted mb-2 fs-6">Seamless Sales Rep.</p>
                 </div>
 
                 <div class="card-body border-top">
@@ -121,58 +155,116 @@
                     <h4 class="card-title text-white">Activity</h4>
                 </div>
                 <div class="card-body">
-                    @*  <div id="column_rotated_labels" data-colors='["--bs-primary"]' class="apex-charts" dir="ltr"></div> *@
+                    @if (Model.Metrics?.PerformanceKPI != null)
+                    {
+                        <div class="card shadow p-2 mb-2">
+                            <h4 class="mb-3">
+                                Monthly Performance Summary <i class="fas fa-info-circle text-primary" data-bs-toggle="modal" data-bs-target="#goalInfoModal"></i><br />
+                            <small class="text-muted">( @Model.StartDate.ToShortDateString() - @Model.EndDate.ToShortDateString() )</small></h4>
+
+                            @if (Model.Metrics?.PerformanceKPI?.MonthlyPerformance != null && Model.Metrics.PerformanceKPI.MonthlyPerformance.Any())
+                            {
+                                <table class="table table-bordered text-center">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Month</th>
+                                            <th>Invoices</th>
+                                            <th>Actual</th>
+                                            <th>
+                                                Expected (Avg)
+                                                <i class="fas fa-info-circle text-info" data-bs-toggle="tooltip" title="Calculated as: Avg Order Amount × Number of Orders"></i>
+                                            </th>
+                                            <th>Δ Diff</th>
+                                            <th>
+                                                Month Goal (x1.1)
+                                                <i class="fas fa-info-circle text-info" data-bs-toggle="tooltip" title="Based on the average of the past 6 full months of actual sales, plus 10% growth."></i>
+                                            </th>
+                                            <th>% to Goal</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var month in Model.Metrics.PerformanceKPI.MonthlyPerformance)
+                                        {
+                                            var percent = month.PercentToGoal.ToString("F1") + "%";
+                                            <tr class="@(month.PercentToGoal < 75 ? "table-danger" : "")">
+                                                <td>@month.MonthLabel</td>
+                                                <td>@month.InvoiceCount</td>
+                                                <td class="fw-bold border-left-divider">$@month.Actual.ToString("N0")</td>
+                                                <td>$@month.Average.ToString("N0")</td>
+                                                <td class="@(month.Difference > 0 ? "Pos-Diff" : month.Difference < 0 ? "Neg-Diff" : "")">@month.Difference.ToString("+#,##0;-#,##0")</td>
+                                                <td class="border-left-divider">$@month.Goal.ToString("N0")</td>
+                                                <td>@percent</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+
+                                <div id="sparkline-sales-trend" class="apex-charts" style="height: 160px;"></div>
+                            }
+                            else
+                            {
+                                <p class="text-muted">
+                                    No sales trend data available for the selected rep or date range.
+                                </p>
+                            }
+                        </div>
+                    }
+
                 </div>
             </div>
-            @if (Model.Metrics != null)
-            {
-                <div class="row text-center">
-                    <div class="col-md-4">
+        </div>
+        @if (Model.Metrics != null)
+        {
+            <div class="col-12">
+                <div class="card mt-1">
+                    <div class="card-header bg-orange">
+                        <h5 class="card-title text-white mb-0">New Account Metrics</h5>
+                    </div>
+                </div>
+                <div class="row text-center justify-content-between">
+                    <div class="col-md-2">
                         <div class="card card-animate">
                             <div class="card-body">
-                                <p class="text-muted mb-2">New Accounts</p>
+                                <p class="text-muted mb-1 fs-4">New Accounts</p>
                                 <h4 class="mb-0">@Model.Metrics.NewAccounts</h4>
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-2">
                         <div class="card card-animate">
                             <div class="card-body">
-                                <p class="text-muted mb-2">Total Orders</p>
+                                <p class="text-muted mb-1 fs-4">Total Orders</p>
                                 <h4 class="mb-0">@Model.Metrics.OrdersCount</h4>
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-2">
                         <div class="card card-animate">
                             <div class="card-body">
-                                <p class="text-muted mb-2">Total Invoices</p>
+                                <p class="text-muted mb-1 fs-4">Total Invoices</p>
                                 <h4 class="mb-0">@Model.Metrics.InvoicesCount</h4>
                             </div>
                         </div>
                     </div>
-                </div>
-
-                <div class="row text-center mt-2">
-                    <div class="col-md-6">
+                    <div class="col-md-3">
                         <div class="card card-animate">
                             <div class="card-body">
-                                <p class="text-muted mb-2">Total Sales Amount</p>
-                                <h4 class="mb-0 text-success fw-bold">$@Model.Metrics.TotalSalesAmount.ToString("N0")</h4>
+                                <p class="text-muted mb-1 fs-4">Total Un-Invoiced Amount</p>
+                                <h4 class="mb-0 text-danger fw-bold">$@Model.Metrics.TotalSalesAmount.ToString("N0")</h4>
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-3">
                         <div class="card card-animate">
                             <div class="card-body">
-                                <p class="text-muted mb-2">Total Invoice Amount</p>
-                                <h4 class="mb-0 text-info fw-bold">$@Model.Metrics.TotalInvoiceAmount.ToString("N0")</h4>
+                                <p class="text-muted mb-1 fs-4">Total Invoiced Amount</p>
+                                <h4 class="mb-0 text-success fw-bold">$@Model.Metrics.TotalInvoiceAmount.ToString("N0")</h4>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="card mt-4">
+                <div class="card mt-2">
                     <div class="card-header bg-orange">
                         <h5 class="card-title text-white mb-0">New Account Property Details</h5>
                     </div>
@@ -180,42 +272,46 @@
                         <table id="propertyDetailsTable" class="table table-hover table-striped table-bordered dt-responsive w-100">
                             <thead>
                                 <tr>
+                                    <th>Property#</th>
                                     <th>Property</th>
+                                    <th>PriceCode</th>
                                     <th>Mgmt Co</th>
                                     <th>Established</th>
                                     <th>Orders</th>
-                                    <th>Sales $</th>
+                                    <th>Not Invoiced $</th>
                                     <th>Invoices</th>
-                                    <th>Invoice $</th>
+                                    <th>Invoiced $</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @foreach (var item in Model.Metrics.PropertyDetails)
                                 {
                                     <tr>
+                                        <td>@item.PropertyId</td>
                                         <td>
                                             <a asp-controller="Properties" asp-action="PropertyDetails" asp-route-id="@item.PropertyId">
                                                 @item.Property
                                             </a>
                                         </td>
+                                        <td>@item.ManagmentCoID</td>
                                         <td>@item.ManagementCompany</td>
                                         <td>@item.EstablishedDate.ToShortDateString()</td>
                                         <td>@item.Orders</td>
-                                        <td>@item.TotalSalesAmount.ToString("N0")</td>
+                                        <td>@item.TotalSalesAmount.ToString("C2")</td>
                                         <td>@item.Invoices</td>
-                                        <td>@item.TotalInvoiceAmount.ToString("N0")</td>
+                                        <td>@item.TotalInvoiceAmount.ToString("C2")</td>
                                     </tr>
                                 }
                             </tbody>
                         </table>
                     </div>
                 </div>
-            }
-            else
-            {
+            </div>
+        }
+        else
+        {
 
-            }
-        </div>
+        }
     }
     else
     {
@@ -232,27 +328,48 @@
     }
 </div>
 
+<!-- MODAL HTML -->
+<!-- Tool Tip Modal -->
+<div class="modal fade" id="goalInfoModal" tabindex="-1" aria-labelledby="goalInfoModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header bg-orange">
+                <h5 class="modal-title" id="goalInfoModalLabel">How Monthly Goal is Calculated</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p><strong>Month Goal</strong> = Avg of last 6 full months' sales × 1.1</p>
+                <p><strong>Expected Avg</strong> = Avg Order Amount × Number of Orders</p>
+                
+                <p>Partial or $0 months are excluded from the average.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
 @section scripts {
+
+    <!-- Load jQuery (required by Daterangepicker) -->
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
 
     <!-- apexcharts -->
     <script src="~/assets/libs/apexcharts/apexcharts.min.js"></script>
 
-    <!-- Required datatable js -->
+    <!-- Load Moment.js -->
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+
+    <!-- Load Daterangepicker -->
+    <script src="https://cdn.jsdelivr.net/npm/daterangepicker@3.1/daterangepicker.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/daterangepicker@3.1/daterangepicker.css" rel="stylesheet" />
+
+    <script src="~/assets/js/shared/date-range.init.js"></script>
+
+    <!-- Bootstrap 5 + DataTables + Responsive Extensions (LOCAL or CDN — pick ONE) -->
+    <link href="~/assets/libs/datatables.net-bs5/css/dataTables.bootstrap5.min.css" rel="stylesheet" />
+    <link href="~/assets/libs/datatables.net-responsive-bs5/css/responsive.bootstrap5.min.css" rel="stylesheet" />
+
     <script src="~/assets/libs/datatables.net/js/jquery.dataTables.min.js"></script>
     <script src="~/assets/libs/datatables.net-bs5/js/dataTables.bootstrap5.min.js"></script>
-
-    <!-- Date Picker -->
-    <script src="~/assets/libs/daterangepicker/moment.min.js"></script>
-    <script src="~/assets/libs/daterangepicker/daterangepicker.js"></script>
-    <script src="~/assets/js/shared/date-range.init.js"></script>
-    <script>
-        $(function () {
-            initDateRangePicker('@Model.StartDate.ToString("yyyy-MM-dd")', '@Model.EndDate.ToString("yyyy-MM-dd")');
-        });
-    </script>
-
-    
-    <!-- Responsive examples -->
     <script src="~/assets/libs/datatables.net-responsive/js/dataTables.responsive.min.js"></script>
     <script src="~/assets/libs/datatables.net-responsive-bs5/js/responsive.bootstrap5.min.js"></script>
 
@@ -262,27 +379,47 @@
     <!-- Datatable init js -->
     <script src="~/assets/js/pages/datatables-base.init.js"></script>
 
+    <!-- Export buttons -->
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
 
     <script>
+        $(function () {
+            initDateRangePicker('@Model.StartDate.ToString("yyyy-MM-dd")', '@Model.EndDate.ToString("yyyy-MM-dd")');
+        });
+    </script>
+
+    <script>
+        let salesRepName = '@(Model.UserProfile?.FullName?.Replace("'", "\\'") ?? "")';
+
         $(document).ready(function () {
             $('#propertyDetailsTable').DataTable({
-                order: [[0, 'desc']],
+                order: [[0, 'asc']],
                 responsive: true,
                 paging: true,
-                pageLength: 25,
-                lengthMenu: [25, 50, 100],
+                pageLength: 10,
                 searching: true,
                 dom: `
-                    <"top d-flex justify-content-between align-items-center mb-2" lBf>
+                    <"top custom-table-header mb-2"lBf>
                     rt
                     <"bottom d-flex justify-content-between align-items-center mt-2"ip>
                 `,
+                scrollX: true,
+                scrollY: '500px',
+                scrollCollapse: true,
+                columnDefs: [
+                    { targets: [0, 2], visible: false }
+                ],
                 buttons: [
                     {
                         extend: 'excelHtml5',
                         text: '<i class="bi bi-file-earmark-excel"></i> Export to Excel',
                         className: 'btn btn-outline-success rounded-pill shadow-sm me-3',
-                        title: 'New Accounts',
+                        title: 'New Accounts Report by Salesperson | ' + salesRepName,
+                        filename: 'New Accounts Report by Salesperson - ' + salesRepName,
                         exportOptions: {
                             format: {
                                 body: function (data, row, column, node)
@@ -301,5 +438,73 @@
             }); // <-- CLOSE DataTable()
         });
     </script>
+    @if (Model?.Metrics?.PerformanceKPI?.MonthlyPerformance?.Any() == true)
+    {
+        var monthly = Model.Metrics.PerformanceKPI.MonthlyPerformance;
 
+        if (monthly.Any())
+        {
+            <script>
+                const chartData = {
+                    chart: {
+                        type: 'bar',
+                        height: 160,
+                        toolbar: { show: false }
+                    },
+                    series: [
+                        {
+                            name: 'Actual',
+                            data: @Html.Raw(Json.Serialize(monthly.Select(x => x.Actual)))
+                        },
+                        {
+                            name: 'Expected (Avg)',
+                            data: @Html.Raw(Json.Serialize(monthly.Select(x => x.Average)))
+                        }
+                    ],
+                    xaxis: {
+                        categories: @Html.Raw(Json.Serialize(monthly.Select(x => x.MonthLabel))),
+                        labels: { style: { fontSize: '12px' } }
+                    },
+                    yaxis: {
+                        labels: {
+                            formatter: function (val) {
+                                if (val >= 1_000_000) return "$ " + (val / 1_000_000).toFixed(1) + " M";
+                                if (val >= 1_000) return "$ " + (val / 1_000).toFixed(0) + " K";
+                                return "$ " + val.toFixed(0);
+                            },
+                            style: { fontSize: '12px' }
+                        }
+                    },
+                    colors: ['#f57c00', '#8884d8'],
+                    legend: { position: 'top' },
+                    plotOptions: {
+                        bar: {
+                            columnWidth: '70%',
+                            borderRadius: 4,
+                            dataLabels: { position: 'top' }
+                        }
+                    },
+                    dataLabels: {
+                        enabled: true,
+                        formatter: function (val) {
+                            if (val >= 1_000_000) return "$ " + (val / 1_000_000).toFixed(1) + " M";
+                            if (val >= 1_000) return "$ " + (val / 1_000).toFixed(0) + " K";
+                            return "$ " + val.toFixed(0);
+                        },
+                        style: {
+                            fontSize: '12px',
+                            colors: ['#000000']
+                        },
+                        offsetY: -10
+                    }
+                };
+
+                new ApexCharts(document.querySelector("#sparkline-sales-trend"), chartData).render();
+            </script>
+        }
+    }
+    else
+    {
+        <p class="text-muted">No performance data available.</p>
+    }
 }

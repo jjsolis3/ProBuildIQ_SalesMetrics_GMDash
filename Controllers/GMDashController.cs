@@ -91,28 +91,10 @@ namespace SalesMetrics.Controllers
 
             model.InventoryByClass = merged;
 
-            // INSTALLER METRICS
-            var installerTasks = locations.Select(loc => GetInstallerMetricsForWeek(loc, ytdStart, today));
-            var installerResults = await Task.WhenAll(installerTasks);
-            model.InstallerCompletionMetrics = installerResults.SelectMany(r => r).ToList();
-            ViewBag.InstallerRange = "ytd";
-            
-            // RECENT RTJS
-            var rtjTasks = locations.Select(loc => GetRecentRTJEntries(ytdStart, today, loc));
-            var rtjResult = await Task.WhenAll(rtjTasks);
-            model.RecentRTJs = rtjResult.SelectMany(r => r).ToList();
-            ViewBag.RTJRange = "ytd";
-
-            ViewBag.SelectedLocationsId = locationId;
-            ViewBag.LocationFullName = locationId == 0 ? "All Branches" : LocationHelper.GetLocationName(locationId);
-
-            ViewBag.MTDStartDateRange = mtdStart.ToString("d") + " to " + today.ToString("d");
-            ViewBag.YTDStartDateRange = ytdStart.ToString("d") + " to " + today.ToString("d");
-
             // ADD DATE RANGE LABELS
             var salesRange = "ytd"; // or "ytd", whatever default you want
-            var installerRange = "ytd";
-            var rtjRange = "ytd";
+            var installerRange = "thisweek";
+            var rtjRange = "mtd";
 
             var (salesStart, salesEnd) = DateRangeHelper.GetRange(salesRange);
             var (installerStart, installerEnd) = DateRangeHelper.GetRange(installerRange);
@@ -122,7 +104,24 @@ namespace SalesMetrics.Controllers
             ViewBag.installerRangeLabel = $"{installerStart.ToString("M/d/yyyy")} to {installerEnd.ToString("M/d/yyyy")}";
             ViewBag.rtjRangeLabel = $"{rtjStart.ToString("M/d/yyyy")} to {rtjEnd.ToString("M/d/yyyy")}";
 
+            // INSTALLER METRICS
+            var installerTasks = locations.Select(loc => GetInstallerMetricsForWeek(loc, installerStart, installerEnd));
+            var installerResults = await Task.WhenAll(installerTasks);
+            model.InstallerCompletionMetrics = installerResults.SelectMany(r => r).ToList();
+            ViewBag.InstallerRange = "thisweek";
+            
+            // RECENT RTJS
+            var rtjTasks = locations.Select(loc => GetRecentRTJEntries(rtjStart, rtjEnd, loc));
+            var rtjResult = await Task.WhenAll(rtjTasks);
+            model.RecentRTJs = rtjResult.SelectMany(r => r).ToList();
+            ViewBag.RTJRange = "mtd";
 
+            ViewBag.SelectedLocationsId = locationId;
+            ViewBag.LocationFullName = locationId == 0 ? "All Branches" : LocationHelper.GetLocationName(locationId);
+
+            ViewBag.MTDStartDateRange = mtdStart.ToString("d") + " to " + today.ToString("d");
+            ViewBag.YTDStartDateRange = ytdStart.ToString("d") + " to " + today.ToString("d");
+                        
             return View("Index", model);
         }
 
@@ -140,15 +139,20 @@ namespace SalesMetrics.Controllers
                     SUM(CASE WHEN ARO_INVOICE_DATE BETWEEN @MTDStart AND @Today THEN ARO_INVOICE_AMOUNT ELSE 0 END) AS MTDSales,
                     SUM(CASE WHEN ARO_INVOICE_DATE BETWEEN @YTDStart AND @Today THEN ARO_INVOICE_AMOUNT ELSE 0 END) AS YTDSales,
 
-                    -- Orders
+                    -- Orders (Counts)
+                    COUNT(CASE WHEN S.SOH_DELIVERY_DATE BETWEEN @MTDStart AND @Today THEN 1 ELSE NULL END) AS MTDOrders,
+                    COUNT(CASE WHEN S.SOH_DELIVERY_DATE BETWEEN @YTDStart AND @Today THEN 1 ELSE NULL END) AS YTDOrders,
+
+                    -- Online Orders Totals
                     COUNT(*) AS TotalOrders,
                     SUM(CASE WHEN S.SOH_OPERATOR = 'Online' THEN 1 ELSE 0 END) AS OnlineOrders,
 
-                    -- Order Amounts
+                    -- Order Amounts Amounts
                     SUM(CASE WHEN A.ARO_INVOICE_AMOUNT IS NULL THEN S.SOH_TOTAL_AMOUNT ELSE A.ARO_INVOICE_AMOUNT END) AS TotalOrderAmount,
                     SUM(CASE WHEN S.SOH_OPERATOR = 'Online' THEN
                         CASE WHEN A.ARO_INVOICE_AMOUNT IS NULL THEN S.SOH_TOTAL_AMOUNT ELSE A.ARO_INVOICE_AMOUNT END
                     ELSE 0 END) AS OnlineOrderAmount
+
                 FROM SALES_HEADER S
                     LEFT JOIN AR_OPEN_ITEM A ON S.SOH_NUMBER = A.ARO_SALES_ORDER_NUMBER
                 WHERE S.SOH_DELIVERY_DATE BETWEEN @YTDStart AND @Today
@@ -168,10 +172,12 @@ namespace SalesMetrics.Controllers
             {
                 result.MTDSales = reader.IsDBNull(0) ? 0 : Convert.ToDecimal(reader.GetDouble(0));
                 result.YTDSales = reader.IsDBNull(1) ? 0 : Convert.ToDecimal(reader.GetDouble(1));
-                result.TotalOrders = reader.IsDBNull(2) ? 0 : reader.GetInt32(2);
-                result.OnlineOrders = reader.IsDBNull(3) ? 0 : reader.GetInt32(3);
-                result.TotalOrderAmount = reader.IsDBNull(4) ? 0 : Convert.ToDecimal(reader.GetDouble(4));
-                result.OnlineOrderAmount = reader.IsDBNull(5) ? 0 : Convert.ToDecimal(reader.GetDouble(5));
+                result.MTDOrders = reader.IsDBNull(2) ? 0 : reader.GetInt32(2);
+                result.YTDOrders = reader.IsDBNull(3) ? 0 : reader.GetInt32(3);
+                result.TotalOrders = reader.IsDBNull(4) ? 0 : reader.GetInt32(4);
+                result.OnlineOrders = reader.IsDBNull(5) ? 0 : reader.GetInt32(5);
+                result.TotalOrderAmount = reader.IsDBNull(6) ? 0 : Convert.ToDecimal(reader.GetDouble(6));
+                result.OnlineOrderAmount = reader.IsDBNull(7) ? 0 : Convert.ToDecimal(reader.GetDouble(7));
             }
 
             return result;
@@ -506,7 +512,7 @@ namespace SalesMetrics.Controllers
         }
                 
         [HttpGet]
-        public async Task<IActionResult> GetInstallerTable(string range = "thisWeek", int locationId = 0)
+        public async Task<IActionResult> GetInstallerTable(string range = "thisweek", int locationId = 0)
         {
             var (startDate, endDate) = DateRangeHelper.GetRange(range);
                         
@@ -521,7 +527,7 @@ namespace SalesMetrics.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetInstallerDetails(string location, string range = "ytd")
+        public async Task<IActionResult> GetInstallerDetails(string location, string range = "thisweek")
         {
             var (startDate, endDate) = DateRangeHelper.GetRange(range);
 
@@ -706,7 +712,7 @@ namespace SalesMetrics.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetRTJTable(string range = "ytd", int locationId = 0)
+        public async Task<IActionResult> GetRTJTable(string range = "mtd", int locationId = 0)
         {
             var (startDate, endDate) = DateRangeHelper.GetRange(range);
 

@@ -46,6 +46,10 @@ namespace SalesMetrics.Controllers
                         Email = reader["Email"].ToString(),
                         UserId = Convert.ToInt32(reader["UserID"]),
                         RoleId = Convert.ToInt32(reader["RoleID"]),
+                        // if SalemanID is nullable, handle it accordingly
+                        SalesmanId = reader["SalesmanID"] != DBNull.Value ? Convert.ToInt32(reader["SalesmanID"]) : 0,
+                        // if salesmanNumber is nullable, handle it accordingly
+                        SalesmanNumber = reader["SalesmanID"] != DBNull.Value ? reader["SalesmanNumber"].ToString() : "",
                         Location = Convert.ToInt32(reader["Location"]),
                         CreatedDate = Convert.ToDateTime(reader["CreatedDate"]),
                         IsActive = reader["IsActive"] != DBNull.Value && Convert.ToBoolean(reader["IsActive"]),

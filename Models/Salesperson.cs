@@ -23,6 +23,7 @@ namespace SalesMetrics.Models
     {
         public int PropertyId { get; set; }
         public string Property { get; set; }
+        public int ManagmentCoID { get; set; }
         public string ManagementCompany { get; set; }
         public DateTime EstablishedDate { get; set; }
         public int Orders { get; set; }
@@ -41,6 +42,34 @@ namespace SalesMetrics.Models
         public decimal TotalInvoiceAmount { get; set; }
 
         public List<SalesRepNewAccountSummaryViewModel> PropertyDetails { get; set; }
+        public SalesRepPerformanceViewModel PerformanceKPI { get; set; }
     }
+
+    public class SalesRepPerformanceViewModel
+    {
+        public decimal MTDSales { get; set; }
+        public decimal YTDSales { get; set; }
+        public int TaskCount { get; set; }
+        public int CompletedTasks { get; set; }
+        public double TaskCompletionRate => TaskCount > 0 ? (CompletedTasks * 100.0 / TaskCount) : 0;
+        public int InactiveAccounts { get; set; }
+        public decimal TargetSalesGoal { get; set; }
+        public string PerformanceRating { get; set; } // e.g. "Excellent", "Needs Improvement"
+        public List<(string MonthLabel, decimal MonthlyTotal)> MonthlyTrend { get; set; } = new();
+        public List<MonthlyPerformanceTrend> MonthlyPerformance { get; set; } = new();
+    }
+
+    public class MonthlyPerformanceTrend
+    {
+        public int InvoiceCount { get; set; } 
+        public string MonthLabel { get; set; }
+        public decimal Actual { get; set; }
+        public decimal Average { get; set; }
+        public decimal Goal { get; set; }
+        public decimal Difference => Actual - Average;
+        public double PercentToGoal => Goal == 0 ? 0 : (double)(Actual / Goal) * 100;
+    }
+
+
 
 }

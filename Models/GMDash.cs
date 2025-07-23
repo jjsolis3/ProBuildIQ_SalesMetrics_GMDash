@@ -28,6 +28,9 @@ namespace SalesMetrics.Models
         public decimal MTDSales { get; set; }
         public decimal YTDSales { get; set; }
 
+        public int MTDOrders { get; set; }
+        public int YTDOrders { get; set; }
+
         public int TotalOrders { get; set; }
         public int OnlineOrders { get; set; }
         public int TotalRegularOrders => TotalOrders - OnlineOrders;
@@ -38,7 +41,7 @@ namespace SalesMetrics.Models
         public string TotalRegularOrderAmountFormatted => TotalRegularOrdersAmount.ToString("C");
 
         public double OnlineOrderPercentage => TotalOrders > 0
-            ? (double)OnlineOrderAmount / (double)TotalOrderAmount * 100 
+            ? ((double)OnlineOrderAmount / (double)TotalOrderAmount) * 100 
             : 0;
 
         public string LocationFullName => Location switch

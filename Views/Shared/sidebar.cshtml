@@ -69,6 +69,18 @@
                     </li>
                 }
 
+                @if (roleId != "2")
+                {
+                    <!-- SALESPERSON METRICS -->
+                    <li class="menu-title">📊 SALES REPS</li>
+                    <li class="ms-3">
+                        <a href="/Salesperson/Index">
+                            <i class="fa fa-users"></i>
+                            <span>Sales Pulse</span>
+                        </a>
+                    </li>
+                }
+
                 <li class="menu-title">✎ JOURNAL</li>
                 <li class="ms-3">
                     <a href="/Journal/Index">
@@ -102,19 +114,7 @@
                         <span>Yardi Properties</span>
                     </a>
                 </li>     
-
-                @if (roleId != "2")
-                {
-                    <!-- SALESPERSON METRICS -->
-                    <li class="menu-title">📊 SALES REPS</li>
-                    <li class="ms-3">
-                        <a href="/Salesperson/Index">
-                            <i class="fa fa-users"></i>
-                            <span>New Accounts</span>
-                        </a>
-                    </li>
-                }
-
+                
                 <!-- User / Profile -->
                 <li class="menu-title">👤 Account</li>
                 <li class="ms-3">

@@ -48,6 +48,8 @@
 
 <input type="hidden" id="CurrentRoleId" value="@ViewBag.RoleId" />
 <input type="hidden" id="CurrentUserId" value="@ViewBag.UserId" />
+<input type="hidden" id="CurrentWhsId" value="@ViewBag.SelectedWhsId" />
+
 
 <div class="row">
     <div class="col-3">
@@ -60,7 +62,7 @@
             </div>
         </div>
     </div>
-    <div class="col-3">
+    <div class="col-2">
         <!-- 🔥 Filter Row (Dropdown + Toggle) -->
         <div class="row mb-3 align-items-center">
 
@@ -89,7 +91,43 @@
             }
         </div>
     </div>    
-    <div class="col-4">
+    <div class="col-2">
+        <!-- 🔥 Filter Whs Row (Dropdown) -->
+        <div class="row mb-3 align-items-center">
+            @if (ViewBag.RoleId == 1 || ViewBag.RoleId == 3 || ViewBag.RoleId == 4)
+            {
+                <!-- Whs ID Toggle: Update by Whs -->
+                <div class="col-auto">
+                    <label for="whsIdFilter" class="form-label fw-bold mb-1">Filter by Warehouse:</label>
+                    <select id="whsIdFilter" class="form-select fw-bold" style="min-width: 200px;">
+                        @{
+                            var selectedWhsId = (int)ViewBag.SelectedWhsId;
+                        }
+                        <option class="fw-bold" value="0" selected="@(selectedWhsId == 0 ? "selected" : "")">
+                            All Warehouses
+                        </option>
+                        @foreach (var whs in (List<SalesMetrics.Models.Warehouses>)ViewBag.WhsList)
+                        {
+                            var isSelected = (selectedWhsId == whs.WhsID) ? "selected" : "";
+                            if (isSelected == "selected")
+                            {
+                                <option class="fw-bold" value="@whs.WhsID" selected="selected">
+                                    (@whs.WhsID) - @whs.WhsName
+                                </option>
+                            }
+                            else {
+                                <option class="fw-bold" value="@whs.WhsID" >
+                                    (@whs.WhsID) - @whs.WhsName
+                                </option>
+                            }
+                        }
+                    </select>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="col-3">
         <div class="row mb-2">
             <p class="mb-0 text-muted">Select Date Range for Dashboard Data</p>
             <div class="col-sm-7">
@@ -825,6 +863,7 @@
         // in a Table Modal,  Display the Work Orders in a DataTable
         $(document).ready(function () {
             let offset = new URLSearchParams(window.location.search).get("weekOffset") || 0;
+            whsId: new URLSearchParams(window.location.search).get("whsId") || 0
 
             $('.day-link').on('click', function (e) {
                 e.preventDefault();
@@ -941,6 +980,14 @@
                 window.location.href = url.toString(); // Reload
             });
 
+            // Whs Drop Down Filter
+            $('#whsIdFilter').on('change', function () {
+                const whsId = $(this).val();
+                const url = new URL(window.location.href);
+                url.searchParams.set('whsId', whsId); // Add/replace whsId in URL
+                window.location.href = url.toString(); // Reload page
+            });
+
         });
     </script>
 
@@ -949,6 +996,7 @@
         let chartInstance; // Global variable to store the chart instance
         const urlParams = new URLSearchParams(window.location.search);
         const weekOffset = urlParams.get("weekOffset") || 0;
+        const whdId = urlParams.get("whsId") || 0
 
         fetch(`/Dashboard/GetWeeklyOrders?weekOffset=${weekOffset}`)
             .then(res => res.json())
@@ -1032,17 +1080,18 @@
                 data: {
                     startDate: start,
                     endDate: end,
-                    filterSalesmanId: new URLSearchParams(window.location.search).get("filterSalesmanId") || 0
+                    filterSalesmanId: new URLSearchParams(window.location.search).get("filterSalesmanId") || 0,
+                    whsId: new URLSearchParams(window.location.search).get("whsId") || 0
                 },
                 success: function (html) {
                     $("#kpiContainer").html(html);
+
                     const formatDisplay = (dateStr) => {
                         const d = new Date(dateStr);
                         return d.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
                     };
 
                     $("#selectedRangeLabel").html(`Selected Range: <br/><strong>${formatDisplay(start)}</strong> to <strong>${formatDisplay(end)}</strong>`);
-                    //$("#selectedRangeLabel").html(`Selected Range: <br/><strong>${start}</strong> to <strong>${end}</strong>`);
                 },
                 error: function () {
                     Swal.fire("Error", "Unable to load KPI data", "error");
@@ -1074,7 +1123,6 @@
             });
         });
     </script>
-
     <script>
         $(document).on('click', '.view-order-details', function () {
             const invoice = $(this).data('invoice');

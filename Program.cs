@@ -96,4 +96,7 @@ app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Auth}/{action=Index}/{id?}");
 
+// ✅ Initialize Rotativa for PDF rendering
+Rotativa.AspNetCore.RotativaConfiguration.Setup(app.Environment.WebRootPath, "Rotativa");
+
 app.Run();

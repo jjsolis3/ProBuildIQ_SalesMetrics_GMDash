@@ -22,7 +22,14 @@ namespace SalesMetrics.Controllers
         {
             return RedirectToAction("Submissions");
         }
-        public IActionResult ViewRequestPartial(int id)
+
+        public IActionResult ViewCustomerRequest(int requestId)
+        {
+            var request = GetCustomerRequestById(requestId); // This already returns NewCustomerFormRequest
+            return PartialView("ViewRequestPartial", request); // ✅ Pass the full model
+        }
+
+        public NewCustomerFormRequest GetCustomerRequestById(int id)
         {
             var model = new NewCustomerFormRequest();
 
@@ -175,7 +182,8 @@ namespace SalesMetrics.Controllers
                 contactReader.Close();
             }
 
-            return PartialView("ViewRequestPartial", model);
+            //return PartialView("ViewRequestPartial", model);
+            return model;
         }
 
         public IActionResult Submissions()
@@ -370,161 +378,19 @@ namespace SalesMetrics.Controllers
 
         public IActionResult PrintCustomerRequest(int id)
         {
-            var model = LoadCustomerRequestModel(id); // Copy code from ViewRequestPartial logic
+            var model = GetCustomerRequestById(id); // Copy code from ViewRequestPartial logic
             return PartialView("_PrintCustomerRequest", model);
         }
-        private NewCustomerFormRequest LoadCustomerRequestModel(int id)
+
+        // USE SERVER-SIDE PDF GENERATION
+        public IActionResult ExportCustomerRequestPdf(int id)
         {
-            var model = new NewCustomerFormRequest();
-
-            var connStr = _configuration.GetConnectionString("SalesMetrics");
-            using (var conn = new SqlConnection(connStr))
+            var model = GetCustomerRequestById(id);
+            return new Rotativa.AspNetCore.ViewAsPdf("_PrintCustomerRequest", model)
             {
-                conn.Open();
-
-                // Get main request
-                var cmd = new SqlCommand(@"
-                    SELECT 
-                        SubmittedDate, SubmittedBy, SubmittedByUserId,
-                        PropertyName, CreditLine, ShipToName, ShipToAddress, PropertyUnits,
-                        MgmtCompanyName, MgmtCompanyAddress,
-                        RequiresPDFInvoices, RequiresSpectrumInvoices, InvoiceEmail,
-                        InvoiceAddress, InvoiceCity, InvoiceState, InvoiceZip, InvoiceAttention,
-                        ThirdPartyVendor, RequiresCustomerPO,
-                        SalespersonName, EstimatedMonthlyRevenue, ARCreditLimit,
-                        Terms, DiscountPercent, SpecialNotes, BillingInstructions
-                    FROM NewCustomerRequests
-                    WHERE ID = @ID
-                ", conn);
-
-                cmd.Parameters.AddWithValue("@ID", id);
-                var reader = cmd.ExecuteReader();
-
-                if (reader.Read())
-                {
-                    model.ID = id;
-                    model.SubmittedDate = reader.GetDateTime(0);
-                    model.SubmittedBy = reader.IsDBNull(1) ? "" : reader.GetString(1);
-                    model.SubmittedByUserId = reader.IsDBNull(2) ? null : Convert.ToInt32(reader.GetValue(2));
-
-                    model.Property = new PropertyInfo
-                    {
-                        Name = reader.IsDBNull(3) ? "" : reader.GetString(3),
-                        CreditLine = reader.IsDBNull(4) ? 0 : reader.GetDecimal(4),
-                        ShipToName = reader.IsDBNull(5) ? "" : reader.GetString(5),
-                        ShipToAddress = reader.IsDBNull(6) ? "" : reader.GetString(6),
-                        Units = reader.IsDBNull(7) ? 0 : reader.GetInt32(7),
-                        ReceivingContact = new Contact(),
-                        PropertyContact = new Contact()
-                    };
-
-                    model.ManagementCompany = new ManagementCompanyInfo
-                    {
-                        ManagementName = reader.IsDBNull(8) ? "" : reader.GetString(8),
-                        ManagementAddress = reader.IsDBNull(9) ? "" : reader.GetString(9),
-                        RegionalManager = new Contact(),
-                        PropertyManager = new Contact()
-                    };
-
-                    model.Billing = new BillingInfo
-                    {
-                        RequiresPDFInvoices = reader.IsDBNull(10) ? false : reader.GetBoolean(10),
-                        RequiresSpectrumInvoices = reader.IsDBNull(11) ? false : reader.GetBoolean(11),
-                        InvoiceEmail = reader.IsDBNull(12) ? "" : reader.GetString(12),
-                        InvoiceAddress = reader.IsDBNull(13) ? "" : reader.GetString(13),
-                        InvoiceCity = reader.IsDBNull(14) ? "" : reader.GetString(14),
-                        InvoiceState = reader.IsDBNull(15) ? "" : reader.GetString(15),
-                        InvoiceZip = reader.IsDBNull(16) ? "" : reader.GetString(16),
-                        InvoiceAttention = reader.IsDBNull(17) ? "" : reader.GetString(17),
-                        ThirdPartyVendor = reader.IsDBNull(18) ? "" : reader.GetString(18),
-                        RequiresCustomerPO = reader.IsDBNull(19) ? false : reader.GetBoolean(19),
-                        AccountsPayable = new Contact(),
-                        AlternateAPContact = new Contact()
-                    };
-
-                    model.Income = new IncomeInfo
-                    {
-                        SalespersonName = reader.IsDBNull(20) ? "" : reader.GetString(20),
-                        EstimatedMonthlyRevenue = reader.IsDBNull(21) ? 0 : reader.GetDecimal(21),
-                        ARCreditLimit = reader.IsDBNull(22) ? 0 : reader.GetDecimal(22),
-                        Terms = reader.IsDBNull(23) ? "" : reader.GetString(23),
-                        DiscountPercent = reader.IsDBNull(24) ? "" : reader.GetString(24)
-                    };
-
-                    model.SpecialNotes = reader.IsDBNull(25) ? "" : reader.GetString(25);
-                    model.BillingInstructions = reader.IsDBNull(26) ? "" : reader.GetString(26);
-                }
-                reader.Close();
-
-                // Get products
-                var productsCmd = new SqlCommand(@"
-            SELECT ProductClass, Style, Color, Price
-            FROM NewCustomerProducts
-            WHERE NewCustomerRequestID = @ID
-        ", conn);
-                productsCmd.Parameters.AddWithValue("@ID", id);
-                var prodReader = productsCmd.ExecuteReader();
-                model.Products = new List<ProductLineItem>();
-                while (prodReader.Read())
-                {
-                    model.Products.Add(new ProductLineItem
-                    {
-                        ProductClass = prodReader.GetString(0),
-                        Style = prodReader.GetString(1),
-                        Color = prodReader.GetString(2),
-                        Price = prodReader.GetDecimal(3)
-                    });
-                }
-                prodReader.Close();
-
-                // Get contacts
-                var contactCmd = new SqlCommand(@"
-            SELECT ContactType, Name, Phone, Fax, Email
-            FROM NewCustomerContacts
-            WHERE NewCustomerRequestID = @ID
-        ", conn);
-                contactCmd.Parameters.AddWithValue("@ID", id);
-
-                var contactReader = contactCmd.ExecuteReader();
-                while (contactReader.Read())
-                {
-                    var contact = new Contact
-                    {
-                        ContactType = contactReader.GetString(0),
-                        Name = contactReader.GetString(1),
-                        Phone = contactReader.GetString(2),
-                        Fax = contactReader.GetString(3),
-                        Email = contactReader.GetString(4)
-                    };
-
-                    switch (contact.ContactType?.ToLowerInvariant())
-                    {
-                        case "receiving":
-                            model.Property.ReceivingContact = contact;
-                            break;
-                        case "property":
-                            model.Property.PropertyContact = contact;
-                            break;
-                        case "regional manager":
-                            model.ManagementCompany.RegionalManager = contact;
-                            break;
-                        case "manager":
-                            model.ManagementCompany.PropertyManager = contact;
-                            break;
-                        case "account payable":
-                        case "accounts payable":
-                            model.Billing.AccountsPayable = contact;
-                            break;
-                        case "ap contact":
-                        case "alternate ap contact":
-                            model.Billing.AlternateAPContact = contact;
-                            break;
-                    }
-                }
-                contactReader.Close();
-            }
-
-            return model;
+                PageSize = Rotativa.AspNetCore.Options.Size.A4,
+                FileName = $"CustomerRequest_{id}.pdf"
+            };
         }
     }
 }

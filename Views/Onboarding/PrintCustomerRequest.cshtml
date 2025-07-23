@@ -1,23 +1,26 @@
 ﻿@model SalesMetrics.Models.NewCustomerFormRequest
+@{
+    Layout = null; // ✅ Disable master layout so only this view renders
+}
 
 <style>
-    @@media print {
-        body *
-        {
-            visibility: hidden;
-        }
+    body {
+        font-family: Arial, sans-serif;
+        font-size: 14px;
+        margin: 20px;
     }
 
-    body {
-        font-size: 14px;
+    h4 {
+        margin-top: 0;
+        font-size: 18px;
     }
 
     .form-section-title {
         background-color: #f26522;
         color: white;
         padding: 0.5rem 1rem;
+        margin: 1.5rem 0 0.75rem;
         font-weight: bold;
-        margin: 1rem 0 0.5rem;
     }
 
     .info-grid .row {
@@ -38,19 +41,19 @@
         padding-left: 0.5rem;
     }
 
-    .product-table td,
-    .product-table th {
-        border: 1px solid #ddd;
-        padding: 4px;
-    }
-
     .product-table {
         width: 100%;
         margin-top: 1rem;
         border-collapse: collapse;
         margin-bottom: 1rem;
     }
-    
+
+        .product-table td,
+        .product-table th {
+            border: 1px solid #ddd;
+            padding: 4px;
+        }
+
     #printCustomerModal, #printCustomerModal * {
         visibility: visible;
     }
@@ -60,12 +63,59 @@
         left: 0;
         top: 0;
     }
+
+    * {
+        box-sizing: border-box;
+    }
+
+    .row {
+        display: block; /* ✅ safer for wkhtmltopdf */
+        clear: both;
+    }
+
+    [class^="col-"] {
+        float: left;
+        padding: 5px;
+    }
+
+    .col-6 {
+        width: 50%;
+    }
+
+    .col-3 {
+        width: 25%;
+    }
+
+    .col-2 {
+        width: 16.6666%;
+    }
+
+    .col-4 {
+        width: 33.3333%;
+    }
+
+    .col-9 {
+        width: 75%;
+    }
+
+    .col-11 {
+        width: 91.6666%;
+    }
+
+    .col-1 {
+        width: 8.3333%;
+    }
+
+    * {
+        outline: 1px solid red; /* temporary for seeing structure */
+    }
+
 </style>
 
-<div class="container-fluid">
-    <div class="text-center mb-4">
-        <img src="/images/seamless-logo.png" alt="Logo" style="height: 60px;">
-        <h4 class="text-uppercase mt-2">New Customer Set Up Form</h4>
+<div class="container-fluid" id="printContentArea">
+    <div class="text-center">
+        <img src="~/assets/images/seamless-logo.png" alt="Seamless Flooring Logo" style="height: 150px;">
+        <h4 class="text-uppercase mt-0">New Customer Set Up Form</h4>
     </div>
 
     <!-- Property Info -->
@@ -313,58 +363,54 @@
         </div>
     </div>
 
-    <!-- Products -->
-    @if (Model.Products?.Any() == true)
-    {
-        <div class="form-section-title">Product Information</div>
-        <table class="product-table">
-            <thead class="table-light bg-light">
-                <tr>
-                    <th>Product Class</th>
-                    <th>Style</th>
-                    <th>Color</th>
-                    <th>Price</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var p in Model.Products)
-                {
+    <div style="page-break-before: always;">
+        <!-- Products -->
+        @if (Model.Products?.Any() == true)
+        {
+            <div class="form-section-title">Product Information</div>
+            <table class="product-table">
+                <thead class="table-light bg-light">
                     <tr>
-                        <td>@p.ProductClass</td>
-                        <td>@p.Style</td>
-                        <td>@p.Color</td>
-                        <td>@p.Price.ToString("C")</td>
+                        <th>Product Class</th>
+                        <th>Style</th>
+                        <th>Color</th>
+                        <th>Price</th>
                     </tr>
-                }
-            </tbody>
-        </table>
-    }
+                </thead>
+                <tbody>
+                    @foreach (var p in Model.Products)
+                    {
+                        <tr>
+                            <td>@p.ProductClass</td>
+                            <td>@p.Style</td>
+                            <td>@p.Color</td>
+                            <td>@p.Price.ToString("C")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
 
-    <!-- Notes -->
-    <div class="form-section-title">Special Notes or Billing Instructions</div>
-    <div class="border p-3">
-        <div class="row">
-            <div class="col-6">
-                <h6>Special Notes</h6>
-                <p>@Model.SpecialNotes</p>
-            </div>
-            <div class="col-6">
-                <h6>Billing Instructions</h6><br />
-                <p>@Model.BillingInstructions</p>
+        <!-- Notes -->
+        <div class="form-section-title">Special Notes or Billing Instructions</div>
+        <div class="border p-3">
+            <div class="row">
+                <div class="col-6">
+                    <h6>Special Notes</h6>
+                    <p>@Model.SpecialNotes</p>
+                </div>
+                <div class="col-6">
+                    <h6>Billing Instructions</h6><br />
+                    <p>@Model.BillingInstructions</p>
+                </div>
             </div>
         </div>
-    </div>
 
-    <!-- Submitted By -->
-    <div class="form-section-title">Submitted By</div>
-    <div class="boder p-3">
-        <p><strong>Submitted By:</strong> @Model.SubmittedBy</p>
-        <p><strong>Salesperson:</strong> @Model.Income.SalespersonName</p>
+        <!-- Submitted By -->
+        <div class="form-section-title">Submitted By</div>
+        <div class="border p-3 mb-5">
+            <p><strong>Submitted By:</strong> @Model.SubmittedBy</p>
+            <p><strong>Salesperson:</strong> @Model.Income.SalespersonName</p>
+        </div>
     </div>
 </div>
-
-<script>
-    window.onload = function () {
-        setTimeout(() => window.print(), 300);
-    };
-</script>

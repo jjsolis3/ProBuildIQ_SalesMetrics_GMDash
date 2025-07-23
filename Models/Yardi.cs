@@ -17,6 +17,36 @@
         public string? PropertyPhone { get; set; }
         public string? PropertyStatus { get; set; }
 
+        // YardiID Deconstruct for Site URL
+        // Split the YardiID into Market ID and Property ID
+        public int? YardiMarketID
+        {
+            get
+            {
+                if (!string.IsNullOrWhiteSpace(YardiID) && YardiID.Contains("_"))
+                {
+                    var parts = YardiID.Split('_');
+                    if (int.TryParse(parts[0], out int marketId))
+                        return marketId;
+                }
+                return null;
+            }
+        }
+
+        public int? YardiPropertyID
+        {
+            get
+            {
+                if (!string.IsNullOrWhiteSpace(YardiID) && YardiID.Contains("_"))
+                {
+                    var parts = YardiID.Split('_');
+                    if (parts.Length > 1 && int.TryParse(parts[1], out int propertyId))
+                        return propertyId;
+                }
+                return null;
+            }
+        }
+
         // Ratings
         public string? ImprRating { get; set; }
         public string? LocRating { get; set; }

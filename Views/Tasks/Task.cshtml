@@ -41,6 +41,7 @@
             <th>Created Date</th>
             <th>Due Date</th>
             <th>Status</th>
+            <th>Google Sync</th>
             <th>Actions</th>
         </tr>
     </thead>
@@ -69,6 +70,19 @@
                             <option value="Completed">Completed</option>
                             <option value="Cancelled">Cancelled</option>
                         </select>
+                    </td>
+                    <td>
+                        @if (task.IsSyncedToGoogle == true)
+                        {
+                            <span class="badge bg-orange">Synced</span>
+                        }
+                        else
+                        {
+                            <form asp-action="ManualGoogleSync" asp-controller="Tasks" method="post">
+                                <input type="hidden" name="taskId" value="@task.TaskID" />
+                                <button class="btn btn-sm btn-outline-orange" type="submit">Sync Now</button>
+                            </form>
+                        }
                     </td>
                     <td>
                         <div class="d-flex gap-1 align-items-center">
@@ -156,6 +170,10 @@
     </div>
 </div>
 
+<!-- Create Task Modal -->
+@await Html.PartialAsync("_CreateTaskModal", taskModel)
+
+
 @section scripts {
 
     <!-- bs custom file input plugin -->
@@ -221,7 +239,7 @@
                         text: '<i class="bi bi-file-earmark-excel"></i> Excel',
                         className: 'btn btn-outline-success rounded-pill shadow-sm me-3',
                         exportOptions: {
-                            columns: [0, 1, 2, 3, 4, 5, 6, 7], // Only export up to status
+                            columns: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], // Only export up to status
                             format: {
                                 body: function (data, row, column, node) {
                                     // If it's the status column (index 6), return selected text from <select>
@@ -242,7 +260,7 @@
                         orientation: 'landscape', // ✅ Set landscape mode
                         pageSize: 'A4', // Optional: you can also set other sizes
                         exportOptions: {
-                            columns: [0, 1, 2, 3, 4, 5, 6, 7], // ✅ Exclude the last column (Actions)
+                            columns: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], // ✅ Exclude the last column (Actions)
                             format: {
                                 body: function (data, row, column, node) {
                                     if (column === 7) { // Status column
@@ -255,8 +273,8 @@
                         },
                         customize: function (doc) {
                             // Optional: Make fonts smaller so it fits better
-                            doc.styles.tableHeader.fontSize = 11;
-                            doc.defaultStyle.fontSize = 10;
+                            doc.styles.tableHeader.fontSize = 10;
+                            doc.defaultStyle.fontSize = 9;
                         }
                     },
                     // 🔥 New Active Tasks button

@@ -5,6 +5,25 @@ using System.ComponentModel.DataAnnotations;
 
 namespace SalesMetrics.Models
 {
+    public class AdminTaskPageViewModel
+    {
+        // whatever the AdminTask view already needs…
+        public List<SalesTask> Tasks { get; set; }
+        public List<User> Users { get; set; }
+
+        // plus your modal’s state, so you can re-render it with errors & inputs
+        public TaskModalViewModel PendingModal { get; set; }
+    }
+
+    public class SchedulePageViewModel
+    {
+        public List<TaskCalendarViewModel> CalendarTasks { get; set; }
+        // … any other schedule-page data …
+        public TaskModalViewModel PendingModal { get; set; }
+    }
+
+
+
     public class SalesTask
     {
         public int TaskID { get; set; }
@@ -40,6 +59,7 @@ namespace SalesMetrics.Models
     public class TaskCreateViewModel
     {
         public int TaskID { get; set; }
+        [Required(ErrorMessage = "A Task Title is required.")]
         public string? Title { get; set; }
         public string? Description { get; set; }
 
@@ -55,12 +75,14 @@ namespace SalesMetrics.Models
 
         public DateTime TaskEndDate { get; set; } // New property for end date
 
+        [Required(ErrorMessage = "A Task Type is required.")]
         public string Type { get; set; }
+        [Required(ErrorMessage = "A Task Status is required.")]
         public string Status { get; set; }
 
         public string? Property { get; set; }
         public int? PropertyID { get; set; }
-
+        
         public int AssignedTo { get; set; }
         public string Source { get; set; } // e.g., "Task", "WorkOrder", "Yardi", etc.
 

@@ -20,6 +20,7 @@ using Azure.Identity;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using System.Data;
 using System.Threading.Tasks;
+using Google.Apis.Gmail.v1.Data;
 
 
 namespace SalesMetrics.Controllers
@@ -123,6 +124,9 @@ namespace SalesMetrics.Controllers
             ViewBag.SalesmanId = salesmanId;
             ViewBag.TaskTypes = TaskTypeHelper.GetTaskTypes("AdminTask");
 
+            // Add ReturnUrl ViewBag 
+            ViewBag.ReturnUrl = Url.Action("AdminTask", "Tasks", new { filter });
+
             return View(viewModel);
         }
 
@@ -167,6 +171,9 @@ namespace SalesMetrics.Controllers
             ViewBag.RoleId = roleId;
             ViewBag.SalesmanId = salesmanId;
             ViewBag.TaskTypes = TaskTypeHelper.GetTaskTypes("Task");
+
+            // Add ReturnUrl ViewBag
+            ViewBag.ReturnUrl = Url.Action("Task", "Tasks", new { filter });
 
             return View(viewModel);
         }
@@ -219,7 +226,10 @@ namespace SalesMetrics.Controllers
                 DueDate = t.DueDate,
                 AssignedTo = users.FirstOrDefault(u => u.Users_ID == t.AssignedTo) is var u && u != null ? $"{u.FirstName} {u.LastName}" : "Unassigned"
             }).ToList();
-            
+
+            // Add ReturnUrl ViewBag
+            ViewBag.ReturnUrl = Url.Action("Schedule", "Tasks");
+
             return View(calendarTasks); // Updated model
         }
 
@@ -281,7 +291,7 @@ namespace SalesMetrics.Controllers
 
         // Add methods like Create, Update Status, Delete, etc
         [HttpPost]
-        public async Task<IActionResult> Create(TaskModalViewModel modal)
+        public async Task<IActionResult> Create(TaskModalViewModel modal, string? returnUrl)
         {
             modal.TaskTypes = TaskTypeHelper.GetTaskTypes("Task"); // 👈 Key line
             var model = modal.Task;
@@ -381,7 +391,7 @@ namespace SalesMetrics.Controllers
             else
                 TempData["Success"] = $"Task (ID:{task.TaskID}) has been created successfully.";
 
-            var returnUrl = Request.Form["ReturnUrl"].ToString();
+            //var returnUrl = Request.Form["ReturnUrl"].ToString();
 
             if (!string.IsNullOrEmpty(returnUrl))
             {
@@ -1213,7 +1223,7 @@ namespace SalesMetrics.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> CreateFromYardi(TaskModalViewModel modal)
+        public async Task<IActionResult> CreateFromYardi(TaskModalViewModel modal, string? returnUrl)
         {
             var model = modal.Task;
 
@@ -1292,7 +1302,7 @@ namespace SalesMetrics.Controllers
                 else
                     TempData["Success"] = $"Task (ID:{task.TaskID}) has been created successfully.";
 
-                var returnUrl = Request.Form["ReturnUrl"].ToString();
+                //var returnUrl = Request.Form["ReturnUrl"].ToString();
 
                 if (!string.IsNullOrEmpty(returnUrl))
                 {
@@ -1303,16 +1313,10 @@ namespace SalesMetrics.Controllers
                     return RedirectToAction("YardiProperties", "Yardi"); // fallback just in case
                 }
             }
-
-            //_context.Tasks.Add(task);
-            //_context.SaveChanges();
-
-            //TempData["Success"] = $"Task created for {model.Property}";
-            //return RedirectToAction("YardiProperties", "Yardi");
         }
 
         [HttpPost]
-        public async Task<IActionResult> CreateFromProperties(TaskModalViewModel modal)
+        public async Task<IActionResult> CreateFromProperties(TaskModalViewModel modal, string? returnUrl)
         {
             var model = modal.Task;
 
@@ -1389,8 +1393,6 @@ namespace SalesMetrics.Controllers
                     return Json(new { success = false, message = "Assigned user is missing or invalid." });
                 }
 
-                //_context.Tasks.Add(task);
-                //_context.SaveChanges();
                 int taskId = SaveTaskToDatabase(task);
                 task.TaskID = taskId;
 
@@ -1415,7 +1417,7 @@ namespace SalesMetrics.Controllers
                     else
                         TempData["Success"] = $"Task (ID:{task.TaskID}) has been created successfully.";
 
-                    var returnUrl = Request.Form["ReturnUrl"].ToString();
+                    //var returnUrl = Request.Form["ReturnUrl"].ToString();
 
                     if (!string.IsNullOrEmpty(returnUrl))
                     {
@@ -1426,10 +1428,6 @@ namespace SalesMetrics.Controllers
                         return RedirectToAction("Properties", "Properties"); // fallback just in case
                     }
                 }
-
-                TempData["Success"] = $"Task created successfully for {task.Property} | Task ID: {taskId}";
-                //return RedirectToAction("Properties", "Properties");
-                return Json(new { success = true, taskId = taskId });
             }
             catch (Exception ex)
             {
@@ -1440,7 +1438,7 @@ namespace SalesMetrics.Controllers
             }
         }
 
-        public async Task<IActionResult> CreateFromWorkOrderSchedule(TaskModalViewModel modal)
+        public async Task<IActionResult> CreateFromWorkOrderSchedule(TaskModalViewModel modal, string? returnUrl)
         {
             var model = modal.Task;
 
@@ -1511,7 +1509,7 @@ namespace SalesMetrics.Controllers
                     else
                         TempData["Success"] = $"Task (ID:{task.TaskID}) has been created successfully.";
 
-                    var returnUrl = Request.Form["ReturnUrl"].ToString();
+                    //var returnUrl = Request.Form["ReturnUrl"].ToString();
 
                     if (!string.IsNullOrEmpty(returnUrl))
                     {
@@ -1522,9 +1520,6 @@ namespace SalesMetrics.Controllers
                         return RedirectToAction("Schedule", "Tasks"); // fallback just in case
                     }
                 }
-
-                TempData["Success"] = $"Task created successfully. Task ID: {taskId}";
-                return RedirectToAction("Schedule", "Tasks");
             }
             catch (Exception ex)
             {
@@ -1535,7 +1530,7 @@ namespace SalesMetrics.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> CreateFromWorkOrder(TaskCreateViewModel model)
+        public async Task<IActionResult> CreateFromWorkOrder(TaskCreateViewModel model, string? returnUrl)
         {
             if (model == null || string.IsNullOrWhiteSpace(model.Property))
             {
@@ -1724,26 +1719,59 @@ namespace SalesMetrics.Controllers
             return Ok();
         }
 
+        //[HttpPost]
+        //[ValidateAntiForgeryToken]
+        //public async Task<IActionResult> DynamicCreate(TaskModalViewModel modal, string? returnUrl)
+        //{
+        //    if (!ModelState.IsValid)
+        //    {
+        //        // handle invalid model
+        //        return Redirect(returnUrl ?? Url.Action("Index", "Tasks"));
+        //    }
+
+        //    var source = modal.Task?.Source?.ToLower() ?? "default";
+
+        //    if (source == "ar" || source == "inactive")
+        //        return await Create(modal, returnUrl);
+
+        //    if (source == "workorder" || source == "orders")
+        //        return await CreateFromWorkOrderSchedule(modal, returnUrl);
+
+        //    if (source == "yardi")
+        //        return await CreateFromYardi(modal, returnUrl);
+
+        //    if (source == "properties")
+        //        return await CreateFromProperties(modal, returnUrl);
+
+        //    return await Create(modal, returnUrl);
+        //}
+
         [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> DynamicCreate(TaskModalViewModel modal)
+        public async Task<IActionResult> DynamicCreate(TaskModalViewModel model, string? returnUrl)
         {
-            var source = modal.Task?.Source?.ToLower() ?? "default";
+            if (!ModelState.IsValid)
+            {
+                // Handle invalid model state
+                TempData["TaskFormError"] = "Please complete all required fields before submitting the task.";
+                // make sure returnUrl is valid (fallback if null)
+                return Redirect(returnUrl ?? Url.Action("Schedule", "Tasks"));
+            }
 
-            if (source == "ar" || source == "inactive")
-                return await Create(modal);
-
-            if (source == "workorder" || source == "orders")
-                return await CreateFromWorkOrderSchedule(modal);
-
-            if (source == "yardi")
-                return await CreateFromYardi(modal);
-
-            if (source == "properties")
-                return await CreateFromProperties(modal);
-
-            return await Create(modal);
+            switch (model.Task.Source)
+            {
+                case "Orders":
+                    return await CreateFromWorkOrderSchedule(model, returnUrl);
+                case "AR":
+                case "Inactive":
+                case "Properties":
+                    return await CreateFromProperties(model, returnUrl);
+                case "Yardi":
+                    return await CreateFromYardi(model, returnUrl);
+                default:
+                    return await Create(model, returnUrl);
+            }
         }
+
 
         [HttpGet]
         public IActionResult DuplicateTaskModal(int id)

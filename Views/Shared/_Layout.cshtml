@@ -219,5 +219,34 @@
             }
         });
     </script>
+    <script>
+            $(document).ready(function () {
+            @if (TempData["TaskFormError"] != null)
+            {
+                <text>
+                            Swal.fire({
+                              icon: 'error',
+                              title: 'Incomplete Task Form',
+                              text: '@TempData["TaskFormError"]',
+                              confirmButtonColor: '#f57c00'
+                            }).then(() => {
+                              $('#createTaskModal').modal('show');
+                            });
+                </text>
+            }
+
+            @if (TempData["TaskSuccess"] != null)
+            {
+                <text>
+                                        Swal.fire({
+                                            icon: 'success',
+                                            title: 'Success!',
+                                            text: '@TempData["TaskSuccess"]',
+                                            confirmButtonColor: '#28a745'
+                                        });
+                </text>
+            }
+            });
+        </script>    
 </body>
 </html>

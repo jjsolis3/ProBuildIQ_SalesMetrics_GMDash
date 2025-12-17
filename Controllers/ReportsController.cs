@@ -163,7 +163,7 @@ namespace SalesMetrics.Controllers
                 var isExcel = string.Equals(input.ExportFormat, "excel", StringComparison.OrdinalIgnoreCase);
                 var bytes = isExcel
                     ? _exportService.ExportToExcel(data, out var excelContentType)
-                    : _exportService.ExportToCsv(data, out var excelContentType);
+                    : _exportService.ExportToCsv(data, out excelContentType);
                 var contentType = isExcel ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" : "text/csv";
                 var extension = isExcel ? "xlsx" : "csv";
                 var fileName = $"{definition.Name.Replace(' ', '_')}_{DateTime.Now:yyyyMMddHHmmss}.{extension}";

@@ -76,7 +76,6 @@ namespace SalesMetrics.Services.Reports
             });
 
             workbookPart.Workbook.Save();
-            document.Close();
 
             return stream.ToArray();
         }

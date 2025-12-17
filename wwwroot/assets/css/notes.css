@@ -1,0 +1,91 @@
+﻿/* Task Notes Styling */
+.view-notes-btn {
+    background-color: #ffc107;
+    border-color: #ffc107;
+    color: #000;
+}
+
+    .view-notes-btn:hover {
+        background-color: #ffca2c;
+        border-color: #ffc720;
+        color: #000;
+    }
+
+#existingNotes .card {
+    border-left: 4px solid #ffc107;
+    transition: all 0.2s ease;
+}
+
+    #existingNotes .card:hover {
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+#newNoteText:focus {
+    border-color: #ffc107;
+    box-shadow: 0 0 0 0.2rem rgba(255, 193, 7, 0.25);
+}
+
+.modal-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+}
+
+/* Enhanced Note Styling */
+.note-actions {
+    opacity: 0.7;
+    transition: opacity 0.2s ease;
+}
+
+.card:hover .note-actions {
+    opacity: 1;
+}
+
+.note-actions .btn {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+}
+
+.note-edit-form {
+    animation: fadeIn 0.2s ease-in;
+}
+
+.note-text {
+    animation: fadeIn 0.2s ease-in;
+    line-height: 1.4;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.note-edit-form textarea {
+    resize: vertical;
+    min-height: 80px;
+}
+
+    .note-edit-form textarea:focus {
+        border-color: #ffc107;
+        box-shadow: 0 0 0 0.2rem rgba(255, 193, 7, 0.25);
+    }
+
+/* Modified indicator styling */
+.bi-pencil-square {
+    color: #6c757d;
+    font-size: 0.75rem;
+}
+
+/* Note card hover effects */
+.card {
+    transition: all 0.2s ease;
+}
+
+    .card:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }

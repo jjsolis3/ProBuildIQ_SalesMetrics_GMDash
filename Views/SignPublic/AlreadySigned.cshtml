@@ -1,0 +1,35 @@
+﻿@{
+    ViewData["Title"] = "Already Signed";
+    var downloadUrl = ViewBag.DownloadUrl as string;
+    var recipientName = ViewBag.RecipientName as string;
+    var signedDate = ViewBag.SignedDate as DateTime?;
+}
+
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-info text-white fw-bold">Document Already Signed</div>
+    <div class="card-body">
+        <div class="alert alert-info">
+            <h5>You've already signed this document</h5>
+            <p> <strong>Signed by:</strong> @recipientName</p>
+            <p> <strong>Date:</strong> @signedDate?.ToString("MMMM dd, yyyy 'at' h:mm tt")</p>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(downloadUrl))
+        {
+            <div class="alert alert-success">
+                <h6><i class="bi bi-check-circle"></i> Document Completed</h6>
+                <p>All parties have signed. You can download the completed document:</p>
+                <a class="btn btn-success" href="@downloadUrl" target="_blank">
+                    <i class="bi bi-download"></i> Download Signed PDF
+                </a>
+            </div>
+        }
+        else
+        {
+            <div class="alert alert-warning">
+                <p><i class="bi bi-clock"></i> This document is waiting for additional signatures.</p>
+                <p>You will receive an email when all parties have signed and the PDF is ready.</p>
+            </div>
+        }
+    </div>
+</div>

@@ -1,0 +1,239 @@
+﻿@* Views/SignAdmin/Create.cshtml *@
+@model SalesMetrics.Models.Signing.CreateEnvelopeVm
+@{
+    ViewData["Title"] = "New Envelope";
+    var i = 0;
+}
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-warning text-dark fw-bold">Create & Send Envelope</div>
+    <div class="card-body">
+        <form method="post">
+            @Html.AntiForgeryToken()
+
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Template</label>
+                    <select asp-for="TemplateKey" class="form-select">
+                        @foreach (var t in Model.Templates)
+                        {
+                            <option value="@t.Key">@t.Display</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-8">
+                    <label class="form-label">Subject</label>
+                    <input asp-for="Subject" class="form-control" />
+                    <span asp-validation-for="Subject" class="text-danger"></span>
+                </div>
+                <div class="col-md-12">
+                    <label class="form-label">Message</label>
+                    <textarea asp-for="MessageBody" class="form-control" rows="3"></textarea>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label">Branch</label>
+                    <input asp-for="LocationCode" class="form-control" placeholder="LAX" />
+                </div>
+
+                @* <div class="col-md-3">
+                    <label class="form-label">Property ID</label>
+                    <input asp-for="PropertyID" class="form-control" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Order ID</label>
+                    <input asp-for="OrderId" class="form-control" />
+                </div> *@
+
+                <div class="col-md-3 position-relative">
+                    <label class="form-label">Property</label>
+                    <input id="propSearch" class="form-control" placeholder="Search by property name..." autocomplete="off" />
+                    <input type="hidden" asp-for="PropertyID" id="propId" />
+                    <div id="propResults" class="list-group position-absolute w-100" style="z-index: 1050;"></div>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label">Order</label>
+                    <select asp-for="OrderId" id="orderSelect" class="form-select" disabled>
+                        <option value="">Select a property first</option>
+                    </select>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label">Expires</label>
+                    <input asp-for="ExpiresAtUtc" type="datetime-local" class="form-control" />
+                </div>
+            </div>
+
+            <hr />
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <div class="fw-bold">Recipients</div>
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="addRecipient()">+ Add Recipient</button>
+            </div>
+
+            <div id="recipients">
+                @for (i = 0; i < Math.Max(Model.Recipients.Count, 1); i++)
+                {
+                    <div class="row g-2 align-items-end mb-2 recipient-row">
+                        <div class="col-md-2">
+                            <label class="form-label">Role</label>
+                            @* <input name="Recipients[@i].Role" class="form-control" value="@(Model.Recipients.ElementAtOrDefault(i)?.Role ?? "Manager")" /> *@
+                            <select name="Recipeints[@i].Role" class="form-select">
+                                <option value="Manager" selected>Manager</option>
+                                <option value="Tenant">Tenant</option>
+                            </select>
+                        </div>
+                        <div class="col-md-1">
+                            <label class="form-label">Order</label>
+                            <input name="Recipients[@i].SignerOrder" class="form-control" value="@(Model.Recipients.ElementAtOrDefault(i)?.SignerOrder ?? 1)" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Full Name</label>
+                            <input name="Recipients[@i].FullName" class="form-control"
+                                   value="@(Model.Recipients.ElementAtOrDefault(i)?.FullName ?? "")" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Email</label>
+                            <input name="Recipients[@i].Email" type="email" class="form-control"
+                                   value="@(Model.Recipients.ElementAtOrDefault(i)?.Email ?? "")" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Phone</label>
+                            <input name="Recipients[@i].Phone" class="form-control"
+                                   value="@(Model.Recipients.ElementAtOrDefault(i)?.Phone ?? "")" />
+                        </div>
+                        <div class="col-md-1 text-end">
+                            <button type="button" class="btn btn-outline-danger btn-sm remove-recipient"
+                                    title="Remove this recipient">
+                                Remove
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="mt-3">
+                <button class="btn btn-success">Send Envelope</button>
+                <a asp-action="Index" class="btn btn-link">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function addRecipient(){
+          const idx = document.querySelectorAll('#recipients .recipient-row').length;
+          const row = document.createElement('div');
+          row.className='row g-2 align-items-end mb-2 recipient-row';
+          row.innerHTML = `
+            <div class="col-md-2"><label class="form-label">Role</label><input name="Recipients[${idx}].Role" class="form-control" value="Manager"/></div>
+            <div class="col-md-1"><label class="form-label">Order</label><input name="Recipients[${idx}].SignerOrder" class="form-control" value="1"/></div>
+            <div class="col-md-3"><label class="form-label">Full Name</label><input name="Recipients[${idx}].FullName" class="form-control"/></div>
+            <div class="col-md-3"><label class="form-label">Email</label><input name="Recipients[${idx}].Email" type="email" class="form-control"/></div>
+            <div class="col-md-3"><label class="form-label">Phone</label><input name="Recipients[${idx}].Phone" class="form-control"/></div>`;
+          document.getElementById('recipients').appendChild(row);
+        }
+    </script>
+
+    <script>
+        function reindexRecipients() {
+          document.querySelectorAll('#recipients .recipient-row').forEach((row, idx) => {
+            row.querySelectorAll('input[name^="Recipients["], select[name^="Recipients["]').forEach(el => {
+              const field = el.name.substring(el.name.indexOf('].') + 2); // e.g. "FullName"
+              el.name = `Recipients[${idx}].${field}`;
+            });
+          });
+        }
+
+        function addRecipient() {
+          const idx = document.querySelectorAll('#recipients .recipient-row').length;
+          const row = document.createElement('div');
+          row.className = 'row g-2 align-items-end mb-2 recipient-row';
+          row.innerHTML = `
+            <div class="col-md-2">
+              <label class="form-label">Role</label>
+              <select name="Recipients[${idx}].Role" class="form-select">
+                <option value="Manager" selected>Manager</option>
+                <option value="Tenant">Tenant</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div class="col-md-1">
+              <label class="form-label">Order</label>
+              <input name="Recipients[${idx}].SignerOrder" class="form-control" value="1" />
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Full Name</label>
+              <input name="Recipients[${idx}].FullName" class="form-control" />
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Email</label>
+              <input name="Recipients[${idx}].Email" type="email" class="form-control" />
+            </div>
+            <div class="col-md-2">
+              <label class="form-label">Phone</label>
+              <input name="Recipients[${idx}].Phone" class="form-control" />
+            </div>
+            <div class="col-md-1 text-end">
+              <button type="button" class="btn btn-outline-danger btn-sm remove-recipient">Remove</button>
+            </div>`;
+          document.getElementById('recipients').appendChild(row);
+          reindexRecipients();
+        }
+
+        // event delegation to handle remove clicks on current + future rows
+        document.getElementById('recipients').addEventListener('click', (e) => {
+          if (e.target.classList.contains('remove-recipient')) {
+            const row = e.target.closest('.recipient-row');
+            row?.remove();
+            reindexRecipients();
+          }
+        });
+    </script>
+
+    <script>
+        // --- Property search ---
+        let propTimer;
+        const propSearch = document.getElementById('propSearch');
+        const propId = document.getElementById('propId');
+        const propResults = document.getElementById('propResults');
+        const orderSelect = document.getElementById('orderSelect');
+
+        propSearch.addEventListener('input', () => {
+          clearTimeout(propTimer);
+          const q = propSearch.value.trim();
+          if (!q) { propResults.innerHTML = ''; return; }
+          propTimer = setTimeout(async () => {
+            const res = await fetch(`/api/properties/search?term=${encodeURIComponent(q)}`);
+            const items = await res.json();
+            propResults.innerHTML = items.map(i =>
+              `<button type="button" class="list-group-item list-group-item-action" data-id="${i.id}" data-name="${i.name}">${i.name}</button>`
+            ).join('');
+          }, 250);
+        });
+
+        propResults.addEventListener('click', async (e) => {
+          const btn = e.target.closest('button[data-id]');
+          if (!btn) return;
+          propId.value = btn.dataset.id;
+          propSearch.value = btn.dataset.name;
+          propResults.innerHTML = '';
+
+          // load orders for this property
+          orderSelect.innerHTML = '<option value="">Loading orders…</option>';
+          orderSelect.disabled = true;
+          const res = await fetch(`/api/orders/by-property?propertyId=${encodeURIComponent(propId.value)}&status=pending`);
+          const items = await res.json();
+          orderSelect.innerHTML = '<option value="">Select an order (optional)</option>' +
+            items.map(o => `<option value="${o.id}">${o.display}</option>`).join('');
+          orderSelect.disabled = false;
+        });
+
+        // dismiss suggestions if clicking elsewhere
+        document.addEventListener('click', (e) => {
+          if (!propResults.contains(e.target) && e.target !== propSearch)
+            propResults.innerHTML = '';
+        });
+    </script>
+
+}

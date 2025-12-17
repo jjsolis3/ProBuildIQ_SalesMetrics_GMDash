@@ -1,0 +1,510 @@
+﻿@model SalesMetrics.Models.ErrorDashboardViewModel
+@{
+    ViewData["Title"] = "Error Dashboard";
+}
+
+<!-- Add DataTables CSS in head section -->
+@section Styles {
+    <!-- DataTables CSS -->
+    <link href="~/assets/libs/datatables.net-bs5/css/dataTables.bootstrap5.min.css" rel="stylesheet" />
+    <link href="~/assets/libs/datatables.net-responsive-bs5/css/responsive.bootstrap5.min.css" rel="stylesheet" />
+    <link href="~/assets/libs/datatables.net-buttons-bs5/css/buttons.bootstrap5.min.css" rel="stylesheet" />
+}
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                <h4 class="mb-sm-0">Error Dashboard</h4>
+                <div class="page-title-right">
+                    <a href="@Url.Action("Index")" class="btn btn-primary">
+                        <i class="fas fa-list"></i> View All Errors
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row">
+        <div class="col-xl-3 col-md-6">
+            <div class="card card-animate">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-grow-1">
+                            <p class="text-uppercase fw-medium text-muted mb-0">Total Errors</p>
+                            <h4 class="mb-0">@Model.TotalErrors</h4>
+                        </div>
+                        <div class="flex-shrink-0">
+                            <div class="avatar-sm rounded-circle bg-danger-subtle">
+                                <span class="avatar-title rounded-circle bg-danger">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6">
+            <div class="card card-animate">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-grow-1">
+                            <p class="text-uppercase fw-medium text-muted mb-0">Unresolved</p>
+                            <h4 class="mb-0 text-danger">@Model.UnresolvedErrors</h4>
+                        </div>
+                        <div class="flex-shrink-0">
+                            <div class="avatar-sm rounded-circle bg-warning-subtle">
+                                <span class="avatar-title rounded-circle bg-warning">
+                                    <i class="fas fa-clock"></i>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6">
+            <div class="card card-animate">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-grow-1">
+                            <p class="text-uppercase fw-medium text-muted mb-0">Resolution Rate</p>
+                            <h4 class="mb-0 text-success">
+                                @if (Model.TotalErrors > 0)
+                                {
+                                    @Math.Round((double)(Model.TotalErrors - Model.UnresolvedErrors) / Model.TotalErrors * 100, 1)
+                                    <text>%</text>
+                                }
+                                else
+                                {
+                                    <text>100%</text>
+                                }
+                            </h4>
+                        </div>
+                        <div class="flex-shrink-0">
+                            <div class="avatar-sm rounded-circle bg-success-subtle">
+                                <span class="avatar-title rounded-circle bg-success">
+                                    <i class="fas fa-check"></i>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6">
+            <div class="card card-animate">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-grow-1">
+                            <p class="text-uppercase fw-medium text-muted mb-0">Last 24 Hours</p>
+                            <h4 class="mb-0">
+                                @Model.RecentErrors.Count(e => e.Timestamp > DateTime.Now.AddDays(-1))
+                            </h4>
+                        </div>
+                        <div class="flex-shrink-0">
+                            <div class="avatar-sm rounded-circle bg-info-subtle">
+                                <span class="avatar-title rounded-circle bg-info">
+                                    <i class="fas fa-calendar-day"></i>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="row">
+        <div class="col-xl-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Errors by Level</h5>
+                </div>
+                <div class="card-body">
+                    @if (Model.ErrorsByLevel.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Level</th>
+                                        <th>Count</th>
+                                        <th>Percentage</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var levelGroup in Model.ErrorsByLevel.OrderByDescending(x => x.Value))
+                                    {
+                                        var percentage = Model.TotalErrors > 0 ?
+                                        Math.Round((double)levelGroup.Value / Model.TotalErrors * 100, 1) : 0;
+                                        <tr>
+                                            <td>
+                                                <span class="badge @(levelGroup.Key == "Error" ? "bg-danger" : levelGroup.Key == "Warning" ? "bg-warning" : "bg-info")">
+                                                    @levelGroup.Key
+                                                </span>
+                                            </td>
+                                            <td>@levelGroup.Value</td>
+                                            <td>@percentage%</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted">No errors found.</p>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Top Controllers with Errors</h5>
+                </div>
+                <div class="card-body">
+                    @if (Model.ErrorsByController.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Controller</th>
+                                        <th>Error Count</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var controllerGroup in Model.ErrorsByController)
+                                    {
+                                        <tr>
+                                            <td>@controllerGroup.Key</td>
+                                            <td>
+                                                <span class="badge bg-danger">@controllerGroup.Value</span>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted">No controller-specific errors found.</p>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Errors -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">Recent Errors</h5>
+                    @if (Model.RecentErrors.Any(e => !e.IsResolved))
+                    {
+                        <button class="btn btn-success btn-sm" id="bulkQuickCloseBtn" onclick="bulkQuickClose()">
+                            <i class="fas fa-check-double"></i> Quick Close All Unresolved
+                        </button>
+                    }
+                </div>
+                <div class="card-body">
+                    @if (Model.RecentErrors.Any())
+                    {
+                        <div class="table-responsive">
+                            <table id="error_table" class="table table-striped table-hover dt-responsive nowrap w-100" style="width:100%">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>
+                                            <input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)">
+                                        </th>
+                                        <th>Timestamp</th>
+                                        <th>Level</th>
+                                        <th>Message</th>
+                                        <th>Controller</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var error in Model.RecentErrors)
+                                    {
+                                        <tr class="@(error.Level == "Error" ? "table-danger" : error.Level == "Warning" ? "table-warning" : "")" data-error-id="@error.ErrorID">
+                                            <td>
+                                                @if (!error.IsResolved)
+                                                {
+                                                    <input type="checkbox" class="error-checkbox" value="@error.ErrorID">
+                                                }
+                                            </td>
+                                            <td data-order="@error.Timestamp.ToString("yyyyMMddHHmm")">@error.Timestamp.ToString("MM/dd/yyyy HH:mm")</td>
+                                            <td>
+                                                <span class="badge @(error.Level == "Error" ? "bg-danger" : error.Level == "Warning" ? "bg-warning" : "bg-info")">
+                                                    @error.Level
+                                                </span>
+                                            </td>
+                                            <td>
+                                                @if (error.Message.Length > 50)
+                                                {
+                                                    <span title="@error.Message">@error.Message.Substring(0, 50)...</span>
+                                                }
+                                                else
+                                                {
+                                                    @error.Message
+                                                }
+                                            </td>
+                                            <td>@(error.Controller ?? "N/A")</td>
+                                            <td>
+                                                @if (error.IsResolved)
+                                                {
+                                                    <span class="badge bg-success">Resolved</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-warning status-badge">Open</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <div class="btn-group btn-group-sm" role="group">
+                                                    <a href="@Url.Action("Details", new { id = error.ErrorID })"
+                                                       class="btn btn-outline-primary">
+                                                        <i class="fas fa-eye"></i>
+                                                    </a>
+                                                    @if (!error.IsResolved)
+                                                    {
+                                                        <button class="btn btn-outline-success quick-close-btn"
+                                                                data-error-id="@error.ErrorID"
+                                                                onclick="quickCloseError(@error.ErrorID, this)"
+                                                                title="Quick Close">
+                                                            <i class="fas fa-check"></i>
+                                                        </button>
+                                                    }
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center py-4">
+                            <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+                            <h5>No Recent Errors</h5>
+                            <p class="text-muted">Everything looks good! No errors have been logged recently.</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Quick Close Individual Error
+    function quickCloseError(errorId, button) {
+        if (confirm('Are you sure you want to quick close this error?')) {
+            button.disabled = true;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+            fetch('@Url.Action("QuickClose")', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: 'id=' + errorId + '&returnUrl=' + encodeURIComponent(window.location.href)
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Update the row to show resolved status
+                        const row = document.querySelector(`tr[data-error-id="${errorId}"]`);
+                        const statusBadge = row.querySelector('.status-badge');
+                        statusBadge.className = 'badge bg-success';
+                        statusBadge.textContent = 'Resolved';
+
+                        // Remove the quick close button
+                        button.parentElement.remove();
+
+                        // Remove checkbox
+                        const checkbox = row.querySelector('.error-checkbox');
+                        if (checkbox) {
+                            checkbox.parentElement.innerHTML = '';
+                        }
+
+                        // Show success message
+                        showToast('Success', 'Error resolved successfully', 'success');
+
+                        // Update counters if they exist
+                        setTimeout(() => location.reload(), 1000);
+                    } else {
+                        button.disabled = false;
+                        button.innerHTML = '<i class="fas fa-check"></i>';
+                        showToast('Error', 'Failed to resolve error', 'error');
+                    }
+                })
+                .catch(error => {
+                    button.disabled = false;
+                    button.innerHTML = '<i class="fas fa-check"></i>';
+                    showToast('Error', 'An error occurred', 'error');
+                });
+        }
+    }
+
+    // Bulk Quick Close
+    function bulkQuickClose() {
+        const checkedBoxes = document.querySelectorAll('.error-checkbox:checked');
+        if (checkedBoxes.length === 0) {
+            alert('Please select at least one error to resolve.');
+            return;
+        }
+
+        if (confirm(`Are you sure you want to quick close ${checkedBoxes.length} error(s)?`)) {
+            const errorIds = Array.from(checkedBoxes).map(cb => parseInt(cb.value));
+            const bulkBtn = document.getElementById('bulkQuickCloseBtn');
+
+            bulkBtn.disabled = true;
+            bulkBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+
+            // Send as an object with errorIds property
+            fetch('@Url.Action("BulkQuickClose")', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]')?.value || ''
+                },
+                body: JSON.stringify({ errorIds: errorIds })
+            })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        showToast('Success', data.message, 'success');
+                        setTimeout(() => location.reload(), 1000);
+                    } else {
+                        bulkBtn.disabled = false;
+                        bulkBtn.innerHTML = '<i class="fas fa-check-double"></i> Quick Close All Unresolved';
+                        showToast('Error', data.message || 'Bulk operation failed', 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Bulk close error:', error);
+                    bulkBtn.disabled = false;
+                    bulkBtn.innerHTML = '<i class="fas fa-check-double"></i> Quick Close All Unresolved';
+                    showToast('Error', 'Network error occurred during bulk operation', 'error');
+                });
+        }
+    }
+
+    // Select All Functionality
+    function toggleSelectAll(selectAllCheckbox) {
+        const checkboxes = document.querySelectorAll('.error-checkbox');
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = selectAllCheckbox.checked;
+        });
+    }
+
+    // Simple Toast Notification
+    function showToast(title, message, type) {
+        // Create a simple alert if no toast library is available
+        const alertClass = type === 'success' ? 'alert-success' : 'alert-danger';
+        const alertHtml = `
+            <div class="alert ${alertClass} alert-dismissible fade show position-fixed"
+                 style="top: 20px; right: 20px; z-index: 9999;" role="alert">
+                <strong>${title}:</strong> ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', alertHtml);
+
+        // Auto remove after 3 seconds
+        setTimeout(() => {
+            const alert = document.querySelector('.alert');
+            if (alert) alert.remove();
+        }, 3000);
+    }
+</script>
+
+@section Scripts {
+    <!-- Required datatable js -->
+    <script src="~/assets/libs/datatables.net/js/jquery.dataTables.min.js"></script>
+    <script src="~/assets/libs/datatables.net-bs5/js/dataTables.bootstrap5.min.js"></script>
+
+    <!-- Responsive examples -->
+    <script src="~/assets/libs/datatables.net-responsive/js/dataTables.responsive.min.js"></script>
+    <script src="~/assets/libs/datatables.net-responsive-bs5/js/responsive.bootstrap5.min.js"></script>
+
+    <!-- Buttons examples -->
+    <script src="~/assets/libs/datatables.net-buttons/js/dataTables.buttons.min.js"></script>
+    <script src="~/assets/libs/datatables.net-buttons-bs5/js/buttons.bootstrap5.min.js"></script>
+    <script src="~/assets/libs/datatables.net-buttons/js/buttons.colVis.min.js"></script>
+    <script src="~/assets/libs/datatables.net-buttons/js/buttons.html5.min.js"></script>
+    <script src="~/assets/libs/datatables.net-buttons/js/buttons.print.min.js"></script>
+
+    <!-- JSZip for Excel export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.3/jszip.min.js"></script>
+    <!-- PDFMake for PDF export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.53/pdfmake.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.53/vfs_fonts.js"></script>
+
+    <script>
+        $(document).ready(function () {
+            $('#error_table').DataTable({
+                pageLength: 25,
+                responsive: true,
+                scrollX: true,
+                dom: `<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>
+                      <"row"<"col-sm-12"tr>>
+                      <"row"<"col-sm-12 col-md-5"i><"col-sm-12 col-md-7"p>>
+                      <"row"<"col-sm-12 text-center"B>>`,
+                buttons: [
+                    {
+                        extend: 'excel',
+                        text: '<i class="fas fa-file-excel"></i> Export Excel',
+                        className: 'btn btn-success btn-sm me-2'
+                    },
+                    {
+                        extend: 'pdf',
+                        text: '<i class="fas fa-file-pdf"></i> Export PDF',
+                        className: 'btn btn-danger btn-sm'
+                    }
+                ],
+                lengthChange: true,
+                ordering: true,
+                order: [[1, 'desc']], // Sort by timestamp column descending
+                columnDefs: [
+                    { orderable: false, targets: 0 }, // Disable sorting for checkbox column
+                    { orderable: false, targets: 6 }, // Disable sorting for actions column
+                    { width: "50px", targets: 0 },    // Set width for checkbox column
+                    { width: "100px", targets: 1 },   // Set width for timestamp
+                    { width: "80px", targets: 2 },    // Set width for level
+                    { width: "100px", targets: 5 },   // Set width for status
+                    { width: "120px", targets: 6 }    // Set width for actions
+                ],
+                language: {
+                    search: "Search errors:",
+                    lengthMenu: "Show _MENU_ errors per page",
+                    info: "Showing _START_ to _END_ of _TOTAL_ errors",
+                    infoEmpty: "Showing 0 to 0 of 0 errors",
+                    infoFiltered: "(filtered from _MAX_ total errors)"
+                }
+            });
+        });
+    </script>
+}

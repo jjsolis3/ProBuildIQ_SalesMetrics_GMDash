@@ -1,0 +1,48 @@
+﻿@* Views/SignAdmin/Index.cshtml *@
+@model IReadOnlyList<SalesMetrics.Models.Signing.EnvelopeListItemVm>
+@{
+    ViewData["Title"] = "E-Sign Envelopes";
+}
+<div class="card mb-3 border-0 shadow-sm">
+    <div class="card-header bg-warning text-dark fw-bold">E-Sign Hub</div>
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <a class="btn btn-success" asp-action="Create">+ New Envelope</a>
+            </div>
+            <div class="text-muted">Total: @ViewBag.Total</div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead class="table-warning">
+                    <tr>
+                        <th>ID</th>
+                        <th>Subject</th>
+                        <th>Status</th>
+                        <th>Recipients</th>
+                        <th>Sent</th>
+                        <th>Completed</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in Model)
+                    {
+                        <tr>
+                            <td>@r.EnvelopeId</td>
+                            <td>@r.Subject</td>
+                            <td>
+                                <span class="badge rounded-pill @(r.Status == "Completed" ? "bg-success" : "bg-warning text-dark")">@r.Status</span>
+                            </td>
+                            <td>@r.SignedCount / @r.RecipientCount</td>
+                            <td>@r.SentAtUtc?.ToLocalTime().ToString("g")</td>
+                            <td>@r.CompletedAtUtc?.ToLocalTime().ToString("g")</td>
+                            <td><a class="btn btn-sm btn-outline-primary" asp-action="Details" asp-route-id="@r.EnvelopeId">Open</a></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

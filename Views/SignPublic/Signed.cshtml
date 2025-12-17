@@ -1,0 +1,30 @@
+﻿@* Views/SignPublic/Signed.cshtml *@
+@{
+    ViewData["Title"] = "Thank You";
+    var downloadUrl = ViewBag.DownloadUrl as string;
+}
+
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-success text-white fw-bold">Thank you!</div>
+    <div class="card-body">
+        <p>Your signature has been recorded successfully.</p>
+
+        @if (!string.IsNullOrWhiteSpace(downloadUrl))
+        {
+            <div class="alert alert-success">
+                <strong>Document Completed!</strong>
+                <p>All parties have signed. You can download the completed document below:</p>
+                <a class="btn btn-success" href="@downloadUrl" target="_blank">
+                    <i class="bi bi-download"></i> Download Signed PDF
+                </a>
+            </div>
+        }
+        else
+        {
+            <div class="alert alert-info">
+                <p>Your signature has been captured. The document is waiting for additional signatures.</p>
+                <p>You will receive an email notification when all parties have signed.</p>
+            </div>
+        }
+    </div>
+</div>

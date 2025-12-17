@@ -1,0 +1,387 @@
+﻿@model SalesMetrics.Models.ManagementDetailsViewModel
+@{
+    ViewBag.Title = "Management Details";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="d-flex align-items-center mb-3">
+    <a class="btn btn-sm btn-light me-2" href="@Url.Action("Management", "Management")">
+        <i class="bi bi-arrow-left"></i> Back
+    </a>
+    <h3 class="mb-0">@Model.Name <small class="text-muted">(#@Model.PriceCode)</small></h3>
+</div>
+
+<!-- Enhanced KPI Cards with Gain/Loss Percentage -->
+<div class="row g-3 mb-4">
+    <div class="col-md-2">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="text-muted small">Properties</div>
+                <div class="h4 mb-0">@Model.PropertyCount</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="text-muted small">Invoices</div>
+                <div class="h4 mb-0">@Model.InvoiceCount</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="text-muted small">Total Revenue</div>
+                <div class="h4 mb-0">@Model.TotalRevenue.ToString("C0")</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="text-muted small">AR Due</div>
+                <div class="h4 mb-0">@Model.AmountDue.ToString("C0")</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="text-muted small">This Year</div>
+                <div class="h4 mb-0">@Model.ThisYearRevenue.ToString("C0")</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="text-muted small">Last Year</div>
+                <div class="h4 mb-0">@Model.LastYearRevenue.ToString("C0")</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- NEW: Gain/Loss KPI Card - Prominently displayed -->
+<div class="row g-3 mb-4">
+    <div class="col-md-12">
+        <div class="card @(Model.GainLossPercentage >= 0 ? "border-success" : "border-danger")" style="border-width: 2px;">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-muted h6 mb-2">
+                            <i class="bi @(Model.GainLossPercentage >= 0 ? "bi-arrow-up-circle" : "bi-arrow-down-circle")"></i>
+                            Year-over-Year Performance
+                        </div>
+                        <div class="h2 mb-0 @(Model.GainLossPercentage >= 0 ? "text-success" : "text-danger")">
+                            @Model.GainLossPercentage.ToString("0.0")%
+                            @if (Model.GainLossPercentage >= 0)
+                            {
+                                <span class="fs-6">Gain</span>
+                            }
+                            else
+                            {
+                                <span class="fs-6">Loss</span>
+                            }
+                        </div>
+                    </div>
+                    <div class="text-end">
+                        <div class="small text-muted">Revenue Change</div>
+                        <div class="h5 mb-0 @(Model.GainLossPercentage >= 0 ? "text-success" : "text-danger")">
+                            @((Model.ThisYearRevenue - Model.LastYearRevenue).ToString("C0"))
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Enhanced Activity Chart: Dual-line comparison of This Year vs Last Year -->
+<div class="card mb-4">
+    <div class="card-header">
+        <strong>Activity</strong>
+        <span class="text-muted">Monthly Revenue Comparison - This Year vs Last Year</span>
+    </div>
+    <div class="card-body">
+        <div id="mgmt-monthly-chart"></div>
+    </div>
+</div>
+
+<!-- NEW: Performance Summary Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">Average Revenue per Property</h6>
+                <h4 class="mb-0">
+                    @((Model.PropertyCount > 0 ? Model.ThisYearRevenue / Model.PropertyCount : 0).ToString("C0"))
+                </h4>
+                <small class="text-muted">This Year</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">Average Invoice Value</h6>
+                <h4 class="mb-0">
+                    @((Model.InvoiceCount > 0 ? Model.TotalRevenue / Model.InvoiceCount : 0).ToString("C0"))
+                </h4>
+                <small class="text-muted">All Time</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">Collection Rate</h6>
+                <h4 class="mb-0">
+                    @{
+                        var collectionRate = Model.TotalRevenue > 0
+                        ? ((Model.TotalRevenue - Model.AmountDue) / Model.TotalRevenue * 100)
+                        : 0;
+                    }
+                    @collectionRate.ToString("0.0")%
+                </h4>
+                <small class="text-muted">Collected vs Outstanding</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Enhanced Properties Table with Year-over-Year Metrics -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <strong>Properties Performance</strong>
+        <div class="small text-muted">@Model.Properties.Count item(s)</div>
+    </div>
+    <div class="card-body">
+        <table id="propTable" class="table table-bordered table-striped table-hover nowrap" style="width:100%">
+            <thead class="table-dark">
+                <tr>
+                    <th>Customer #</th>
+                    <th>Property</th>
+                    <th>Address</th>
+                    <th>City</th>
+                    <th>Salesperson</th>
+                    <th class="text-end">Invoices</th>
+                    <th class="text-end">This Year</th>
+                    <th class="text-end">Last Year</th>
+                    <th class="text-end">% G/L</th>
+                    <th class="text-end">AR Balance</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var p in Model.Properties)
+                {
+                    <tr>
+                        <td>@p.CustomerNumber</td>
+                        <td>
+                            <a asp-controller="Properties" asp-action="PropertyDetails" asp-route-id="@p.PropertyId">
+                                @p.CustomerName
+                            </a>
+                        </td>
+                        <td>@p.Address</td>
+                        <td>@p.City</td>
+                        <td>@p.Salesperson</td>
+                        <td class="text-end">@p.InvoiceCount</td>
+                        <td class="text-end">@p.ThisYearRevenue.ToString("C0")</td>
+                        <td class="text-end">@p.LastYearRevenue.ToString("C0")</td>
+                        <td class="text-end">
+                            @{
+                                var pct = p.GainLossPercentage;
+                                var css = pct >= 0 ? "text-success" : "text-danger";
+                                var icon = pct >= 0 ? "bi-arrow-up" : "bi-arrow-down";
+                            }
+                            <span class="@css fw-bold">
+                                <i class="bi @icon"></i>
+                                @pct.ToString("0.0")%
+                            </span>
+                        </td>
+                        <td class="text-end">@p.ARBalance.ToString("C0")</td>
+                        <td>
+                            <a class="btn btn-sm btn-primary"
+                               href="@Url.Action("PropertyDetails", "Properties", new { id = p.CustomerNumber })">
+                                View
+                            </a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot class="table-secondary">
+                <tr>
+                    <th colspan="5" class="text-end">TOTALS:</th>
+                    <th class="text-end">@Model.Properties.Sum(p => p.InvoiceCount)</th>
+                    <th class="text-end">@Model.Properties.Sum(p => p.ThisYearRevenue).ToString("C0")</th>
+                    <th class="text-end">@Model.Properties.Sum(p => p.LastYearRevenue).ToString("C0")</th>
+                    <th class="text-end">
+                        @{
+                            var totalThisYear = Model.Properties.Sum(p => p.ThisYearRevenue);
+                            var totalLastYear = Model.Properties.Sum(p => p.LastYearRevenue);
+                            var totalPct = totalLastYear > 0
+                            ? (double)(((totalThisYear - totalLastYear) / totalLastYear) * 100)
+                            : (totalThisYear > 0 ? 100.0 : 0.0);
+                            var totalCss = totalPct >= 0 ? "text-success" : "text-danger";
+                        }
+                        <span class="@totalCss fw-bold">@totalPct.ToString("0.0")%</span>
+                    </th>
+                    <th class="text-end">@Model.Properties.Sum(p => p.ARBalance).ToString("C0")</th>
+                    <th></th>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+
+@section Scripts {
+    <!-- ApexCharts (if not already on layout) -->
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+
+    <!-- DataTables (if not already on layout) -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.5/css/jquery.dataTables.min.css" />
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.5/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
+
+    <!-- Required for export buttons -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.print.min.js"></script>
+
+    <script src="~/assets/libs/datatables.net-select/js/dataTables.select.min.js"></script>
+
+    <script>
+        $(function(){
+            // Initialize DataTable with export buttons and enhanced styling
+            $('#propTable').DataTable({
+                order: [
+                    [6, 'desc']
+                ], // Sort by This Year revenue descending by default             
+                dom: `
+                  <"top mb-2"P>
+                  <"top d-flex justify-content-between align-items-center mb-3" lBf>
+                  rt
+                  <"bottom d-flex justify-content-between align-items-center mt-3" ip>
+                `,
+                scrollX: true,
+                pageLength: 25,
+                buttons: [
+                    {
+                        extend: 'excelHtml5',
+                        text: '<i class="bi bi-file-earmark-excel"></i> Excel',
+                        className: 'btn btn-outline-success rounded-pill shadow-sm me-2',
+                        title: 'Management Companies Dashboard - ' + new Date().toLocaleDateString()
+                    },
+                    {
+                        extend: 'pdfHtml5',
+                        text: '<i class="bi bi-file-earmark-pdf"></i> PDF',
+                        className: 'btn btn-outline-danger rounded-pill shadow-sm',
+                        orientation: 'landscape',
+                        pageSize: 'LEGAL',
+                        title: 'Management Companies Dashboard - ' + new Date().toLocaleDateString()
+                    }
+                ]
+            });
+        });
+
+        // Build chart series from the model
+        // This creates a dual-line chart comparing this year vs last year
+
+        // Get month names in order (Jan through Dec)
+        const monthOrder = ['January', 'February', 'March', 'April', 'May', 'June',
+                           'July', 'August', 'September', 'October', 'November', 'December'];
+
+        // Get the data from the model
+        const thisYearData = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.ThisYearMonthlyData));
+        const lastYearData = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.LastYearMonthlyData));
+
+        // Create a map of month -> amount for easier lookup
+        const thisYearMap = {};
+        const lastYearMap = {};
+
+        thisYearData.forEach(item => {
+            thisYearMap[item.InvoiceMonth] = Math.round(item.InvoiceAmount);
+        });
+
+        lastYearData.forEach(item => {
+            lastYearMap[item.InvoiceMonth] = Math.round(item.InvoiceAmount);
+        });
+
+        // Create arrays aligned by month order
+        const thisYearSeries = monthOrder.map(month => thisYearMap[month] || 0);
+        const lastYearSeries = monthOrder.map(month => lastYearMap[month] || 0);
+
+        // Chart configuration
+        const options = {
+            chart: {
+                type: 'line',
+                height: 350,
+                toolbar: { show: true },
+                zoom: { enabled: false }
+            },
+            series: [
+                {
+                    name: 'This Year (@DateTime.Now.Year)',
+                    data: thisYearSeries,
+                    color: '#28a745'  // Green for this year
+                },
+                {
+                    name: 'Last Year (@(DateTime.Now.Year - 1))',
+                    data: lastYearSeries,
+                    color: '#6c757d'  // Gray for last year
+                }
+            ],
+            xaxis: {
+                categories: monthOrder.map(m => m.substring(0, 3)), // Show abbreviated month names
+                title: { text: 'Month' }
+            },
+            yaxis: {
+                title: { text: 'Revenue ($)' },
+                labels: {
+                    formatter: function(val) {
+                        if (val >= 1000000) {
+                            return '$' + (val / 1000000).toFixed(1) + 'M';
+                        } else if (val >= 1000) {
+                            return '$' + (val / 1000).toFixed(0) + 'K';
+                        }
+                        return '$' + val.toFixed(0);
+                    }
+                }
+            },
+            dataLabels: { enabled: false },
+            stroke: {
+                curve: 'smooth',
+                width: 3
+            },
+            markers: {
+                size: 4,
+                hover: { size: 6 }
+            },
+            legend: {
+                position: 'top',
+                horizontalAlign: 'right'
+            },
+            tooltip: {
+                shared: true,
+                intersect: false,
+                y: {
+                    formatter: function(val) {
+                        return '$' + val.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+                    }
+                }
+            },
+            grid: {
+                borderColor: '#f1f1f1',
+                strokeDashArray: 4
+            }
+        };
+
+        // Render the chart
+        new ApexCharts(document.querySelector("#mgmt-monthly-chart"), options).render();
+    </script>
+}

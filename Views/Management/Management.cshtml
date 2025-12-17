@@ -1,0 +1,458 @@
+﻿@model SalesMetrics.Models.ManagementDashboardViewModel
+@{
+    ViewBag.Title = "Management Dashboard";
+    ViewBag.pTitle = "Management Companies";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+@section styles {
+    <link href="~/assets/libs/datatables.net-searchpanes-bs5/css/searchPanes.bootstrap5.min.css" rel="stylesheet" />
+    <link href="~/assets/libs/select2/css/select2.min.css" rel="stylesheet" />
+}
+
+<style>
+    table.dataTable thead th {
+        background-color: darkorange !important;
+        color: white !important;
+    }
+
+    div.dataTables_length {
+        margin-right: 1.5rem;
+    }
+
+    div.dataTables_filter {
+        max-width: 300px;
+        margin-left: auto;
+    }
+
+    .kpi-card {
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+        .kpi-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+        }
+
+    .kpi-icon {
+        font-size: 2.5rem;
+        opacity: 0.8;
+    }
+
+    .top-performer-card {
+        border-left: 4px solid #28a745;
+        transition: all 0.2s;
+    }
+
+        .top-performer-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            transform: translateX(5px);
+        }
+
+    .rank-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        font-weight: bold;
+        font-size: 0.9rem;
+    }
+
+    .rank-1 {
+        background: linear-gradient(135deg, #FFD700, #FFA500);
+        color: white;
+    }
+
+    .rank-2 {
+        background: linear-gradient(135deg, #C0C0C0, #A9A9A9);
+        color: white;
+    }
+
+    .rank-3 {
+        background: linear-gradient(135deg, #CD7F32, #8B4513);
+        color: white;
+    }
+
+    .rank-other {
+        background: linear-gradient(135deg, #6c757d, #495057);
+        color: white;
+    }
+
+    .section-card {
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    .stat-trend-up {
+        color: #28a745;
+        font-weight: 600;
+    }
+
+    .stat-trend-down {
+        color: #dc3545;
+        font-weight: 600;
+    }
+</style>
+
+<!-- Page Header -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <p class="text-muted mb-0">
+                    <i class="bi bi-calendar-check me-1"></i>
+                    YTD Performance as of @DateTime.Now.ToString("MMMM dd, yyyy")
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ======================================
+     KPI SUMMARY CARDS
+     ====================================== -->
+<div class="row g-3 mb-4">
+    <!-- Total Management Companies -->
+    <div class="col-lg-3 col-md-6">
+        <div class="card kpi-card section-card border-0 h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <p class="text-muted mb-2 small text-uppercase">Total Companies</p>
+                        <h3 class="mb-0 fw-bold">@Model.TotalCompanies</h3>
+                    </div>
+                    <div class="kpi-icon text-primary">
+                        <i class="bi bi-building"></i>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <small class="text-muted">
+                        <i class="bi bi-houses me-1"></i>
+                        @Model.TotalProperties Properties
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Total Revenue YTD -->
+    <div class="col-lg-3 col-md-6">
+        <div class="card kpi-card section-card border-0 h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <p class="text-muted mb-2 small text-uppercase">This Year Revenue</p>
+                        <h3 class="mb-0 fw-bold">@Model.TotalThisYearRevenue.ToString("C0")</h3>
+                    </div>
+                    <div class="kpi-icon text-success">
+                        <i class="bi bi-currency-dollar"></i>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <small class="text-muted">
+                        <i class="bi bi-receipt me-1"></i>
+                        @Model.TotalThisYearInvoices.ToString("N0") Invoices
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- YoY Growth -->
+    <div class="col-lg-3 col-md-6">
+        <div class="card kpi-card section-card border-0 h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <p class="text-muted mb-2 small text-uppercase">YoY Growth</p>
+                        <h3 class="mb-0 fw-bold @(Model.OverallGainLossPercentage >= 0 ? "text-success" : "text-danger")">
+                            @Model.OverallGainLossPercentage.ToString("0.0")%
+                        </h3>
+                    </div>
+                    <div class="kpi-icon @(Model.OverallGainLossPercentage >= 0 ? "text-success" : "text-danger")">
+                        <i class="bi bi-graph-@(Model.OverallGainLossPercentage >= 0 ? "up" : "down")-arrow"></i>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <small class="@(Model.OverallGainLossPercentage >= 0 ? "stat-trend-up" : "stat-trend-down")">
+                        <i class="bi bi-arrow-@(Model.OverallGainLossPercentage >= 0 ? "up" : "down")-short me-1"></i>
+                        @((Model.TotalThisYearRevenue - Model.TotalLastYearRevenue).ToString("C0")) vs last year
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- AR Outstanding -->
+    <div class="col-lg-3 col-md-6">
+        <div class="card kpi-card section-card border-0 h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <p class="text-muted mb-2 small text-uppercase">AR Outstanding</p>
+                        <h3 class="mb-0 fw-bold">@Model.TotalARDue.ToString("C0")</h3>
+                    </div>
+                    <div class="kpi-icon text-warning">
+                        <i class="bi bi-cash-stack"></i>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <small class="text-muted">
+                        <i class="bi bi-percent me-1"></i>
+                        @Model.CollectionRate.ToString("0.0")% Collection Rate
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ======================================
+     TOP 5 PERFORMERS SECTION
+     ====================================== -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card section-card border-0">
+            <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center py-3">
+                <h5 class="mb-0">
+                    <i class="bi bi-trophy-fill text-warning me-2"></i>
+                    Top 5 Performers (YTD Revenue)
+                </h5>
+                <span class="badge bg-primary">Top Tier</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 60px;">Rank</th>
+                                <th>Management Company</th>
+                                <th>Properties</th>
+                                <th class="text-end">This Year</th>
+                                <th class="text-end">Last Year</th>
+                                <th class="text-end">Growth</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var company in Model.TopPerformers.Take(5))
+                            {
+                                <tr class="top-performer-card">
+                                    <td>
+                                        <span class="rank-badge rank-@(company.Rank <= 3 ? company.Rank.ToString() : "other")">
+                                            @company.Rank
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <strong>@company.Name</strong>
+                                        <br />
+                                        <small class="text-muted">Price Code: @company.PriceCode</small>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-info">@company.PropertyCount</span>
+                                    </td>
+                                    <td class="text-end fw-bold">@company.ThisYearRevenue.ToString("C0")</td>
+                                    <td class="text-end text-muted">@company.LastYearRevenue.ToString("C0")</td>
+                                    <td class="text-end">
+                                        @{
+                                            var pct = company.GainLossPercentage;
+                                            var css = pct >= 0 ? "text-success" : "text-danger";
+                                            var icon = pct >= 0 ? "bi-arrow-up" : "bi-arrow-down";
+                                        }
+                                        <span class="@css fw-bold">
+                                            <i class="bi @icon"></i>
+                                            @pct.ToString("0.0")%
+                                        </span>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ======================================
+    MANAGEMENT CO TABLE
+    ====================================== -->
+<div class="row">
+    <div class="col-12">
+        <div class="card section-card border-0">
+            <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center py-3">
+                <h5 class="mb-0">
+                    <i class="bi bi-table me-2"></i>
+                    All Management Companies
+                    <span class="badge bg-secondary me-2">@Model.Companies.Count Total</span>
+                </h5>
+                <div>
+                    <button class="btn btn-outline-primary" onclick="$('#mgmtTable').DataTable().searchPanes.container().toggle()">
+                        <i class="bi bi-funnel"></i> Filters
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table id="mgmtTable" class="table table-bordered table-striped table-hover nowrap" style="width:100%">
+                        <thead>
+                            <tr>
+                                <th>Rank</th>
+                                <th>Management Co</th>
+                                <th>Price Code</th>
+                                <th>Properties</th>
+                                <th>Invoices</th>
+                                <th>Total Revenue</th>
+                                <th>AR Due</th>
+                                <th>This Yr Invoices</th>
+                                <th>This Yr Revenue</th>
+                                <th>Last Yr Invoices</th>
+                                <th>Last Yr Revenue</th>
+                                <th>% G/L</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in Model.Companies)
+                            {
+                                <tr>
+                                    <td>
+                                        <span class="rank-badge rank-@(row.Rank <= 3 ? row.Rank.ToString() : "other")">
+                                            @row.Rank
+                                        </span>
+                                    </td>
+                                    <!--<td><strong>@row.Name</strong></td>-->
+                                    <td>
+                                        <a asp-controller="Management" asp-action="ManagementDetails" asp-route-id="@row.PriceCode">
+                                            <strong>@row.Name</strong>
+                                        </a>
+                                    </td>
+                                    <td>@row.PriceCode</td>
+                                    <td><span class="badge bg-info">@row.PropertyCount</span></td>
+                                    <td>@row.InvoiceCount</td>
+                                    <td>@row.TotalRevenue.ToString("C0")</td>
+                                    <td>@row.AmountDue.ToString("C0")</td>
+                                    <td>@row.ThisYearInvoiceCount</td>
+                                    <td><strong>@row.ThisYearRevenue.ToString("C0")</strong></td>
+                                    <td>@row.LastYearInvoiceCount</td>
+                                    <td>@row.LastYearRevenue.ToString("C0")</td>
+                                    <td class="text-end">
+                                        @{
+                                            var ty = row.ThisYearRevenue;
+                                            var ly = row.LastYearRevenue;
+                                            var pct = (ly == 0)
+                                            ? (ty > 0 ? 100m : 0m)
+                                            : ((ty - ly) / ly) * 100m;
+                                            var css = pct >= 0 ? "text-success" : "text-danger";
+                                            var icon = pct >= 0 ? "bi-arrow-up" : "bi-arrow-down";
+                                        }
+                                        <span class="@css fw-bold">
+                                            <i class="bi @icon"></i>
+                                            @pct.ToString("0.0")%
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <a class="btn btn-sm btn-primary" href="@Url.Action("ManagementDetails", "Management", new { id = row.PriceCode })">
+                                            <i class="bi bi-eye"></i> View
+                                        </a>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <!-- DataTables CSS -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.5/css/jquery.dataTables.min.css" />
+    <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.dataTables.min.css" />
+
+    <!-- jQuery + DataTables JS -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.5/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.colVis.min.js"></script>
+
+    <!-- Required for export buttons -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.print.min.js"></script>
+
+    <script src="~/assets/libs/datatables.net-searchpanes/js/dataTables.searchPanes.min.js"></script>
+    <script src="~/assets/libs/datatables.net-searchpanes-bs5/js/searchPanes.bootstrap5.min.js"></script>
+    <script src="~/assets/libs/datatables.net-select/js/dataTables.select.min.js"></script>
+
+    <script src="~/assets/libs/select2/js/select2.full.min.js"></script>
+
+    <script>
+        var table;
+
+        $(document).ready(function () {
+            table = $('#mgmtTable').DataTable({
+                order: [
+                    [8, 'desc'], // Default sort by This Year Revenue (column index 8)
+                ],
+                dom: `
+                  <"top mb-2"P>
+                  <"top d-flex justify-content-between align-items-center mb-3" lBf>
+                  rt
+                  <"bottom d-flex justify-content-between align-items-center mt-3" ip>
+                `,
+                scrollX: true,
+                pageLength: 25,
+                searchPanes: {
+                    cascadePanes: true,
+                    viewTotal: true,
+                    layout: 'columns-2',
+                    initCollapsed: true
+                },
+                buttons: [
+                    {
+                        extend: 'colvis',
+                        text: '<i class="bi bi-eye"></i> Show/Hide Columns',
+                        className: 'btn btn-outline-primary rounded-pill shadow-sm me-2'
+                    },
+                    {
+                        extend: 'excelHtml5',
+                        text: '<i class="bi bi-file-earmark-excel"></i> Excel',
+                        className: 'btn btn-outline-success rounded-pill shadow-sm me-2',
+                        title: 'Management Companies Dashboard - ' + new Date().toLocaleDateString()
+                    },
+                    {
+                        extend: 'pdfHtml5',
+                        text: '<i class="bi bi-file-earmark-pdf"></i> PDF',
+                        className: 'btn btn-outline-danger rounded-pill shadow-sm',
+                        orientation: 'landscape',
+                        pageSize: 'LEGAL',
+                        title: 'Management Companies Dashboard - ' + new Date().toLocaleDateString()
+                    }
+                ],
+                columnDefs: [
+                    { targets: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], visible: true },
+                    { searchPanes: { show: true }, targets: [1, 2] },   // Mgmt Co & PriceCode
+                    { searchPanes: { show: false }, targets: '_all' }
+                ]
+            });
+
+            table.on('searchPanes.statesLoaded', function () {
+                updateFilterCount();
+            });
+
+            table.on('searchPanes.selectionChanged', function () {
+                updateFilterCount();
+            });
+
+            function updateFilterCount() {
+                const count = table.searchPanes.getSelections().reduce((total, pane) => total + pane.rows.length, 0);
+                $('#filtersCount').text(count);
+            }
+        });
+    </script>
+}

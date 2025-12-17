@@ -1,0 +1,201 @@
+﻿@model SalesMetrics.Models.ErrorLog
+@{
+    ViewData["Title"] = "Error Details";
+}
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                <h4 class="mb-sm-0">Error Details</h4>
+                <div class="page-title-right">
+                    <a href="@Url.Action("Index")" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Back to List
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <!-- Error Information -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <span class="badge @(Model.Level == "Error" ? "bg-danger" : Model.Level == "Warning" ? "bg-warning" : "bg-info") me-2">
+                            @Model.Level
+                        </span>
+                        Error Information
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-sm-3"><strong>Timestamp:</strong></div>
+                        <div class="col-sm-9">@Model.Timestamp.ToString("MM/dd/yyyy HH:mm:ss")</div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-sm-3"><strong>Message:</strong></div>
+                        <div class="col-sm-9">@Model.Message</div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-sm-3"><strong>Source:</strong></div>
+                        <div class="col-sm-9">@(Model.Source ?? "Unknown")</div>
+                    </div>
+                    @if (!string.IsNullOrEmpty(Model.RequestId))
+                    {
+                        <div class="row mb-3">
+                            <div class="col-sm-3"><strong>Request ID:</strong></div>
+                            <div class="col-sm-9"><code>@Model.RequestId</code></div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Request Information -->
+            @if (!string.IsNullOrEmpty(Model.RequestPath))
+            {
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Request Information</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-2">
+                            <div class="col-sm-3"><strong>Path:</strong></div>
+                            <div class="col-sm-9"><code>@Model.RequestPath</code></div>
+                        </div>
+                        @if (!string.IsNullOrEmpty(Model.RequestMethod))
+                        {
+                            <div class="row mb-2">
+                                <div class="col-sm-3"><strong>Method:</strong></div>
+                                <div class="col-sm-9"><span class="badge bg-primary">@Model.RequestMethod</span></div>
+                            </div>
+                        }
+                        @if (!string.IsNullOrEmpty(Model.Controller) || !string.IsNullOrEmpty(Model.Action))
+                        {
+                            <div class="row mb-2">
+                                <div class="col-sm-3"><strong>Route:</strong></div>
+                                <div class="col-sm-9">@Model.Controller/@Model.Action</div>
+                            </div>
+                        }
+                        @if (!string.IsNullOrEmpty(Model.QueryString))
+                        {
+                            <div class="row mb-2">
+                                <div class="col-sm-3"><strong>Query String:</strong></div>
+                                <div class="col-sm-9"><code>@Model.QueryString</code></div>
+                            </div>
+                        }
+                        @if (!string.IsNullOrEmpty(Model.IPAddress))
+                        {
+                            <div class="row mb-2">
+                                <div class="col-sm-3"><strong>IP Address:</strong></div>
+                                <div class="col-sm-9">@Model.IPAddress</div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            <!-- Exception Details -->
+            @if (!string.IsNullOrEmpty(Model.Exception))
+            {
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Exception Details</h5>
+                    </div>
+                    <div class="card-body">
+                        <pre class="bg-light p-3" style="max-height: 400px; overflow-y: auto;"><code>@Model.Exception</code></pre>
+                    </div>
+                </div>
+            }
+
+            <!-- Additional Data -->
+            @if (!string.IsNullOrEmpty(Model.AdditionalData))
+            {
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Additional Data</h5>
+                    </div>
+                    <div class="card-body">
+                        <pre class="bg-light p-3"><code>@Model.AdditionalData</code></pre>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="col-lg-4">
+            <!-- User Information -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">User Information</h5>
+                </div>
+                <div class="card-body">
+                    @if (Model.UserID.HasValue || !string.IsNullOrEmpty(Model.Username))
+                    {
+                        @if (Model.UserID.HasValue)
+                        {
+                            <div class="mb-2"><strong>User ID:</strong> @Model.UserID</div>
+                        }
+                        @if (!string.IsNullOrEmpty(Model.Username))
+                        {
+                            <div class="mb-2"><strong>Username:</strong> @Model.Username</div>
+                        }
+                        @if (!string.IsNullOrEmpty(Model.SessionID))
+                        {
+                            <div class="mb-2"><strong>Session:</strong> <small>@Model.SessionID</small></div>
+                        }
+                        @if (!string.IsNullOrEmpty(Model.UserAgent))
+                        {
+                            <div class="mb-2"><strong>User Agent:</strong> <small>@Model.UserAgent</small></div>
+                        }
+                    }
+                    else
+                    {
+                        <p class="text-muted">Anonymous user</p>
+                    }
+                </div>
+            </div>
+
+            <!-- Resolution Status -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Resolution Status</h5>
+                </div>
+                <div class="card-body">
+                    @if (Model.IsResolved)
+                    {
+                        <div class="alert alert-success">
+                            <i class="fas fa-check-circle"></i> <strong>Resolved</strong>
+                        </div>
+                        <div class="mb-2"><strong>Resolved By:</strong> @Model.ResolvedBy</div>
+                        <div class="mb-2"><strong>Resolved Date:</strong> @Model.ResolvedDate?.ToString("MM/dd/yyyy HH:mm:ss")</div>
+                        @if (!string.IsNullOrEmpty(Model.ResolutionNotes))
+                        {
+                            <div class="mb-2"><strong>Notes:</strong></div>
+                            <p class="bg-light p-2 border rounded">@Model.ResolutionNotes</p>
+                        }
+                    }
+                    else
+                    {
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle"></i> <strong>Unresolved</strong>
+                        </div>
+
+                        <!-- Mark as Resolved Form -->
+                        <form asp-action="MarkResolved" method="post">
+                            <input type="hidden" name="id" value="@Model.ErrorID" />
+                            <div class="mb-3">
+                                <label for="resolutionNotes" class="form-label">Resolution Notes:</label>
+                                <textarea class="form-control" id="resolutionNotes" name="resolutionNotes" rows="3"
+                                          placeholder="Describe how this error was resolved..."></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-check"></i> Mark as Resolved
+                            </button>
+                        </form>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

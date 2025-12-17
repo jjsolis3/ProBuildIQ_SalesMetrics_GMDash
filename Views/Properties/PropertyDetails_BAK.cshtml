@@ -1,0 +1,470 @@
+﻿
+@{
+    ViewBag.Title = "Property Details";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+@model SalesMetrics.Models.PropertyDetailsViewModel
+
+<div class="row">
+    <div class="col-xl-4">
+        <div class="card overflow-hidden">
+            <div class="bg-primary-subtle">
+                <div class="row align-items-center">
+                    <div class="col-7">
+                        <div class="text-black p-3 mb-3">
+                            <h4 class="text-black">@Model.CustomerName</h4>
+                            <p class="mb-0">@Model.City @Model.State</p>
+                        </div>
+                    </div>
+                    <div class="col-5">
+                        <div class="align-self-end">
+                            @if(Model.CreditHold == 1)
+                            {
+                                <img src="~/assets/images/credithold.png" alt="CreditHold Label" class="img-fluid" style="max-width: 150px;" />
+                            }
+                            
+                        </div>
+                    </div> 
+                </div>
+            </div>
+            <div class="card-body pt-1">
+                <div class="border-bottom pt-3">
+                    <h5 class="fs-15 mb-1 text-truncate">Last 12 Months</h5>
+                </div>
+                <div class="row align-items-end">
+                    @*<div class="avatar-md mb-3 mt-n4">
+                             <img src="~/assets/images/users/avatar-6.png" alt="" class="img-fluid avatar-circle bg-light p-2 border-2 border-primary"> 
+                        </div>*@
+                    <div class="col-sm-4 text-center mt-3">    
+                        <h5 class="fs-5 mb-1">@Model.TotalRevenueLastYear.ToString("C")</h5>
+                        <p class="text-muted medium mb-0">Total Revenue</p>
+                    </div>
+
+                    <div class="col-sm-4 text-center mt-2">
+                        <h5 class="fs-5 mb-1">@Model.CompletedOrdersLastYear</h5>
+                        <p class="text-muted small mb-0">Completed Orders</p>
+                    </div>
+                    <div class="col-sm-4 text-center mt-2">
+                        <h5 class="fs-5 mb-1">@Model.PendingOrdersLastYear</h5>
+                        <p class="text-muted medium mb-0">Pending Orders</p>
+                    </div>
+                </div>
+            </div>
+            <!-- ABOUT SECTION -->                
+            <div class="card-body border-top">
+                <h4 class="card-title mb-3 border-bottom pb-2">About</h4>
+                <div class="table-responsive">
+                    <table class="table table-nowrap table-borderless mb-0">
+                        <tbody>
+                            <tr>
+                                <th scope="row"><i class="mdi mdi-account align-middle text-primary me-2 h4"></i> Customer Name:</th>
+                                <td class="fs-5">@Model.CustomerName</td>
+                            </tr>
+                            <tr>
+                                <th scope="row"><i class="mdi mdi-map-marker text-danger me-2 h4"></i> Address:</th>
+                                <td class="fs-5">
+                                    @if (!string.IsNullOrEmpty(Model.Address))
+                                    {
+                                        <a href="https://www.google.com/maps/search/?api=1&query=@Uri.EscapeDataString(Model.Address)"
+                                           target="_blank"
+                                           rel="noopener noreferrer">
+                                            @Model.Address
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">No address available</span>
+                                    }
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row"><i class="mdi mdi-calendar-range text-primary me-2 h4 fs-14"></i> Established:</th>
+                                <td class="fs-5">@Model.EstablishedDate?.ToString("MMM dd, yyyy")</td>
+                            </tr>
+                            <tr>
+                                <th scope="row"><i class="mdi mdi-cash text-primary me-2 h4"></i> Credit Limit:</th>
+                                <td class="fs-5">@Model.CreditLimit?.ToString("C")</td>
+                            </tr>
+                            <tr>
+                                <th scope="row"><i class="mdi mdi-account-tie text-primary me-2 h4"></i> Salesperson:</th>
+                                <td class="fs-5">@Model.SalemanName (@Model.SalemanNumber)</td>
+                            </tr>
+                            <tr>
+                                <th scope="row"><i class="mdi mdi-domain text-primary me-2 h4"></i> Management Co:</th>
+                                <td class="fs-5">@Model.MgmtCo</td>
+                            </tr>
+                            <tr>
+                                <th scope="row"><i class="mdi mdi-account-multiple text-primary me-2 h4"></i> Attention To:</th>
+                                <td class="fs-5">@Model.AttnTo</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- BOTTOM SECTION - NOTES -->
+            <div class="card-body border-top">
+                <h4 class="card-title mb-4"></h4>
+                <div class="">
+                    <div class="d-flex mb-3">
+                        <div class="flex-grow-1">
+                            <div>
+                                <h4 class="card-title mb-3 border-bottom pb-2">Property Notes</h4>
+                                <span class="text-muted"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="property-notes" style="max-height: 250px; overflow-y: auto;">
+                        @foreach (var note in Model.PropertyNotes)
+                        {
+                            <div class="mb-2 p-2 border-bottom">
+                                <div class="col-12 fs-6 text-end">@note.NoteText</div>
+                                <div class="row">
+                                    <div class="text-end">
+                                        <span class="col-4 text-muted small">@note.CreatedDate.ToString("g")</span> | 
+                                        <span cclass="fw-bold"> by: @note.CreatedBy</span>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                    <form id="add-property-note-form" method="post" action="/Properties/AddPropertyNote">
+                        <input type="hidden" name="PropertyId" value="@Model.PropertyId" />
+                        <input type="hidden" name="PropertyNumber" value="@Model.CustomerNumber" />
+                        <input type="hidden" name="PropertyName" value="@Model.CustomerName" />
+                        <textarea class="form-control mb-2" name="NoteText" rows="2" placeholder="Add a new note..."></textarea>
+                        <button type="submit" class="btn btn-sm btn-outline-primary w-100">Add Note</button>
+                    </form>
+                </div>
+
+            </div>
+        </div>
+        <!-- end card -->
+    </div>
+
+    <!-- Monthly Activity Graph -->
+    <div class="col-xl-8">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title">Activity</h4>
+            </div>
+            <div class="card-body">
+                <div id="column_rotated_labels" data-colors='["--bs-primary"]' class="apex-charts" dir="ltr"></div>
+            </div>
+        </div>
+
+        <!-- Data Bubbles -->
+        <div class="row">
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex">
+                            <div class="flex-shrink-0 align-self-center">
+                                <div class="avatar-sm rounded bg-danger-subtle text-danger d-flex align-items-center justify-content-center">
+                                    <span class="avatar-title">
+                                        <i class="mdi mdi-cash-usd-outline fs-24"></i>
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="flex-grow-1 ms-3">
+                                <p class="text-muted fw-medium mb-2">AR Amount Due</p>
+                                <h4 class="mb-0">@Model.ARAmountDue.ToString("C")</h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex">
+                            <div class="flex-shrink-0 align-self-center">
+                                <div class="avatar-sm rounded bg-warning-subtle text-warning d-flex align-items-center justify-content-center">
+                                    <span class="avatar-title">
+                                        <i class="mdi mdi-timer-sand fs-24"></i>
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="flex-grow-1 ms-3">
+                                <p class="text-muted fw-medium mb-2">Pending Projects</p>
+                                <h4 class="mb-0">@Model.PendingOrders</h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex">
+                            <div class="flex-shrink-0 align-self-center">
+                                <div class="avatar-sm rounded bg-info-subtle text-info d-flex align-items-center justify-content-center">
+                                    <span class="avatar-title">
+                                        <i class="mdi mdi-check-circle-outline"></i>
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="flex-grow-1 ms-3">
+                                <p class="text-muted fw-medium mb-2">Completed Projects</p>
+                                <h4 class="mb-0">@Model.CompletedOrders</h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex">
+                            <div class="flex-shrink-0 align-self-center">
+                                <div class="avatar-sm rounded bg-primary-subtle text-primary d-flex align-items-center justify-content-center">
+                                    <span class="">
+                                        <i class="mdi mdi-chart-line fs-24"></i>
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="flex-grow-1 ms-3">
+                                <p class="text-muted fw-medium mb-2">Total Revenue</p>
+                                <h4 class="mb-0">@Model.TotalRevenue.ToString("C")</h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title">Property Orders</h4>
+            </div>
+            <div class="card-body">
+
+                <table id="propertyOrderTable" class="table table-hover table-bordered table-striped dt-responsive nowrap" style="border-collapse: collapse; border-spacing: 0; width: 100%;">
+                    <thead>
+                        <tr>
+                            <th>Order ID</th>
+                            <th>Order Type</th>
+                            <th>Qty</th>
+                            <th>Unit #</th>
+                            <th>Unit Type</th>
+                            <th>Installed</th>
+                            <th>Paid Date</th>
+                            <th>Class</th>
+                            <th>Description</th>
+                            <th>Ordered By</th>
+                            <th>Status</th>
+                            <th>Location</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var order in Model.WorkOrders)
+                        {
+                        <tr>
+                            <td>
+                                <a href="javascript:void(0)" class="view-order" data-id="@order.OrderID">
+                                    @order.OrderID
+                                </a>
+                            </td>
+                            <td>@order.OrderType</td>
+                            <td>@order.Qty</td>
+                            <td>@order.UnitNumber</td>
+                            <td>@order.UnitType</td>
+                            <td data-order="@DateTime.Parse(order.DeliveryDate).ToString("yyyy-MM-dd")">@order.DeliveryDate</td>
+                            @{
+                                var paidInRaw = order.PaidInFullDate;
+                                string paidInFormatted = "";
+                                if (DateTime.TryParse(paidInRaw, out var paidInDate))
+                                {
+                                    paidInFormatted = paidInDate.ToString("yyyy-MM-dd");
+                                }
+                            }
+                            <td data-order="@paidInFormatted">@paidInRaw</td>
+
+                            <td>@order.ProductClass</td>
+                            <td>@order.ProductDescription</td>
+                            <td>@order.OrderedBy</td>
+                            <td>@order.Status</td>
+                            <td>@order.Location</td>
+                        </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Work Order Details Modal -->
+<div class="modal fade" id="workOrderDetailModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Work Order Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="workOrderDetailContent">
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section scripts{
+
+    <!-- apexcharts -->
+    <script src="~/assets/libs/apexcharts/apexcharts.min.js"></script>
+
+    <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.dataTables.min.css" />
+
+
+    <script>
+        @* C# Razor block to prepare labels and data *@
+        @{
+            var chartLabels = Model.MonthlyInvoices
+                .Where(m => m.InvoiceAmount > 0)
+                .OrderByDescending(m => m.InvoiceMonthKey)
+                .Select(m => $"{m.InvoiceMonth} '{m.InvoiceYear}")
+                .ToList();
+
+            var chartData = Model.MonthlyInvoices
+                .Where(m => m.InvoiceAmount > 0)
+                .OrderByDescending(m => m.InvoiceMonthKey)
+                .Select(m => m.InvoiceAmount)
+                .ToList();
+        }
+
+        var options = {
+            chart: {
+                height: 250,
+                type: 'bar',
+                toolbar: { show: false }
+            },
+            plotOptions: {
+                bar: {
+                    borderRadius: 6,
+                    horizontal: false,
+                    columnWidth: '50%'
+                }
+            },
+            dataLabels: { enabled: false },
+            fill: {
+                type: 'gradient',
+                gradient: {
+                    shade: 'light',
+                    type: "horizontal",
+                    shadeIntensity: 0.5,
+                    gradientToColors: ['#1eac5d'],
+                    inverseColors: false,
+                    opacityFrom: 0.90,
+                    opacityTo: 0.55,
+                    stops: [0, 100]
+                }
+            },
+            colors: ['#28c76f'],
+            series: [{
+                name: 'Invoices',
+                data: @Html.Raw(Json.Serialize(chartData))
+            }],
+            tooltip: {
+                y: {
+                    formatter: function (val) {
+                        return "$" + val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    }
+                }
+            },
+            yaxis: {
+                labels: {
+                    formatter: function (value) {
+                        return value >= 1000
+                            ? "$" + (value / 1000).toFixed(1) + "K"
+                            : "$" + value.toLocaleString();
+                    }
+                }
+            },
+            xaxis: {
+                categories: @Html.Raw(Json.Serialize(chartLabels)),
+                labels: {
+                    rotate: -45,
+                    style: { fontSize: '18px' }
+                }
+            },
+            grid: {
+                borderColor: '#f1f1f1'
+            }
+        };
+
+        var chart = new ApexCharts(document.querySelector("#column_rotated_labels"), options);
+        chart.render();
+    </script>
+
+    <!-- Required datatable js -->
+    <script src="~/assets/libs/datatables.net/js/jquery.dataTables.min.js"></script>
+    <script src="~/assets/libs/datatables.net-bs5/js/dataTables.bootstrap5.min.js"></script>
+
+    <!-- Responsive examples -->
+    <script src="~/assets/libs/datatables.net-responsive/js/dataTables.responsive.min.js"></script>
+    <script src="~/assets/libs/datatables.net-responsive-bs5/js/responsive.bootstrap5.min.js"></script>
+
+    <!-- Datatable init js -->
+    <script src="~/assets/js/pages/datatables-base.init.js"></script>
+
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.5/css/jquery.dataTables.min.css" />
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.5/js/jquery.dataTables.min.js"></script>
+
+    <!-- ✅ Required for export buttons -->
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
+
+    <script>
+        $(document).ready(function () {
+            // Initialize DataTable for the property orders table
+            var propTable = $('#propertyOrderTable').DataTable({
+                order: [
+                    [5,'desc'], // 5 Delivery Date
+                    [1,'asc']   // 1 Order Number
+                ],
+                dom: `
+                  <"top mb-2"P>
+                  <"top d-flex justify-content-between mb-3" lBf>
+                  rt
+                  <"bottom d-flex justify-content-between align-items-center mt-3" ip>
+                `,
+                scrollX: true,
+                scrollY: '500px',
+                scrollCollapse: true,
+                pageLength: 50,
+                buttons: [
+                    {
+                        extend: 'excelHtml5',
+                        text: '<i class="bi bi-file-earmark-excel"></i> Export to Excel',
+                        className: 'btn btn-outline-success rounded-pill shadow-sm me-2'
+                    }
+                ]
+            });
+        });
+    </script>
+    <script>
+        $(document).ready(function () {
+            // Handle click on order ID to load details
+            $('#propertyOrderTable').on('click', '.view-order', function () {
+                const orderId = $(this).data('id');
+
+                $('#workOrderDetailContent').html('<div class="text-center py-5"><div class="spinner-border text-primary"></div></div>');
+                $('#workOrderDetailModal').modal('show');
+
+                $.get(`/Orders/WorkOrderDetailsPartial`, { orderId: orderId }, function (html) {
+                    $('#workOrderDetailContent').html(html);
+                }).fail(function () {
+                    $('#workOrderDetailContent').html('<div class="alert alert-danger">Failed to load work order details.</div>');
+                });
+            });
+        });
+    </script>
+}

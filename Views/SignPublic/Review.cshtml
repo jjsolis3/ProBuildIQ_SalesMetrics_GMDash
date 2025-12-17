@@ -1,0 +1,206 @@
+﻿@* Views/SignPublic/Review.cshtml *@
+@model SalesMetrics.Models.Signing.ReviewVm
+@{
+    ViewData["Title"] = "Review & Sign";
+    var token = (string)ViewBag.Token;
+}
+
+<!-- Display validation errors prominently -->
+@if (!ViewData.ModelState.IsValid)
+{
+    <div class="alert alert-danger">
+        <h4>Please correct the following errors:</h4>
+        <ul>
+            @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+            {
+                <li>@error.ErrorMessage</li>
+            }
+        </ul>
+    </div>
+}
+
+<!-- FIXED: Changed from asp-action to direct action URL -->
+<form action="/sign/@token" method="post" id="signForm">
+    @Html.AntiForgeryToken()
+
+    <!-- Property info (read-only) -->
+    @if (Model.Property != null)
+    {
+        <div class="alert alert-light border mb-3">
+            <div><strong>Property:</strong> @Model.Property.Name</div>
+            <div>@Model.Property.Address, @Model.Property.City, @Model.Property.State @Model.Property.Zip</div>
+            @if (!string.IsNullOrWhiteSpace(Model.Property.Unit))
+            {
+                <div><strong>Unit:</strong> @Model.Property.Unit</div>
+            }
+        </div>
+    }
+
+    <!-- Review body (your template HTML) -->
+    <div class="mb-3">@Html.Raw(Model.HtmlBody)</div>
+
+    <!-- Manager-only: capture tenant -->
+    @if (Model.Recipient.Role == "Manager" && !Model.HasTenantRecipient)
+    {
+        <div class="card mb-3">
+            <div class="card-header">Add Tenant (to receive the consent)</div>
+            <div class="card-body row g-2">
+                <div class="col-md-6">
+                    <label class="form-label">Tenant Full Name</label>
+                    <input name="TenantFullName" class="form-control" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Tenant Email</label>
+                    <input name="TenantEmail" type="email" class="form-control" />
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Consent -->
+    <div class="form-check mb-3">
+        <input class="form-check-input" type="checkbox" id="Accept" name="Accept" value="true">
+        <label class="form-check-label" for="Accept">
+            I have read and agree to the terms, and I adopt the signature below as my electronic signature.
+        </label>
+    </div>
+
+    <!-- Drawn signature -->
+    <div class="mb-3">
+        <label class="form-label">Draw your signature</label>
+        <div class="border rounded p-2">
+            <canvas id="sigPad" style="width:100%;height:120px;"></canvas>
+            <input type="hidden" id="SigData" name="SigData" />
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-secondary mt-2" id="clearSig">Clear</button>
+    </div>
+
+    <!-- Typed name -->
+    <div class="mb-4">
+        <label class="form-label">Type your full name</label>
+        <input class="form-control" id="TypedFullName" name="TypedFullName" />
+    </div>
+
+    <button class="btn btn-success" type="submit" id="submitBtn">Sign & Finish</button>
+</form>
+
+@section Scripts {
+    <script>
+        // Basic canvas setup
+        const canvas = document.getElementById('sigPad');
+        const ctx = canvas.getContext('2d');
+        let drawing = false, hasInk = false;
+
+        function resize() {
+          const r = canvas.getBoundingClientRect();
+          const ratio = window.devicePixelRatio || 1;
+          canvas.width = r.width * ratio;
+          canvas.height = r.height * ratio;
+          ctx.scale(ratio, ratio);
+          ctx.lineWidth = 2;
+          ctx.lineCap = 'round';
+          ctx.strokeStyle = '#000';
+        }
+        resize();
+        window.addEventListener('resize', resize);
+
+        function pos(e) {
+          const rect = canvas.getBoundingClientRect();
+          const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+          const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+          return {x,y};
+        }
+
+        function start(e){
+          e.preventDefault();
+          drawing = true;
+          hasInk = true;
+          const p = pos(e);
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y);
+        }
+
+        function move(e){
+          if(!drawing) return;
+          e.preventDefault();
+          const p = pos(e);
+          ctx.lineTo(p.x, p.y);
+          ctx.stroke();
+        }
+
+        function end(e){
+          if(!drawing) return;
+          e.preventDefault();
+          drawing = false;
+          const dataUrl = canvas.toDataURL('image/png');
+          document.getElementById('SigData').value = dataUrl;
+          console.log('Signature captured, length:', dataUrl.length);
+        }
+
+        canvas.addEventListener('mousedown', start);
+        canvas.addEventListener('mousemove', move);
+        canvas.addEventListener('mouseup', end);
+        canvas.addEventListener('mouseleave', end);
+
+        canvas.addEventListener('touchstart', start);
+        canvas.addEventListener('touchmove', move);
+        canvas.addEventListener('touchend', end);
+        canvas.addEventListener('touchcancel', end);
+
+        document.getElementById('clearSig').addEventListener('click', ()=>{
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          document.getElementById('SigData').value = '';
+          hasInk = false;
+          console.log('Signature cleared');
+        });
+
+        document.getElementById('signForm').addEventListener('submit', function(e){
+          const accept = document.getElementById('Accept').checked;
+          const name = document.getElementById('TypedFullName').value.trim();
+          const sig = document.getElementById('SigData').value;
+
+          console.log('=== FORM SUBMISSION DEBUG ===');
+          console.log('Accept checked:', accept);
+          console.log('Name entered:', name);
+          console.log('Signature data length:', sig ? sig.length : 0);
+          console.log('Has drawn ink:', hasInk);
+
+          // Check if manager needs to add tenant
+          const isTenantSection = document.getElementById('TenantFullName');
+          if (isTenantSection) {
+            const tenantName = document.getElementById('TenantFullName').value.trim();
+            const tenantEmail = document.getElementById('TenantEmail').value.trim();
+            console.log('Tenant name:', tenantName);
+            console.log('Tenant email:', tenantEmail);
+
+            if (!tenantName || !tenantEmail) {
+              e.preventDefault();
+              alert('Please enter the tenant name and email.');
+              return false;
+            }
+          }
+
+          if (!accept) {
+            e.preventDefault();
+            alert('Please check the consent checkbox.');
+            return false;
+          }
+
+          if (!name) {
+            e.preventDefault();
+            alert('Please type your full name.');
+            return false;
+          }
+
+          if (!sig || sig.length < 100) {
+            e.preventDefault();
+            alert('Please draw your signature.');
+            return false;
+          }
+
+          console.log('Form validation passed, submitting...');
+          document.getElementById('submitBtn').disabled = true;
+          document.getElementById('submitBtn').textContent = 'Submitting...';
+        });
+    </script>
+}

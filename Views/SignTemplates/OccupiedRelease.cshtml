@@ -1,0 +1,39 @@
+﻿@model SalesMetrics.Models.Signing.TemplateRenderVm
+
+@{
+    Layout = null;
+}
+
+<div style="font-family:Arial,sans-serif">
+    <h3>Occupied Release Form (v1.4)</h3>
+    <p><strong>Envelope #@Model.Envelope.EnvelopeId</strong></p>
+    <p><strong>Tenant:</strong> @Model.Recipient.FullName</p>
+
+    <p class="text-muted">
+        Envelope #@Model.Envelope.EnvelopeId<br />
+        Tenant: @Model.Order?.TenantName
+    </p>
+
+    <p>
+        <strong>Property:</strong>
+        @Model.Property?.Name<br />
+        @Model.Property?.Address<br />
+        @Model.Property?.City, @Model.Property?.State @Model.Property?.Zip
+    </p>
+
+    <p style="margin:18px 0;">
+        <!-- Replace this with your real release paragraph -->
+        By signing below, I acknowledge and consent to work being performed in the
+        occupied unit and accept responsibility as outlined by the property’s policy.
+        I certify I am authorized to sign this document.
+    </p>
+
+    <!-- (Optional) Echo property info that we’ll also show in the header card -->
+    @if (Model.Property != null)
+    {
+        <p style="color:#555">
+            <strong>Property:</strong> @Model.Property.Name,
+            @Model.Property.Address, @Model.Property.City, @Model.Property.State @Model.Property.Zip
+        </p>
+    }
+</div>

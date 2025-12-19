@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.Extensions.DependencyInjection;
 using SalesMetrics.Data;
 using Microsoft.EntityFrameworkCore;
+using SalesMetrics.Services.Mvc;
+using SalesMetrics.Services.Signing;
 
 var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration.GetConnectionString("SalesMetrics");
@@ -24,6 +26,15 @@ builder.Services.AddSession(options =>
 
 // Register IConfiguration to be accessible in controllers
 builder.Services.AddSingleton<IConfiguration>(builder.Configuration);
+
+// Signing add-on services
+builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection("Smtp"));
+builder.Services.Configure<AppSettings>(builder.Configuration.GetSection("App"));
+builder.Services.AddScoped<IRazorViewToStringRenderer, RazorViewToStringRenderer>();
+builder.Services.AddScoped<IErpMergeService, ErpMergeService>();
+builder.Services.AddScoped<IPdfService, PdfService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<IEnvelopeService, EnvelopeService>();
 
 // Google OAuth + Cookie Auth
 builder.Services.AddAuthentication(options =>

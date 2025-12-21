@@ -1,0 +1,33 @@
+@model SalesMetrics.Models.Reports.ReportCatalogViewModel
+@{
+    ViewData["Title"] = "Reports";
+}
+
+<div class="row mb-3">
+    <div class="col-12">
+        <h2 class="mb-2">Reporting</h2>
+        <p class="text-muted">Choose a report to run. Access is filtered by your role and location.</p>
+    </div>
+</div>
+
+@if (!Model.AvailableReports.Any())
+{
+    <div class="alert alert-warning">No reports are available for your account.</div>
+}
+else
+{
+    <div class="row">
+        @foreach (var report in Model.AvailableReports)
+        {
+            <div class="col-md-6 mb-3">
+                <div class="card h-100">
+                    <div class="card-body d-flex flex-column">
+                        <h5 class="card-title">@report.Name</h5>
+                        <p class="card-text flex-grow-1">@report.Description</p>
+                        <a class="btn btn-primary mt-2" href="@Url.Action("Run", new { id = report.Id })">Run report</a>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}

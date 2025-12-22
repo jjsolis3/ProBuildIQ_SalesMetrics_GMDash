@@ -60,62 +60,48 @@ public sealed class PdfService : IPdfService
         var brush = XBrushes.Black;
 
         // 5) Coordinates (points; 1pt = 1/72in; origin = bottom-left)
-        //    Start with approximations; adjust once by eye.
-        //    Tip: temporarily call DrawMarker(...) to find exact positions.
+        //    Coordinates are based on the SF_OccupiedReleaseForm_1.4.pdf template
+        //    Top section: Property Name, Installation Date, Unit Number
+        //    Bottom section: Property Staff and Resident signature rows
 
-        float left = 72f;            // 1 inch from left
-        float yTop = 720f;           // ~8.6 inches from bottom
-                
-        // tiny POCO to register variant reading from config
+        // Enable debug mode to visualize field positions
         var debug = _db.Database.GetService<IConfiguration>()["Pdf:DebugMarkers"]?.Equals("true", StringComparison.OrdinalIgnoreCase) == true;
         if (debug)
         {
             DrawGrid(gfx, page, 1.0); // 1-inch grid
-
-            // Drop some test markers where you THINK fields should land
-            DrawMarker(gfx, In(1.0), In(8.6)); DrawLabel(gfx, "PropertyName?", In(1.0), In(8.6));
-            DrawMarker(gfx, In(1.0), In(8.35)); DrawLabel(gfx, "InstallDate?", In(1.0), In(8.35));
-            DrawMarker(gfx, In(1.0), In(8.1)); DrawLabel(gfx, "Unit #?", In(1.0), In(8.1));
-
-            // Tenant block guesses
-            DrawMarker(gfx, In(1.0), In(5.8)); DrawLabel(gfx, "TenantName?", In(1.0), In(5.8));
-            DrawMarker(gfx, In(1.0), In(5.55)); DrawLabel(gfx, "TenantPhone?", In(1.0), In(5.55));
-
-            // Signature box guess (x, y of lower-left corner of image)
-            DrawMarker(gfx, In(1.0), In(4.9)); DrawLabel(gfx, "Tenant Sig", In(1.0), In(4.9));
         }
-        // Note: PDF origin is bottom-left, so Y coordinates are "inches from bottom"
 
-        // after
-        DrawText(gfx, fontBold, XBrushes.Black, propertyName, In(1.0), In(8.6));
+        // TOP SECTION - Form fields (aligned with template form lines)
+        // Property Name field - approximately 9.2" from bottom, 1.65" from left
+        DrawText(gfx, font, brush, propertyName, In(1.65), In(9.18));
 
-        // Property Staff section (example)
-        DrawText(gfx, fontBold, brush, $"Property: {propertyName}", left, yTop);
-        DrawText(gfx, font, brush, $"Installation Date: {installDate}", left, yTop - 18);
-        DrawText(gfx, font, brush, $"Unit #: {unitNumber}", left, yTop - 36);
-        DrawText(gfx, font, brush, $"Property Staff: {staffName}", left, yTop - 54);
-        DrawText(gfx, font, brush, $"Date Signed: {staffSignedAt}", left, yTop - 72);
+        // Installation Date field - approximately 8.87" from bottom, 1.65" from left
+        DrawText(gfx, font, brush, installDate, In(1.65), In(8.87));
 
-        // Tenant section (example)
-        float yTenant = 420f;
-        DrawText(gfx, fontBold, brush, $"Tenant: {tenantName}", left, yTenant);
-        DrawText(gfx, font, brush, $"Tenant Phone: {tenantPhone}", left, yTenant - 18);
+        // Unit Number field - approximately 8.57" from bottom, 1.65" from left
+        DrawText(gfx, font, brush, unitNumber, In(1.65), In(8.57));
 
-        // Tenant signature image (drawn). Scale to a nice size.
-        //if (tenantSigFs != null && File.Exists(tenantSigFs))
-        //{
-        //    using var fs = File.OpenRead(tenantSigFs);
-        //    using var img = XImage.FromStream(() => fs); // PdfSharpCore expects a Func<Stream>
-        //    double sigW = 180, sigH = 60;                // width/height in points
-        //    gfx.DrawImage(img, left, yTenant - 80, sigW, sigH);
-        //}
+        // BOTTOM SECTION - Signature rows
+        // Property Staff row (approximately 1.73" from bottom)
+        double staffRowY = In(1.73);
+        DrawText(gfx, font, brush, staffName, In(0.6), staffRowY);                    // Property Staff Name column
+        DrawText(gfx, font, brush, staffSignedAt, In(5.5), staffRowY);               // Date column
+
+        // Resident row (approximately 1.03" from bottom)
+        double residentRowY = In(1.03);
+        DrawText(gfx, font, brush, tenantName, In(0.6), residentRowY);               // Resident Name column
+        DrawText(gfx, font, brush, tenantPhone, In(5.5), residentRowY);              // Resident Phone column
+
+        // Resident signature image (middle column, aligned with Resident row)
+        // Signature should be positioned in the "Resident Signature" column
         if (tenantSigFs != null && File.Exists(tenantSigFs))
         {
             using var fs = File.OpenRead(tenantSigFs);
             using var img = XImage.FromStream(() => fs);
-            double sigW = In(2.5);  // 2.5 inches wide
-            double sigH = In(0.9);  // 0.9 inches tall
-            gfx.DrawImage(img, In(1.0), In(4.9), sigW, sigH);
+            double sigW = In(1.8);   // Signature width to fit in signature column
+            double sigH = In(0.5);   // Signature height to fit in row
+            // Position in middle column, slightly below the baseline to align nicely
+            gfx.DrawImage(img, In(2.6), In(0.88), sigW, sigH);
         }
 
 

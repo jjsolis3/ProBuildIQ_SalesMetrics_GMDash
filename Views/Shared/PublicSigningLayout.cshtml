@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>@ViewData["Title"] | SalesMetrics - Document Signing</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta content="SalesMetrics Document Signing Portal" name="description" />
+    <meta content="SalesMetrics" name="author" />
+    <!-- App favicon -->
+    <link rel="shortcut icon" href="~/assets/images/favicon.ico" asp-append-version="true">
+
+    @RenderSection("styles", required: false)
+
+    <!-- Bootstrap Css -->
+    <link href="~/assets/css/bootstrap.min.css" id="bootstrap-style" rel="stylesheet" type="text/css" asp-append-version="true">
+    <!-- Icons Css -->
+    <link href="~/assets/css/icons.min.css" rel="stylesheet" type="text/css" asp-append-version="true">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <!-- App Css-->
+    <link href="~/assets/css/app.min.css" id="app-style" rel="stylesheet" type="text/css" asp-append-version="true">
+
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .public-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 1.5rem 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+        .public-header .logo-container {
+            text-align: center;
+        }
+        .public-header .logo-container img {
+            height: 50px;
+            filter: brightness(0) invert(1);
+        }
+        .public-header .site-title {
+            color: white;
+            font-size: 1.75rem;
+            font-weight: 600;
+            margin: 0.5rem 0 0 0;
+            text-align: center;
+        }
+        .public-header .site-subtitle {
+            color: rgba(255,255,255,0.9);
+            font-size: 0.95rem;
+            text-align: center;
+            margin-top: 0.25rem;
+        }
+        .content-container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 0 1rem 3rem 1rem;
+        }
+        .document-card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            padding: 2rem;
+        }
+        .page-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid #e2e8f0;
+        }
+    </style>
+</head>
+<body>
+    <!-- Public Header -->
+    <div class="public-header">
+        <div class="container">
+            <div class="logo-container">
+                <img src="~/assets/images/logo-light.png" alt="SalesMetrics Logo">
+                <h1 class="site-title">SalesMetrics</h1>
+                <p class="site-subtitle">ProBuildIQ - Document Signing Portal</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="content-container">
+        <div class="document-card">
+            @if (!string.IsNullOrEmpty(ViewData["Title"]?.ToString()))
+            {
+                <h2 class="page-title">@ViewData["Title"]</h2>
+            }
+            @RenderBody()
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer style="text-align: center; padding: 2rem 0; color: #718096; font-size: 0.875rem;">
+        <div class="container">
+            <p>&copy; @DateTime.Now.Year SalesMetrics. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <!-- JAVASCRIPT -->
+    <script src="~/assets/libs/jquery/jquery.min.js"></script>
+    <script src="~/assets/libs/bootstrap/js/bootstrap.bundle.min.js"></script>
+    <script src="~/assets/libs/metismenu/metisMenu.min.js"></script>
+    <script src="~/assets/libs/simplebar/simplebar.min.js"></script>
+    <script src="~/assets/libs/node-waves/waves.min.js"></script>
+    @RenderSection("scripts", required: false)
+</body>
+</html>

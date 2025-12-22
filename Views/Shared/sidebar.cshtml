@@ -113,8 +113,32 @@
                         <i class="mdi mdi-briefcase-account "></i>
                         <span>Yardi Properties</span>
                     </a>
-                </li>     
-                
+                </li>
+
+                <!-- SIGN & SEND (ENVELOPES) -->
+                <li class="menu-title">✍️ SIGN & SEND</li>
+                <li class="ms-3">
+                    <a href="/SignAdmin/Index">
+                        <i class="fa fa-envelope"></i>
+                        <span>Envelopes</span>
+                    </a>
+                </li>
+                <li class="ms-3">
+                    <a href="/SignAdmin/Create">
+                        <i class="fa fa-paper-plane"></i>
+                        <span>Send Document</span>
+                    </a>
+                </li>
+                @if (roleId == "1" || roleId == "4")
+                {
+                    <li class="ms-3">
+                        <a href="/SignTemplates/Index">
+                            <i class="fa fa-file-alt"></i>
+                            <span>Templates</span>
+                        </a>
+                    </li>
+                }
+
                 <!-- User / Profile -->
                 <li class="menu-title">👤 Account</li>
                 <li class="ms-3">

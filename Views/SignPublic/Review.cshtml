@@ -1,6 +1,7 @@
 ﻿@* Views/SignPublic/Review.cshtml *@
 @model SalesMetrics.Models.Signing.ReviewVm
 @{
+    Layout = "~/Views/Shared/AuthLayout.cshtml";
     ViewData["Title"] = "Review & Sign";
     var token = (string)ViewBag.Token;
 }

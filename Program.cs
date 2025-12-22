@@ -38,6 +38,7 @@ builder.Services.AddSingleton<IConfiguration>(builder.Configuration);
 // Signing add-on services
 builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection("Smtp"));
 builder.Services.Configure<AppSettings>(builder.Configuration.GetSection("App"));
+builder.Services.Configure<CompanyBrandingSettings>(builder.Configuration.GetSection("CompanyBranding"));
 builder.Services.AddScoped<IRazorViewToStringRenderer, RazorViewToStringRenderer>();
 builder.Services.AddScoped<IErpMergeService, ErpMergeService>();
 builder.Services.AddScoped<IPdfService, PdfService>();

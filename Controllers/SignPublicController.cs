@@ -1,5 +1,6 @@
 ﻿// Controllers/SignPublicController.cs
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using SalesMetrics.Services.Signing;
 using SalesMetrics.Models.Signing;
 
@@ -10,11 +11,16 @@ public class SignPublicController : Controller
 {
     private readonly IEnvelopeService _svc;
     private readonly ILogger<SignPublicController> _logger;
+    private readonly CompanyBrandingSettings _branding;
 
-    public SignPublicController(IEnvelopeService svc, ILogger<SignPublicController> logger)
+    public SignPublicController(
+        IEnvelopeService svc,
+        ILogger<SignPublicController> logger,
+        IOptions<CompanyBrandingSettings> branding)
     {
         _svc = svc;
         _logger = logger;
+        _branding = branding.Value;
     }
 
     [HttpGet("{token}")]
@@ -22,10 +28,11 @@ public class SignPublicController : Controller
     {
         _logger.LogInformation("GET Review called with token: {Token}", token);
         var vm = await _svc.GetReviewAsync(token, Request.Headers["User-Agent"], HttpContext.Connection.RemoteIpAddress?.ToString() ?? "n/a");
-        
+
         if (vm == null)
         {
             _logger.LogWarning("Token {Token} is invalid or expired", token);
+            ViewBag.CompanyBranding = _branding;
             return View("InvalidOrExpired");
         }
 
@@ -40,11 +47,13 @@ public class SignPublicController : Controller
             ViewBag.DownloadUrl = downloadUrl;
             ViewBag.RecipientName = vm.Recipient.FullName;
             ViewBag.SignedDate = vm.Recipient.SignedAtUtc.Value.ToLocalTime();
+            ViewBag.CompanyBranding = _branding;
 
             return View("AlreadySigned");
         }
 
         ViewBag.Token = token;
+        ViewBag.CompanyBranding = _branding;
         return View(vm);
     }
 
@@ -69,6 +78,7 @@ public class SignPublicController : Controller
         if (vm is null)
         {
             _logger.LogWarning("Token {Token} not found during POST", token);
+            ViewBag.CompanyBranding = _branding;
             return View("InvalidOrExpired");
         }
 
@@ -95,6 +105,7 @@ public class SignPublicController : Controller
         {
             _logger.LogWarning("Form validation failed, returning view");
             ViewBag.Token = token;
+            ViewBag.CompanyBranding = _branding;
             return View(vm);
         }
 
@@ -106,6 +117,7 @@ public class SignPublicController : Controller
                 _logger.LogWarning("Manager validation failed: Tenant info missing");
                 ModelState.AddModelError("", "Please enter the tenant name and email.");
                 ViewBag.Token = token;
+                ViewBag.CompanyBranding = _branding;
                 return View(vm);
             }
 
@@ -141,6 +153,7 @@ public class SignPublicController : Controller
     {
         _logger.LogInformation("Signed page displayed, download URL: {Url}", url ?? "none");
         ViewBag.DownloadUrl = url;
+        ViewBag.CompanyBranding = _branding;
         return View();
     }
 }

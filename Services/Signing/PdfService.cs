@@ -112,7 +112,7 @@ public sealed class PdfService : IPdfService
         // Optional: audit footer/hash (once you compute final bytes, you can re-open and stamp hash)
         // Here we add a placeholder text (hash added after save is tricky). You can also write the
         // envelope/recipient IDs as audit anchors.
-        DrawSmall(gfx, $"Envelope #{env.EnvelopeId}", left, 36);
+        DrawSmall(gfx, $"Envelope #{env.EnvelopeId}", In(1.0), 36);
 
         // 6) Save to bytes
         using var ms = new MemoryStream();

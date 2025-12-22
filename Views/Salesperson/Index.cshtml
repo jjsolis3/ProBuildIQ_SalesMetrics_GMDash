@@ -17,7 +17,7 @@
         }
 
         .border-left-divider {
-            border-left: 3px solid #f57c00 !important; /* Bootstrap light gray */
+            border-left: 3px solid #f57c00 !important;
         }
 
         .Pos-Diff {
@@ -52,6 +52,14 @@
                     width: 300px;
                 }
 
+        /* NEW: Styles for Lost & Returning Customers section */
+        .lost-customer-card {
+            border-left: 4px solid #ffc107;
+        }
+
+        .rep-change-indicator {
+            font-size: 0.8rem;
+        }
     </style>
 }
 
@@ -89,7 +97,6 @@
     {
         <div class="col-xl-4">
             <div class="card overflow-hidden text-center">
-
                 <div class="card-body">
                     <div class="mb-3">
                         <img src="~/assets/images/users/@($"{Model.UserProfile.FirstName}{Model.UserProfile.LastName}.jpg")"
@@ -114,7 +121,6 @@
                                     <th><i class="mdi mdi-email text-primary me-2"></i> Email:</th>
                                     <td>@Model.UserProfile?.Email</td>
                                 </tr>
-
                                 <tr>
                                     <th><i class="mdi mdi-map-marker text-primary me-2"></i> Location:</th>
                                     <td>@Model.UserProfile?.LocationName()</td>
@@ -146,7 +152,6 @@
                     </div>
                 </div>
             </div>
-            <!-- end card -->
         </div>
 
         <div class="col-xl-8">
@@ -160,7 +165,8 @@
                         <div class="card shadow p-2 mb-2">
                             <h4 class="mb-3">
                                 Monthly Performance Summary <i class="fas fa-info-circle text-primary" data-bs-toggle="modal" data-bs-target="#goalInfoModal"></i><br />
-                            <small class="text-muted">( @Model.StartDate.ToShortDateString() - @Model.EndDate.ToShortDateString() )</small></h4>
+                                <small class="text-muted">( @Model.StartDate.ToShortDateString() - @Model.EndDate.ToShortDateString() )</small>
+                            </h4>
 
                             @if (Model.Metrics?.PerformanceKPI?.MonthlyPerformance != null && Model.Metrics.PerformanceKPI.MonthlyPerformance.Any())
                             {
@@ -209,10 +215,10 @@
                             }
                         </div>
                     }
-
                 </div>
             </div>
         </div>
+
         @if (Model.Metrics != null)
         {
             <div class="col-12">
@@ -306,11 +312,153 @@
                         </table>
                     </div>
                 </div>
-            </div>
-        }
-        else
-        {
 
+                @* NEW SECTION: Lost & Returning Customers *@
+                @if (Model.Metrics?.LostAndReturningCustomers != null && Model.Metrics.LostAndReturningCustomers.TotalReturningCustomers > 0)
+                {
+                    <div class="card mt-3 lost-customer-card">
+                        <div class="card-header bg-warning">
+                            <h5 class="card-title text-dark mb-0">
+                                <i class="fas fa-user-clock me-2"></i>Lost & Returning Customers Analysis
+                                <i class="fas fa-info-circle text-primary ms-2" data-bs-toggle="modal" data-bs-target="#lostCustomerInfoModal"></i>
+                            </h5>
+                        </div>
+                    </div>
+
+                    <!-- Summary Cards -->
+                    <div class="row text-center justify-content-between">
+                        <div class="col-md-2">
+                            <div class="card card-animate border-warning">
+                                <div class="card-body">
+                                    <p class="text-muted mb-1 fs-6">Returning Customers</p>
+                                    <h4 class="mb-0 text-warning fw-bold">@Model.Metrics.LostAndReturningCustomers.TotalReturningCustomers</h4>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="card card-animate border-danger">
+                                <div class="card-body">
+                                    <p class="text-muted mb-1 fs-6">Salesperson Changed</p>
+                                    <h4 class="mb-0 text-danger fw-bold">@Model.Metrics.LostAndReturningCustomers.CustomersWithSalespersonChange</h4>
+                                    <small class="text-muted">(@Model.Metrics.LostAndReturningCustomers.PercentageWithSalespersonChange.ToString("F1")%)</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="card card-animate border-success">
+                                <div class="card-body">
+                                    <p class="text-muted mb-1 fs-6">Same Salesperson</p>
+                                    <h4 class="mb-0 text-success fw-bold">@Model.Metrics.LostAndReturningCustomers.CustomersWithSameSalesperson</h4>
+                                    <small class="text-muted">(@((100 - Model.Metrics.LostAndReturningCustomers.PercentageWithSalespersonChange).ToString("F1"))%)</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card card-animate border-info">
+                                <div class="card-body">
+                                    <p class="text-muted mb-1 fs-6">Revenue Recovered</p>
+                                    <h4 class="mb-0 text-info fw-bold">$@Model.Metrics.LostAndReturningCustomers.TotalRevenueRecovered.ToString("N0")</h4>
+                                    <small class="text-muted">Avg: $@Model.Metrics.LostAndReturningCustomers.AverageReturningOrderValue.ToString("N0")</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card card-animate border-secondary">
+                                <div class="card-body">
+                                    <p class="text-muted mb-1 fs-6">Average Gap</p>
+                                    <h4 class="mb-0 text-secondary fw-bold">@Model.Metrics.LostAndReturningCustomers.AverageGapInMonths.ToString("F1")</h4>
+                                    <small class="text-muted">months inactive</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Detailed Customer Table -->
+                    <div class="card mt-2">
+                        <div class="card-header bg-warning">
+                            <h5 class="card-title text-dark mb-0">Customer Details - Lost & Returned</h5>
+                        </div>
+                        <div class="card-body">
+                            <table id="lostReturningCustomersTable" class="table table-hover table-striped table-bordered dt-responsive w-100">
+                                <thead>
+                                    <tr>
+                                        <th>Customer</th>
+                                        <th>Management Co</th>
+                                        <th>Last Order Before Gap</th>
+                                        <th>Previous Rep</th>
+                                        <th>Gap (Months)</th>
+                                        <th>Returned Date</th>
+                                        <th>Current Rep</th>
+                                        <th>Rep Changed?</th>
+                                        <th>Orders Since Return</th>
+                                        <th>Revenue Recovered</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var customer in Model.Metrics.LostAndReturningCustomers.CustomerDetails)
+                                    {
+                                        <tr class="@(customer.SalespersonChanged ? "table-warning" : "table-light")">
+                                            <td>
+                                                <a asp-controller="Properties" asp-action="PropertyDetails" asp-route-id="@customer.CustomerId">
+                                                    @customer.CustomerName
+                                                </a>
+                                            </td>
+                                            <td>@customer.ManagementCompany</td>
+                                            <td>
+                                                @customer.LastOrderBeforeGap.ToShortDateString()
+                                                <br><small class="text-muted">$@customer.LastOrderAmount.ToString("N0")</small>
+                                            </td>
+                                            <td>@customer.PreviousSalesperson</td>
+                                            <td>
+                                                <span class="badge bg-@(customer.MonthsInactive > 24 ? "danger" : customer.MonthsInactive > 18 ? "warning" : "secondary")">
+                                                    @customer.MonthsInactive
+                                                </span>
+                                            </td>
+                                            <td>
+                                                @customer.FirstOrderAfterReturn.ToShortDateString()
+                                                <br><small class="text-muted">$@customer.ReturningOrderAmount.ToString("N0")</small>
+                                            </td>
+                                            <td>@customer.ReturningSalesperson</td>
+                                            <td>
+                                                @if (customer.SalespersonChanged)
+                                                {
+                                                    <span class="badge bg-danger rep-change-indicator">
+                                                        <i class="fas fa-exchange-alt"></i> Changed
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-success rep-change-indicator">
+                                                        <i class="fas fa-check"></i> Same
+                                                    </span>
+                                                }
+                                            </td>
+                                            <td class="text-center">@customer.OrdersSinceReturn</td>
+                                            <td class="text-end fw-bold text-success">$@customer.TotalAmountSinceReturn.ToString("N0")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+                else if (Model.Metrics != null)
+                {
+                    <!-- Show message when no lost/returning customers are found -->
+                    <div class="card mt-3">
+                        <div class="card-header bg-success">
+                            <h5 class="card-title text-white mb-0">
+                                <i class="fas fa-thumbs-up me-2"></i>Lost & Returning Customers Analysis
+                            </h5>
+                        </div>
+                        <div class="card-body text-center py-4">
+                            <i class="fas fa-smile-beam fa-3x text-success mb-3"></i>
+                            <h6 class="text-muted">Great news! No customers were lost and returned during this period.</h6>
+                            <p class="text-muted small">This indicates good customer retention for the selected salesperson and date range.</p>
+                        </div>
+                    </div>
+                }
+            </div>
         }
     }
     else
@@ -328,8 +476,7 @@
     }
 </div>
 
-<!-- MODAL HTML -->
-<!-- Tool Tip Modal -->
+<!-- EXISTING MODAL -->
 <div class="modal fade" id="goalInfoModal" tabindex="-1" aria-labelledby="goalInfoModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-sm">
         <div class="modal-content">
@@ -340,15 +487,69 @@
             <div class="modal-body">
                 <p><strong>Month Goal</strong> = Avg of last 6 full months' sales × 1.1</p>
                 <p><strong>Expected Avg</strong> = Avg Order Amount × Number of Orders</p>
-                
                 <p>Partial or $0 months are excluded from the average.</p>
             </div>
         </div>
     </div>
 </div>
 
-@section scripts {
+<!-- NEW MODAL: Information Modal for Lost Customer Analysis -->
+<div class="modal fade" id="lostCustomerInfoModal" tabindex="-1" aria-labelledby="lostCustomerInfoModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title text-dark" id="lostCustomerInfoModalLabel">
+                    <i class="fas fa-info-circle me-2"></i>Lost & Returning Customer Analysis
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <h6 class="fw-bold mb-3">What This Analysis Shows:</h6>
+                <ul class="list-unstyled">
+                    <li class="mb-2">
+                        <i class="fas fa-clock text-warning me-2"></i>
+                        <strong>Lost Customers:</strong> Customers with 14+ months between orders
+                    </li>
+                    <li class="mb-2">
+                        <i class="fas fa-undo text-info me-2"></i>
+                        <strong>Returning Customers:</strong> Previously lost customers who placed new orders
+                    </li>
+                    <li class="mb-2">
+                        <i class="fas fa-exchange-alt text-danger me-2"></i>
+                        <strong>Salesperson Changes:</strong> When customers returned with a different salesperson
+                    </li>
+                    <li class="mb-2">
+                        <i class="fas fa-dollar-sign text-success me-2"></i>
+                        <strong>Revenue Recovery:</strong> Total sales from returning customers
+                    </li>
+                </ul>
 
+                <hr>
+
+                <h6 class="fw-bold mb-3">Key Insights:</h6>
+                <ul class="list-unstyled">
+                    <li class="mb-2">
+                        <i class="fas fa-lightbulb text-primary me-2"></i>
+                        High salesperson change rates may indicate relationship issues
+                    </li>
+                    <li class="mb-2">
+                        <i class="fas fa-target text-success me-2"></i>
+                        Customers returning to the same rep show strong relationship building
+                    </li>
+                    <li class="mb-2">
+                        <i class="fas fa-chart-line text-info me-2"></i>
+                        Longer gaps suggest deeper service issues or competitive losses
+                    </li>
+                </ul>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section scripts {
     <!-- Load jQuery (required by Daterangepicker) -->
     <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
 
@@ -364,7 +565,7 @@
 
     <script src="~/assets/js/shared/date-range.init.js"></script>
 
-    <!-- Bootstrap 5 + DataTables + Responsive Extensions (LOCAL or CDN — pick ONE) -->
+    <!-- Bootstrap 5 + DataTables + Responsive Extensions -->
     <link href="~/assets/libs/datatables.net-bs5/css/dataTables.bootstrap5.min.css" rel="stylesheet" />
     <link href="~/assets/libs/datatables.net-responsive-bs5/css/responsive.bootstrap5.min.css" rel="stylesheet" />
 
@@ -396,6 +597,7 @@
         let salesRepName = '@(Model.UserProfile?.FullName?.Replace("'", "\\'") ?? "")';
 
         $(document).ready(function () {
+            // Initialize the existing property details table
             $('#propertyDetailsTable').DataTable({
                 order: [[0, 'asc']],
                 responsive: true,
@@ -422,10 +624,8 @@
                         filename: 'New Accounts Report by Salesperson - ' + salesRepName,
                         exportOptions: {
                             format: {
-                                body: function (data, row, column, node)
-                                {
-                                    if (column === 6)
-                                    {
+                                body: function (data, row, column, node) {
+                                    if (column === 6) {
                                         const $select = $('<div>' + data + '</div>').find('select');
                                         return $select.length ? $select.find('option:selected').text() : data;
                                     }
@@ -434,10 +634,51 @@
                             }
                         }
                     }
-                ] // <-- CLOSE buttons array
-            }); // <-- CLOSE DataTable()
+                ]
+            });
+
+            // NEW: Initialize the lost/returning customers table
+            if ($('#lostReturningCustomersTable').length) {
+                $('#lostReturningCustomersTable').DataTable({
+                    order: [[5, 'desc']], // Order by return date descending
+                    responsive: true,
+                    paging: true,
+                    pageLength: 10,
+                    searching: true,
+                    dom: `
+                        <"top custom-table-header mb-2"lBf>
+                        rt
+                        <"bottom d-flex justify-content-between align-items-center mt-2"ip>
+                    `,
+                    scrollX: true,
+                    columnDefs: [
+                        { targets: [4], className: 'text-center' }, // Center gap months
+                        { targets: [7], className: 'text-center' }, // Center rep changed
+                        { targets: [8], className: 'text-center' }, // Center orders count
+                        { targets: [9], className: 'text-end' }     // Right-align revenue
+                    ],
+                    buttons: [
+                        {
+                            extend: 'excelHtml5',
+                            text: '<i class="bi bi-file-earmark-excel"></i> Export Lost & Returning Customers',
+                            className: 'btn btn-outline-warning rounded-pill shadow-sm me-3',
+                            title: 'Lost & Returning Customers Report | ' + salesRepName,
+                            filename: 'Lost & Returning Customers - ' + salesRepName,
+                            exportOptions: {
+                                format: {
+                                    body: function (data, row, column, node) {
+                                        // Clean up HTML content for export
+                                        return $('<div>').html(data).text();
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                });
+            }
         });
     </script>
+
     @if (Model?.Metrics?.PerformanceKPI?.MonthlyPerformance?.Any() == true)
     {
         var monthly = Model.Metrics.PerformanceKPI.MonthlyPerformance;

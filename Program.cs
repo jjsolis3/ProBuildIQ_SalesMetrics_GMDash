@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.Extensions.DependencyInjection;
 using SalesMetrics.Data;
 using Microsoft.EntityFrameworkCore;
+using SalesMetrics.Services.Erp;
+using SalesMetrics.Services.Reports;
 using SalesMetrics.Services.Mvc;
 using SalesMetrics.Services.Signing;
 
@@ -11,6 +13,12 @@ var connectionString = builder.Configuration.GetConnectionString("SalesMetrics")
 
 // Add services to the container
 builder.Services.AddControllersWithViews();
+builder.Services.AddSingleton<IReportCatalog, ReportCatalog>();
+builder.Services.AddSingleton<IReportRunner, ReportRunner>();
+builder.Services.AddSingleton<IReportAuthorizationService, ReportAuthorizationService>();
+builder.Services.AddSingleton<IReportExportService, ReportExportService>();
+builder.Services.AddSingleton<IErpDataClient, SqlServerErpDataClient>();
+builder.Services.AddSingleton<HttpErpDataClient>();
 
 // Add EF Core DbContext for SalesMetrics
 builder.Services.AddDbContext<SalesMetricsDbContext>(options =>

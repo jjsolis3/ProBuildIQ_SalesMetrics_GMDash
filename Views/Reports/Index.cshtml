@@ -1,11 +1,333 @@
-@model SalesMetrics.Models.Reports.ReportCatalogViewModel
+﻿@model SalesMetrics.Models.Reports.ReportCatalogViewModel
+@{
+    ViewData["Title"] = "Reports";
+}
+
+<style>
+    /* Custom styling for the reports catalog page */
+    .reports-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 16px;
+        padding: 1rem 1rem;
+        margin-bottom: 2rem;
+        color: white;
+        box-shadow: 0 10px 40px rgba(102, 126, 234, 0.15);
+    }
+
+        .reports-header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .reports-header p {
+            font-size: 1.1rem;
+            opacity: 0.95;
+            margin-bottom: 0;
+        }
+
+    .search-box {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    }
+
+    .search-input-wrapper {
+        position: relative;
+    }
+
+        .search-input-wrapper .search-icon {
+            position: absolute;
+            left: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #6c757d;
+            pointer-events: none;
+        }
+
+        .search-input-wrapper input {
+            padding-left: 3rem;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+            .search-input-wrapper input:focus {
+                border-color: #667eea;
+                box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.15);
+            }
+
+    .report-card {
+        border: none;
+        border-radius: 12px;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        overflow: hidden;
+        height: 100%;
+        background: white;
+    }
+
+        .report-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
+        }
+
+    .report-card-header {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        padding: 1.5rem;
+        border-bottom: 2px solid #dee2e6;
+    }
+
+    .report-icon {
+        width: 48px;
+        height: 48px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 1.5rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+    }
+
+    .report-card-title {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #1a1a2e;
+        margin-bottom: 0;
+    }
+
+    .report-card-body {
+        padding: 1.5rem;
+    }
+
+    .report-card-description {
+        color: #6c757d;
+        font-size: 0.95rem;
+        line-height: 1.6;
+        margin-bottom: 1.5rem;
+        min-height: 3rem;
+    }
+
+    .report-card .btn-run {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+        border-radius: 8px;
+        padding: 0.75rem 1.5rem;
+        font-weight: 600;
+        color: white;
+        transition: all 0.3s ease;
+        width: 100%;
+        text-transform: uppercase;
+        font-size: 0.875rem;
+        letter-spacing: 0.5px;
+    }
+
+        .report-card .btn-run:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(102, 126, 234, 0.3);
+        }
+
+    .report-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+    }
+
+    .report-badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+
+    .badge-roles {
+        background: #e3f2fd;
+        color: #1976d2;
+    }
+
+    .badge-locations {
+        background: #f3e5f5;
+        color: #7b1fa2;
+    }
+
+    .no-reports {
+        text-align: center;
+        padding: 4rem 2rem;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    }
+
+    .no-reports-icon {
+        font-size: 4rem;
+        color: #dee2e6;
+        margin-bottom: 1rem;
+    }
+
+    .no-results {
+        text-align: center;
+        padding: 3rem 2rem;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        display: none;
+    }
+
+    .no-results-icon {
+        font-size: 3rem;
+        color: #dee2e6;
+        margin-bottom: 1rem;
+    }
+</style>
+
+<div class="reports-header">
+    <h1>📊 Reports Center</h1>
+    <p>Access powerful business intelligence reports tailored to your role and location</p>
+</div>
+
+@if (!Model.AvailableReports.Any())
+{
+    <div class="no-reports">
+        <div class="no-reports-icon">📋</div>
+        <h3>No Reports Available</h3>
+        <p class="text-muted">No reports are currently available for your account. Please contact your administrator if you need access.</p>
+    </div>
+}
+else
+{
+    <div class="search-box">
+        <div class="search-input-wrapper">
+            <svg class="search-icon" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
+                <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z" />
+            </svg>
+            <input type="text"
+                   id="reportSearch"
+                   class="form-control form-control-lg"
+                   placeholder="Search reports by name or description..."
+                   autocomplete="off">
+        </div>
+    </div>
+
+    <div id="reportGrid" class="row g-4">
+        @foreach (var report in Model.AvailableReports)
+        {
+            <div class="col-md-6 col-lg-4 report-item"
+                 data-name="@report.Name.ToLower()"
+                 data-description="@report.Description.ToLower()">
+                <div class="report-card">
+                    <div class="report-card-header">
+                        <div class="report-icon">
+                            📈
+                        </div>
+                        <h5 class="report-card-title">@report.Name</h5>
+                    </div>
+                    <div class="report-card-body">
+                        <p class="report-card-description">@report.Description</p>
+
+                        <div class="report-meta">
+                            @if (report.AllowedRoles.Any())
+                            {
+                                <span class="report-badge badge-roles">
+                                    @report.AllowedRoles.Count() @(report.AllowedRoles.Count() == 1 ? "Role" : "Roles")
+                                </span>
+                            }
+                            @if (report.AllowedLocations.Any())
+                            {
+                                <span class="report-badge badge-locations">
+                                    @report.AllowedLocations.Count() @(report.AllowedLocations.Count() == 1 ? "Location" : "Locations")
+                                </span>
+                            }
+                        </div>
+
+                        <a class="btn btn-run" href="@Url.Action("Run", new { id = report.Id })">
+                            Run Report →
+                        </a>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <div id="noResults" class="no-results">
+        <div class="no-results-icon">🔍</div>
+        <h4>No Reports Found</h4>
+        <p class="text-muted">Try adjusting your search terms</p>
+    </div>
+}
+
+@section Scripts {
+    <script>
+        // Client-side search functionality for filtering reports
+        // This provides instant feedback without needing a server roundtrip
+        document.addEventListener('DOMContentLoaded', function() {
+            const searchInput = document.getElementById('reportSearch');
+            const reportGrid = document.getElementById('reportGrid');
+            const noResults = document.getElementById('noResults');
+
+            if (searchInput) {
+                // Add an event listener that fires on every keystroke
+                searchInput.addEventListener('input', function() {
+                    // Get the search query and convert to lowercase for case-insensitive search
+                    const query = this.value.toLowerCase().trim();
+
+                    // Get all report cards from the DOM
+                    const reportItems = document.querySelectorAll('.report-item');
+                    let visibleCount = 0;
+
+                    // Loop through each report card
+                    reportItems.forEach(function(item) {
+                        // Get the searchable data attributes (name and description)
+                        const name = item.getAttribute('data-name');
+                        const description = item.getAttribute('data-description');
+
+                        // Check if the query matches either name or description
+                        // We use indexOf to check if the query appears anywhere in the text
+                        const matches = name.indexOf(query) !== -1 || description.indexOf(query) !== -1;
+
+                        // Show or hide the card based on match
+                        if (matches) {
+                            item.style.display = 'block';
+                            visibleCount++;
+                        } else {
+                            item.style.display = 'none';
+                        }
+                    });
+
+                    // Show "no results" message if no reports match
+                    if (visibleCount === 0 && query !== '') {
+                        noResults.style.display = 'block';
+                        reportGrid.style.display = 'none';
+                    } else {
+                        noResults.style.display = 'none';
+                        reportGrid.style.display = 'flex';
+                    }
+                });
+            }
+        });
+    </script>
+}
+
+
+
+
+@* @model SalesMetrics.Models.Reports.ReportCatalogViewModel
 @{
     ViewData["Title"] = "Reports";
 }
 
 <div class="row mb-3">
     <div class="col-12">
-        <h2 class="mb-2">Reporting</h2>
+        <h2 class="mb-2">Reports</h2>
         <p class="text-muted">Choose a report to run. Access is filtered by your role and location.</p>
     </div>
 </div>
@@ -31,3 +353,4 @@ else
         }
     </div>
 }
+ *@

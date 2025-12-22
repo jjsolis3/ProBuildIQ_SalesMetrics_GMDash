@@ -15,3 +15,11 @@ public sealed class AppSettings
 {
     public string BaseUrl { get; set; } = default!;
 }
+
+public sealed class CompanyBrandingSettings
+{
+    public string CompanyName { get; set; } = "SalesMetrics";
+    public string LogoUrl { get; set; } = "/assets/images/logo-light.png";
+    public string? Website { get; set; }
+    public string? Phone { get; set; }
+}

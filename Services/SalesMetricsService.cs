@@ -2,7 +2,7 @@
 
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Caching.Memory;
-using SalesMetrics.Controllers;
+//using SalesMetrics.Controllers;
 using SalesMetrics.Models;
 using SalesMetrics.Services.Helpers;
 using System.Data;

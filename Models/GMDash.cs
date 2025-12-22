@@ -40,6 +40,10 @@ namespace SalesMetrics.Models
         public decimal TotalRegularOrdersAmount => TotalOrderAmount - OnlineOrderAmount;
         public string TotalRegularOrderAmountFormatted => TotalRegularOrdersAmount.ToString("C");
 
+        public int OpenOrders { get; set; }
+        public decimal OpenOrderAmount { get; set; }
+        public string OpenOrdersAmountFormatted => OpenOrderAmount.ToString("C");
+
         public double OnlineOrderPercentage => TotalOrders > 0
             ? ((double)OnlineOrderAmount / (double)TotalOrderAmount) * 100 
             : 0;

@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
+using SalesMetrics.Domain.Signing;
+using SalesMetrics.Infrastructure.EF.Configurations.Signing;
 using SalesMetrics.Models.EFCore;
 
 namespace SalesMetrics.Data;
@@ -27,6 +29,13 @@ public partial class SalesMetricsDbContext : DbContext
     public virtual DbSet<UserEntity> Users { get; set; }
 
     public virtual DbSet<YardiPropertyEntity> YardiProperties { get; set; }
+
+    public DbSet<SignTemplate> SignTemplates { get; set; } = default!;
+    public DbSet<SignEnvelope> SignEnvelopes { get; set; } = default!;
+    public DbSet<SignRecipient> SignRecipients { get; set; } = default!;
+    public DbSet<SignEvent> SignEvents { get; set; } = default!;
+    public DbSet<SignAttachment> SignAttachments { get; set; } = default!;
+    public DbSet<SignField> SignFields { get; set; } = default!;
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -191,6 +200,12 @@ public partial class SalesMetricsDbContext : DbContext
             entity.Property(e => e.ImportedBy).HasMaxLength(100);
         });
 
+        modelBuilder.ApplyConfiguration(new SignTemplateConfiguration());
+        modelBuilder.ApplyConfiguration(new SignEnvelopeConfiguration());
+        modelBuilder.ApplyConfiguration(new SignRecipientConfiguration());
+        modelBuilder.ApplyConfiguration(new SignEventConfiguration());
+        modelBuilder.ApplyConfiguration(new SignAttachmentConfiguration());
+        modelBuilder.ApplyConfiguration(new SignFieldConfiguration());
 
         OnModelCreatingPartial(modelBuilder);
     }

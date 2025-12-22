@@ -22,8 +22,6 @@ namespace SalesMetrics.Models
         public TaskModalViewModel PendingModal { get; set; }
     }
 
-
-
     public class SalesTask
     {
         public int TaskID { get; set; }
@@ -46,6 +44,7 @@ namespace SalesMetrics.Models
         public int? CreatedById { get; set; } // User ID of the creator
         // add Google Sync Bit [IsSyncedToGoogle]
         public bool IsSyncedToGoogle { get; set; } // Indicates if the task is synced with Google Calendar
+        public string? Source { get; set; }
 
     }
 

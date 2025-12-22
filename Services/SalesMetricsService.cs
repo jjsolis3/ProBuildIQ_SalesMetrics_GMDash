@@ -31,7 +31,9 @@ namespace SalesMetrics.Services
 
             try
             {
-                var (startDate, endDate) = DateRangeHelper.GetRange(range);
+                var dateRange = DateRangeHelper.GetRange(range);
+                DateTime startDate = dateRange.StartDate;
+                DateTime endDate = dateRange.EndDate;
                 var cacheKey = $"sales_metrics_{range}_{locationId}_{whsId}_{DateTime.Today:yyyyMMdd}";
 
                 if (_cache.TryGetValue(cacheKey, out List<GMBranchSalesMetricsViewModel> cachedResult))

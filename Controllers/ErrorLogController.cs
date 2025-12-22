@@ -185,7 +185,18 @@ namespace SalesMetrics.Controllers
                     .OrderByDescending(g => g.Count())
                     .Take(10)
                     .ToDictionary(g => g.Key, g => g.Count()),
-                RecentErrors = recentErrors.Take(10).ToList()
+                RecentErrors = recentErrors
+                    .Take(10)
+                    .Select(e => new ErrorLogEntry
+                    {
+                        ErrorID = (int)e.ErrorID,
+                        Timestamp = e.Timestamp,
+                        Level = e.Level,
+                        Message = e.Message,
+                        Controller = e.Controller ?? string.Empty,
+                        IsResolved = e.IsResolved,
+                    })
+                    .ToList()
             };
 
             return View(dashboard);

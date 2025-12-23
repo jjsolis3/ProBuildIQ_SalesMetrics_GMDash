@@ -37,8 +37,42 @@
         </div>
     }
 
-    <!-- Review body (your template HTML) -->
-    <div class="mb-3">@Html.Raw(Model.HtmlBody)</div>
+    <!-- Document Preview Section -->
+    <div class="pdf-preview mb-4">
+        <div class="pdf-preview-header">
+            <h5>
+                <i class="bi bi-file-earmark-text"></i> Document Preview
+            </h5>
+        </div>
+        <div class="pdf-preview-body">
+            <!-- Option 1: Display the HTML body content -->
+            <div class="document-content">
+                @Html.Raw(Model.HtmlBody)
+            </div>
+
+            <!-- Option 2: If you want to show the actual PDF template as an image
+                 Uncomment this section and add a controller action to return the PDF as an image
+            <div class="text-center">
+                <img src="/sign/preview/@ViewBag.Token" alt="Document Preview" class="img-fluid" />
+            </div>
+            -->
+
+            <!-- Option 3: Embed the PDF template (requires PDF file URL)
+                 Uncomment if you have a URL to the base PDF template
+            <iframe src="@Url.Content("~/Content/Templates/SF_OccupiedReleaseForm_1.4.pdf")"
+                    class="pdf-embed"
+                    type="application/pdf">
+                <p>Your browser doesn't support PDF embedding.
+                   <a href="@Url.Content("~/Content/Templates/SF_OccupiedReleaseForm_1.4.pdf")" target="_blank">
+                       Click here to view the PDF
+                   </a>
+                </p>
+            </iframe>
+            -->
+        </div>
+    </div>
+
+    <!-- Property Info (below document preview for better UX) -->
 
     <!-- Manager-only: capture tenant -->
     @if (Model.Recipient.Role == "Manager" && !Model.HasTenantRecipient)

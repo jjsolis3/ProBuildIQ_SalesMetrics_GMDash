@@ -184,7 +184,87 @@
         margin-bottom: 1rem;
         opacity: 0.5;
     }
+
+    /* Loading overlay styles */
+    .loading-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.7);
+        z-index: 9999;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .loading-overlay.active {
+        display: flex;
+    }
+
+    .loading-content {
+        background: white;
+        border-radius: 16px;
+        padding: 3rem;
+        text-align: center;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        max-width: 400px;
+    }
+
+    .loading-spinner {
+        width: 60px;
+        height: 60px;
+        border: 6px solid #f3f3f3;
+        border-top: 6px solid #667eea;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 1.5rem;
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    .loading-text {
+        font-size: 1.2rem;
+        font-weight: 600;
+        color: #1a1a2e;
+        margin-bottom: 0.5rem;
+    }
+
+    .loading-subtext {
+        font-size: 0.9rem;
+        color: #6c757d;
+    }
+
+    /* Row highlighting for commission/margin gates */
+    .row-warning {
+        background-color: #fff3cd !important;
+    }
+
+    .row-danger {
+        background-color: #f8d7da !important;
+    }
+
+    .results-table tbody tr.row-warning:hover {
+        background-color: #ffe69c !important;
+    }
+
+    .results-table tbody tr.row-danger:hover {
+        background-color: #f5c2c7 !important;
+    }
 </style>
+
+<!-- Loading Overlay -->
+<div id="loadingOverlay" class="loading-overlay">
+    <div class="loading-content">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Generating Report...</div>
+        <div class="loading-subtext">Please wait while we process your request</div>
+    </div>
+</div>
 
 <div class="report-header">
     <h2>@Model.Definition?.Name</h2>
@@ -212,7 +292,7 @@
         📋 Report Parameters
     </div>
     <div class="card-body">
-        <form asp-action="Run" method="post">
+        <form id="reportForm" asp-action="Run" method="post">
             <input type="hidden" name="DefinitionId" value="@Model.Definition?.Id" />
             <div class="row">
                 <div class="col-md-3 mb-3">
@@ -309,7 +389,9 @@
                 <tbody>
                     @foreach (var row in Model.Rows)
                     {
-                        <tr>
+                        var meetsCommissionGate = row.ContainsKey("MeetsCommissionGate") ? row["MeetsCommissionGate"]?.ToString() : "YES";
+                        var meetsTargetMargin = row.ContainsKey("MeetsTargetMargin") ? row["MeetsTargetMargin"]?.ToString() : "YES";
+                        <tr data-commission-gate="@meetsCommissionGate" data-target-margin="@meetsTargetMargin">
                             @foreach (var column in Model.Columns)
                             {
                                 <td>@(row.ContainsKey(column) ? row[column] : "")</td>
@@ -354,6 +436,36 @@ else if (Model.ShowResults)
 
     <script>
         $(document).ready(function() {
+            // Show loading overlay when report form is submitted
+            $('#reportForm').on('submit', function() {
+                $('#loadingOverlay').addClass('active');
+            });
+
+            // Apply conditional row highlighting based on commission gate and target margin
+            function applyRowHighlighting() {
+                $('#resultsTable tbody tr').each(function() {
+                    var $row = $(this);
+                    var commissionGate = $row.data('commission-gate');
+                    var targetMargin = $row.data('target-margin');
+
+                    // Remove any existing highlight classes
+                    $row.removeClass('row-warning row-danger');
+
+                    // Apply highlighting based on conditions
+                    if (commissionGate === 'NO' && targetMargin === 'NO') {
+                        // Both are NO - Red highlighting
+                        $row.addClass('row-danger');
+                    } else if (commissionGate === 'NO' || targetMargin === 'NO') {
+                        // One is NO - Yellow highlighting
+                        $row.addClass('row-warning');
+                    }
+                    // Otherwise no highlighting (both are YES)
+                });
+            }
+
+            // Apply row highlighting before initializing DataTable
+            applyRowHighlighting();
+
             // Initialize DataTable with export buttons and features
             $('#resultsTable').DataTable({
                 order: [[0, 'asc']], // Default sort by first column

@@ -11,6 +11,7 @@ public interface IErpMergeService
 {
     Task<string> RenderHtmlAsync(string templateKey, long envelopeId, long? recipientId = null);
     Task<string?> GetPropertyNameAsync(int? propertyId);
+    Task<string?> GetUnitNumberByOrderIdAsync(int? orderId);
 
     // New: Methods used by the API controllers for searching properties and orders
     Task<IReadOnlyList<CustomerPropertyViewModel>> SearchPropertiesAsync(string term, int take = 20);

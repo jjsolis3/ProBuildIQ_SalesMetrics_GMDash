@@ -115,6 +115,34 @@ public class SignTemplatesController : Controller
         return RedirectToAction(nameof(Index));
     }
 
+    // POST: /SignTemplates/Duplicate
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> Duplicate(string templateKey)
+    {
+        var original = await _db.SignTemplates.FirstOrDefaultAsync(t => t.TemplateKey == templateKey);
+        if (original == null) return NotFound();
+
+        // Create a copy with new key
+        var copy = new SignTemplate
+        {
+            TemplateKey = $"{original.TemplateKey}-copy",
+            DisplayName = $"{original.DisplayName} (Copy)",
+            DefaultSubject = original.DefaultSubject,
+            DefaultMessage = original.DefaultMessage,
+            RazorViewPath = original.RazorViewPath,
+            MergeSpecJson = original.MergeSpecJson,
+            IsActive = false, // Set to inactive by default
+            CreatedByUsers_ID = 1, // TODO: current user
+            CreatedDateUtc = DateTime.UtcNow
+        };
+
+        _db.SignTemplates.Add(copy);
+        await _db.SaveChangesAsync();
+
+        TempData["SuccessMessage"] = $"Template '{original.DisplayName}' duplicated successfully.";
+        return RedirectToAction(nameof(Edit), new { id = copy.TemplateKey });
+    }
+
     private List<string> GetRazorViewPaths()
     {
         // enumerate /Views/SignTemplates/*.cshtml

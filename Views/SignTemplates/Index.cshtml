@@ -26,10 +26,47 @@
                     <td>@(t.IsActive ? "Yes" : "No")</td>
                     <td>@t.RazorViewPath</td>
                     <td class="text-end">
-                        <a class="btn btn-sm btn-primary" asp-action="Edit" asp-route-id="@t.TemplateKey">Edit</a>
+                        <div class="btn-group">
+                            <a class="btn btn-sm btn-primary" asp-action="Edit" asp-route-id="@t.TemplateKey" title="Edit template">
+                                <i class="bi bi-pencil"></i> Edit
+                            </a>
+                            <button type="button" class="btn btn-sm btn-secondary" onclick="duplicateTemplate('@t.TemplateKey')" title="Duplicate template">
+                                <i class="bi bi-files"></i> Duplicate
+                            </button>
+                        </div>
                     </td>
                 </tr>
             }
         </tbody>
     </table>
 </div>
+
+@section Scripts {
+    <script>
+        function duplicateTemplate(templateKey) {
+            if (confirm('Create a copy of this template?')) {
+
+                // Create a form and submit it
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = '@Url.Action("Duplicate")';
+
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'templateKey';
+                input.value = templateKey;
+
+                const token = document.querySelector('input[name="__RequestVerificationToken"]');
+
+                if (token) {
+                    form.appendChild(token.cloneNode());
+                }
+
+                form.appendChild(input);
+                document.body.appendChild(form);
+                form.submit();
+            }
+        }
+    </script>
+    @Html.AntiForgeryToken()
+}

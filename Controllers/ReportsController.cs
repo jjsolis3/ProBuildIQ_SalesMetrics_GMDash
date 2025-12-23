@@ -205,15 +205,13 @@ namespace SalesMetrics.Controllers
             viewModel.Columns = data.Columns.Cast<DataColumn>().Select(c => c.ColumnName).ToList();
             viewModel.TotalRows = data.Rows.Count;
 
-            var skip = (viewModel.PageNumber - 1) * viewModel.PageSize;
-            var pagedRows = data.AsEnumerable()
-                .Skip(skip)
-                .Take(viewModel.PageSize)
+            // Send all rows to the view - DataTables will handle client-side pagination
+            var allRows = data.AsEnumerable()
                 .Select(row => data.Columns.Cast<DataColumn>()
                     .ToDictionary(c => c.ColumnName, c => row[c]))
                 .ToList();
 
-            viewModel.Rows = pagedRows;
+            viewModel.Rows = allRows;
         }
 
         private bool ValidateDateRange(ReportParameters parameters, out string error)

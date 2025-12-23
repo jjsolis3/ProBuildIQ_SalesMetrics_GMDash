@@ -33,11 +33,17 @@ public sealed class PdfService : IPdfService
         // 2) Gather data to stamp (replace placeholders with ERP values)
         var propertyName = await _merge.GetPropertyNameAsync(env.PropertyID) ?? "";
         var installDate = DateTime.UtcNow.ToString("MM/dd/yyyy");   // TODO: from ERP if available
-        var unitNumber = "Unit 123";                               // TODO
-        var staffName = manager?.FullName ?? "Property Staff";    // from recipient or ERP
+        var unitNumber = "";  // TODO: Get from ERP via merge service or recipients
+        var staffName = manager?.FullName ?? "Property Staff";      // from recipient or ERP
         var staffSignedAt = manager?.SignedAtUtc?.ToLocalTime().ToString("MM/dd/yyyy") ?? "";
         var tenantName = tenant.FullName;
         var tenantPhone = tenant.Phone ?? "";
+
+        // Manager signature (if exists)
+        string? managerSigWeb = manager?.SignatureImagePath;
+        string? managerSigFs = managerSigWeb is null ? null :
+            Path.Combine("wwwroot", managerSigWeb.TrimStart('/')
+                .Replace("/", Path.DirectorySeparatorChar.ToString()));
 
         // Signature images (saved earlier by EnvelopeService)
         string? tenantSigWeb = tenant.SignatureImagePath;     // like "/Files/Sign/2025/09/sig-123.png"
@@ -60,73 +66,59 @@ public sealed class PdfService : IPdfService
         var brush = XBrushes.Black;
 
         // 5) Coordinates (points; 1pt = 1/72in; origin = bottom-left)
-        //    Start with approximations; adjust once by eye.
-        //    Tip: temporarily call DrawMarker(...) to find exact positions.
+        //    PDF page size: 8.5" x 11" = 612pt x 792pt
+        //    Y coordinates measure from BOTTOM of page
+        //    Text Y coordinate is the BASELINE of the text
 
-        float left = 72f;            // 1 inch from left
-        float yTop = 720f;           // ~8.6 inches from bottom
-                
-        // tiny POCO to register variant reading from config
+        // Enable debug mode to visualize field positions
         var debug = _db.Database.GetService<IConfiguration>()["Pdf:DebugMarkers"]?.Equals("true", StringComparison.OrdinalIgnoreCase) == true;
         if (debug)
         {
             DrawGrid(gfx, page, 1.0); // 1-inch grid
-
-            // Drop some test markers where you THINK fields should land
-            DrawMarker(gfx, In(1.0), In(8.6)); DrawLabel(gfx, "PropertyName?", In(1.0), In(8.6));
-            DrawMarker(gfx, In(1.0), In(8.35)); DrawLabel(gfx, "InstallDate?", In(1.0), In(8.35));
-            DrawMarker(gfx, In(1.0), In(8.1)); DrawLabel(gfx, "Unit #?", In(1.0), In(8.1));
-
-            // Tenant block guesses
-            DrawMarker(gfx, In(1.0), In(5.8)); DrawLabel(gfx, "TenantName?", In(1.0), In(5.8));
-            DrawMarker(gfx, In(1.0), In(5.55)); DrawLabel(gfx, "TenantPhone?", In(1.0), In(5.55));
-
-            // Signature box guess (x, y of lower-left corner of image)
-            DrawMarker(gfx, In(1.0), In(4.9)); DrawLabel(gfx, "Tenant Sig", In(1.0), In(4.9));
         }
-        // Note: PDF origin is bottom-left, so Y coordinates are "inches from bottom"
 
-        // after
-        DrawText(gfx, fontBold, XBrushes.Black, propertyName, In(1.0), In(8.6));
+        // TOP SECTION - Form fields (these are near the top of the page)
+        // Based on the template, these fields are approximately:
+        // Property Name: 10.4" from bottom (748pt)
+        // Installation Date: 10.1" from bottom (727pt)
+        // Unit Number: 9.8" from bottom (706pt)
+        DrawText(gfx, font, brush, propertyName, In(1.9), In(10.35));      // Property Name field
+        DrawText(gfx, font, brush, installDate, In(1.9), In(10.05));       // Installation Date field
+        DrawText(gfx, font, brush, unitNumber, In(1.9), In(9.75));         // Unit Number field
 
-        // Property Staff section (example)
-        DrawText(gfx, fontBold, brush, $"Property: {propertyName}", left, yTop);
-        DrawText(gfx, font, brush, $"Installation Date: {installDate}", left, yTop - 18);
-        DrawText(gfx, font, brush, $"Unit #: {unitNumber}", left, yTop - 36);
-        DrawText(gfx, font, brush, $"Property Staff: {staffName}", left, yTop - 54);
-        DrawText(gfx, font, brush, $"Date Signed: {staffSignedAt}", left, yTop - 72);
+        // BOTTOM SECTION - Signature table (near bottom of page)
+        // Property Staff row: approximately 2.0" from bottom
+        double staffRowY = In(2.0);
+        DrawText(gfx, font, brush, staffName, In(0.65), staffRowY);        // Property Staff Name column (left)
 
-        // Tenant section (example)
-        float yTenant = 420f;
-        DrawText(gfx, fontBold, brush, $"Tenant: {tenantName}", left, yTenant);
-        DrawText(gfx, font, brush, $"Tenant Phone: {tenantPhone}", left, yTenant - 18);
+        // Property Staff signature (middle column)
+        if (managerSigFs != null && File.Exists(managerSigFs))
+        {
+            using var fs = File.OpenRead(managerSigFs);
+            using var img = XImage.FromStream(() => fs);
+            gfx.DrawImage(img, In(2.4), In(1.6), In(1.6), In(0.45));  // Signature in middle column
+        }
 
-        // Tenant signature image (drawn). Scale to a nice size.
-        //if (tenantSigFs != null && File.Exists(tenantSigFs))
-        //{
-        //    using var fs = File.OpenRead(tenantSigFs);
-        //    using var img = XImage.FromStream(() => fs); // PdfSharpCore expects a Func<Stream>
-        //    double sigW = 180, sigH = 60;                // width/height in points
-        //    gfx.DrawImage(img, left, yTenant - 80, sigW, sigH);
-        //}
+        DrawText(gfx, font, brush, staffSignedAt, In(5.4), staffRowY);     // Date column (right)
+
+        // Resident row: approximately 1.25" from bottom
+        double residentRowY = In(1.25);
+        DrawText(gfx, font, brush, tenantName, In(0.65), residentRowY);    // Resident Name column (left)
+
+        // Resident signature (middle column)
         if (tenantSigFs != null && File.Exists(tenantSigFs))
         {
             using var fs = File.OpenRead(tenantSigFs);
             using var img = XImage.FromStream(() => fs);
-            double sigW = In(2.5);  // 2.5 inches wide
-            double sigH = In(0.9);  // 0.9 inches tall
-            gfx.DrawImage(img, In(1.0), In(4.9), sigW, sigH);
+            gfx.DrawImage(img, In(2.4), In(0.85), In(1.6), In(0.45));  // Signature in middle column
         }
 
-
-        // Optional: staff signature too (if you capture it similarly)
-        // var staffSigFs = ...
-        // gfx.DrawImage(...);
+        DrawText(gfx, font, brush, tenantPhone, In(5.4), residentRowY);    // Resident Phone column (right)
 
         // Optional: audit footer/hash (once you compute final bytes, you can re-open and stamp hash)
         // Here we add a placeholder text (hash added after save is tricky). You can also write the
         // envelope/recipient IDs as audit anchors.
-        DrawSmall(gfx, $"Envelope #{env.EnvelopeId}", left, 36);
+        DrawSmall(gfx, $"Envelope #{env.EnvelopeId}", In(1.0), 36);
 
         // 6) Save to bytes
         using var ms = new MemoryStream();

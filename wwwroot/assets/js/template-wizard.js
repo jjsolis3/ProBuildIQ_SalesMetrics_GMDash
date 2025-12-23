@@ -372,6 +372,11 @@ var TemplateWizard = (function () {
             // Show preview container
             showPDFPreview();
 
+            // Show field placement button (Phase 3)
+            if (typeof PDFFieldConfigurator !== 'undefined') {
+                PDFFieldConfigurator.showEnableButton();
+            }
+
         }).catch(function (error) {
             console.error('Error loading PDF:', error);
             alert('Error loading PDF file. Please try again.');
@@ -414,6 +419,11 @@ var TemplateWizard = (function () {
 
             // Update navigation buttons
             updatePageNavigation();
+
+            // Notify field configurator of page change (Phase 3)
+            if (typeof PDFFieldConfigurator !== 'undefined') {
+                PDFFieldConfigurator.onPageChange();
+            }
         });
     }
 
@@ -473,6 +483,12 @@ var TemplateWizard = (function () {
         if (container) {
             container.style.display = 'none';
         }
+
+        // Hide field placement button (Phase 3)
+        if (typeof PDFFieldConfigurator !== 'undefined') {
+            PDFFieldConfigurator.hideEnableButton();
+        }
+
         pdfDoc = null;
         currentPage = 1;
         totalPages = 0;

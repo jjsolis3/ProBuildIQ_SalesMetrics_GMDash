@@ -120,73 +120,6 @@
             font-size: 1.3rem;
         }
 
-    .table-controls {
-        padding: 1.5rem;
-        background: #f8f9fa;
-        border-bottom: 1px solid #dee2e6;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 1rem;
-    }
-
-    .search-box-inline {
-        position: relative;
-        flex: 1;
-        min-width: 250px;
-        max-width: 400px;
-    }
-
-        .search-box-inline .search-icon {
-            position: absolute;
-            left: 1rem;
-            top: 50%;
-            transform: translateY(-50%);
-            color: #6c757d;
-            pointer-events: none;
-        }
-
-        .search-box-inline input {
-            padding-left: 2.75rem;
-            border: 2px solid #e9ecef;
-            border-radius: 8px;
-            transition: all 0.3s ease;
-            width: 100%;
-        }
-
-            .search-box-inline input:focus {
-                border-color: #667eea;
-                box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.15);
-            }
-
-    .page-size-selector {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-    }
-
-        .page-size-selector label {
-            font-weight: 600;
-            color: #495057;
-            margin-bottom: 0;
-            white-space: nowrap;
-        }
-
-        .page-size-selector select {
-            border: 2px solid #e9ecef;
-            border-radius: 8px;
-            padding: 0.5rem 2rem 0.5rem 0.75rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-            .page-size-selector select:focus {
-                border-color: #667eea;
-                box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.15);
-                outline: none;
-            }
 
     .table-wrapper {
         overflow-x: auto;
@@ -196,48 +129,16 @@
     .results-table {
         width: 100%;
         margin-bottom: 0;
-        border-collapse: separate;
-        border-spacing: 0;
     }
 
         .results-table thead th {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            background-color: darkorange !important;
+            color: white !important;
             font-weight: 700;
             padding: 1rem;
             text-align: left;
-            position: sticky;
-            top: 0;
-            z-index: 10;
-            cursor: pointer;
-            user-select: none;
             white-space: nowrap;
-            border: none;
-            transition: all 0.2s ease;
         }
-
-            .results-table thead th:hover {
-                background: linear-gradient(135deg, #5568d3 0%, #654393 100%);
-            }
-
-            .results-table thead th.sortable::after {
-                content: ' ⇅';
-                opacity: 0.4;
-                font-size: 0.9rem;
-                margin-left: 0.5rem;
-            }
-
-            .results-table thead th.sort-asc::after {
-                content: ' ↑';
-                opacity: 1;
-                color: #ffd700;
-            }
-
-            .results-table thead th.sort-desc::after {
-                content: ' ↓';
-                opacity: 1;
-                color: #ffd700;
-            }
 
         .results-table tbody tr {
             border-bottom: 1px solid #e9ecef;
@@ -248,74 +149,11 @@
                 background-color: #f8f9fa;
             }
 
-            .results-table tbody tr.filtered-out {
-                display: none;
-            }
-
         .results-table tbody td {
             padding: 1rem;
             color: #495057;
-            border: none;
         }
 
-        .results-table tbody tr:nth-child(even) {
-            background-color: #fcfcfc;
-        }
-
-            .results-table tbody tr:nth-child(even):hover {
-                background-color: #f8f9fa;
-            }
-
-    .pagination-wrapper {
-        padding: 1.5rem;
-        background: #f8f9fa;
-        border-top: 1px solid #dee2e6;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 1rem;
-    }
-
-    .pagination-info {
-        font-weight: 600;
-        color: #495057;
-    }
-
-    .pagination-controls {
-        display: flex;
-        gap: 0.5rem;
-        align-items: center;
-    }
-
-    .pagination-btn {
-        background: white;
-        border: 2px solid #dee2e6;
-        border-radius: 8px;
-        padding: 0.5rem 1rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        color: #495057;
-    }
-
-        .pagination-btn:hover:not(:disabled) {
-            background: #667eea;
-            border-color: #667eea;
-            color: white;
-            transform: translateY(-2px);
-        }
-
-        .pagination-btn:disabled {
-            opacity: 0.4;
-            cursor: not-allowed;
-        }
-
-        .pagination-btn.active {
-            background: #667eea;
-            border-color: #667eea;
-            color: white;
-        }
 
     .export-buttons {
         display: flex;
@@ -458,36 +296,13 @@
             </div>
         </div>
 
-        <div class="table-controls">
-            <div class="search-box-inline">
-                <svg class="search-icon" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
-                    <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z" />
-                </svg>
-                <input type="text"
-                       id="tableSearch"
-                       class="form-control"
-                       placeholder="Search in results..."
-                       autocomplete="off">
-            </div>
-            <div class="page-size-selector">
-                <label for="pageSizeSelect">Show:</label>
-                <select id="pageSizeSelect" class="form-select form-select-sm">
-                    <option value="10" selected>10 rows</option>
-                    <option value="25">25 rows</option>
-                    <option value="50">50 rows</option>
-                    <option value="100">100 rows</option>
-                    <option value="-1">All rows</option>
-                </select>
-            </div>
-        </div>
-
-        <div class="table-wrapper">
-            <table class="results-table" id="resultsTable">
+        <div class="table-wrapper p-3">
+            <table class="results-table table table-bordered table-striped nowrap" id="resultsTable" style="width:100%">
                 <thead>
                     <tr>
                         @foreach (var column in Model.Columns)
                         {
-                            <th class="sortable" data-column="@column">@column</th>
+                            <th>@column</th>
                         }
                     </tr>
                 </thead>
@@ -504,15 +319,6 @@
                 </tbody>
             </table>
         </div>
-
-        <div class="pagination-wrapper">
-            <div class="pagination-info" id="paginationInfo">
-                Showing 1 to @Math.Min(10, Model.TotalRows) of @Model.TotalRows
-            </div>
-            <div class="pagination-controls" id="paginationControls">
-                <!-- Pagination buttons will be inserted here by JavaScript -->
-            </div>
-        </div>
     </div>
 }
 else if (Model.ShowResults)
@@ -527,255 +333,78 @@ else if (Model.ShowResults)
 }
 
 @section Scripts {
+    <!-- jQuery (required by DataTables) -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
+    <!-- DataTables CSS -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.5/css/jquery.dataTables.min.css" />
+    <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.dataTables.min.css" />
+
+    <!-- DataTables JS -->
+    <script src="https://cdn.datatables.net/1.13.5/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.colVis.min.js"></script>
+
+    <!-- Required for export buttons -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.print.min.js"></script>
+
     <script>
-        // Client-side table functionality: search, sort, and pagination
-        // This provides a rich interactive experience without server roundtrips
-
-        document.addEventListener('DOMContentLoaded', function() {
-            const table = document.getElementById('resultsTable');
-            if (!table) return; // Exit if no table on page
-
-            const tbody = table.querySelector('tbody');
-            const allRows = Array.from(tbody.querySelectorAll('tr'));
-            let filteredRows = [...allRows]; // Clone the array for filtering
-            let currentPage = 1;
-            let pageSize = 10;
-            let sortColumn = null;
-            let sortDirection = 'asc';
-
-            // =================
-            // SEARCH FUNCTIONALITY
-            // =================
-            const searchInput = document.getElementById('tableSearch');
-            if (searchInput) {
-                searchInput.addEventListener('input', function() {
-                    const query = this.value.toLowerCase().trim();
-
-                    // Filter rows based on search query
-                    // We search across all cells in each row
-                    filteredRows = allRows.filter(function(row) {
-                        const cells = row.querySelectorAll('td');
-                        // Check if any cell contains the search query
-                        return Array.from(cells).some(function(cell) {
-                            return cell.textContent.toLowerCase().includes(query);
-                        });
-                    });
-
-                    // Update the displayed count
-                    document.getElementById('displayedCount').textContent = filteredRows.length;
-
-                    // Reset to first page when search changes
-                    currentPage = 1;
-
-                    // Re-render the table with filtered results
-                    renderTable();
-                });
-            }
-
-            // =================
-            // SORTING FUNCTIONALITY
-            // =================
-            const headers = table.querySelectorAll('thead th.sortable');
-            headers.forEach(function(header) {
-                header.addEventListener('click', function() {
-                    const column = this.getAttribute('data-column');
-                    const columnIndex = Array.from(this.parentElement.children).indexOf(this);
-
-                    // Toggle sort direction if clicking the same column
-                    if (sortColumn === column) {
-                        sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
-                    } else {
-                        sortColumn = column;
-                        sortDirection = 'asc';
+        $(document).ready(function() {
+            // Initialize DataTable with export buttons and features
+            $('#resultsTable').DataTable({
+                order: [[0, 'asc']], // Default sort by first column
+                responsive: true,
+                paging: true,
+                pageLength: 10,
+                searching: true,
+                dom: `
+                    <"top d-flex justify-content-between align-items-center mb-3" lBf>
+                    rt
+                    <"bottom d-flex justify-content-between align-items-center mt-3" ip>
+                `,
+                scrollX: true,
+                buttons: [
+                    {
+                        extend: 'colvis',
+                        text: '<i class="bi bi-eye"></i> Show/Hide Columns',
+                        className: 'btn btn-outline-primary rounded-pill shadow-sm me-2'
+                    },
+                    {
+                        extend: 'excelHtml5',
+                        text: '<i class="bi bi-file-earmark-excel"></i> Excel',
+                        className: 'btn btn-outline-success rounded-pill shadow-sm me-2',
+                        title: '@(Model.Definition?.Name ?? "Report") - Results',
+                        filename: '@(Model.Definition?.Name ?? "Report")_@DateTime.Now.ToString("yyyyMMdd")'
+                    },
+                    {
+                        extend: 'pdfHtml5',
+                        text: '<i class="bi bi-file-earmark-pdf"></i> PDF',
+                        className: 'btn btn-outline-danger rounded-pill shadow-sm',
+                        title: '@(Model.Definition?.Name ?? "Report") - Results',
+                        filename: '@(Model.Definition?.Name ?? "Report")_@DateTime.Now.ToString("yyyyMMdd")',
+                        orientation: 'landscape',
+                        pageSize: 'LEGAL'
                     }
-
-                    // Update header visual state
-                    headers.forEach(h => h.classList.remove('sort-asc', 'sort-desc'));
-                    this.classList.add(sortDirection === 'asc' ? 'sort-asc' : 'sort-desc');
-
-                    // Sort the filtered rows
-                    // We use a custom comparator that handles numbers, dates, and text
-                    filteredRows.sort(function(rowA, rowB) {
-                        const cellA = rowA.cells[columnIndex].textContent.trim();
-                        const cellB = rowB.cells[columnIndex].textContent.trim();
-
-                        // Try to parse as numbers first
-                        const numA = parseFloat(cellA.replace(/[^0-9.-]/g, ''));
-                        const numB = parseFloat(cellB.replace(/[^0-9.-]/g, ''));
-
-                        let comparison = 0;
-
-                        if (!isNaN(numA) && !isNaN(numB)) {
-                            // Both are numbers
-                            comparison = numA - numB;
-                        } else {
-                            // String comparison
-                            comparison = cellA.localeCompare(cellB);
-                        }
-
-                        // Apply sort direction
-                        return sortDirection === 'asc' ? comparison : -comparison;
-                    });
-
-                    // Reset to first page after sorting
-                    currentPage = 1;
-
-                    // Re-render the table
-                    renderTable();
-                });
+                ],
+                lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
+                language: {
+                    search: "Search results:",
+                    lengthMenu: "Show _MENU_ entries",
+                    info: "Showing _START_ to _END_ of _TOTAL_ results",
+                    infoEmpty: "Showing 0 to 0 of 0 results",
+                    infoFiltered: "(filtered from _MAX_ total results)",
+                    paginate: {
+                        first: "First",
+                        last: "Last",
+                        next: "Next ›",
+                        previous: "‹ Previous"
+                    }
+                }
             });
-
-            // =================
-            // PAGE SIZE SELECTOR
-            // =================
-            const pageSizeSelect = document.getElementById('pageSizeSelect');
-            if (pageSizeSelect) {
-                pageSizeSelect.addEventListener('change', function() {
-                    pageSize = parseInt(this.value);
-                    currentPage = 1; // Reset to first page
-                    renderTable();
-                });
-            }
-
-            // =================
-            // RENDER TABLE FUNCTION
-            // =================
-            // This function displays the appropriate rows based on:
-            // - Current search filter
-            // - Current sort order
-            // - Current page and page size
-            function renderTable() {
-                // Hide all rows first
-                allRows.forEach(row => row.style.display = 'none');
-
-                // Determine which rows to show based on pagination
-                let startIndex, endIndex;
-
-                if (pageSize === -1) {
-                    // Show all rows
-                    startIndex = 0;
-                    endIndex = filteredRows.length;
-                } else {
-                    // Calculate pagination range
-                    startIndex = (currentPage - 1) * pageSize;
-                    endIndex = Math.min(startIndex + pageSize, filteredRows.length);
-                }
-
-                // Show only the rows for the current page
-                for (let i = startIndex; i < endIndex; i++) {
-                    filteredRows[i].style.display = '';
-                }
-
-                // Update pagination info and controls
-                updatePagination();
-            }
-
-            // =================
-            // PAGINATION CONTROLS
-            // =================
-            function updatePagination() {
-                const totalRows = filteredRows.length;
-                const totalPages = pageSize === -1 ? 1 : Math.ceil(totalRows / pageSize);
-
-                // Update pagination info text
-                const paginationInfo = document.getElementById('paginationInfo');
-                if (pageSize === -1) {
-                    paginationInfo.textContent = `Showing all ${totalRows} results`;
-                } else {
-                    const startIndex = (currentPage - 1) * pageSize + 1;
-                    const endIndex = Math.min(currentPage * pageSize, totalRows);
-                    paginationInfo.textContent = `Showing ${startIndex} to ${endIndex} of ${totalRows}`;
-                }
-
-                // Create pagination buttons
-                const paginationControls = document.getElementById('paginationControls');
-                paginationControls.innerHTML = '';
-
-                if (pageSize !== -1 && totalPages > 1) {
-                    // Previous button
-                    const prevBtn = document.createElement('button');
-                    prevBtn.className = 'pagination-btn';
-                    prevBtn.textContent = '‹ Previous';
-                    prevBtn.disabled = currentPage === 1;
-                    prevBtn.onclick = function() {
-                        if (currentPage > 1) {
-                            currentPage--;
-                            renderTable();
-                        }
-                    };
-                    paginationControls.appendChild(prevBtn);
-
-                    // Page number buttons
-                    // We show: first page, pages around current, last page
-                    const maxButtons = 7;
-                    let startPage = Math.max(1, currentPage - 2);
-                    let endPage = Math.min(totalPages, currentPage + 2);
-
-                    // Always show first page
-                    if (startPage > 1) {
-                        addPageButton(1);
-                        if (startPage > 2) {
-                            const ellipsis = document.createElement('span');
-                            ellipsis.textContent = '...';
-                            ellipsis.className = 'pagination-btn';
-                            ellipsis.disabled = true;
-                            ellipsis.style.border = 'none';
-                            ellipsis.style.cursor = 'default';
-                            paginationControls.appendChild(ellipsis);
-                        }
-                    }
-
-                    // Show range of pages around current
-                    for (let i = startPage; i <= endPage; i++) {
-                        addPageButton(i);
-                    }
-
-                    // Always show last page
-                    if (endPage < totalPages) {
-                        if (endPage < totalPages - 1) {
-                            const ellipsis = document.createElement('span');
-                            ellipsis.textContent = '...';
-                            ellipsis.className = 'pagination-btn';
-                            ellipsis.disabled = true;
-                            ellipsis.style.border = 'none';
-                            ellipsis.style.cursor = 'default';
-                            paginationControls.appendChild(ellipsis);
-                        }
-                        addPageButton(totalPages);
-                    }
-
-                    // Next button
-                    const nextBtn = document.createElement('button');
-                    nextBtn.className = 'pagination-btn';
-                    nextBtn.textContent = 'Next ›';
-                    nextBtn.disabled = currentPage === totalPages;
-                    nextBtn.onclick = function() {
-                        if (currentPage < totalPages) {
-                            currentPage++;
-                            renderTable();
-                        }
-                    };
-                    paginationControls.appendChild(nextBtn);
-                }
-            }
-
-            // Helper function to create a page number button
-            function addPageButton(pageNum) {
-                const pageBtn = document.createElement('button');
-                pageBtn.className = 'pagination-btn';
-                if (pageNum === currentPage) {
-                    pageBtn.classList.add('active');
-                }
-                pageBtn.textContent = pageNum;
-                pageBtn.onclick = function() {
-                    currentPage = pageNum;
-                    renderTable();
-                };
-                document.getElementById('paginationControls').appendChild(pageBtn);
-            }
-
-            // Initial render of the table
-            renderTable();
         });
     </script>
 }

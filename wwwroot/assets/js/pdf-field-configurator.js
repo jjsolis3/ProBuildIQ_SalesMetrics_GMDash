@@ -117,6 +117,7 @@ var PDFFieldConfigurator = (function () {
         const overlay = document.getElementById('fieldOverlay');
         if (overlay) {
             overlay.style.display = 'block';
+            overlay.style.pointerEvents = 'none'; // Allow clicks through to canvas, except on field boxes
             updateOverlayDimensions();
         }
 
@@ -181,17 +182,18 @@ var PDFFieldConfigurator = (function () {
             if (fieldDef) {
                 const item = document.createElement('div');
                 item.className = 'field-palette-item';
-                item.textContent = fieldDef.displayName;
-                item.setAttribute('data-field-key', fieldKey);
 
-                // Check if already placed
-                const isPlaced = placedFields.some(f => f.fieldKey === fieldKey);
-                if (isPlaced) {
-                    item.classList.add('placed');
-                    item.title = 'Already placed on PDF';
+                // Show count of placements if field is used multiple times
+                const placementCount = placedFields.filter(f => f.fieldKey === fieldKey).length;
+                if (placementCount > 0) {
+                    item.textContent = `${fieldDef.displayName} (${placementCount})`;
+                    item.title = `Click to place another instance (${placementCount} already placed)`;
                 } else {
-                    item.addEventListener('click', () => selectFieldForPlacement(fieldKey));
+                    item.textContent = fieldDef.displayName;
                 }
+
+                item.setAttribute('data-field-key', fieldKey);
+                item.addEventListener('click', () => selectFieldForPlacement(fieldKey));
 
                 palette.appendChild(item);
             }
@@ -251,11 +253,8 @@ var PDFFieldConfigurator = (function () {
         const fieldDef = fieldDefinitions[fieldKey];
         if (!fieldDef) return;
 
-        // Check if field already placed
-        if (placedFields.some(f => f.fieldKey === fieldKey)) {
-            alert(`${fieldDef.displayName} is already placed on the PDF`);
-            return;
-        }
+        // ALLOW DUPLICATE PLACEMENTS - removed the check that prevented placing the same field multiple times
+        // Users can now place "Resident Name" in multiple locations (e.g., top and bottom of form)
 
         // Get current page number
         const currentPageEl = document.getElementById('currentPage');
@@ -268,9 +267,13 @@ var PDFFieldConfigurator = (function () {
         const defaultWidth = fieldDef.type === 'signature' ? 200 : 150;
         const defaultHeight = fieldDef.type === 'signature' ? 50 : 20;
 
+        // Generate unique ID for this field instance (allows multiple instances of same field)
+        const instanceId = `${fieldKey}_${Date.now()}`;
+
         // Add field to placed fields
         const field = {
             fieldKey: fieldKey,
+            instanceId: instanceId,
             displayName: fieldDef.displayName,
             type: fieldDef.type,
             page: currentPage,
@@ -633,6 +636,7 @@ var PDFFieldConfigurator = (function () {
 
     /**
      * Save field coordinates to MergeSpec JSON
+     * Supports multiple placements of the same field
      */
     function saveCoordinatesToMergeSpec() {
         const mergeSpecInput = document.getElementById('mergeSpecJson');
@@ -641,17 +645,27 @@ var PDFFieldConfigurator = (function () {
         try {
             const existingSpec = mergeSpecInput.value ? JSON.parse(mergeSpecInput.value) : {};
 
-            // Add coordinates to each field in fieldMapping
+            // Group placed fields by fieldKey to support multiple placements
             if (existingSpec.fieldMapping) {
+                // First, clear all existing placements
+                Object.keys(existingSpec.fieldMapping).forEach(fieldKey => {
+                    existingSpec.fieldMapping[fieldKey].placements = [];
+                });
+
+                // Then add all current placements
                 placedFields.forEach(field => {
                     if (existingSpec.fieldMapping[field.fieldKey]) {
-                        existingSpec.fieldMapping[field.fieldKey].coordinates = {
+                        if (!existingSpec.fieldMapping[field.fieldKey].placements) {
+                            existingSpec.fieldMapping[field.fieldKey].placements = [];
+                        }
+
+                        existingSpec.fieldMapping[field.fieldKey].placements.push({
                             page: field.page,
                             x: field.x,
                             y: field.y,
                             width: field.width,
                             height: field.height
-                        };
+                        });
                     }
                 });
             }

@@ -7,6 +7,7 @@ public sealed class SignTemplate
     public string DisplayName { get; set; } = default!;
     public string RazorViewPath { get; set; } = default!;
     public string? MergeSpecJson { get; set; }
+    public string? PdfFilePath { get; set; }  // Path to uploaded base PDF for stamping
     public string? DefaultSubject { get; set; }
     public string? DefaultMessage { get; set; }
     public bool IsActive { get; set; } = true;

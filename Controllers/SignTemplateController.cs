@@ -42,18 +42,22 @@ public class SignTemplatesController : Controller
             return View(model);
         }
 
-        // optional: upload base PDF
+        // Upload base PDF for stamping
         if (pdfFile is not null && pdfFile.Length > 0)
         {
             var dir = Path.Combine(_env.ContentRootPath, "Content", "Templates");
             Directory.CreateDirectory(dir);
-            var fileName = Path.GetFileName(pdfFile.FileName);
+
+            // Generate unique filename: templateKey_timestamp.pdf
+            var timestamp = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
+            var fileName = $"{model.TemplateKey}_{timestamp}.pdf";
             var dest = Path.Combine(dir, fileName);
+
             await using var fs = System.IO.File.Create(dest);
             await pdfFile.CopyToAsync(fs);
-            // store the file name in RazorViewPath or add a FilePath column on SignTemplate if you have it
-            // if you already have FilePath column in SignTemplate, use that instead of RazorViewPath
-            // model.FilePath = fileName;
+
+            // Store relative path for PdfService to use
+            model.PdfFilePath = fileName;
         }
 
         model.CreatedDateUtc = DateTime.UtcNow;
@@ -104,11 +108,17 @@ public class SignTemplatesController : Controller
         {
             var dir = Path.Combine(_env.ContentRootPath, "Content", "Templates");
             Directory.CreateDirectory(dir);
-            var fileName = Path.GetFileName(pdfFile.FileName);
+
+            // Generate unique filename: templateKey_timestamp.pdf
+            var timestamp = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
+            var fileName = $"{t.TemplateKey}_{timestamp}.pdf";
             var dest = Path.Combine(dir, fileName);
+
             await using var fs = System.IO.File.Create(dest);
             await pdfFile.CopyToAsync(fs);
-            // t.FilePath = fileName; // if you have FilePath column
+
+            // Update PDF file path
+            t.PdfFilePath = fileName;
         }
 
         await _db.SaveChangesAsync();
@@ -148,7 +158,17 @@ public class SignTemplatesController : Controller
         // enumerate /Views/SignTemplates/*.cshtml
         var root = Path.Combine(_env.ContentRootPath, "Views", "SignTemplates");
         if (!Directory.Exists(root)) return new();
-        return Directory.GetFiles(root, "*.cshtml").Select(p =>
-            "/Views/SignTemplates/" + Path.GetFileName(p)).OrderBy(x => x).ToList();
+
+        // Exclude UI pages (Create, Edit, Index, Delete, etc.) - only include document templates
+        var excludedPrefixes = new[] { "Create", "Edit", "Index", "Delete", "Details" };
+
+        return Directory.GetFiles(root, "*.cshtml")
+            .Select(p => Path.GetFileName(p))
+            .Where(fileName => !excludedPrefixes.Any(prefix =>
+                fileName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+            .Where(fileName => !fileName.EndsWith(".backup", StringComparison.OrdinalIgnoreCase))
+            .Select(fileName => "/Views/SignTemplates/" + fileName)
+            .OrderBy(x => x)
+            .ToList();
     }
 }

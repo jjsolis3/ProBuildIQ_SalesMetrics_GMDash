@@ -222,9 +222,14 @@
         margin: 0 auto 1.5rem;
     }
 
-    @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
+    @@ Keykeyframes spin {
+        0% {
+            transform: rotate(0deg);
+        }
+
+        100% {
+            transform: rotate(360deg);
+        }
     }
 
     .loading-text {
@@ -468,7 +473,11 @@ else if (Model.ShowResults)
 
             // Initialize DataTable with export buttons and features
             $('#resultsTable').DataTable({
-                order: [[0, 'asc']], // Default sort by first column
+                order: [
+                    [2, 'desc' ],   // 2 by status
+                    [6, 'asc'],     // 6 by Price Code 
+                    [5, 'asc']      // 5 by Property
+                ], 
                 responsive: true,
                 paging: true,
                 pageLength: 10,
@@ -500,7 +509,10 @@ else if (Model.ShowResults)
                         filename: '@(Model.Definition?.Name ?? "Report")_@DateTime.Now.ToString("yyyyMMdd")',
                         orientation: 'landscape',
                         pageSize: 'LEGAL'
-                    }
+                    },
+                ],
+                columnDefs: [
+                    { targets: [0, 10, 11, 12, 15, 16, 17], visible: false }
                 ],
                 lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
                 language: {

@@ -117,6 +117,7 @@ var PDFFieldConfigurator = (function () {
         const overlay = document.getElementById('fieldOverlay');
         if (overlay) {
             overlay.style.display = 'block';
+            overlay.style.pointerEvents = 'none'; // Allow clicks through to canvas, except on field boxes
             updateOverlayDimensions();
         }
 

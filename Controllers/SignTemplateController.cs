@@ -148,7 +148,17 @@ public class SignTemplatesController : Controller
         // enumerate /Views/SignTemplates/*.cshtml
         var root = Path.Combine(_env.ContentRootPath, "Views", "SignTemplates");
         if (!Directory.Exists(root)) return new();
-        return Directory.GetFiles(root, "*.cshtml").Select(p =>
-            "/Views/SignTemplates/" + Path.GetFileName(p)).OrderBy(x => x).ToList();
+
+        // Exclude UI pages (Create, Edit, Index, Delete, etc.) - only include document templates
+        var excludedPrefixes = new[] { "Create", "Edit", "Index", "Delete", "Details" };
+
+        return Directory.GetFiles(root, "*.cshtml")
+            .Select(p => Path.GetFileName(p))
+            .Where(fileName => !excludedPrefixes.Any(prefix =>
+                fileName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+            .Where(fileName => !fileName.EndsWith(".backup", StringComparison.OrdinalIgnoreCase))
+            .Select(fileName => "/Views/SignTemplates/" + fileName)
+            .OrderBy(x => x)
+            .ToList();
     }
 }

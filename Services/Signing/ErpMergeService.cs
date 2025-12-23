@@ -129,6 +129,14 @@ namespace SalesMetrics.Services.Signing
             return prop;
         }
 
+        public async Task<string?> GetUnitNumberByOrderIdAsync(int? orderId)
+        {
+            if (!orderId.HasValue) return null;
+
+            var order = await GetOrderByIdAsync(orderId.Value.ToString());
+            return order?.UnitNumber;
+        }
+
         public async Task<IReadOnlyList<CustomerPropertyViewModel>> SearchPropertiesAsync(string term, int take = 20)
         {
             var officeLocation = _http.HttpContext?.Session.GetString("OfficeLocation") ?? "LAX";

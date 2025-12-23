@@ -32,8 +32,8 @@ public sealed class PdfService : IPdfService
 
         // 2) Gather data to stamp (replace placeholders with ERP values)
         var propertyName = await _merge.GetPropertyNameAsync(env.PropertyID) ?? "";
+        var unitNumber = await _merge.GetUnitNumberByOrderIdAsync(env.OrderId) ?? "";
         var installDate = DateTime.UtcNow.ToString("MM/dd/yyyy");   // TODO: from ERP if available
-        var unitNumber = "";  // TODO: Get from ERP via merge service or recipients
         var staffName = manager?.FullName ?? "Property Staff";      // from recipient or ERP
         var staffSignedAt = manager?.SignedAtUtc?.ToLocalTime().ToString("MM/dd/yyyy") ?? "";
         var tenantName = tenant.FullName;

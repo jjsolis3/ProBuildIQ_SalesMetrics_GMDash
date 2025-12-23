@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.Extensions.DependencyInjection;
 using SalesMetrics.Data;
 using Microsoft.EntityFrameworkCore;
+using SalesMetrics.Services;
 using SalesMetrics.Services.Erp;
 using SalesMetrics.Services.Reports;
 using SalesMetrics.Services.Mvc;
@@ -23,6 +24,9 @@ builder.Services.AddSingleton<HttpErpDataClient>();
 // Add EF Core DbContext for SalesMetrics
 builder.Services.AddDbContext<SalesMetricsDbContext>(options =>
     options.UseSqlServer(connectionString));
+
+// Add Error Logging Service
+builder.Services.AddScoped<IErrorLoggingService, ErrorLoggingService>();
 
 // Add Session Services
 builder.Services.AddSession(options =>

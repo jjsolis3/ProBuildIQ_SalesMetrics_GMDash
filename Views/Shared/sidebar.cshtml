@@ -13,6 +13,7 @@
             <ul class="left-menu list-unstyled" id="side-menu">
                 @if(roleId == "1" || roleId == "4")
                 {
+                    <!-- GM DASHBOARD and RECAP ENTRY/LIST-->
                     <li class="menu-title">📊 GENERAL MGR</li>
                     <li class="ms-3">
                         <a href="/GMDash/Index">
@@ -33,7 +34,7 @@
                         </a>
                     </li>
                 }
-                <!-- DASHBOARD -->
+                <!-- SALES DASHBOARD -->
                 <li class="menu-title">📈 DASHBOARD</li>
                 <li class="ms-3">
                     <a href="/Dashboard/Index">
@@ -43,7 +44,7 @@
                 </li>
                 @if (roleId != "5" && roleId != "6")
                 {
-                    <!-- SALES ACTIVITIES -->
+                    <!-- SALES TASK ACTIVITIES -->
                     <li class="menu-title">📋 TASKS</li>
                     @if (roleId == "1" || roleId == "3" || roleId == "4")
                     {
@@ -81,6 +82,7 @@
                     </li>
                 }
 
+                <!-- SALES JOURNALIGN -->
                 <li class="menu-title">✎ JOURNAL</li>
                 <li class="ms-3">
                     <a href="/Journal/Index">
@@ -89,6 +91,7 @@
                     </a>
                 </li>
 
+                <!-- JOB SCHEDULE / ORDERS -->
                 <li class="menu-title">🗓️ JOB SCHEDULE</li>
                 <li class="ms-3">
                     <a href="/Orders/Orders">
@@ -129,12 +132,24 @@
                         <span>Send Document</span>
                     </a>
                 </li>
-                @if (roleId == "1" || roleId == "4")
+                @if (roleId == "1" )
                 {
                     <li class="ms-3">
                         <a href="/SignTemplates/Index">
                             <i class="fa fa-file-alt"></i>
                             <span>Templates</span>
+                        </a>
+                    </li>
+                }
+
+                @if (roleId == "1" || roleId == "4")
+                {
+                    <!-- Reporting & Analytics -->
+                    <li class="menu-title">📈 Reports</li>
+                    <li class="ms-3">
+                        <a href="/Reports">
+                            <i class="fa fa-chart-line"></i>
+                            <span>Reports</span>
                         </a>
                     </li>
                 }
@@ -147,17 +162,7 @@
                         <span>Profile</span>
                     </a>
                 </li>
-                @if (roleId == "1" || roleId == "4")
-                {
-                    <!-- Reporting & Analytics -->
-                    <li class="menu-title">📈 Reports</li>
-                    <li class="ms-3">
-                        <a href="/Reports">
-                            <i class="fa fa-chart-line"></i>
-                            <span>Reports</span>
-                        </a>
-                    </li>
-                }
+                
                 @if (roleId == "1")
                 {
                     <!-- Admin / Settings -->

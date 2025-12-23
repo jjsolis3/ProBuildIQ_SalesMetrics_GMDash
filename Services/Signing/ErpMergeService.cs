@@ -204,7 +204,12 @@ namespace SalesMetrics.Services.Signing
                     LEFT JOIN ApartmentType APT ON A.ApartmentType_Id = APT.ID
                     LEFT JOIN AR_OPEN_ITEM AR on S.SOH_NUMBER = AR.ARO_SALES_ORDER_NUMBER
                 WHERE CUS.CUM_CUMMAS_ID = @propertyId
-                  AND S.SOH_CANCELED_DATE IS NULL";
+                  AND S.SOH_CANCELED_DATE IS NULL
+                  AND S.SOH_DELIVERY_DATE >= GETDATE()
+                  AND S.SOH_INVOICE_TYPE = 0
+                  AND S.SOH_WHSMAS_ID = 1
+                  AND S.SOH_TOTAL_AMOUNT > 0
+            ";
 
             using var cmd = new SqlCommand(sql, conn);
             cmd.Parameters.AddWithValue("@propertyId", propertyId);

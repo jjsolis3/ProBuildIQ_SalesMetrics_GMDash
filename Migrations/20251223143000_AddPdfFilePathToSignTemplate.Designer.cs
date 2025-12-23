@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SalesMetrics.Data;
 
@@ -11,9 +12,11 @@ using SalesMetrics.Data;
 namespace SalesMetrics.Migrations
 {
     [DbContext(typeof(SalesMetricsDbContext))]
-    partial class SalesMetricsDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251223143000_AddPdfFilePathToSignTemplate")]
+    partial class AddPdfFilePathToSignTemplate
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -313,10 +316,6 @@ namespace SalesMetrics.Migrations
                     b.Property<int>("SignerOrder")
                         .HasColumnType("int");
 
-                    b.Property<string>("TypedFullName")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
                     b.Property<string>("UserAgentSigned")
                         .HasMaxLength(400)
                         .HasColumnType("nvarchar(400)");
@@ -379,10 +378,6 @@ namespace SalesMetrics.Migrations
                     b.Property<string>("MergeSpecJson")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("PdfFilePath")
-                        .HasMaxLength(260)
-                        .HasColumnType("nvarchar(260)");
-
                     b.Property<int?>("ModifiedByUsers_ID")
                         .HasColumnType("int");
 
@@ -399,6 +394,100 @@ namespace SalesMetrics.Migrations
                     b.HasIndex("IsActive");
 
                     b.ToTable("SignTemplate", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            TemplateKey = "TenantConsentV1",
+                            CreatedByUsers_ID = 1,
+                            CreatedDateUtc = new DateTime(2025, 9, 25, 22, 22, 7, 375, DateTimeKind.Utc).AddTicks(8179),
+                            DefaultMessage = "Hi {{Recipient.FirstName}}, please review and sign to proceed.",
+                            DefaultSubject = "Please review and sign: Tenant Work Consent",
+                            DisplayName = "Tenant Work Consent (v1)",
+                            IsActive = true,
+                            MergeSpecJson = "{\r\n  \"merge\":\"property,order,customer\",\r\n  \"fields\":{\r\n    \"PropertyName\":\"ERP.Properties.Name\",\r\n    \"PropertyAddress\":\"ERP.Properties.Address\",\r\n    \"UnitNumber\":\"ERP.Orders.Unit\",\r\n    \"ManagerName\":\"ERP.PropertyManager.Name\",\r\n    \"TenantName\":\"ERP.Tenant.Name\",\r\n    \"OrderId\":\"ERP.Orders.Id\",\r\n    \"City\":\"ERP.Properties.City\",\r\n    \"State\":\"ERP.Properties.State\",\r\n    \"Zip\":\"ERP.Properties.Zip\"\r\n  }\r\n}",
+                            RazorViewPath = "/Views/SignTemplates/TenantConsent.cshtml"
+                        });
+                });
+
+            modelBuilder.Entity("SalesMetrics.Models.AdobeAgreement", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AgreementId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CreatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ManagerEmail")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PlaceholderTenantEmail")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("PropertyId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TemplateId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TenantEmail")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AdobeAgreements");
+                });
+
+            modelBuilder.Entity("SalesMetrics.Models.AdobeAgreementEvent", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ActorEmail")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("AgreementId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Meta")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("ReceivedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AdobeAgreementEvents");
                 });
 
             modelBuilder.Entity("SalesMetrics.Models.EFCore.LocationEntity", b =>

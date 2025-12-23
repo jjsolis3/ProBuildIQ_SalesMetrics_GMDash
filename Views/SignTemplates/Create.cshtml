@@ -1,64 +1,596 @@
-﻿@model SalesMetrics.Domain.Signing.SignTemplate
+@model SalesMetrics.Domain.Signing.SignTemplate
 @{
     ViewData["Title"] = "New Template";
     var viewPaths = (List<string>)ViewBag.ViewPaths;
 }
+
+<style>
+    /* Wizard Progress Indicator */
+    .wizard-progress {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 2rem;
+        position: relative;
+    }
+
+    .wizard-progress::before {
+        content: '';
+        position: absolute;
+        top: 20px;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: #dee2e6;
+        z-index: 0;
+    }
+
+    .wizard-step {
+        flex: 1;
+        text-align: center;
+        position: relative;
+        z-index: 1;
+    }
+
+    .wizard-step-circle {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: white;
+        border: 2px solid #dee2e6;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        margin-bottom: 0.5rem;
+        transition: all 0.3s ease;
+    }
+
+    .wizard-step.active .wizard-step-circle {
+        background: #0d6efd;
+        border-color: #0d6efd;
+        color: white;
+    }
+
+    .wizard-step.completed .wizard-step-circle {
+        background: #198754;
+        border-color: #198754;
+        color: white;
+    }
+
+    .wizard-step.completed .wizard-step-circle::before {
+        content: '✓';
+        font-weight: bold;
+    }
+
+    .wizard-step-label {
+        font-size: 0.875rem;
+        color: #6c757d;
+    }
+
+    .wizard-step.active .wizard-step-label {
+        color: #0d6efd;
+        font-weight: 600;
+    }
+
+    /* Wizard Content */
+    .wizard-content {
+        min-height: 400px;
+    }
+
+    .wizard-step-content {
+        display: none;
+    }
+
+    .wizard-step-content.active {
+        display: block;
+        animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Template Cards */
+    .template-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+
+    .template-card {
+        border: 2px solid #dee2e6;
+        border-radius: 8px;
+        padding: 1.5rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        background: white;
+    }
+
+    .template-card:hover {
+        border-color: #0d6efd;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        transform: translateY(-2px);
+    }
+
+    .template-card.selected {
+        border-color: #0d6efd;
+        background: #e7f1ff;
+        box-shadow: 0 4px 12px rgba(13,110,253,0.2);
+    }
+
+    .template-card-icon {
+        font-size: 2rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .template-card-title {
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+    }
+
+    .template-card-description {
+        font-size: 0.875rem;
+        color: #6c757d;
+    }
+
+    /* Field Selection */
+    .field-category {
+        margin-bottom: 1.5rem;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 1rem;
+        background: #f8f9fa;
+    }
+
+    .field-category-header {
+        font-weight: 600;
+        margin-bottom: 0.75rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .field-checkbox-group {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 0.5rem;
+    }
+
+    .field-checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem;
+        background: white;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background 0.2s ease;
+    }
+
+    .field-checkbox-label:hover {
+        background: #e7f1ff;
+    }
+
+    /* PDF Preview */
+    .pdf-preview-container {
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 1rem;
+        background: #f8f9fa;
+        margin-top: 1rem;
+    }
+
+    .pdf-preview-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+
+    #pdfCanvas {
+        max-width: 100%;
+        border: 1px solid #dee2e6;
+        background: white;
+        display: block;
+        margin: 0 auto;
+    }
+
+    .pdf-preview-controls {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+
+    /* Review Page */
+    .review-section {
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+        background: white;
+    }
+
+    .review-section-title {
+        font-weight: 600;
+        font-size: 1.1rem;
+        margin-bottom: 1rem;
+        color: #0d6efd;
+    }
+
+    .review-item {
+        display: flex;
+        margin-bottom: 0.5rem;
+    }
+
+    .review-item-label {
+        font-weight: 500;
+        width: 150px;
+        color: #6c757d;
+    }
+
+    .review-item-value {
+        flex: 1;
+    }
+
+    .field-badge {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        background: #e7f1ff;
+        border: 1px solid #0d6efd;
+        border-radius: 20px;
+        font-size: 0.875rem;
+        margin-right: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+
+    /* Wizard Navigation */
+    .wizard-navigation {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 2rem;
+        padding-top: 1rem;
+        border-top: 1px solid #dee2e6;
+    }
+
+    .validation-error {
+        color: #dc3545;
+        font-size: 0.875rem;
+        margin-top: 0.5rem;
+        display: none;
+    }
+
+    .validation-error.show {
+        display: block;
+    }
+</style>
+
 <div class="card p-4">
-    <h4 class="mb-3">Create Template</h4>
-    <form asp-action="Create" method="post" enctype="multipart/form-data">
-        <div class="row mb-3">
-            <div class="col-md-4">
-                <label class="form-label">Template Key</label>
-                <input asp-for="TemplateKey" class="form-control" />
+    <h4 class="mb-4">Create New Template</h4>
+
+    <!-- Wizard Progress Indicator -->
+    <div class="wizard-progress">
+        <div class="wizard-step active" data-step="1">
+            <div class="wizard-step-circle">1</div>
+            <div class="wizard-step-label">Basic Info</div>
+        </div>
+        <div class="wizard-step" data-step="2">
+            <div class="wizard-step-circle">2</div>
+            <div class="wizard-step-label">Template</div>
+        </div>
+        <div class="wizard-step" data-step="3">
+            <div class="wizard-step-circle">3</div>
+            <div class="wizard-step-label">Fields & PDF</div>
+        </div>
+        <div class="wizard-step" data-step="4">
+            <div class="wizard-step-circle">4</div>
+            <div class="wizard-step-label">Review</div>
+        </div>
+    </div>
+
+    <form asp-action="Create" method="post" enctype="multipart/form-data" id="templateForm">
+        <div class="wizard-content">
+
+            <!-- Step 1: Basic Information & Category -->
+            <div class="wizard-step-content active" data-step="1">
+                <h5 class="mb-3">Basic Information</h5>
+
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Display Name *</label>
+                        <input asp-for="DisplayName" id="displayName" class="form-control" placeholder="e.g., Installation Release Form" required />
+                        <small class="text-muted">User-friendly name for the template</small>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Template Key</label>
+                        <input asp-for="TemplateKey" id="templateKey" class="form-control" readonly />
+                        <small class="text-muted">Auto-generated from display name</small>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Category *</label>
+                        <select id="templateCategory" class="form-select" required>
+                            <option value="">-- Select Category --</option>
+                            <option value="Installation Release">Installation Release</option>
+                            <option value="Work Order">Work Order</option>
+                            <option value="Inspection">Inspection</option>
+                            <option value="General Consent">General Consent</option>
+                            <option value="Custom">Custom</option>
+                        </select>
+                        <small class="text-muted">Helps organize templates</small>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Active Status</label>
+                        <select asp-for="IsActive" class="form-select">
+                            <option value="true" selected>Active</option>
+                            <option value="false">Inactive</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Default Subject</label>
+                    <input asp-for="DefaultSubject" class="form-control" placeholder="e.g., Please sign: Installation Release" />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Default Message</label>
+                    <textarea asp-for="DefaultMessage" class="form-control" rows="3" placeholder="Please review and sign the attached document..."></textarea>
+                </div>
+
+                <div class="validation-error" id="step1Error">Please fill in all required fields (Display Name and Category)</div>
             </div>
-            <div class="col-md-6">
-                <label class="form-label">Display Name</label>
-                <input asp-for="DisplayName" class="form-control" />
+
+            <!-- Step 2: Document Template Selection -->
+            <div class="wizard-step-content" data-step="2">
+                <h5 class="mb-3">Select Document Template</h5>
+                <p class="text-muted">Choose the Razor view that will render your document for review</p>
+
+                <div class="template-cards">
+                    @foreach (var viewPath in viewPaths)
+                    {
+                        var displayName = viewPath.Split('/').Last().Replace(".cshtml", "");
+                        var icon = displayName.Contains("Installation") ? "📋" :
+                                   displayName.Contains("Work") ? "🔧" :
+                                   displayName.Contains("Inspection") ? "✅" : "📄";
+
+                        <div class="template-card" data-view-path="@viewPath">
+                            <div class="template-card-icon">@icon</div>
+                            <div class="template-card-title">@displayName</div>
+                            <div class="template-card-description">@viewPath</div>
+                        </div>
+                    }
+                </div>
+
+                <input type="hidden" asp-for="RazorViewPath" id="razorViewPath" />
+                <div class="validation-error" id="step2Error">Please select a document template</div>
             </div>
-            <div class="col-md-2">
-                <label class="form-label">Active</label>
-                <select asp-for="IsActive" class="form-select">
-                    <option value="true">Yes</option>
-                    <option value="false">No</option>
-                </select>
+
+            <!-- Step 3: Field Selection & PDF Upload -->
+            <div class="wizard-step-content" data-step="3">
+                <h5 class="mb-3">Configure Fields & Upload PDF</h5>
+
+                <!-- Field Selection -->
+                <div class="mb-4">
+                    <h6>Select Fields to Include</h6>
+
+                    <!-- Property Fields -->
+                    <div class="field-category">
+                        <div class="field-category-header">
+                            <input type="checkbox" class="form-check-input select-all-category" data-category="property" id="selectAllProperty" />
+                            <label for="selectAllProperty">🏢 Property Information</label>
+                        </div>
+                        <div class="field-checkbox-group">
+                            <label class="field-checkbox-label">
+                                <input type="checkbox" class="field-checkbox" data-category="property" value="PropertyName" />
+                                Property Name
+                            </label>
+                            <label class="field-checkbox-label">
+                                <input type="checkbox" class="field-checkbox" data-category="property" value="PropertyAddress" />
+                                Property Address
+                            </label>
+                            <label class="field-checkbox-label">
+                                <input type="checkbox" class="field-checkbox" data-category="property" value="PropertyPhone" />
+                                Property Phone
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Order Fields -->
+                    <div class="field-category">
+                        <div class="field-category-header">
+                            <input type="checkbox" class="form-check-input select-all-category" data-category="order" id="selectAllOrder" />
+                            <label for="selectAllOrder">📦 Work Order Information</label>
+                        </div>
+                        <div class="field-checkbox-group">
+                            <label class="field-checkbox-label">
+                                <input type="checkbox" class="field-checkbox" data-category="order" value="InstallationDate" />
+                                Installation Date
+                            </label>
+                            <label class="field-checkbox-label">
+                                <input type="checkbox" class="field-checkbox" data-category="order" value="UnitNumber" />
+                                Unit Number
+                            </label>
+                            <label class="field-checkbox-label">
+                                <input type="checkbox" class="field-checkbox" data-category="order" value="DeliveryDate" />
+                                Delivery Date
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Signature Fields -->
+                    <div class="field-category">
+                        <div class="field-category-header">
+                            <input type="checkbox" class="form-check-input select-all-category" data-category="signature" id="selectAllSignature" />
+                            <label for="selectAllSignature">✍️ Signature Fields</label>
+                        </div>
+                        <div class="field-checkbox-group">
+                            <label class="field-checkbox-label">
+                                <input type="checkbox" class="field-checkbox" data-category="signature" value="PropertyStaffName" />
+                                Property Staff Name
+                            </label>
+                            <label class="field-checkbox-label">
+                                <input type="checkbox" class="field-checkbox" data-category="signature" value="PropertyStaffSignature" />
+                                Property Staff Signature
+                            </label>
+                            <label class="field-checkbox-label">
+                                <input type="checkbox" class="field-checkbox" data-category="signature" value="PropertyStaffDate" />
+                                Property Staff Date
+                            </label>
+                            <label class="field-checkbox-label">
+                                <input type="checkbox" class="field-checkbox" data-category="signature" value="ResidentName" />
+                                Resident Name
+                            </label>
+                            <label class="field-checkbox-label">
+                                <input type="checkbox" class="field-checkbox" data-category="signature" value="ResidentSignature" />
+                                Resident Signature
+                            </label>
+                            <label class="field-checkbox-label">
+                                <input type="checkbox" class="field-checkbox" data-category="signature" value="ResidentPhone" />
+                                Resident Phone
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Hidden field for MergeSpec JSON -->
+                <input type="hidden" asp-for="MergeSpecJson" id="mergeSpecJson" />
+
+                <!-- PDF Upload -->
+                <div class="mb-3">
+                    <h6>Upload Base PDF (Optional)</h6>
+                    <input type="file" name="pdfFile" id="pdfFile" class="form-control" accept=".pdf" />
+                    <small class="text-muted">Upload a PDF template for pdf-stamp rendering</small>
+                </div>
+
+                <!-- PDF Preview -->
+                <div class="pdf-preview-container" id="pdfPreviewContainer" style="display: none;">
+                    <div class="pdf-preview-header">
+                        <h6>PDF Preview</h6>
+                        <button type="button" class="btn btn-sm btn-secondary" id="togglePreview">
+                            <i class="bi bi-arrows-angle-contract"></i> Collapse
+                        </button>
+                    </div>
+                    <div id="pdfPreviewContent">
+                        <div class="text-center mb-2">
+                            <strong id="pdfFileName"></strong>
+                            <span class="text-muted">(<span id="pdfFileSize"></span>)</span>
+                        </div>
+                        <canvas id="pdfCanvas"></canvas>
+                        <div class="pdf-preview-controls">
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="prevPage">
+                                <i class="bi bi-chevron-left"></i> Previous
+                            </button>
+                            <span>Page <span id="currentPage">1</span> of <span id="totalPages">1</span></span>
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="nextPage">
+                                Next <i class="bi bi-chevron-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="validation-error" id="step3Error">Please select at least one field</div>
             </div>
+
+            <!-- Step 4: Review & Save -->
+            <div class="wizard-step-content" data-step="4">
+                <h5 class="mb-3">Review Your Template</h5>
+                <p class="text-muted mb-4">Please review all information before saving</p>
+
+                <!-- Basic Information Review -->
+                <div class="review-section">
+                    <div class="review-section-title">📋 Basic Information</div>
+                    <div class="review-item">
+                        <div class="review-item-label">Display Name:</div>
+                        <div class="review-item-value" id="reviewDisplayName"></div>
+                    </div>
+                    <div class="review-item">
+                        <div class="review-item-label">Template Key:</div>
+                        <div class="review-item-value"><code id="reviewTemplateKey"></code></div>
+                    </div>
+                    <div class="review-item">
+                        <div class="review-item-label">Category:</div>
+                        <div class="review-item-value" id="reviewCategory"></div>
+                    </div>
+                    <div class="review-item">
+                        <div class="review-item-label">Status:</div>
+                        <div class="review-item-value" id="reviewStatus"></div>
+                    </div>
+                </div>
+
+                <!-- Document Template Review -->
+                <div class="review-section">
+                    <div class="review-section-title">📄 Document Template</div>
+                    <div class="review-item">
+                        <div class="review-item-label">Razor View:</div>
+                        <div class="review-item-value"><code id="reviewRazorView"></code></div>
+                    </div>
+                </div>
+
+                <!-- Fields Review -->
+                <div class="review-section">
+                    <div class="review-section-title">✅ Selected Fields</div>
+                    <div id="reviewFields"></div>
+                </div>
+
+                <!-- PDF Review -->
+                <div class="review-section" id="reviewPdfSection" style="display: none;">
+                    <div class="review-section-title">📎 PDF File</div>
+                    <div class="review-item">
+                        <div class="review-item-label">File Name:</div>
+                        <div class="review-item-value" id="reviewPdfFileName"></div>
+                    </div>
+                    <div class="review-item">
+                        <div class="review-item-label">File Size:</div>
+                        <div class="review-item-value" id="reviewPdfFileSize"></div>
+                    </div>
+                </div>
+            </div>
+
         </div>
 
-        <div class="mb-3">
-            <label class="form-label">Razor View Path (for Review page)</label>
-            <select asp-for="RazorViewPath" class="form-select">
-                <option value="">-- choose --</option>
-                @foreach (var p in viewPaths)
-                {
-                    <option value="@p">@p</option>
-                }
-            </select>
-        </div>
-
-        <div class="mb-3">
-            <label class="form-label">Default Subject</label>
-            <input asp-for="DefaultSubject" class="form-control" />
-        </div>
-        <div class="mb-3">
-            <label class="form-label">Default Message</label>
-            <textarea asp-for="DefaultMessage" class="form-control" rows="2"></textarea>
-        </div>
-
-        <div class="mb-3">
-            <label class="form-label">MergeSpec (JSON)</label>
-            <textarea asp-for="MergeSpecJson" class="form-control" rows="8" spellcheck="false"></textarea>
-            <small class="text-muted">e.g. { "merge":"property,order,customer", "fields": { "PropertyName":"ERP.Properties.Name" } }</small>
-        </div>
-
-        <div class="mb-3">
-            <label class="form-label">Base PDF (optional for pdf-stamp)</label>
-            <input type="file" name="pdfFile" class="form-control" accept=".pdf" />
-            <small class="text-muted">Uploaded to Content/Templates.</small>
-        </div>
-
-        <div class="d-flex gap-2">
-            <button class="btn btn-success" type="submit">Save</button>
-            <a class="btn btn-secondary" asp-action="Index">Cancel</a>
+        <!-- Wizard Navigation -->
+        <div class="wizard-navigation">
+            <button type="button" class="btn btn-secondary" id="prevBtn" style="display: none;">
+                <i class="bi bi-chevron-left"></i> Previous
+            </button>
+            <div>
+                <a class="btn btn-outline-secondary" asp-action="Index">Cancel</a>
+            </div>
+            <button type="button" class="btn btn-primary" id="nextBtn">
+                Next <i class="bi bi-chevron-right"></i>
+            </button>
+            <button type="submit" class="btn btn-success" id="submitBtn" style="display: none;">
+                <i class="bi bi-check-circle"></i> Create Template
+            </button>
         </div>
     </form>
 </div>
+
+@section Scripts {
+    <!-- PDF.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        // Set PDF.js worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
+
+    <!-- Template Field Selector (from Phase 1) -->
+    <script src="~/assets/js/template-field-selector.js"></script>
+
+    <!-- Template Wizard (Phase 2) -->
+    <script src="~/assets/js/template-wizard.js"></script>
+
+    <script>
+        // Initialize both modules
+        document.addEventListener('DOMContentLoaded', function() {
+            TemplateFieldSelector.init();
+            TemplateWizard.init();
+        });
+    </script>
+}

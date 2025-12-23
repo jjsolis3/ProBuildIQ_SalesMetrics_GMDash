@@ -33,11 +33,17 @@ public sealed class PdfService : IPdfService
         // 2) Gather data to stamp (replace placeholders with ERP values)
         var propertyName = await _merge.GetPropertyNameAsync(env.PropertyID) ?? "";
         var installDate = DateTime.UtcNow.ToString("MM/dd/yyyy");   // TODO: from ERP if available
-        var unitNumber = "Unit 123";                               // TODO
-        var staffName = manager?.FullName ?? "Property Staff";    // from recipient or ERP
+        var unitNumber = env.Property?.Unit ?? "Unit 123";         // Get from envelope property
+        var staffName = manager?.FullName ?? "Property Staff";      // from recipient or ERP
         var staffSignedAt = manager?.SignedAtUtc?.ToLocalTime().ToString("MM/dd/yyyy") ?? "";
         var tenantName = tenant.FullName;
         var tenantPhone = tenant.Phone ?? "";
+
+        // Manager signature (if exists)
+        string? managerSigWeb = manager?.SignatureImagePath;
+        string? managerSigFs = managerSigWeb is null ? null :
+            Path.Combine("wwwroot", managerSigWeb.TrimStart('/')
+                .Replace("/", Path.DirectorySeparatorChar.ToString()));
 
         // Signature images (saved earlier by EnvelopeService)
         string? tenantSigWeb = tenant.SignatureImagePath;     // like "/Files/Sign/2025/09/sig-123.png"
@@ -60,9 +66,9 @@ public sealed class PdfService : IPdfService
         var brush = XBrushes.Black;
 
         // 5) Coordinates (points; 1pt = 1/72in; origin = bottom-left)
-        //    Coordinates are based on the SF_OccupiedReleaseForm_1.4.pdf template
-        //    Top section: Property Name, Installation Date, Unit Number
-        //    Bottom section: Property Staff and Resident signature rows
+        //    PDF page size: 8.5" x 11" = 612pt x 792pt
+        //    Y coordinates measure from BOTTOM of page
+        //    Text Y coordinate is the BASELINE of the text
 
         // Enable debug mode to visualize field positions
         var debug = _db.Database.GetService<IConfiguration>()["Pdf:DebugMarkers"]?.Equals("true", StringComparison.OrdinalIgnoreCase) == true;
@@ -71,43 +77,43 @@ public sealed class PdfService : IPdfService
             DrawGrid(gfx, page, 1.0); // 1-inch grid
         }
 
-        // TOP SECTION - Form fields (aligned with template form lines)
-        // Property Name field - approximately 9.2" from bottom, 1.65" from left
-        DrawText(gfx, font, brush, propertyName, In(1.65), In(9.18));
+        // TOP SECTION - Form fields (these are near the top of the page)
+        // Based on the template, these fields are approximately:
+        // Property Name: 10.4" from bottom (748pt)
+        // Installation Date: 10.1" from bottom (727pt)
+        // Unit Number: 9.8" from bottom (706pt)
+        DrawText(gfx, font, brush, propertyName, In(1.9), In(10.35));      // Property Name field
+        DrawText(gfx, font, brush, installDate, In(1.9), In(10.05));       // Installation Date field
+        DrawText(gfx, font, brush, unitNumber, In(1.9), In(9.75));         // Unit Number field
 
-        // Installation Date field - approximately 8.87" from bottom, 1.65" from left
-        DrawText(gfx, font, brush, installDate, In(1.65), In(8.87));
+        // BOTTOM SECTION - Signature table (near bottom of page)
+        // Property Staff row: approximately 2.0" from bottom
+        double staffRowY = In(2.0);
+        DrawText(gfx, font, brush, staffName, In(0.65), staffRowY);        // Property Staff Name column (left)
 
-        // Unit Number field - approximately 8.57" from bottom, 1.65" from left
-        DrawText(gfx, font, brush, unitNumber, In(1.65), In(8.57));
+        // Property Staff signature (middle column)
+        if (managerSigFs != null && File.Exists(managerSigFs))
+        {
+            using var fs = File.OpenRead(managerSigFs);
+            using var img = XImage.FromStream(() => fs);
+            gfx.DrawImage(img, In(2.4), In(1.6), In(1.6), In(0.45));  // Signature in middle column
+        }
 
-        // BOTTOM SECTION - Signature rows
-        // Property Staff row (approximately 1.73" from bottom)
-        double staffRowY = In(1.73);
-        DrawText(gfx, font, brush, staffName, In(0.6), staffRowY);                    // Property Staff Name column
-        DrawText(gfx, font, brush, staffSignedAt, In(5.5), staffRowY);               // Date column
+        DrawText(gfx, font, brush, staffSignedAt, In(5.4), staffRowY);     // Date column (right)
 
-        // Resident row (approximately 1.03" from bottom)
-        double residentRowY = In(1.03);
-        DrawText(gfx, font, brush, tenantName, In(0.6), residentRowY);               // Resident Name column
-        DrawText(gfx, font, brush, tenantPhone, In(5.5), residentRowY);              // Resident Phone column
+        // Resident row: approximately 1.25" from bottom
+        double residentRowY = In(1.25);
+        DrawText(gfx, font, brush, tenantName, In(0.65), residentRowY);    // Resident Name column (left)
 
-        // Resident signature image (middle column, aligned with Resident row)
-        // Signature should be positioned in the "Resident Signature" column
+        // Resident signature (middle column)
         if (tenantSigFs != null && File.Exists(tenantSigFs))
         {
             using var fs = File.OpenRead(tenantSigFs);
             using var img = XImage.FromStream(() => fs);
-            double sigW = In(1.8);   // Signature width to fit in signature column
-            double sigH = In(0.5);   // Signature height to fit in row
-            // Position in middle column, slightly below the baseline to align nicely
-            gfx.DrawImage(img, In(2.6), In(0.88), sigW, sigH);
+            gfx.DrawImage(img, In(2.4), In(0.85), In(1.6), In(0.45));  // Signature in middle column
         }
 
-
-        // Optional: staff signature too (if you capture it similarly)
-        // var staffSigFs = ...
-        // gfx.DrawImage(...);
+        DrawText(gfx, font, brush, tenantPhone, In(5.4), residentRowY);    // Resident Phone column (right)
 
         // Optional: audit footer/hash (once you compute final bytes, you can re-open and stamp hash)
         // Here we add a placeholder text (hash added after save is tricky). You can also write the

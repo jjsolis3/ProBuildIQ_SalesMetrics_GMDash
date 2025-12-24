@@ -750,6 +750,7 @@ namespace SalesMetrics.Controllers
                     WHERE A.ARO_INVOICE_BALANCE_DUE > 0
 	                    AND DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) > 30
 	                    AND A.ARO_DATE_PAID_IN_FULL IS NULL
+                        AND I.IHF_INVOICE_NUMBER IS NOT NULL
                     ";
 
                 if (connectionString == "LAX")

@@ -41,7 +41,7 @@
             padding: 1.25rem 1.5rem;
             font-weight: 700;
             font-size: 1.1rem;
-            color: #1a1a2e;
+            color: darkorange;
         }
 
         .parameters-card .card-body {
@@ -186,18 +186,22 @@
     }
 
     /* Row highlighting for commission/margin gates */
-    .row-warning {
+    .row-warning,
+    .row-warning td {
         background-color: #fff3cd !important;
     }
 
-    .row-danger {
+    .row-danger,
+    .row-danger td {
         background-color: #f8d7da !important;
     }
 
+    .results-table tbody tr.row-warning:hover,
     .results-table tbody tr.row-warning:hover {
         background-color: #ffe69c !important;
     }
 
+    .results-table tbody tr.row-danger:hover,
     .results-table tbody tr.row-danger:hover {
         background-color: #f5c2c7 !important;
     }
@@ -376,20 +380,30 @@ else if (Model.ShowResults)
     <script>
         $(document).ready(function() {
             // Apply conditional row highlighting based on commission gate and target margin
+            function normalizeGateValue(value) {
+                if (value === undefined || value === null) {
+                    return '';
+                }
+
+                return value.toString().trim().toUpperCase();
+            }
+
             function applyRowHighlighting() {
                 $('#resultsTable tbody tr').each(function() {
                     var $row = $(this);
-                    var commissionGate = $row.data('commission-gate');
-                    var targetMargin = $row.data('target-margin');
+                    var commissionGate = normalizeGateValue($row.data('commission-gate'));
+                    var targetMargin = normalizeGateValue($row.data('target-margin'));
+                    var commisionNo = commissionGate === 'NO';
+                    var targetNo = targetMargin === 'NO';
 
                     // Remove any existing highlight classes
                     $row.removeClass('row-warning row-danger');
 
                     // Apply highlighting based on conditions
-                    if (commissionGate === 'NO' && targetMargin === 'NO') {
+                    if (commissionNo && targetNo) {
                         // Both are NO - Red highlighting
                         $row.addClass('row-danger');
-                    } else if (commissionGate === 'NO' || targetMargin === 'NO') {
+                    } else if (commissionNo || targetNo) {
                         // One is NO - Yellow highlighting
                         $row.addClass('row-warning');
                     }
@@ -398,7 +412,7 @@ else if (Model.ShowResults)
             }
 
             // Initialize DataTable with export buttons and features
-            $('#resultsTable').DataTable({
+            var resultsTable = $('#resultsTable').DataTable({
                 order: [
                     [2, 'desc' ],   // 2 by status
                     [6, 'asc'],     // 6 by Price Code
@@ -455,13 +469,17 @@ else if (Model.ShowResults)
                     }
                 },
                 // Apply row highlighting after every draw (pagination, search, sort)
-                drawCallback: function() {
-                    applyRowHighlighting();
-                },
+                //drawCallback: function() {
+                //    applyRowHighlighting();
+                //},
                 // Hide loading overlay after DataTable is fully initialized
                 initComplete: function() {
                     $('#loadingOverlay').fadeOut(600);
                 }
+            });
+
+            resultsTable.on('draw.dt', function() {
+                applyRowHighlighting();
             });
         });
     </script>

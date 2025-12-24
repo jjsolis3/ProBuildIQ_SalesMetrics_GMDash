@@ -185,65 +185,6 @@
         opacity: 0.5;
     }
 
-    /* Loading overlay styles */
-    .loading-overlay {
-        display: none;
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0, 0, 0, 0.7);
-        z-index: 9999;
-        justify-content: center;
-        align-items: center;
-    }
-
-        .loading-overlay.active {
-            display: flex;
-        }
-
-    .loading-content {
-        background: white;
-        border-radius: 16px;
-        padding: 3rem;
-        text-align: center;
-        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-        max-width: 400px;
-    }
-
-    .loading-spinner {
-        width: 60px;
-        height: 60px;
-        border: 6px solid #f3f3f3;
-        border-top: 6px solid #667eea;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-        margin: 0 auto 1.5rem;
-    }
-
-    @@ Keykeyframes spin {
-        0% {
-            transform: rotate(0deg);
-        }
-
-        100% {
-            transform: rotate(360deg);
-        }
-    }
-
-    .loading-text {
-        font-size: 1.2rem;
-        font-weight: 600;
-        color: #1a1a2e;
-        margin-bottom: 0.5rem;
-    }
-
-    .loading-subtext {
-        font-size: 0.9rem;
-        color: #6c757d;
-    }
-
     /* Row highlighting for commission/margin gates */
     .row-warning {
         background-color: #fff3cd !important;
@@ -261,15 +202,6 @@
         background-color: #f5c2c7 !important;
     }
 </style>
-
-<!-- Loading Overlay -->
-<div id="loadingOverlay" class="loading-overlay">
-    <div class="loading-content">
-        <div class="loading-spinner"></div>
-        <div class="loading-text">Generating Report...</div>
-        <div class="loading-subtext">Please wait while we process your request</div>
-    </div>
-</div>
 
 <div class="report-header">
     <h2>@Model.Definition?.Name</h2>
@@ -443,11 +375,6 @@ else if (Model.ShowResults)
 
     <script>
         $(document).ready(function() {
-            // Show loading overlay when report form is submitted
-            $('#reportForm').on('submit', function() {
-                $('#loadingOverlay').addClass('active');
-            });
-
             // Apply conditional row highlighting based on commission gate and target margin
             function applyRowHighlighting() {
                 $('#resultsTable tbody tr').each(function() {
@@ -470,16 +397,13 @@ else if (Model.ShowResults)
                 });
             }
 
-            // Apply row highlighting before initializing DataTable
-            applyRowHighlighting();
-
             // Initialize DataTable with export buttons and features
             $('#resultsTable').DataTable({
                 order: [
                     [2, 'desc' ],   // 2 by status
-                    [6, 'asc'],     // 6 by Price Code 
+                    [6, 'asc'],     // 6 by Price Code
                     [5, 'asc']      // 5 by Property
-                ], 
+                ],
                 responsive: true,
                 paging: true,
                 pageLength: 10,
@@ -529,6 +453,14 @@ else if (Model.ShowResults)
                         next: "Next ›",
                         previous: "‹ Previous"
                     }
+                },
+                // Apply row highlighting after every draw (pagination, search, sort)
+                drawCallback: function() {
+                    applyRowHighlighting();
+                },
+                // Hide loading overlay after DataTable is fully initialized
+                initComplete: function() {
+                    $('#loadingOverlay').fadeOut(600);
                 }
             });
         });

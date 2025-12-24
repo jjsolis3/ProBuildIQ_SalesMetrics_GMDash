@@ -1,7 +1,7 @@
 ﻿@model SalesMetrics.Models.UserLocationSwitcherViewModel
 
-<form asp-controller="Accounts" asp-action="SwitchLocation" method="post" class="d-inline me-2">
-    <select name="selectedLocation" onchange="this.form.submit()" class="form-select form-select-sm">
+<form asp-controller="Accounts" asp-action="SwitchLocation" method="post" class="w-100">
+    <select name="selectedLocation" onchange="this.form.submit()" class="form-select form-select-sm location-switcher-dropdown" aria-label="Select Office Location">
         @foreach (var loc in Model.AvailableLocations)
         {
             <option value="@loc.Value" selected="@(loc.Selected ? "selected" : null)">

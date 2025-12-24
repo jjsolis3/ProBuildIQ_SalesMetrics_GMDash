@@ -189,12 +189,19 @@
                 </div>
                 <!-- End Notification -->
                 <!-- Start Profile -->
+                @{
+                    var userFullName = User.FindFirst("FullName")?.Value ?? "User";
+                    var userRole = User.FindFirst(ClaimTypes.Role)?.Value ?? "User";
+                    var userLocation = Context.Session.GetString("OfficeLocation") ?? "LAX";
+                    var isAdminOrGM = User.IsInRole("Admin") || User.IsInRole("GM") || User.FindFirst("RoleId")?.Value == "1" || User.FindFirst("RoleId")?.Value == "4";
+                }
                 <div class="dropdown d-inline-block">
                     <button type="button" class="btn btn-sm top-icon p-0" id="page-header-user-dropdown" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                         <img class="rounded avatar-2xs p-0" src="~/assets/images/users/GenericPhoto.png" alt="Header Avatar">
                     </button>
                     <div class="dropdown-menu dropdown-menu-wide dropdown-menu-end dropdown-menu-animated overflow-hidden py-0">
                         <div class="card border-0">
+                            <!-- User Info Header -->
                             <div class="card-header bg-primary rounded-0">
                                 <div class="rich-list-item w-100 p-0">
                                     <div class="rich-list-prepend">
@@ -203,71 +210,95 @@
                                         </div>
                                     </div>
                                     <div class="rich-list-content">
-                                        <h3 class="rich-list-title text-white">Seamless Nav Menu</h3>
-                                        <span class="rich-list-subtitle text-white"></span>
+                                        <h3 class="rich-list-title text-white mb-0">@userFullName</h3>
+                                        <span class="rich-list-subtitle text-white-50 small">@userRole</span>
                                     </div>
-                                    <div class="rich-list-append"><span class="badge badge-label-light fs-6">SF</span></div>
+                                    <div class="rich-list-append">
+                                        <span class="badge badge-label-light fs-6" title="Current Location">@userLocation</span>
+                                    </div>
                                 </div>
                             </div>
+
                             <div class="card-body p-0">
+                                <!-- Main Navigation Grid -->
                                 <div class="grid-nav grid-nav-flush grid-nav-action grid-nav-no-rounded">
                                     <div class="grid-nav-row">
-                                        <a href="/Accounts/Profile" class="grid-nav-item">
+                                        <a href="/Accounts/Profile" class="grid-nav-item" aria-label="View Profile">
                                             <div class="grid-nav-icon"><i class="far fa-address-card"></i></div>
                                             <span class="grid-nav-content">Profile</span>
                                         </a>
-                                        <a href="/Tasks/Task" class="grid-nav-item">
+                                        <a href="/Tasks/Task" class="grid-nav-item" aria-label="View Tasks">
                                             <div class="grid-nav-icon"><i class="far fa-calendar-check"></i></div>
                                             <span class="grid-nav-content">Tasks</span>
                                         </a>
-                                        <a href="/Orders/Orders" class="grid-nav-item">
+                                        <a href="/Orders/Orders" class="grid-nav-item" aria-label="View Job Schedule">
                                             <div class="grid-nav-icon"><i class="far fa-calendar"></i></div>
                                             <span class="grid-nav-content">Job Schedule</span>
                                         </a>
-
                                     </div>
+
                                     <div class="grid-nav-row">
-                                        <a href="/Properties/Properties" class="grid-nav-item">
+                                        <a href="/Properties/Properties" class="grid-nav-item" aria-label="View Properties">
                                             <div class="grid-nav-icon"><i class="far fa-building"></i></div>
                                             <span class="grid-nav-content">Properties</span>
                                         </a>
-                                        <a href="/Yardi/YardiProperties" class="grid-nav-item">
+                                        <a href="/Yardi/YardiProperties" class="grid-nav-item" aria-label="View Yardi">
                                             <div class="grid-nav-icon"><i class="far fa-address-book"></i></div>
                                             <span class="grid-nav-content">Yardi</span>
                                         </a>
-                                        <a href="/Journal/Index" class="grid-nav-item">
-                                            <div class="grid-nav-icon"><i class="far fa-comments"></i><i class="far fa-journal-whills"></i></div>
+                                        <a href="/Journal/Index" class="grid-nav-item" aria-label="View Journal">
+                                            <div class="grid-nav-icon"><i class="far fa-comments"></i></div>
                                             <span class="grid-nav-content">Journal</span>
                                         </a>
                                     </div>
-                                @if (User.IsInRole("Admin") || User.IsInRole("GM") || User.FindFirst("RoleId")?.Value == "1" || User.FindFirst("RoleId")?.Value == "4")
-                                {
-                                        <div class="grid-nav-item px-3 py-2">
-                                            <div class="row">
-                                                <div class="col-2">
-                                                    <div class="me-2 text-primary"><i class="fas fa-map-marker-alt"></i></div>
+
+                                    @if (isAdminOrGM)
+                                    {
+                                        <!-- Documents & Signing Section -->
+                                        <div class="nav-menu-divider">
+                                            <span class="nav-menu-divider-text">Documents & Signing</span>
+                                        </div>
+                                        <div class="grid-nav-row">
+                                            <a href="/SignAdmin/Index" class="grid-nav-item" aria-label="View Envelopes">
+                                                <div class="grid-nav-icon"><i class="fa fa-envelope"></i></div>
+                                                <span class="grid-nav-content">My Envelopes</span>
+                                            </a>
+                                            <a href="/SignAdmin/Create" class="grid-nav-item" aria-label="Send Document">
+                                                <div class="grid-nav-icon"><i class="fa fa-paper-plane"></i></div>
+                                                <span class="grid-nav-content">Send Document</span>
+                                            </a>
+                                            <a href="/SignTemplates/Index" class="grid-nav-item" aria-label="Manage Templates">
+                                                <div class="grid-nav-icon"><i class="fa fa-file-alt"></i></div>
+                                                <span class="grid-nav-content">Templates</span>
+                                            </a>
+                                        </div>
+
+                                        <!-- Office Location Section -->
+                                        <div class="nav-menu-divider">
+                                            <span class="nav-menu-divider-text">Settings</span>
+                                        </div>
+                                        <div class="location-switcher-section">
+                                            <div class="d-flex align-items-center px-3 py-3">
+                                                <div class="me-3">
+                                                    <i class="fas fa-map-marker-alt text-primary fs-4"></i>
                                                 </div>
-                                                <div class="col-10 align-center">
-                                                    <div class="d-flex align-items-center w-100">
-                                                        <div class="grid-nav-content text-center mt-1 small fw-bold text-secondary">Change Office Location</div>
-                                                        <div class="w-100">
-                                                        @await Component.InvokeAsync("UserLocationSwitcher")
-                                                        </div>
-                                                    </div>
+                                                <div class="flex-grow-1">
+                                                    <label class="form-label mb-1 small fw-semibold text-muted">Office Location</label>
+                                                    @await Component.InvokeAsync("UserLocationSwitcher")
                                                 </div>
                                             </div>
                                         </div>
-                                }
+                                    }
                                 </div>
+
+                                <!-- Sign Out Footer -->
                                 <div class="card-footer card-footer-bordered rounded-0">
                                     <form method="post" action="/auth/logout" class="d-inline">
-                                    @Html.AntiForgeryToken()
-                                        <button type="submit" class="btn btn-label-danger w-100">
+                                        @Html.AntiForgeryToken()
+                                        <button type="submit" class="btn btn-label-danger w-100" aria-label="Sign Out">
                                             <i class="mdi mdi-logout me-1"></i> Sign out
                                         </button>
                                     </form>
-
-
                                 </div>
                             </div>
                         </div>

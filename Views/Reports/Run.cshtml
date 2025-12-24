@@ -351,7 +351,8 @@
 
 @if (Model.ShowResults && Model.Rows.Any())
 {
-    <div class="results-container">
+     <div class="results-container">
+        @*
         <div class="results-header">
             <div class="results-info">
                 <div class="result-count">
@@ -379,7 +380,8 @@
                     </button>
                 </form>
             </div>
-        </div>
+        </div> 
+        *@
 
         <div class="table-wrapper p-3">
             <table class="results-table table table-bordered table-striped nowrap" id="resultsTable" style="width:100%">

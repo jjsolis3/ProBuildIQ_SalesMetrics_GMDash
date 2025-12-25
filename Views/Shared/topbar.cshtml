@@ -194,6 +194,8 @@
                     var userFullName = User.FindFirst("FullName")?.Value ?? "User";
                     var userRole = User.FindFirst(ClaimTypes.Role)?.Value ?? "User";
                     var userLocation = Context.Session.GetString("OfficeLocation") ?? "LAX";
+                    var isAdmin = User.IsInRole("Admin") || User.FindFirst("RoleId")?.Value == "1";
+                    var isGM = User.IsInRole("GM") || User.FindFirst("RoleId")?.Value == "4";
                     var isAdminOrGM = User.IsInRole("Admin") || User.IsInRole("GM") || User.FindFirst("RoleId")?.Value == "1" || User.FindFirst("RoleId")?.Value == "4";
                 }
                 <div class="dropdown d-inline-block">
@@ -253,26 +255,29 @@
                                         </a>
                                     </div>
 
+                                    @if (isAdmin)
+                                {
+                                    <!-- Documents & Signing Section -->
+                                    <div class="nav-menu-divider">
+                                        <span class="nav-menu-divider-text">Documents & Signing</span>
+                                    </div>
+                                    <div class="grid-nav-row">
+                                        <a href="/SignAdmin/Index" class="grid-nav-item" aria-label="View Envelopes">
+                                            <div class="grid-nav-icon"><i class="fa fa-envelope"></i></div>
+                                            <span class="grid-nav-content">My Envelopes</span>
+                                        </a>
+                                        <a href="/SignAdmin/Create" class="grid-nav-item" aria-label="Send Document">
+                                            <div class="grid-nav-icon"><i class="fa fa-paper-plane"></i></div>
+                                            <span class="grid-nav-content">Send Document</span>
+                                        </a>
+                                        <a href="/SignTemplates/Index" class="grid-nav-item" aria-label="Manage Templates">
+                                            <div class="grid-nav-icon"><i class="fa fa-file-alt"></i></div>
+                                            <span class="grid-nav-content">Templates</span>
+                                        </a>
+                                    </div>
+                                }
                                     @if (isAdminOrGM)
                                     {
-                                        <!-- Documents & Signing Section -->
-                                        <div class="nav-menu-divider">
-                                            <span class="nav-menu-divider-text">Documents & Signing</span>
-                                        </div>
-                                        <div class="grid-nav-row">
-                                            <a href="/SignAdmin/Index" class="grid-nav-item" aria-label="View Envelopes">
-                                                <div class="grid-nav-icon"><i class="fa fa-envelope"></i></div>
-                                                <span class="grid-nav-content">My Envelopes</span>
-                                            </a>
-                                            <a href="/SignAdmin/Create" class="grid-nav-item" aria-label="Send Document">
-                                                <div class="grid-nav-icon"><i class="fa fa-paper-plane"></i></div>
-                                                <span class="grid-nav-content">Send Document</span>
-                                            </a>
-                                            <a href="/SignTemplates/Index" class="grid-nav-item" aria-label="Manage Templates">
-                                                <div class="grid-nav-icon"><i class="fa fa-file-alt"></i></div>
-                                                <span class="grid-nav-content">Templates</span>
-                                            </a>
-                                        </div>
 
                                         <!-- Office Location Section -->
                                         <div class="nav-menu-divider">

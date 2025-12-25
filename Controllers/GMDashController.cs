@@ -38,7 +38,7 @@ namespace SalesMetrics.Controllers
             };
 
             var locations = LocationHelper.GetLocationQueryList(locationId);
-            
+
             // SALES METRICS - run all in parallel
             var salesTasks = locations.Select(loc => GetBranchSalesMetrics(loc, mtdStart, ytdStart, today));
             var salesResult = await Task.WhenAll(salesTasks);
@@ -109,7 +109,7 @@ namespace SalesMetrics.Controllers
             var installerResults = await Task.WhenAll(installerTasks);
             model.InstallerCompletionMetrics = installerResults.SelectMany(r => r).ToList();
             ViewBag.InstallerRange = "thisweek";
-            
+
             // RECENT RTJS
             var rtjTasks = locations.Select(loc => GetRecentRTJEntries(rtjStart, rtjEnd, loc));
             var rtjResult = await Task.WhenAll(rtjTasks);
@@ -121,7 +121,7 @@ namespace SalesMetrics.Controllers
 
             ViewBag.MTDStartDateRange = mtdStart.ToString("d") + " to " + today.ToString("d");
             ViewBag.YTDStartDateRange = ytdStart.ToString("d") + " to " + today.ToString("d");
-                        
+
             return View("Index", model);
         }
 
@@ -223,8 +223,8 @@ namespace SalesMetrics.Controllers
             {
                 // Fill AR data
                 result.DueUnder30 = reader.IsDBNull(0) ? 0 : Convert.ToDecimal(reader.GetDouble(0));
-                result.Due30to60 =  reader.IsDBNull(1) ? 0 : Convert.ToDecimal(reader.GetDouble(1));
-                result.Due60to90 =  reader.IsDBNull(2) ? 0 : Convert.ToDecimal(reader.GetDouble(2));
+                result.Due30to60 = reader.IsDBNull(1) ? 0 : Convert.ToDecimal(reader.GetDouble(1));
+                result.Due60to90 = reader.IsDBNull(2) ? 0 : Convert.ToDecimal(reader.GetDouble(2));
                 result.Due90to120 = reader.IsDBNull(3) ? 0 : Convert.ToDecimal(reader.GetDouble(3));
                 result.DueOver120 = reader.IsDBNull(4) ? 0 : Convert.ToDecimal(reader.GetDouble(4));
             }
@@ -447,7 +447,7 @@ namespace SalesMetrics.Controllers
         }
 
         // INSTALLER SECTION
-        private async Task<List<InstallerCompletionMetric>> GetInstallerMetricsForWeek(string location, DateTime startDate, DateTime endDate )
+        private async Task<List<InstallerCompletionMetric>> GetInstallerMetricsForWeek(string location, DateTime startDate, DateTime endDate)
         {
             var metrics = new List<InstallerCompletionMetric>();
 
@@ -510,12 +510,12 @@ namespace SalesMetrics.Controllers
 
             return metrics;
         }
-                
+
         [HttpGet]
         public async Task<IActionResult> GetInstallerTable(string range = "thisweek", int locationId = 0)
         {
             var (startDate, endDate) = DateRangeHelper.GetRange(range);
-                        
+
             var locations = LocationHelper.GetLocationQueryList(locationId);
             var installerTasks = locations.Select(loc => GetInstallerMetricsForWeek(loc, startDate, endDate));
             var installerResults = await Task.WhenAll(installerTasks);
@@ -662,7 +662,7 @@ namespace SalesMetrics.Controllers
         }
         // END INSTALLER SECTION
         // RTJ SECTION
-        private async Task<List<RTJEntry>> GetRecentRTJEntries(DateTime startDate, DateTime endDate,  string location)
+        private async Task<List<RTJEntry>> GetRecentRTJEntries(DateTime startDate, DateTime endDate, string location)
         {
             var result = new List<RTJEntry>();
             using var conn = new SqlConnection(_configuration.GetConnectionString(location));
@@ -692,7 +692,7 @@ namespace SalesMetrics.Controllers
 
             using var reader = await cmd.ExecuteReaderAsync();
             //Console.WriteLine($"{location}: Reader opened");
-            
+
 
             while (await reader.ReadAsync())
             {
@@ -724,7 +724,7 @@ namespace SalesMetrics.Controllers
             ViewBag.rtjRangeLabel = $"{startDate.ToString("M/d/yyyy")} to {endDate.ToString("M/d/yyyy")}";
 
             return PartialView("_RTJTablePartial", allEntries);
-        }        
+        }
         // END RTJ SECTION
     }
 
@@ -734,42 +734,98 @@ namespace SalesMetrics.Controllers
         public static (DateTime StartDate, DateTime EndDate) GetRange(string rangeKey)
         {
             var today = DateTime.Today;
-            DateTime startDate, endDate = today;
+            DateTime startDate;
+            DateTime endDate = today;
 
-            switch (rangeKey?.ToLower())
+            switch (rangeKey?.ToLowerInvariant())
             {
-                case "lastweek":
-                    startDate = today.AddDays(-(int)today.DayOfWeek - 7 + 1);
-                    endDate = startDate.AddDays(6);
+                case "today":
+                    startDate = today;
+                    endDate = today;
                     break;
+
+                case "yesterday":
+                    {
+                        var prevBiz = GetPreviousBusinessDay(today);
+                        startDate = prevBiz;
+                        endDate = prevBiz;
+                        break;
+                    }
+
+                case "thisweek":
+                default:
+                    {
+                        // Monday-based week
+                        int diff = ((int)today.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
+                        startDate = today.AddDays(-diff);
+                        endDate = startDate.AddDays(6);
+                        break;
+                    }
+
+                case "lastweek":
+                    {
+                        int diff = ((int)today.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
+                        var thisWeekStart = today.AddDays(-diff);
+                        startDate = thisWeekStart.AddDays(-7);
+                        endDate = startDate.AddDays(6);
+                        break;
+                    }
+
                 case "mtd":
                     startDate = new DateTime(today.Year, today.Month, 1);
+                    endDate = today;
                     break;
+
                 case "lastmonth":
                     startDate = new DateTime(today.Year, today.Month, 1).AddMonths(-1);
                     endDate = startDate.AddMonths(1).AddDays(-1);
                     break;
+
                 case "thisquarter":
-                    int thisQ = (today.Month) / 3;
-                    startDate = new DateTime(today.Year, thisQ * 3 + 1, 1);
-                    endDate = startDate.AddMonths(3).AddDays(-1);
-                    break;
+                    {
+                        int quarterStartMonth = ((today.Month - 1) / 3) * 3 + 1; // 1,4,7,10
+                        startDate = new DateTime(today.Year, quarterStartMonth, 1);
+                        endDate = startDate.AddMonths(3).AddDays(-1);
+                        break;
+                    }
+
                 case "lastquarter":
-                    int lastQ = (today.Month - 1) / 3;
-                    startDate = new DateTime(today.Year, lastQ * 3 + 1, 1).AddMonths(-3);
-                    endDate = startDate.AddMonths(3).AddDays(-1);
-                    break;
+                    {
+                        int quarterStartMonth = ((today.Month - 1) / 3) * 3 + 1;
+                        var thisQuarterStart = new DateTime(today.Year, quarterStartMonth, 1);
+                        startDate = thisQuarterStart.AddMonths(-3);
+                        endDate = startDate.AddMonths(3).AddDays(-1);
+                        break;
+                    }
+
                 case "ytd":
                     startDate = new DateTime(today.Year, 1, 1);
+                    endDate = today;
                     break;
-                default: // this week
-                    int daysToSunday = (int)today.DayOfWeek;
-                    startDate = today.AddDays(-daysToSunday);
-                    break;
+
+                case "lastyear":
+                    {
+                        int lastYear = today.Year - 1;
+                        startDate = new DateTime(lastYear, 1, 1);
+                        endDate = new DateTime(lastYear, 12, 31);
+                        break;
+                    }
             }
 
             return (startDate, endDate);
         }
-    }
 
+
+        // ✅ Helper: Previous business day (weekends only)
+        private static DateTime GetPreviousBusinessDay(DateTime date)
+        {
+            return date.DayOfWeek switch
+            {
+                DayOfWeek.Monday => date.AddDays(-3),
+                DayOfWeek.Sunday => date.AddDays(-2),
+                DayOfWeek.Saturday => date.AddDays(-1),
+                _ => date.AddDays(-1) // Tue–Fri
+            };
+        }
+    }
 }

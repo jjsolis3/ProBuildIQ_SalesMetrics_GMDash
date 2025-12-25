@@ -273,6 +273,8 @@
                     <div class="input-group input-group-sm w-auto gap-2">
                         <label class="input-group-text text-dark" for="salesRange">Date Range</label>
                         <select id="salesRange" class="form-select border-secondary shadow-sm rounded-pill" style="min-width: 140px;">
+                            <option value="today" selected="@(ViewBag.SalesRange == "today")">Today</option>
+                            <option value="yesterday" selected="@(ViewBag.SalesRange == "yesterday")">Yesterday</option>
                             <option value="thisweek" selected="@(ViewBag.SalesRange == "thisweek")">This Week</option>
                             <option value="lastweek" selected="@(ViewBag.SalesRange == "lastweek")">Last Week</option>
                             <option value="mtd" selected="@(ViewBag.SalesRange == "mtd")">MTD</option>
@@ -280,6 +282,7 @@
                             <option value="thisquarter" selected="@(ViewBag.SalesRange == "thisquarter")">This Quarter</option>
                             <option value="lastquarter" selected="@(ViewBag.SalesRange == "lastquarter")">Last Quarter</option>
                             <option value="ytd" selected="@(ViewBag.SalesRange == "ytd")">YTD</option>
+                            <option value="lastyear" selected="@(ViewBag.SalesRange == "lastyear")">Last Year</option>
 
                         </select>
                     </div>
@@ -429,7 +432,9 @@
                     </label>
                     <select id="rtjRange" class="form-select border-secondary shadow-sm rounded-pill"
                             style="min-width: 140px;">
-                        <option value="week" selected="@(ViewBag.RTJRange == "thisweek")">This Week</option>
+                        <option value="today" selected="@(ViewBag.RTJRange == "today")">Today</option>
+                        <option value="yesterday" selected="@(ViewBag.RTJRange == "yesterday")">Yesterday</option>
+                        <option value="thisweek" selected="@(ViewBag.RTJRange == "thisweek")">This Week</option>
                         <option value="lastweek" selected="@(ViewBag.RTJRange == "lastweek")">Last Week</option>
                         <option value="mtd" selected="@(ViewBag.RTJRange == "mtd")">MTD</option>
                         <option value="lastmonth" selected="@(ViewBag.RTJRange == "lastmonth")">Last Month</option>
@@ -468,7 +473,9 @@
                         </label>
                         <select id="installerRange" class="form-select border-secondary shadow-sm rounded-pill"
                                 style="min-width: 140px;">
-                            <option value="week" selected="@(ViewBag.InstallerRange == "thisweek")">This Week</option>
+                            <option value="today" selected="@(ViewBag.InstallerRange == "today")">Today</option>
+                            <option value="yesterday" selected="@(ViewBag.InstallerRange == "yesterday")">Yesterday</option>
+                            <option value="thisweek" selected="@(ViewBag.InstallerRange == "thisweek")">This Week</option>
                             <option value="lastweek" selected="@(ViewBag.InstallerRange == "lastweek")">Last Week</option>
                             <option value="mtd" selected="@(ViewBag.InstallerRange == "mtd")">MTD</option>
                             <option value="lastmonth" selected="@(ViewBag.InstallerRange == "lastmonth")">Last Month</option>

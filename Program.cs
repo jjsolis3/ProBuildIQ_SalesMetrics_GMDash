@@ -8,12 +8,15 @@ using SalesMetrics.Services;
 using SalesMetrics.Services.Reports;
 using SalesMetrics.Services.Mvc;
 using SalesMetrics.Services.Signing;
+using SalesMetrics.Services.Notifications;
+using SalesMetrics.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration.GetConnectionString("SalesMetrics");
 
 // Add services to the container
 builder.Services.AddControllersWithViews();
+builder.Services.AddSignalR(); // Add SignalR
 builder.Services.AddSingleton<IReportCatalog, ReportCatalog>();
 builder.Services.AddSingleton<IReportRunner, ReportRunner>();
 builder.Services.AddSingleton<IReportAuthorizationService, ReportAuthorizationService>();
@@ -46,7 +49,8 @@ builder.Services.Configure<CompanyBrandingSettings>(builder.Configuration.GetSec
 builder.Services.AddScoped<IRazorViewToStringRenderer, RazorViewToStringRenderer>();
 builder.Services.AddScoped<IErpMergeService, ErpMergeService>();
 builder.Services.AddScoped<IPdfService, PdfService>();
-builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<Signing.INotificationService, Signing.NotificationService>(); // Email notification service
+builder.Services.AddScoped<Notifications.INotificationService, Notifications.NotificationService>(); // In-app notification service
 builder.Services.AddScoped<IEnvelopeService, EnvelopeService>();
 
 // Google OAuth + Cookie Auth
@@ -119,6 +123,9 @@ app.UseAuthorization();
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Auth}/{action=Index}/{id?}");
+
+// Map SignalR Hub
+app.MapHub<NotificationHub>("/notificationHub");
 
 // ✅ Initialize Rotativa for PDF rendering
 Rotativa.AspNetCore.RotativaConfiguration.Setup(app.Environment.WebRootPath, "Rotativa");

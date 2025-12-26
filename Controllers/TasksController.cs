@@ -13,6 +13,7 @@ using Calendar = SalesMetrics.Models.Calendar;
 using Microsoft.Extensions.Localization;
 using SalesMetrics.Services;
 using SalesMetrics.Services.Helpers;
+using SalesMetrics.Services.Notifications;
 
 using Google.Apis.Tasks.v1.Data;
 using System.Diagnostics.CodeAnalysis;
@@ -30,11 +31,13 @@ namespace SalesMetrics.Controllers
     {
         private readonly IConfiguration _configuration;
         private readonly SalesMetricsDbContext _context;
+        private readonly INotificationService _notificationService;
 
-        public TasksController(IConfiguration configuration, SalesMetricsDbContext context)
+        public TasksController(IConfiguration configuration, SalesMetricsDbContext context, INotificationService notificationService)
         {
             _configuration = configuration;
             _context = context;
+            _notificationService = notificationService;
         }
 
         private UserContext GetUserContext()
@@ -378,6 +381,17 @@ namespace SalesMetrics.Controllers
 
             int taskId = SaveTaskToDatabase(task);
             task.TaskID = taskId;
+
+            // Send notification to assigned user
+            try
+            {
+                await _notificationService.NotifyTaskAssignedAsync(taskId, model.AssignedTo, user.Users_Id, task.Title ?? "New Task");
+            }
+            catch (Exception ex)
+            {
+                // Log error but don't fail task creation
+                Console.WriteLine($"Error sending task assignment notification: {ex.Message}");
+            }
 
             // Add to Google Task
             var (googleTaskId, googleEventId) = await TryGoogleSyncTaskAsync(task);
@@ -1186,7 +1200,7 @@ namespace SalesMetrics.Controllers
         }
 
         [HttpPost]
-        public JsonResult UpdateStatus([FromBody] StatusUpdateModel model)
+        public async Task<JsonResult> UpdateStatus([FromBody] StatusUpdateModel model)
         {
             try
             {
@@ -1194,9 +1208,9 @@ namespace SalesMetrics.Controllers
                 {
                     conn.Open();
 
-                    string query = @"UPDATE Tasks 
-                             SET Status = @Status, 
-                                 ModifiedDate = @ModifiedDate 
+                    string query = @"UPDATE Tasks
+                             SET Status = @Status,
+                                 ModifiedDate = @ModifiedDate
                              WHERE TaskID = @TaskID;
 
                              IF @Status = 'Completed'
@@ -1212,6 +1226,20 @@ namespace SalesMetrics.Controllers
                         cmd.Parameters.AddWithValue("@TaskID", model.TaskId);
                         cmd.ExecuteNonQuery();
                     }
+                }
+
+                // Send notification about status change
+                try
+                {
+                    var task = await _context.Tasks.FirstOrDefaultAsync(t => t.TaskId == model.TaskId);
+                    if (task != null && task.AssignedTo.HasValue)
+                    {
+                        await _notificationService.NotifyTaskStatusChangedAsync(model.TaskId, task.AssignedTo.Value, task.Title ?? "Task", model.NewStatus);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error sending status change notification: {ex.Message}");
                 }
 
                 return Json(new { success = true });
@@ -1702,9 +1730,10 @@ namespace SalesMetrics.Controllers
         }
 
         [HttpPost]
-        public IActionResult AddNoteToTask(int taskId, string noteText)
+        public async Task<IActionResult> AddNoteToTask(int taskId, string noteText)
         {
             string createdBy = HttpContext.Session.GetString("Username") ?? "system";
+            var currentUserId = GetUserContext().Users_Id;
 
             using (var conn = new SqlConnection(_configuration.GetConnectionString("SalesMetrics")))
             {
@@ -1714,6 +1743,20 @@ namespace SalesMetrics.Controllers
                 cmd.Parameters.AddWithValue("@NoteText", noteText);
                 cmd.Parameters.AddWithValue("@CreatedBy", createdBy);
                 cmd.ExecuteNonQuery();
+            }
+
+            // Send notification to task owner
+            try
+            {
+                var task = await _context.Tasks.FirstOrDefaultAsync(t => t.TaskId == taskId);
+                if (task != null && task.AssignedTo.HasValue)
+                {
+                    await _notificationService.NotifyNoteAddedAsync(taskId, task.AssignedTo.Value, currentUserId, task.Title ?? "Task");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error sending note notification: {ex.Message}");
             }
 
             return Ok();

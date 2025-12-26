@@ -148,7 +148,7 @@
                     <button type="button" class="btn btn-sm top-icon" id="page-header-notifications-dropdown" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="fas fa-bell align-middle"></i>
                         <!-- Notification Dot Marker -->
-                    @* <span class="btn-marker"><i class="marker marker-dot text-danger"></i></span> *@
+                        <span class="btn-marker" style="display:none;"><i class="marker marker-dot text-danger"></i></span>
                     </button>
                     <div class="dropdown-menu dropdown-menu-lg dropdown-menu-md dropdown-menu-end p-0" aria-labelledby="page-header-notifications-dropdown">
                         <div class="p-3 bg-info">
@@ -157,33 +157,29 @@
                                     <h6 class="text-white m-0"><i class="far fa-bell me-2"></i> Notifications </h6>
                                 </div>
                                 <div class="col-auto">
-                                    <a href="#!" class="badge bg-info-subtle text-info"> 0</a>
+                                    <span id="notification-count-badge" class="badge bg-info-subtle text-info">0</span>
                                 </div>
                             </div>
                         </div>
-                        <div data-simplebar style="max-height: 230px;">
-                        @* <a href="" class="text-reset notification-item">
-                                <div class="d-flex">
-                                    <div class="avatar avatar-xs avatar-label-primary me-3">
-                                        <span class="rounded fs-16">
-                                            <i class="mdi mdi-file-document-outline"></i>
-                                        </span>
-                                    </div>
-                                    <div class="flex-1">
-                                        <h6 class="mb-1">New report has been recived</h6>
-                                        <div class="fs-12 text-muted">
-                                            <p class="mb-0"><i class="mdi mdi-clock-outline"></i> 3 min ago</p>
-                                        </div>
-                                    </div>
-                                    <i class="mdi mdi-chevron-right align-middle ms-2"></i>
-                                </div>
-                            </a> *@
+                        <div id="notification-list" data-simplebar style="max-height: 300px;">
+                            <!-- Notifications will be loaded here by JavaScript -->
+                            <div class="text-center p-4">
+                                <i class="fas fa-spinner fa-spin text-muted fs-1"></i>
+                                <p class="text-muted mt-2">Loading notifications...</p>
+                            </div>
                         </div>
                         <div class="p-2 border-top">
-                            <div class="d-grid">
-                                <a class="btn btn-sm btn-link font-size-14 text-center" href="javascript:void(0)">
-                                    <i class="mdi mdi-arrow-right-circle me-1"></i> View More..
-                                </a>
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <a class="btn btn-sm btn-link font-size-13 text-center w-100" href="javascript:void(0)" onclick="markAllAsRead()">
+                                        <i class="mdi mdi-check-all me-1"></i> Mark All Read
+                                    </a>
+                                </div>
+                                <div class="col-6">
+                                    <a class="btn btn-sm btn-link font-size-13 text-center w-100" href="/Notifications/Index">
+                                        <i class="mdi mdi-arrow-right-circle me-1"></i> View All
+                                    </a>
+                                </div>
                             </div>
                         </div>
                     </div>

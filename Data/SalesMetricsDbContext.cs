@@ -37,6 +37,10 @@ public partial class SalesMetricsDbContext : DbContext
     public DbSet<SignAttachment> SignAttachments { get; set; } = default!;
     public DbSet<SignField> SignFields { get; set; } = default!;
 
+    public DbSet<NotificationEntity> Notifications { get; set; } = default!;
+    public DbSet<NotificationRecipientEntity> NotificationRecipients { get; set; } = default!;
+    public DbSet<BroadcastMessageEntity> BroadcastMessages { get; set; } = default!;
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
         if (!optionsBuilder.IsConfigured)
@@ -206,6 +210,57 @@ public partial class SalesMetricsDbContext : DbContext
         modelBuilder.ApplyConfiguration(new SignEventConfiguration());
         modelBuilder.ApplyConfiguration(new SignAttachmentConfiguration());
         modelBuilder.ApplyConfiguration(new SignFieldConfiguration());
+
+        // Notification System Configuration
+        modelBuilder.Entity<NotificationEntity>(entity =>
+        {
+            entity.HasKey(e => e.NotificationId);
+            entity.Property(e => e.NotificationId).HasColumnName("NotificationID");
+            entity.Property(e => e.NotificationType).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.Title).HasMaxLength(255).IsRequired();
+            entity.Property(e => e.Message).HasMaxLength(1000);
+            entity.Property(e => e.ActionUrl).HasMaxLength(500);
+            entity.Property(e => e.RelatedTaskId).HasColumnName("RelatedTaskID");
+            entity.Property(e => e.RelatedEnvelopeId).HasColumnName("RelatedEnvelopeID");
+            entity.Property(e => e.BroadcastMessageId).HasColumnName("BroadcastMessageID");
+            entity.Property(e => e.CreatedByUserId).HasColumnName("CreatedByUserID");
+            entity.Property(e => e.CreatedDate).HasColumnType("datetime").HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.IsSystemGenerated).HasDefaultValue(true);
+        });
+
+        modelBuilder.Entity<NotificationRecipientEntity>(entity =>
+        {
+            entity.HasKey(e => e.NotificationRecipientId);
+            entity.Property(e => e.NotificationRecipientId).HasColumnName("NotificationRecipientID");
+            entity.Property(e => e.NotificationId).HasColumnName("NotificationID");
+            entity.Property(e => e.UserId).HasColumnName("UserID");
+            entity.Property(e => e.IsRead).HasDefaultValue(false);
+            entity.Property(e => e.ReadDate).HasColumnType("datetime");
+            entity.Property(e => e.IsDeleted).HasDefaultValue(false);
+            entity.Property(e => e.DeletedDate).HasColumnType("datetime");
+
+            entity.HasOne(d => d.Notification)
+                .WithMany(p => p.Recipients)
+                .HasForeignKey(d => d.NotificationId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_NotificationRecipients_Notifications");
+        });
+
+        modelBuilder.Entity<BroadcastMessageEntity>(entity =>
+        {
+            entity.HasKey(e => e.BroadcastMessageId);
+            entity.Property(e => e.BroadcastMessageId).HasColumnName("BroadcastMessageID");
+            entity.Property(e => e.Title).HasMaxLength(255).IsRequired();
+            entity.Property(e => e.Message).HasMaxLength(2000).IsRequired();
+            entity.Property(e => e.TargetType).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.TargetLocationId).HasColumnName("TargetLocationID");
+            entity.Property(e => e.TargetRoleId).HasColumnName("TargetRoleID");
+            entity.Property(e => e.CreatedByUserId).HasColumnName("CreatedByUserID");
+            entity.Property(e => e.CreatedDate).HasColumnType("datetime").HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.ExpiresDate).HasColumnType("datetime");
+            entity.Property(e => e.IsActive).HasDefaultValue(true);
+            entity.Property(e => e.Priority).HasMaxLength(20).HasDefaultValue("Normal");
+        });
 
         OnModelCreatingPartial(modelBuilder);
     }

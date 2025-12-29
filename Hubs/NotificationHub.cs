@@ -17,7 +17,7 @@ namespace SalesMetrics.Hubs
 
                 // Get user's role and location for broadcast groups
                 var roleId = Context.User?.FindFirst("RoleId")?.Value;
-                var locationId = HttpContext.Session.GetInt32("LocationId")?.ToString();
+                var locationId = Context.GetHttpContext()?.Session.GetInt32("LocationId")?.ToString();
 
                 if (!string.IsNullOrEmpty(roleId))
                 {

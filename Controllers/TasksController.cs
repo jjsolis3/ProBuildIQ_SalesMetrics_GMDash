@@ -1232,9 +1232,9 @@ namespace SalesMetrics.Controllers
                 try
                 {
                     var task = await _context.Tasks.FirstOrDefaultAsync(t => t.TaskId == model.TaskId);
-                    if (task != null && task.AssignedTo.HasValue)
+                    if (task != null && task.AssignedTo > 0)
                     {
-                        await _notificationService.NotifyTaskStatusChangedAsync(model.TaskId, task.AssignedTo.Value, task.Title ?? "Task", model.NewStatus);
+                        await _notificationService.NotifyTaskStatusChangedAsync(model.TaskId, task.AssignedTo, task.Title ?? "Task", model.NewStatus);
                     }
                 }
                 catch (Exception ex)
@@ -1749,9 +1749,9 @@ namespace SalesMetrics.Controllers
             try
             {
                 var task = await _context.Tasks.FirstOrDefaultAsync(t => t.TaskId == taskId);
-                if (task != null && task.AssignedTo.HasValue)
+                if (task != null && task.AssignedTo > 0)
                 {
-                    await _notificationService.NotifyNoteAddedAsync(taskId, task.AssignedTo.Value, currentUserId, task.Title ?? "Task");
+                    await _notificationService.NotifyNoteAddedAsync(taskId, task.AssignedTo, currentUserId, task.Title ?? "Task");
                 }
             }
             catch (Exception ex)

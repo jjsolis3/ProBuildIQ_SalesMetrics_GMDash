@@ -1702,25 +1702,38 @@ namespace SalesMetrics.Controllers
         [HttpGet]
         public JsonResult GetNotesForTask(int taskId)
         {
-            var notes = new List<TaskNote>();
+            var notes = new List<object>(); // ✅ MUST be List<object> for anonymous types
+            string currentUser = HttpContext.Session.GetString("Username") ?? "system";
+            int currentUserRole = int.Parse(User.FindFirst("RoleId")?.Value ?? "0");
 
             using (var conn = new SqlConnection(_configuration.GetConnectionString("SalesMetrics")))
             {
                 conn.Open();
-                var cmd = new SqlCommand("SELECT * FROM TaskNotes WHERE TaskID = @TaskID ORDER BY CreatedDate DESC", conn);
+                var cmd = new SqlCommand(@"
+                    SELECT NoteID, TaskID, NoteText, CreatedBy, CreatedDate, ModifiedBy, ModifiedDate
+                    FROM TaskNotes
+                    WHERE TaskID = @TaskID AND DeletedDate IS NULL
+                    ORDER BY CreatedDate DESC
+                ", conn);
                 cmd.Parameters.AddWithValue("@TaskID", taskId);
 
                 using (var reader = cmd.ExecuteReader())
                 {
                     while (reader.Read())
                     {
-                        notes.Add(new TaskNote
+                        var noteCreatedBy = reader.GetString("CreatedBy");
+
+                        // ✅ CRITICAL: Create anonymous object with explicit camelCase property names
+                        notes.Add(new
                         {
-                            NoteID = reader.GetInt32(0),
-                            TaskID = reader.GetInt32(1),
-                            NoteText = reader.GetString(2),
-                            CreatedBy = reader.GetString(3),
-                            CreatedDate = reader.GetDateTime(4)
+                            noteID = reader.GetInt32("NoteID"),  // ✅ Capital ID
+                            taskID = reader.GetInt32("TaskID"),
+                            noteText = reader.GetString("NoteText"),
+                            createdBy = noteCreatedBy,
+                            createdDate = reader.GetDateTime("CreatedDate"),
+                            modifiedBy = reader.IsDBNull("ModifiedBy") ? null : reader.GetString("ModifiedBy"),
+                            modifiedDate = reader.IsDBNull("ModifiedDate") ? (DateTime?)null : reader.GetDateTime("ModifiedDate"),
+                            canEdit = noteCreatedBy == currentUser || currentUserRole == 1 || currentUserRole == 3 || currentUserRole == 4
                         });
                     }
                 }
@@ -1762,32 +1775,113 @@ namespace SalesMetrics.Controllers
             return Ok();
         }
 
-        //[HttpPost]
-        //[ValidateAntiForgeryToken]
-        //public async Task<IActionResult> DynamicCreate(TaskModalViewModel modal, string? returnUrl)
-        //{
-        //    if (!ModelState.IsValid)
-        //    {
-        //        // handle invalid model
-        //        return Redirect(returnUrl ?? Url.Action("Index", "Tasks"));
-        //    }
+        [HttpPost]
+        public IActionResult UpdateNoteText(int noteId, string noteText)
+        {
+            try
+            {
+                string currentUser = HttpContext.Session.GetString("Username") ?? "system";
+                int currentUserRole = int.Parse(User.FindFirst("RoleId")?.Value ?? "0");
 
-        //    var source = modal.Task?.Source?.ToLower() ?? "default";
+                using (var conn = new SqlConnection(_configuration.GetConnectionString("SalesMetrics")))
+                {
+                    conn.Open();
 
-        //    if (source == "ar" || source == "inactive")
-        //        return await Create(modal, returnUrl);
+                    // First check if user owns this note or is an admin
+                    var checkCmd = new SqlCommand("SELECT CreatedBy FROM TaskNotes WHERE NoteID = @NoteID", conn);
+                    checkCmd.Parameters.AddWithValue("@NoteID", noteId);
 
-        //    if (source == "workorder" || source == "orders")
-        //        return await CreateFromWorkOrderSchedule(modal, returnUrl);
+                    var noteCreator = checkCmd.ExecuteScalar()?.ToString();
 
-        //    if (source == "yardi")
-        //        return await CreateFromYardi(modal, returnUrl);
+                    // Allow if user owns the note or is admin/manager (roles 1, 3, 4)
+                    if (noteCreator != currentUser && currentUserRole != 1 && currentUserRole != 3 && currentUserRole != 4)
+                    {
+                        return Json(new { success = false, message = "You can only edit your own notes." });
+                    }
 
-        //    if (source == "properties")
-        //        return await CreateFromProperties(modal, returnUrl);
+                    // Update the note
+                    var cmd = new SqlCommand(@"
+                UPDATE TaskNotes 
+                SET NoteText = @NoteText, 
+                    ModifiedBy = @ModifiedBy, 
+                    ModifiedDate = @ModifiedDate 
+                WHERE NoteID = @NoteID", conn);
 
-        //    return await Create(modal, returnUrl);
-        //}
+                    cmd.Parameters.AddWithValue("@NoteID", noteId);
+                    cmd.Parameters.AddWithValue("@NoteText", noteText);
+                    cmd.Parameters.AddWithValue("@ModifiedBy", currentUser);
+                    cmd.Parameters.AddWithValue("@ModifiedDate", DateTime.Now);
+
+                    int rowsAffected = cmd.ExecuteNonQuery();
+
+                    if (rowsAffected > 0)
+                    {
+                        return Json(new { success = true });
+                    }
+                    else
+                    {
+                        return Json(new { success = false, message = "Note not found." });
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = "Error updating note: " + ex.Message });
+            }
+        }
+
+        [HttpPost]
+        public IActionResult DeleteNote(int noteId)
+        {
+            try
+            {
+                string currentUser = HttpContext.Session.GetString("Username") ?? "system";
+                int currentUserRole = int.Parse(User.FindFirst("RoleId")?.Value ?? "0");
+
+                using (var conn = new SqlConnection(_configuration.GetConnectionString("SalesMetrics")))
+                {
+                    conn.Open();
+
+                    // First check if user owns this note or is an admin
+                    var checkCmd = new SqlCommand("SELECT CreatedBy FROM TaskNotes WHERE NoteID = @NoteID", conn);
+                    checkCmd.Parameters.AddWithValue("@NoteID", noteId);
+
+                    var noteCreator = checkCmd.ExecuteScalar()?.ToString();
+
+                    // Allow if user owns the note or is admin/manager (roles 1, 3, 4)
+                    if (noteCreator != currentUser && currentUserRole != 1 && currentUserRole != 3 && currentUserRole != 4)
+                    {
+                        return Json(new { success = false, message = "You can only delete your own notes." });
+                    }
+
+                    // Soft delete the note
+                    var cmd = new SqlCommand(@"
+                UPDATE TaskNotes 
+                SET DeletedBy = @DeletedBy, 
+                    DeletedDate = @DeletedDate 
+                WHERE NoteID = @NoteID", conn);
+
+                    cmd.Parameters.AddWithValue("@NoteID", noteId);
+                    cmd.Parameters.AddWithValue("@DeletedBy", currentUser);
+                    cmd.Parameters.AddWithValue("@DeletedDate", DateTime.Now);
+
+                    int rowsAffected = cmd.ExecuteNonQuery();
+
+                    if (rowsAffected > 0)
+                    {
+                        return Json(new { success = true });
+                    }
+                    else
+                    {
+                        return Json(new { success = false, message = "Note not found." });
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = "Error deleting note: " + ex.Message });
+            }
+        }
 
         [HttpPost]
         public async Task<IActionResult> DynamicCreate(TaskModalViewModel model, string? returnUrl)

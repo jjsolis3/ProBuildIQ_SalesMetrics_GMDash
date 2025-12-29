@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace SalesMetrics.Models
 {
@@ -121,17 +122,51 @@ namespace SalesMetrics.Models
         public string? AssignedTo { get; set; }
     }
 
+    /// <summary>
+    /// Enhanced TaskNote model with validation
+    /// </summary>
     public class TaskNote
     {
         public int NoteID { get; set; }
+
+        [Required(ErrorMessage = "Task ID is required.")]
         public int TaskID { get; set; }
+
+        [Required(ErrorMessage = "Note text is required.")]
+        [StringLength(2000, ErrorMessage = "Note cannot exceed 2000 characters.")]
         public string? NoteText { get; set; }
+
+        [StringLength(100, ErrorMessage = "Created by cannot exceed 100 characters.")]
         public string? CreatedBy { get; set; }
-        public DateTime CreatedDate { get; set; }
+
+        public DateTime CreatedDate { get; set; } = DateTime.Now;
+
+        [StringLength(100, ErrorMessage = "Modified by cannot exceed 100 characters.")]
         public string? ModifiedBy { get; set; }
+
         public DateTime? ModifiedDate { get; set; }
+
+        [StringLength(100, ErrorMessage = "Deleted by cannot exceed 100 characters.")]
         public string? DeletedBy { get; set; }
+
         public DateTime? DeletedDate { get; set; }
+
+        /// <summary>
+        /// Computed property to determine if current user can edit this note
+        /// This is NOT a database column - it's calculated at runtime
+        /// </summary>
+        [NotMapped]
+        public bool canEdit { get; set; }
+
+        /// <summary>
+        /// Indicates if this note has been soft-deleted
+        /// </summary>
+        public bool IsDeleted => DeletedDate.HasValue;
+
+        /// <summary>
+        /// Formatted display of when the note was created
+        /// </summary>
+        public string CreatedDateDisplay => CreatedDate.ToString("MMM dd, yyyy 'at' h:mm tt");
     }
 
 }

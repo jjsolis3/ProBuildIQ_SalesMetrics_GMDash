@@ -313,10 +313,6 @@ namespace SalesMetrics.Migrations
                     b.Property<int>("SignerOrder")
                         .HasColumnType("int");
 
-                    b.Property<string>("TypedFullName")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
                     b.Property<string>("UserAgentSigned")
                         .HasMaxLength(400)
                         .HasColumnType("nvarchar(400)");
@@ -379,10 +375,6 @@ namespace SalesMetrics.Migrations
                     b.Property<string>("MergeSpecJson")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("PdfFilePath")
-                        .HasMaxLength(260)
-                        .HasColumnType("nvarchar(260)");
-
                     b.Property<int?>("ModifiedByUsers_ID")
                         .HasColumnType("int");
 
@@ -399,6 +391,100 @@ namespace SalesMetrics.Migrations
                     b.HasIndex("IsActive");
 
                     b.ToTable("SignTemplate", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            TemplateKey = "TenantConsentV1",
+                            CreatedByUsers_ID = 1,
+                            CreatedDateUtc = new DateTime(2025, 9, 25, 22, 22, 7, 375, DateTimeKind.Utc).AddTicks(8179),
+                            DefaultMessage = "Hi {{Recipient.FirstName}}, please review and sign to proceed.",
+                            DefaultSubject = "Please review and sign: Tenant Work Consent",
+                            DisplayName = "Tenant Work Consent (v1)",
+                            IsActive = true,
+                            MergeSpecJson = "{\r\n  \"merge\":\"property,order,customer\",\r\n  \"fields\":{\r\n    \"PropertyName\":\"ERP.Properties.Name\",\r\n    \"PropertyAddress\":\"ERP.Properties.Address\",\r\n    \"UnitNumber\":\"ERP.Orders.Unit\",\r\n    \"ManagerName\":\"ERP.PropertyManager.Name\",\r\n    \"TenantName\":\"ERP.Tenant.Name\",\r\n    \"OrderId\":\"ERP.Orders.Id\",\r\n    \"City\":\"ERP.Properties.City\",\r\n    \"State\":\"ERP.Properties.State\",\r\n    \"Zip\":\"ERP.Properties.Zip\"\r\n  }\r\n}",
+                            RazorViewPath = "/Views/SignTemplates/TenantConsent.cshtml"
+                        });
+                });
+
+            modelBuilder.Entity("SalesMetrics.Models.AdobeAgreement", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AgreementId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CreatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ManagerEmail")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PlaceholderTenantEmail")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("PropertyId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TemplateId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TenantEmail")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AdobeAgreements", (string)null);
+                });
+
+            modelBuilder.Entity("SalesMetrics.Models.AdobeAgreementEvent", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ActorEmail")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("AgreementId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Meta")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("ReceivedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AdobeAgreementEvents", (string)null);
                 });
 
             modelBuilder.Entity("SalesMetrics.Models.EFCore.LocationEntity", b =>
@@ -442,7 +528,7 @@ namespace SalesMetrics.Migrations
                     b.HasIndex(new[] { "LocationName", "LocationAbrv" }, "UC_LocationAbvr")
                         .IsUnique();
 
-                    b.ToTable("Locations");
+                    b.ToTable("Locations", (string)null);
                 });
 
             modelBuilder.Entity("SalesMetrics.Models.EFCore.LoginHistoryEntity", b =>
@@ -513,7 +599,7 @@ namespace SalesMetrics.Migrations
                     b.HasKey("RoleId")
                         .HasName("PK__Roles__8AFACE3A7BCC7B90");
 
-                    b.ToTable("Roles");
+                    b.ToTable("Roles", (string)null);
                 });
 
             modelBuilder.Entity("SalesMetrics.Models.EFCore.TaskEntity", b =>
@@ -581,7 +667,7 @@ namespace SalesMetrics.Migrations
                     b.HasKey("TaskId")
                         .HasName("PK__Tasks__7C6949D10FBD462C");
 
-                    b.ToTable("Tasks");
+                    b.ToTable("Tasks", (string)null);
                 });
 
             modelBuilder.Entity("SalesMetrics.Models.EFCore.UserEntity", b =>
@@ -693,7 +779,7 @@ namespace SalesMetrics.Migrations
                     b.HasIndex(new[] { "UserId", "Location" }, "UQ_Users_UserID_Location")
                         .IsUnique();
 
-                    b.ToTable("Users");
+                    b.ToTable("Users", (string)null);
                 });
 
             modelBuilder.Entity("SalesMetrics.Models.EFCore.UserLocationAssignment", b =>
@@ -726,7 +812,7 @@ namespace SalesMetrics.Migrations
 
                     b.HasIndex("LocationID");
 
-                    b.ToTable("UserLocationAssignments");
+                    b.ToTable("UserLocationAssignments", (string)null);
                 });
 
             modelBuilder.Entity("SalesMetrics.Models.EFCore.YardiPropertyEntity", b =>
@@ -935,7 +1021,7 @@ namespace SalesMetrics.Migrations
 
                     b.HasKey("Property_ID");
 
-                    b.ToTable("YardiProperties");
+                    b.ToTable("YardiProperties", (string)null);
                 });
 
             modelBuilder.Entity("SalesMetrics.Domain.Signing.SignAttachment", b =>

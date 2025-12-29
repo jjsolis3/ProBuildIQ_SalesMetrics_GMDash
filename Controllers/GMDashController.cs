@@ -28,7 +28,7 @@ namespace SalesMetrics.Controllers
             var today = DateTime.Today;
             var mtdStart = new DateTime(today.Year, today.Month, 1);
             var ytdStart = new DateTime(today.Year, 1, 1);
-            var locationFullName = Empty;
+            var locationFullName = string.Empty;
 
             var model = new GMFullDashboardViewModel
             {
@@ -133,32 +133,61 @@ namespace SalesMetrics.Controllers
             using var conn = new SqlConnection(_configuration.GetConnectionString(location));
             await conn.OpenAsync();
 
+            // ==========================================================================
+            // CORRECTED QUERY - Uses AR_OPEN_ITEM as the authoritative data source
+            // ==========================================================================
+            // KEY CHANGES:
+            // 1. AR_OPEN_ITEM is now the primary table (not SALES_HEADER)
+            // 2. Uses IHF_INVOICE_DATE for date filtering (consistent with KPI bubbles)
+            // 3. Uses ARO_INVOICE_AMOUNT for all monetary values (actual invoiced amounts)
+            // 4. Properly handles ARO_DATE_PAID_IN_FULL as a string column
+            // 5. LEFT JOINs to SALES_HEADER only for SOH_OPERATOR (online detection)
+            // ==========================================================================
             var query = @"
                 SELECT
-                    -- Sales
-                    SUM(CASE WHEN ARO_INVOICE_DATE BETWEEN @MTDStart AND @Today THEN ARO_INVOICE_AMOUNT ELSE 0 END) AS MTDSales,
-                    SUM(CASE WHEN ARO_INVOICE_DATE BETWEEN @YTDStart AND @Today THEN ARO_INVOICE_AMOUNT ELSE 0 END) AS YTDSales,
+                    -- Sales Totals (using ARO_INVOICE_DATE for consistency with KPI)
+                    SUM(CASE WHEN IHF.IHF_INVOICE_DATE BETWEEN @MTDStart AND @Today 
+                             THEN ARO.ARO_INVOICE_AMOUNT ELSE 0 END) AS MTDSales,
+                    SUM(CASE WHEN IHF.IHF_INVOICE_DATE BETWEEN @YTDStart AND @Today 
+                             THEN ARO.ARO_INVOICE_AMOUNT ELSE 0 END) AS YTDSales,
 
-                    -- Orders (Counts)
-                    COUNT(CASE WHEN S.SOH_DELIVERY_DATE BETWEEN @MTDStart AND @Today THEN 1 ELSE NULL END) AS MTDOrders,
-                    COUNT(CASE WHEN S.SOH_DELIVERY_DATE BETWEEN @YTDStart AND @Today THEN 1 ELSE NULL END) AS YTDOrders,
+                    -- Order Counts (using IHF_INVOICE_DATE for consistency)
+                    COUNT(CASE WHEN IHF.IHF_INVOICE_DATE BETWEEN @MTDStart AND @Today 
+                               THEN 1 ELSE NULL END) AS MTDOrders,
+                    COUNT(CASE WHEN IHF.IHF_INVOICE_DATE BETWEEN @YTDStart AND @Today 
+                               THEN 1 ELSE NULL END) AS YTDOrders,
 
-                    -- Online Orders Totals
+                    -- Total Orders in date range
                     COUNT(*) AS TotalOrders,
+
+                    -- Online Orders (using SOH_OPERATOR from SALES_HEADER)
                     SUM(CASE WHEN S.SOH_OPERATOR = 'Online' THEN 1 ELSE 0 END) AS OnlineOrders,
 
-                    -- Order Amounts Amounts
-                    SUM(CASE WHEN A.ARO_INVOICE_AMOUNT IS NULL THEN S.SOH_TOTAL_AMOUNT ELSE A.ARO_INVOICE_AMOUNT END) AS TotalOrderAmount,
-                    SUM(CASE WHEN S.SOH_OPERATOR = 'Online' THEN
-                        CASE WHEN A.ARO_INVOICE_AMOUNT IS NULL THEN S.SOH_TOTAL_AMOUNT ELSE A.ARO_INVOICE_AMOUNT END
-                    ELSE 0 END) AS OnlineOrderAmount
+                    -- Total Order Amount (from AR - the authoritative source)
+                    SUM(ARO.ARO_INVOICE_AMOUNT) AS TotalOrderAmount,
 
-                FROM SALES_HEADER S
-                    LEFT JOIN AR_OPEN_ITEM A ON S.SOH_NUMBER = A.ARO_SALES_ORDER_NUMBER
-                WHERE S.SOH_DELIVERY_DATE BETWEEN @YTDStart AND @Today
-                    AND S.SOH_CANCELED_DATE IS NULL
-                    AND S.SOH_WHSMAS_ID IN (1)
-                    AND (@Location <> 'LAX' OR S.SOH_SMNMAS_ID <> 24);
+                    -- Online Order Amount
+                    SUM(CASE WHEN S.SOH_OPERATOR = 'Online' 
+                             THEN ARO.ARO_INVOICE_AMOUNT ELSE 0 END) AS OnlineOrderAmount,
+
+                    -- Open Orders Count (properly handles ARO_DATE_PAID_IN_FULL as string)
+                    SUM(CASE WHEN (ARO.ARO_DATE_PAID_IN_FULL IS NULL OR ARO.ARO_DATE_PAID_IN_FULL = '') 
+                              AND ARO.ARO_INVOICE_BALANCE_DUE > 0 
+                             THEN 1 ELSE 0 END) AS OpenOrders,
+
+                    -- Open Order Amount (balance due on unpaid invoices)
+                    SUM(CASE WHEN (ARO.ARO_DATE_PAID_IN_FULL IS NULL OR ARO.ARO_DATE_PAID_IN_FULL = '') 
+                              AND ARO.ARO_INVOICE_BALANCE_DUE > 0 
+                             THEN ARO.ARO_INVOICE_BALANCE_DUE ELSE 0 END) AS OpenOrderAmount
+
+                FROM AR_OPEN_ITEM ARO WITH (NOLOCK)
+                INNER JOIN INVOICE_HEADER IHF WITH (NOLOCK) 
+                    ON ARO.ARO_INVOICE_NUMBER = IHF.IHF_INVOICE_NUMBER
+                LEFT JOIN SALES_HEADER S WITH (NOLOCK) 
+                    ON IHF.IHF_ORDER_NUMBER = S.SOH_NUMBER
+                WHERE IHF.IHF_INVOICE_DATE BETWEEN @YTDStart AND @Today
+                  AND IHF.IHF_WAREHOUSE_NUMBER IN (1)
+                  AND (@Location <> 'LAX' OR ISNULL(S.SOH_SMNMAS_ID, 0) <> 24);
             ";
 
             using var cmd = new SqlCommand(query, conn);
@@ -178,6 +207,8 @@ namespace SalesMetrics.Controllers
                 result.OnlineOrders = reader.IsDBNull(5) ? 0 : reader.GetInt32(5);
                 result.TotalOrderAmount = reader.IsDBNull(6) ? 0 : Convert.ToDecimal(reader.GetDouble(6));
                 result.OnlineOrderAmount = reader.IsDBNull(7) ? 0 : Convert.ToDecimal(reader.GetDouble(7));
+                result.OpenOrders = reader.IsDBNull(8) ? 0 : reader.GetInt32(8);
+                result.OpenOrderAmount = reader.IsDBNull(9) ? 0 : Convert.ToDecimal(reader.GetDouble(9));
             }
 
             return result;
@@ -206,22 +237,24 @@ namespace SalesMetrics.Controllers
 
             var cmd = new SqlCommand(@"
                 SELECT 
-                    SUM(CASE WHEN DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) < 30 THEN ARO_INVOICE_BALANCE_DUE ELSE 0 END) AS DueUnder30,
-                    SUM(CASE WHEN DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) BETWEEN 30 AND 59 THEN ARO_INVOICE_BALANCE_DUE ELSE 0 END) AS Due30to60,
-                    SUM(CASE WHEN DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) BETWEEN 60 AND 89 THEN ARO_INVOICE_BALANCE_DUE ELSE 0 END) AS Due60to90,
-                    SUM(CASE WHEN DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) BETWEEN 90 AND 120 THEN ARO_INVOICE_BALANCE_DUE ELSE 0 END) AS Due90to120,
-                    SUM(CASE WHEN DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) > 120 THEN ARO_INVOICE_BALANCE_DUE ELSE 0 END) AS DueOver120
-                FROM AR_OPEN_ITEM ARO
-                LEFT JOIN INVOICE_HEADER IHF ON ARO.ARO_INVOICE_NUMBER = IHF.IHF_INVOICE_NUMBER
+                    SUM(CASE WHEN DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) < 30 
+                             THEN ARO_INVOICE_BALANCE_DUE ELSE 0 END) AS DueUnder30,
+                    SUM(CASE WHEN DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) BETWEEN 30 AND 59 
+                             THEN ARO_INVOICE_BALANCE_DUE ELSE 0 END) AS Due30to60,
+                    SUM(CASE WHEN DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) BETWEEN 60 AND 89 
+                             THEN ARO_INVOICE_BALANCE_DUE ELSE 0 END) AS Due60to90,
+                    SUM(CASE WHEN DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) BETWEEN 90 AND 120 
+                             THEN ARO_INVOICE_BALANCE_DUE ELSE 0 END) AS Due90to120,
+                    SUM(CASE WHEN DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) > 120 
+                             THEN ARO_INVOICE_BALANCE_DUE ELSE 0 END) AS DueOver120
+                FROM AR_OPEN_ITEM ARO WITH (NOLOCK)
                 WHERE ARO_INVOICE_BALANCE_DUE > 0
-                  AND ARO_DATE_PAID_IN_FULL IS NULL;
-            
-            ", conn); // Add AR query
+                  AND (ARO_DATE_PAID_IN_FULL IS NULL OR ARO_DATE_PAID_IN_FULL = '');
+            ", conn);
 
             using var reader = await cmd.ExecuteReaderAsync();
             if (await reader.ReadAsync())
             {
-                // Fill AR data
                 result.DueUnder30 = reader.IsDBNull(0) ? 0 : Convert.ToDecimal(reader.GetDouble(0));
                 result.Due30to60 = reader.IsDBNull(1) ? 0 : Convert.ToDecimal(reader.GetDouble(1));
                 result.Due60to90 = reader.IsDBNull(2) ? 0 : Convert.ToDecimal(reader.GetDouble(2));

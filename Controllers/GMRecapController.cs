@@ -2,9 +2,12 @@
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using SalesMetrics.Models;
+using SalesMetrics.Services;
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace SalesMetrics.Controllers
@@ -12,24 +15,97 @@ namespace SalesMetrics.Controllers
     public class GMRecapController : Controller
     {
         private readonly IConfiguration _configuration;
+        private readonly IErrorLoggingService _errorLoggingService;
 
-        public GMRecapController(IConfiguration configuration)
+        // RESTORED: Constructor with IErrorLoggingService dependency injection
+        public GMRecapController(IConfiguration configuration, IErrorLoggingService errorLoggingService)
         {
             _configuration = configuration;
+            _errorLoggingService = errorLoggingService;
         }
 
         [HttpGet]
-        public IActionResult RecapEntry()
+        public async Task<IActionResult> RecapEntry()
         {
-            var today = DateTime.Today;
-            var weekStart = today.AddDays(-(int)today.DayOfWeek + (int)DayOfWeek.Monday);
-
-            var model = new GMRecapCardViewModel
+            try
             {
-                WeekStartDate = weekStart
-            };
+                // RESTORED: Proper session validation
+                var userClaim = HttpContext.User.FindFirst("Users_ID");
+                if (userClaim == null || !int.TryParse(userClaim.Value, out int user_id))
+                {
+                    TempData["ErrorMessage"] = "Your session has expired. Please log in again.";
+                    return RedirectToAction("Login", "Auth");
+                }
 
-            return View("RecapEntry", model);
+                var location = HttpContext.User.FindFirst("LocationId")?.Value;
+                int locationId = location != null ? int.Parse(location) : 0;
+
+                var today = DateTime.Today;
+                var weekStart = today.AddDays(-(int)today.DayOfWeek + (int)DayOfWeek.Monday);
+
+                var model = new GMRecapCardViewModel
+                {
+                    WeekStartDate = weekStart,
+                    GMUserID = user_id,
+                    LocationID = locationId,
+                    Fields = new List<RecapField>()
+                };
+
+                // RESTORED: Load existing recap data for visual feedback (badges/progress)
+                await LoadExistingRecapData(model);
+
+                return View("RecapEntry", model);
+            }
+            catch (Exception ex)
+            {
+                await _errorLoggingService.LogErrorAsync(ex, HttpContext, null, "GMRecap-RecapEntry");
+                TempData["ErrorMessage"] = "An error occurred loading the recap entry form.";
+                return RedirectToAction("Index", "Home");
+            }
+        }
+
+        // RESTORED: Helper method to load existing recap data for visual indicators
+        private async Task LoadExistingRecapData(GMRecapCardViewModel model)
+        {
+            var connStr = _configuration.GetConnectionString("SalesMetrics");
+            using var conn = new SqlConnection(connStr);
+            await conn.OpenAsync();
+
+            // Check for existing entry this week
+            var checkCmd = new SqlCommand(@"
+                SELECT RecapID FROM GMWeeklyRecapEntry
+                WHERE GMUserID = @GMUserID AND LocationID = @LocationID AND WeekStartDate = @WeekStartDate
+            ", conn);
+            checkCmd.Parameters.AddWithValue("@GMUserID", model.GMUserID);
+            checkCmd.Parameters.AddWithValue("@LocationID", model.LocationID);
+            checkCmd.Parameters.AddWithValue("@WeekStartDate", model.WeekStartDate);
+
+            var existingRecapId = await checkCmd.ExecuteScalarAsync();
+            if (existingRecapId != null)
+            {
+                int recapId = (int)existingRecapId;
+                model.RecapID = recapId;
+
+                // Load existing fields for visual indicator (badges, progress bar)
+                var fieldCmd = new SqlCommand(@"
+                    SELECT FieldName, FieldValue, CreatedDate 
+                    FROM GMWeeklyRecapField 
+                    WHERE RecapID = @RecapID
+                    ORDER BY CreatedDate DESC
+                ", conn);
+                fieldCmd.Parameters.AddWithValue("@RecapID", recapId);
+
+                using var reader = await fieldCmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    model.Fields.Add(new RecapField
+                    {
+                        FieldName = reader.GetString(0),
+                        FieldValue = reader.IsDBNull(1) ? "" : reader.GetString(1),
+                        CreatedDate = reader.GetDateTime(2)
+                    });
+                }
+            }
         }
 
         [HttpPost]
@@ -54,7 +130,6 @@ namespace SalesMetrics.Controllers
             model.LocationID = location != null ? int.Parse(location) : 0;
 
             var connStr = _configuration.GetConnectionString("SalesMetrics");
-            var skippedFields = new List<string>();
 
             using var conn = new SqlConnection(connStr);
             await conn.OpenAsync();
@@ -64,11 +139,11 @@ namespace SalesMetrics.Controllers
             {
                 int entryId;
 
-                // 🔍 Check if entry already exists for the week
+                // Check if entry already exists for the week
                 var checkCmd = new SqlCommand(@"
-            SELECT RecapID FROM GMWeeklyRecapEntry
-            WHERE GMUserID = @GMUserID AND LocationID = @LocationID AND WeekStartDate = @WeekStartDate
-        ", conn, tran);
+                    SELECT RecapID FROM GMWeeklyRecapEntry
+                    WHERE GMUserID = @GMUserID AND LocationID = @LocationID AND WeekStartDate = @WeekStartDate
+                ", conn, tran);
                 checkCmd.Parameters.AddWithValue("@GMUserID", user_id);
                 checkCmd.Parameters.AddWithValue("@LocationID", model.LocationID);
                 checkCmd.Parameters.AddWithValue("@WeekStartDate", model.WeekStartDate);
@@ -77,9 +152,17 @@ namespace SalesMetrics.Controllers
                 if (existing != null)
                 {
                     entryId = (int)existing;
+
+                    // Update the ModifiedDate on the main entry
+                    var updateEntryCmd = new SqlCommand(@"
+                        UPDATE GMWeeklyRecapEntry SET ModifiedDate = GETDATE() WHERE RecapID = @RecapID
+                    ", conn, tran);
+                    updateEntryCmd.Parameters.AddWithValue("@RecapID", entryId);
+                    await updateEntryCmd.ExecuteNonQueryAsync();
                 }
                 else
                 {
+                    // Create new entry
                     var insertEntryCmd = new SqlCommand(@"
                         INSERT INTO GMWeeklyRecapEntry (GMUserID, LocationID, WeekStartDate, CreatedDate)
                         OUTPUT INSERTED.RecapID
@@ -92,69 +175,64 @@ namespace SalesMetrics.Controllers
                     entryId = (int)await insertEntryCmd.ExecuteScalarAsync();
                 }
 
-                // 🔁 Loop over fields
-                foreach (var field in model.Fields)
+                // ========================================================================
+                // CRITICAL FIX: ALWAYS INSERT new field entries (never update from Entry page)
+                // This ensures each submission creates separate entries that can be tracked
+                // individually and displayed with proper counts in RecapList.
+                // ========================================================================
+                foreach (var field in model.Fields.Where(f => !string.IsNullOrWhiteSpace(f.FieldValue)))
                 {
-                    if (string.IsNullOrWhiteSpace(field.FieldValue))
-                        continue;
-
-                    var checkFieldCmd = new SqlCommand(@"
-                        SELECT FieldValue FROM GMWeeklyRecapField
-                        WHERE RecapID = @RecapID AND FieldName = @FieldName
+                    var insertFieldCmd = new SqlCommand(@"
+                        INSERT INTO GMWeeklyRecapField (RecapID, FieldName, FieldValue, CreatedDate)
+                        VALUES (@RecapID, @FieldName, @FieldValue, GETDATE())
                     ", conn, tran);
-
-                    checkFieldCmd.Parameters.AddWithValue("@RecapID", entryId);
-                    checkFieldCmd.Parameters.AddWithValue("@FieldName", field.FieldName);
-
-                    var existingValueObj = await checkFieldCmd.ExecuteScalarAsync();
-                    if (existingValueObj != null)
-                    {
-                        var existingValue = existingValueObj.ToString();
-                        if (string.Equals(existingValue, field.FieldValue, StringComparison.OrdinalIgnoreCase))
-                        {
-                            skippedFields.Add(field.FieldName);
-                            continue;
-                        }
-
-                        var insertFieldCmd = new SqlCommand(@"
-                            INSERT INTO GMWeeklyRecapField (RecapID, FieldName, FieldValue, CreatedDate)
-                            VALUES (@RecapID, @FieldName, @FieldValue, GETDATE())
-                        ", conn, tran);
-                        insertFieldCmd.Parameters.AddWithValue("@RecapID", entryId);
-                        insertFieldCmd.Parameters.AddWithValue("@FieldName", field.FieldName);
-                        insertFieldCmd.Parameters.AddWithValue("@FieldValue", field.FieldValue);
-                        await insertFieldCmd.ExecuteNonQueryAsync();
-                    }
-                    else
-                    {
-                        var insertFieldCmd = new SqlCommand(@"
-                            INSERT INTO GMWeeklyRecapField (RecapID, FieldName, FieldValue, CreatedDate)
-                            VALUES (@RecapID, @FieldName, @FieldValue, GETDATE())
-                        ", conn, tran);
-                        insertFieldCmd.Parameters.AddWithValue("@RecapID", entryId);
-                        insertFieldCmd.Parameters.AddWithValue("@FieldName", field.FieldName);
-                        insertFieldCmd.Parameters.AddWithValue("@FieldValue", field.FieldValue);
-                        await insertFieldCmd.ExecuteNonQueryAsync();
-                    }
+                    insertFieldCmd.Parameters.AddWithValue("@RecapID", entryId);
+                    insertFieldCmd.Parameters.AddWithValue("@FieldName", field.FieldName);
+                    insertFieldCmd.Parameters.AddWithValue("@FieldValue", field.FieldValue);
+                    await insertFieldCmd.ExecuteNonQueryAsync();
                 }
 
                 await tran.CommitAsync();
-
-                if (skippedFields.Any())
-                {
-                    TempData["PartialSubmittedWarning"] = $"These fields were already identical and skipped: {string.Join(", ", skippedFields)}.";
-                }
-                else
-                {
-                    TempData["RecapSubmitted"] = "true";
-                }
-
+                TempData["RecapSubmitted"] = "true";
                 return RedirectToAction("RecapEntry");
             }
-            catch
+            catch (SqlException sqlEx)
             {
                 await tran.RollbackAsync();
-                TempData["ErrorMessage"] = "An error occurred while saving your recap.";
+
+                // RESTORED: SQL-specific error logging with additional context
+                var additionalData = JsonSerializer.Serialize(new
+                {
+                    ModelData = model,
+                    UserId = user_id,
+                    Location = model.LocationID,
+                    SqlErrorNumber = sqlEx.Number,
+                    SqlErrorSeverity = sqlEx.Class,
+                    SqlErrorState = sqlEx.State,
+                    SqlErrorProcedure = sqlEx.Procedure,
+                    SqlErrorLineNumber = sqlEx.LineNumber
+                });
+
+                await _errorLoggingService.LogErrorAsync(sqlEx, HttpContext, additionalData, "GMRecap-Database");
+                TempData["ErrorMessage"] = "A database error occurred while saving your recap. Please try again.";
+                return View("RecapEntry", model);
+            }
+            catch (Exception ex)
+            {
+                await tran.RollbackAsync();
+
+                // RESTORED: General error logging with additional context
+                var additionalData = JsonSerializer.Serialize(new
+                {
+                    ModelData = model,
+                    UserId = user_id,
+                    Location = model.LocationID,
+                    Action = "SubmitRecap",
+                    TimeStamp = DateTime.Now
+                });
+
+                await _errorLoggingService.LogErrorAsync(ex, HttpContext, additionalData, "GMRecap");
+                TempData["ErrorMessage"] = "An error occurred while saving your recap. Please try again or contact support.";
                 return View("RecapEntry", model);
             }
         }
@@ -173,7 +251,7 @@ namespace SalesMetrics.Controllers
 
             // First, get all recaps
             var recapCmd = new SqlCommand(@"
-                SELECT E.RecapID, E.WeekStartDate, U.FirstName + ' ' + U.LastName as GMName, E.CreatedDate
+                SELECT E.RecapID, E.WeekStartDate, U.FirstName + ' ' + U.LastName as GMName, E.CreatedDate, E.GMUserID
                 FROM GMWeeklyRecapEntry E
                 LEFT JOIN Users U ON E.GMUserID = U.Users_ID
                 ORDER BY E.WeekStartDate DESC
@@ -186,37 +264,40 @@ namespace SalesMetrics.Controllers
                 {
                     RecapID = reader.GetInt32(0),
                     WeekStartDate = reader.GetDateTime(1),
-                    GMName = reader.GetString(2),
+                    GMName = reader.IsDBNull(2) ? "Unknown" : reader.GetString(2),
                     CreatedDate = reader.GetDateTime(3),
-                    Fields = new List<RecapField>() // to be populated after
+                    GMUserID = reader.GetInt32(4),
+                    Fields = new List<RecapField>()
                 });
             }
-
             reader.Close();
 
-            // Then, get all fields
-            foreach (var recap in recapCards)
+            // Then fetch fields for each recap
+            foreach (var card in recapCards)
             {
                 var fieldCmd = new SqlCommand(@"
-                    SELECT FieldName, 
-                        FieldValue 
+                    SELECT FieldName, FieldValue, CreatedDate 
                     FROM GMWeeklyRecapField 
                     WHERE RecapID = @RecapID
+                    ORDER BY CreatedDate DESC
                 ", conn);
-                fieldCmd.Parameters.AddWithValue("@RecapID", recap.RecapID);
+                fieldCmd.Parameters.AddWithValue("@RecapID", card.RecapID);
 
                 using var fieldReader = await fieldCmd.ExecuteReaderAsync();
                 while (await fieldReader.ReadAsync())
                 {
-                    recap.Fields.Add(new RecapField
+                    card.Fields.Add(new RecapField
                     {
                         FieldName = fieldReader.GetString(0),
-                        FieldValue = fieldReader.IsDBNull(1) ? "" : fieldReader.GetString(1)
+                        FieldValue = fieldReader.IsDBNull(1) ? "" : fieldReader.GetString(1),
+                        CreatedDate = fieldReader.GetDateTime(2)
                     });
                 }
-
-                fieldReader.Close();
             }
+
+            // RESTORED: Get current user ID for "Your Entry" badge
+            var currentUserId = HttpContext.User.FindFirst("Users_ID")?.Value;
+            ViewBag.CurrentUserId = currentUserId != null ? int.Parse(currentUserId) : 0;
 
             return View("RecapList", recapCards);
         }
@@ -225,68 +306,64 @@ namespace SalesMetrics.Controllers
         public async Task<IActionResult> GetRecapDetails(int recapId)
         {
             var connStr = _configuration.GetConnectionString("SalesMetrics");
+            var recap = new GMRecapCardViewModel { Fields = new List<RecapField>() };
+
             using var conn = new SqlConnection(connStr);
             await conn.OpenAsync();
 
-            var entry = new GMRecapCardViewModel();
-            var cmd = new SqlCommand(@"
-                SELECT RecapID, 
-                    WeekStartDate, 
-                    GMUserID, 
-                    LocationID, 
-                    CreatedDate 
-                FROM GMWeeklyRecapEntry 
-                WHERE RecapID = @RecapID
+            // Get recap header info
+            var recapCmd = new SqlCommand(@"
+                SELECT E.RecapID, E.WeekStartDate, U.FirstName + ' ' + U.LastName as GMName, E.CreatedDate
+                FROM GMWeeklyRecapEntry E
+                LEFT JOIN Users U ON E.GMUserID = U.Users_ID
+                WHERE E.RecapID = @RecapID
             ", conn);
-            cmd.Parameters.AddWithValue("@RecapID", recapId);
+            recapCmd.Parameters.AddWithValue("@RecapID", recapId);
 
-            using var reader = await cmd.ExecuteReaderAsync();
+            using var reader = await recapCmd.ExecuteReaderAsync();
             if (await reader.ReadAsync())
             {
-                entry.RecapID = reader.GetInt32(0);
-                entry.WeekStartDate = reader.GetDateTime(1);
-                entry.GMUserID = reader.GetInt32(2);
-                entry.LocationID = reader.GetInt32(3);
-                entry.CreatedDate = reader.GetDateTime(4);
+                recap.RecapID = reader.GetInt32(0);
+                recap.WeekStartDate = reader.GetDateTime(1);
+                recap.GMName = reader.IsDBNull(2) ? "Unknown" : reader.GetString(2);
+                recap.CreatedDate = reader.GetDateTime(3);
             }
             reader.Close();
 
+            // Fetch all field entries (showing all separate entries, not just latest)
             var fieldCmd = new SqlCommand(@"
-                SELECT FieldName, 
-                    FieldValue,
-                    CreatedDate
+                SELECT FieldName, FieldValue, CreatedDate 
                 FROM GMWeeklyRecapField 
                 WHERE RecapID = @RecapID
+                ORDER BY FieldName, CreatedDate DESC
             ", conn);
             fieldCmd.Parameters.AddWithValue("@RecapID", recapId);
 
-            entry.Fields = new List<RecapField>();
             using var fieldReader = await fieldCmd.ExecuteReaderAsync();
             while (await fieldReader.ReadAsync())
             {
-                entry.Fields.Add(new RecapField
+                recap.Fields.Add(new RecapField
                 {
                     FieldName = fieldReader.GetString(0),
                     FieldValue = fieldReader.IsDBNull(1) ? "" : fieldReader.GetString(1),
-                    CreatedDate = fieldReader.IsDBNull(2) ? DateTime.MinValue : fieldReader.GetDateTime(2)
+                    CreatedDate = fieldReader.GetDateTime(2)
                 });
             }
 
-            return PartialView("_RecapDetailsPartial", entry);
+            return PartialView("_RecapDetailsPartial", recap);
         }
 
         [HttpPost]
         public async Task<IActionResult> DeleteRecap(int recapId)
         {
             var connStr = _configuration.GetConnectionString("SalesMetrics");
-
             using var conn = new SqlConnection(connStr);
             await conn.OpenAsync();
-
             using var tran = conn.BeginTransaction();
+
             try
             {
-                // Step 1: Delete fields first (in case cascade is not enforced)
+                // Step 1: Delete fields first (child records)
                 var deleteFieldsCmd = new SqlCommand(
                     "DELETE FROM GMWeeklyRecapField WHERE RecapID = @RecapID", conn, tran);
                 deleteFieldsCmd.Parameters.AddWithValue("@RecapID", recapId);
@@ -304,6 +381,7 @@ namespace SalesMetrics.Controllers
             catch (Exception ex)
             {
                 await tran.RollbackAsync();
+                await _errorLoggingService.LogErrorAsync(ex, HttpContext, null, "GMRecap-DeleteRecap");
                 TempData["ErrorMessage"] = "Error deleting recap entry: " + ex.Message;
             }
 
@@ -336,12 +414,20 @@ namespace SalesMetrics.Controllers
             }
             reader.Close();
 
-            // Fetch fields
+            // RESTORED: Fetch LATEST fields using ROW_NUMBER for editing
+            // This ensures we only show the most recent entry per field for editing
             recap.Fields = new List<RecapField>();
             var fieldCmd = new SqlCommand(@"
-                SELECT FieldName, FieldValue 
-                FROM GMWeeklyRecapField 
-                WHERE RecapID = @RecapID", conn);
+                WITH RankedFields AS (
+                    SELECT FieldName, FieldValue, CreatedDate,
+                           ROW_NUMBER() OVER (PARTITION BY FieldName ORDER BY CreatedDate DESC) as rn
+                    FROM GMWeeklyRecapField 
+                    WHERE RecapID = @RecapID
+                )
+                SELECT FieldName, FieldValue, CreatedDate
+                FROM RankedFields
+                WHERE rn = 1
+            ", conn);
             fieldCmd.Parameters.AddWithValue("@RecapID", recapId);
 
             using var fieldReader = await fieldCmd.ExecuteReaderAsync();
@@ -350,7 +436,8 @@ namespace SalesMetrics.Controllers
                 recap.Fields.Add(new RecapField
                 {
                     FieldName = fieldReader.GetString(0),
-                    FieldValue = fieldReader.IsDBNull(1) ? "" : fieldReader.GetString(1)
+                    FieldValue = fieldReader.IsDBNull(1) ? "" : fieldReader.GetString(1),
+                    CreatedDate = fieldReader.GetDateTime(2)
                 });
             }
 
@@ -374,22 +461,30 @@ namespace SalesMetrics.Controllers
 
             try
             {
-                // Optional: update ModifiedDate on the main recap entry
+                // FIXED: Update ModifiedDate and ModifiedBy on the main recap entry
                 var updateRecapEntry = new SqlCommand(@"
                     UPDATE GMWeeklyRecapEntry 
                     SET ModifiedDate = GETDATE(),
-                        ModifiedBy = 
+                        ModifiedBy = @ModifiedBy
                     WHERE RecapID = @RecapID
                 ", conn, tran);
                 updateRecapEntry.Parameters.AddWithValue("@RecapID", model.RecapID);
+                updateRecapEntry.Parameters.AddWithValue("@ModifiedBy", loggedInUser ?? (object)DBNull.Value);
                 await updateRecapEntry.ExecuteNonQueryAsync();
 
+                // RESTORED: Update only the LATEST entry for each field (using subquery)
                 foreach (var field in model.Fields)
                 {
                     var updateFieldCmd = new SqlCommand(@"
                         UPDATE GMWeeklyRecapField 
                         SET FieldValue = @FieldValue
-                        WHERE RecapID = @RecapID AND FieldName = @FieldName
+                        WHERE RecapID = @RecapID 
+                          AND FieldName = @FieldName
+                          AND CreatedDate = (
+                              SELECT MAX(CreatedDate) 
+                              FROM GMWeeklyRecapField 
+                              WHERE RecapID = @RecapID AND FieldName = @FieldName
+                          )
                     ", conn, tran);
                     updateFieldCmd.Parameters.AddWithValue("@RecapID", model.RecapID);
                     updateFieldCmd.Parameters.AddWithValue("@FieldName", field.FieldName);
@@ -402,82 +497,13 @@ namespace SalesMetrics.Controllers
                 TempData["SuccessMessage"] = "Recap updated successfully.";
                 return RedirectToAction("RecapList");
             }
-            catch
+            catch (Exception ex)
             {
                 await tran.RollbackAsync();
+                await _errorLoggingService.LogErrorAsync(ex, HttpContext, null, "GMRecap-UpdateRecap");
                 TempData["ErrorMessage"] = "Error occurred while updating the recap.";
                 return RedirectToAction("RecapList");
             }
         }
-
-        private async Task<List<string>> GetDuplicateFieldsAsync(GMRecapCardViewModel model)
-        {
-            var duplicates = new List<string>();
-            var connStr = _configuration.GetConnectionString("SalesMetrics");
-
-            using var conn = new SqlConnection(connStr);
-            await conn.OpenAsync();
-
-            var cmd = new SqlCommand(@"
-                SELECT FieldName, FieldValue
-                FROM GMWeeklyRecapEntry E
-                INNER JOIN GMWeeklyRecapField F ON E.RecapID = F.RecapID
-                WHERE E.GMUserID = @GMUserID AND E.LocationID = @LocationID AND E.WeekStartDate = @WeekStartDate
-            ", conn);
-
-            cmd.Parameters.AddWithValue("@GMUserID", model.GMUserID);
-            cmd.Parameters.AddWithValue("@LocationID", model.LocationID);
-            cmd.Parameters.AddWithValue("@WeekStartDate", model.WeekStartDate);
-
-            using var reader = await cmd.ExecuteReaderAsync();
-            var existingPairs = new HashSet<(string Field, string Value)>(new FieldValueTupleComparer());
-            while (await reader.ReadAsync())
-            {
-                var field = reader.GetString(0);
-                var value = reader.IsDBNull(1) ? "" : reader.GetString(1);
-                existingPairs.Add((field, value));
-            }
-
-            foreach (var field in model.Fields)
-            {
-                if (!string.IsNullOrWhiteSpace(field.FieldValue) &&
-                    existingPairs.Contains((field.FieldName, field.FieldValue)))
-                {
-                    duplicates.Add(field.FieldName);
-                }
-            }
-
-            return duplicates;
-        }
-
     }
-
-    public class GMWeeklyEntrySummary
-    {
-        public int RecapID { get; set; }
-        public DateTime WeekStartDate { get; set; }
-        public string GMName { get; set; }
-        public DateTime CreatedDate { get; set; }
-    }
-
-    public class FieldValueTupleComparer : IEqualityComparer<(string Field, string Value)>
-    {
-        public bool Equals((string Field, string Value) x, (string Field, string Value) y)
-        {
-            return string.Equals(x.Field, y.Field, StringComparison.OrdinalIgnoreCase)
-                && string.Equals(x.Value, y.Value, StringComparison.OrdinalIgnoreCase);
-        }
-
-        public int GetHashCode((string Field, string Value) obj)
-        {
-            unchecked
-            {
-                int hash = 17;
-                hash = hash * 23 + (obj.Field?.ToLowerInvariant().GetHashCode() ?? 0);
-                hash = hash * 23 + (obj.Value?.ToLowerInvariant().GetHashCode() ?? 0);
-                return hash;
-            }
-        }
-    }
-
 }

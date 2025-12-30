@@ -3,7 +3,9 @@
 -- =============================================
 -- Purpose: Optimize query performance for GM Weekly Recap Entry and List features
 -- Created: 2025-12-30
+-- Updated: 2025-12-30 - Removed ONLINE option for compatibility with all SQL Server editions
 -- Impact: 10-20x faster page loads by reducing query execution time
+-- Compatible with: SQL Server Standard, Express, and Enterprise editions
 -- =============================================
 
 USE [SalesMetrics]
@@ -19,7 +21,7 @@ BEGIN
     CREATE NONCLUSTERED INDEX [IX_GMWeeklyRecapEntry_WeekStartDate_Includes]
     ON [dbo].[GMWeeklyRecapEntry] ([WeekStartDate] DESC)
     INCLUDE ([RecapID], [GMUserID], [LocationID], [CreatedDate], [IsDraft], [SubmittedDate])
-    WITH (ONLINE = ON, FILLFACTOR = 90)
+    WITH (FILLFACTOR = 90)
 
     PRINT 'Created index: IX_GMWeeklyRecapEntry_WeekStartDate_Includes'
 END
@@ -39,7 +41,7 @@ BEGIN
     CREATE NONCLUSTERED INDEX [IX_GMWeeklyRecapEntry_GMUserID_LocationID_WeekStartDate]
     ON [dbo].[GMWeeklyRecapEntry] ([GMUserID], [LocationID], [WeekStartDate])
     INCLUDE ([RecapID], [IsDraft], [CreatedDate])
-    WITH (ONLINE = ON, FILLFACTOR = 90)
+    WITH (FILLFACTOR = 90)
 
     PRINT 'Created index: IX_GMWeeklyRecapEntry_GMUserID_LocationID_WeekStartDate'
 END
@@ -59,7 +61,7 @@ BEGIN
     CREATE NONCLUSTERED INDEX [IX_GMWeeklyRecapField_RecapID_Includes]
     ON [dbo].[GMWeeklyRecapField] ([RecapID])
     INCLUDE ([FieldName], [FieldValue], [CreatedDate], [ModifiedDate])
-    WITH (ONLINE = ON, FILLFACTOR = 90)
+    WITH (FILLFACTOR = 90)
 
     PRINT 'Created index: IX_GMWeeklyRecapField_RecapID_Includes'
 END
@@ -79,7 +81,7 @@ BEGIN
     CREATE NONCLUSTERED INDEX [IX_GMWeeklyRecapField_RecapID_FieldName]
     ON [dbo].[GMWeeklyRecapField] ([RecapID], [FieldName])
     INCLUDE ([FieldValue], [ModifiedDate])
-    WITH (ONLINE = ON, FILLFACTOR = 90)
+    WITH (FILLFACTOR = 90)
 
     PRINT 'Created index: IX_GMWeeklyRecapField_RecapID_FieldName'
 END
@@ -98,7 +100,7 @@ BEGIN
     CREATE NONCLUSTERED INDEX [IX_GMWeeklyRecapEntry_GMUserID_WeekStartDate]
     ON [dbo].[GMWeeklyRecapEntry] ([GMUserID], [WeekStartDate] DESC)
     INCLUDE ([RecapID], [LocationID], [IsDraft], [SubmittedDate])
-    WITH (ONLINE = ON, FILLFACTOR = 90)
+    WITH (FILLFACTOR = 90)
 
     PRINT 'Created index: IX_GMWeeklyRecapEntry_GMUserID_WeekStartDate'
 END
@@ -117,7 +119,7 @@ BEGIN
     CREATE NONCLUSTERED INDEX [IX_GMWeeklyRecapEntry_IsDraft_WeekStartDate]
     ON [dbo].[GMWeeklyRecapEntry] ([IsDraft], [WeekStartDate] DESC)
     INCLUDE ([RecapID], [GMUserID], [LocationID], [ModifiedDate])
-    WITH (ONLINE = ON, FILLFACTOR = 90)
+    WITH (FILLFACTOR = 90)
 
     PRINT 'Created index: IX_GMWeeklyRecapEntry_IsDraft_WeekStartDate'
 END

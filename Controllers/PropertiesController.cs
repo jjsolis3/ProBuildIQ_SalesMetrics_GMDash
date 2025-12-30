@@ -67,7 +67,7 @@ namespace SalesMetrics.Controllers
             var properties = new List<CustomerPropertyViewModel>();
 
             var baseSql = @"
-                SELECT 
+                SELECT
 	                C.[CUM_CUMMAS_ID],
 	                C.[CUM_CUSTOMER_NUMBER],
                     C.[CUM_CUSTOMER_NAME],
@@ -88,7 +88,19 @@ namespace SalesMetrics.Controllers
                     CAST(C.[CUM_CREDIT_HOLD_FLAG] as int) as [CUM_CREDIT_HOLD_FLAG],
                     C.[CUM_PO_NUMBER_REQUIRED],
 	                P.[IPC_DESCRIPTION],
-	                (SELECT MAX(SOH_WHSMAS_ID) FROM SALES_HEADER WHERE SOH_CUMMAS_ID = C.CUM_CUMMAS_ID AND SOH_WHSMAS_ID <> 1 GROUP BY SOH_CUMMAS_ID) as [SOH_WHSMAS_ID]
+	                COALESCE(
+                        (SELECT TOP 1 SOH_WHSMAS_ID
+                         FROM SALES_HEADER
+                         WHERE SOH_CUMMAS_ID = C.CUM_CUMMAS_ID
+                           AND SOH_WHSMAS_ID IS NOT NULL
+                           AND SOH_WHSMAS_ID <> 1
+                         ORDER BY SOH_NUMBER DESC),
+                        (SELECT TOP 1 SOH_WHSMAS_ID
+                         FROM SALES_HEADER
+                         WHERE SOH_CUMMAS_ID = C.CUM_CUMMAS_ID
+                           AND SOH_WHSMAS_ID IS NOT NULL
+                         ORDER BY SOH_NUMBER DESC)
+                    ) as [SOH_WHSMAS_ID]
 
                 FROM [CUSTOMER_MASTER] AS C
 	                LEFT JOIN PRICE_CODES AS P ON C.CUM_PRICE_CODE = P.IPC_PRICE_CODE
@@ -139,7 +151,8 @@ namespace SalesMetrics.Controllers
                             SalesmanID = reader.IsDBNull("CUM_SMNMAS_ID") ? 0 : reader.GetInt32("CUM_SMNMAS_ID"),
                             Salesperson = reader.IsDBNull("SMN_SALESMAN_NAME") ? "" : reader.GetString("SMN_SALESMAN_NAME"),
                             PONumberRequired = reader.GetBoolean("CUM_PO_NUMBER_REQUIRED"),
-                            MgmtCo = reader.IsDBNull("IPC_DESCRIPTION") ? "" : reader.GetString("IPC_DESCRIPTION")
+                            MgmtCo = reader.IsDBNull("IPC_DESCRIPTION") ? "" : reader.GetString("IPC_DESCRIPTION"),
+                            WhsId = reader.IsDBNull("SOH_WHSMAS_ID") ? null : reader.GetInt32("SOH_WHSMAS_ID")
                         });
                     }
                 }

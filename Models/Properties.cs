@@ -23,6 +23,7 @@ namespace SalesMetrics.Models
         public bool PONumberRequired { get; set; }
         public int SalesmanID { get; set; }
         public string? Salesperson { get; set; }
+        public int? WhsId { get; set; }
     }
 
     public class PropertyDetailsViewModel

@@ -1,34 +1,14 @@
 ﻿@model List<SalesMetrics.Models.GMRecapCardViewModel>
+@using SalesMetrics.Models
 
 @{
     ViewBag.Title = "GM Weekly Recap Dashboard";
     var currentUser = User.FindFirst("Users_ID")?.Value;
     var isAdmin = User.IsInRole("Admin") || User.FindFirst("RoleId")?.Value == "1";
 
-    // Define all recap fields (must match RecapEntry.cshtml)
-    var recapFields = new[] {
-        new { Name = "Wins", Category = "Performance", Icon = "🏆" },
-        new { Name = "Loses", Category = "Performance", Icon = "📉" },
-        new { Name = "Needs", Category = "Performance", Icon = "🎯" },
-        new { Name = "The Team", Category = "Team", Icon = "👥" },
-        new { Name = "1-1's with Sales Reps", Category = "Team", Icon = "💬" },
-        new { Name = "Ride-along with Sales Reps", Category = "Team", Icon = "🚗" },
-        new { Name = "Actual vs Projected Sales #'s", Category = "Performance", Icon = "📊" },
-        new { Name = "Average Jobs per Day", Category = "Operations", Icon = "📈" },
-        new { Name = "Reschedules", Category = "Operations", Icon = "📅" },
-        new { Name = "Aged Inventory", Category = "Operations", Icon = "📦" },
-        new { Name = "Tablet %", Category = "Operations", Icon = "📱" },
-        new { Name = "Weekly Focus", Category = "Operations", Icon = "💡" },
-        new { Name = "A/R Update", Category = "Finance", Icon = "💰" },
-        new { Name = "Open Orders", Category = "Finance", Icon = "📋" },
-        new { Name = "New Accounts", Category = "Accounts", Icon = "✨" },
-        new { Name = "Lost Accounts", Category = "Accounts", Icon = "❌" },
-        new { Name = "Customer Events", Category = "Customer Relations", Icon = "🎉" },
-        new { Name = "Customer Visits", Category = "Customer Relations", Icon = "🏠" },
-        new { Name = "Ordering Issues", Category = "Customer Relations", Icon = "📢" }
-    };
-
-    var totalFields = recapFields.Length; // Dynamic total: 19 fields
+    // Use centralized field definitions - SINGLE SOURCE OF TRUTH
+    var recapFields = GMRecapFieldDefinitions.AllFields;
+    var totalFields = GMRecapFieldDefinitions.TotalFieldCount;
 }
 
 @section styles {

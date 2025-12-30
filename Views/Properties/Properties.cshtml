@@ -1,114 +1,552 @@
 ﻿@using SalesMetrics.Services.Helpers
+@model SalesMetrics.Models.PropertyDashboardViewModel
 
 @{
-    ViewBag.Title = "Properties";
+    ViewBag.Title = "Properties Dashboard";
     ViewBag.pTitle = "Sales Properties";
     Layout = "~/Views/Shared/_Layout.cshtml";
 }
 
-@model IEnumerable<SalesMetrics.Models.CustomerPropertyViewModel>
-
 @section styles {
-<link href="~/assets/libs/datatables.net-searchpanes-bs5/css/searchPanes.bootstrap5.min.css" rel="stylesheet" />
-<link href="~/assets/libs/select2/css/select2.min.css" rel="stylesheet" />
+    <link href="~/assets/libs/datatables.net-searchpanes-bs5/css/searchPanes.bootstrap5.min.css" rel="stylesheet" />
+    <link href="~/assets/libs/select2/css/select2.min.css" rel="stylesheet" />
 }
 
 <style>
+    /* ======================================
+           KPI CARDS STYLING
+           ====================================== */
+    .kpi-card {
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        transition: all 0.3s ease;
+        border: 1px solid #e0e0e0;
+        background: white;
+    }
+
+        .kpi-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+        }
+
+    .kpi-title {
+        font-size: 0.9rem;
+        color: #6c757d;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 0.5rem;
+    }
+
+    .kpi-value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #2c3e50;
+        margin-bottom: 0.25rem;
+    }
+
+    .kpi-subtitle {
+        font-size: 0.85rem;
+        color: #95a5a6;
+        margin-top: 0.5rem;
+    }
+
+    .kpi-icon {
+        font-size: 2.5rem;
+        opacity: 0.2;
+        position: absolute;
+        right: 20px;
+        top: 20px;
+    }
+
+    /* Badge colors for different metrics */
+    .badge-positive {
+        background: linear-gradient(135deg, #28a745, #20c997);
+    }
+
+    .badge-warning {
+        background: linear-gradient(135deg, #ffc107, #fd7e14);
+    }
+
+    .badge-danger {
+        background: linear-gradient(135deg, #dc3545, #c82333);
+    }
+
+    .badge-info {
+        background: linear-gradient(135deg, #17a2b8, #138496);
+    }
+
+    /* ======================================
+           TOP PERFORMERS SECTION
+           ====================================== */
+    .top-performers-section {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 16px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        color: white;
+        box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
+    }
+
+    .top-performer-card {
+        background: rgba(255, 255, 255, 0.15);
+        backdrop-filter: blur(10px);
+        border-radius: 12px;
+        padding: 1.25rem;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        transition: all 0.3s ease;
+    }
+
+        .top-performer-card:hover {
+            background: rgba(255, 255, 255, 0.25);
+            transform: scale(1.02);
+        }
+
+    .performer-rank {
+        font-size: 2rem;
+        font-weight: 700;
+        opacity: 0.9;
+    }
+
+    .performer-name {
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+    }
+
+    .performer-metric {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #ffd700;
+    }
+
+    /* ======================================
+           RANKING BADGES IN TABLE
+           ====================================== */
+    .rank-badge {
+        display: inline-block;
+        padding: 0.35rem 0.65rem;
+        border-radius: 8px;
+        font-weight: 700;
+        font-size: 0.85rem;
+        text-align: center;
+        min-width: 45px;
+    }
+
+    .rank-gold {
+        background: linear-gradient(135deg, #FFD700, #FFA500);
+        color: #000;
+        box-shadow: 0 2px 8px rgba(255, 215, 0, 0.4);
+    }
+
+    .rank-silver {
+        background: linear-gradient(135deg, #C0C0C0, #A8A8A8);
+        color: #000;
+        box-shadow: 0 2px 8px rgba(192, 192, 192, 0.4);
+    }
+
+    .rank-bronze {
+        background: linear-gradient(135deg, #CD7F32, #B87333);
+        color: #fff;
+        box-shadow: 0 2px 8px rgba(205, 127, 50, 0.4);
+    }
+
+    .rank-default {
+        background: #6c757d;
+        color: #fff;
+    }
+
+    /* ======================================
+           DATATABLES ENHANCEMENTS
+           ====================================== */
     table.dataTable thead th {
-    background-color: darkorange !important;
-    color: white !important;
+        background-color: #667eea !important;
+        color: white !important;
+        font-weight: 600 !important;
+        border: none !important;
     }
 
-    div.dataTables_length {
-    margin-right: 1.5rem;
+    table.dataTable tbody tr:hover {
+        background-color: #f8f9fa !important;
     }
 
-    div.dataTables_filter {
-    max-width: 300px;
-    margin-left: auto;
+    /* Credit Hold Indicator */
+    .credit-hold-badge {
+        background: linear-gradient(135deg, #dc3545, #c82333);
+        color: white;
+        padding: 0.4rem 0.8rem;
+        border-radius: 6px;
+        font-weight: 700;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        box-shadow: 0 2px 6px rgba(220, 53, 69, 0.3);
     }
 
+    /* Credit Utilization Colors */
+    .utilization-high {
+        color: #dc3545;
+        font-weight: 700;
+    }
+
+    .utilization-medium {
+        color: #ffc107;
+        font-weight: 600;
+    }
+
+    .utilization-low {
+        color: #28a745;
+    }
+
+    /* ======================================
+           RESPONSIVE ADJUSTMENTS
+           ====================================== */
+    @@media (max-width: 768px) {
+        .kpi-value {
+            font-size: 1.5rem;
+        }
+
+        .top-performers-section {
+            padding: 1.5rem;
+        }
+
+        .performer-rank {
+            font-size: 1.5rem;
+        }
+    }
 </style>
 
-<div class="table-responsive">
-    <table id="erpTable" class="table table-bordered table-striped nowrap" style="width:100%">
-        <thead>
-            <tr>
-                <th>Customer #</th>
-                <th>Property</th>
-                <th>PriceCode</th>
-                <th>Managent Co</th>
-                <th>Address</th>
-                <th>City</th>
-                <th>State</th>
-                <th>Zip</th>
-                <th>Phone</th>
-                <th>Email</th>
-                <th>AR Balance</th>
-                <th>Established</th>
-                <th>Credit Hold</th>
-                <th>Salesperson</th>
-                <th>Attention To</th>
-                <th>PO Required</th>
-                <th>Whs ID</th>
-                <th>Action</th>
-            </tr>
-        </thead>
-        <tbody>
-            @if (Model != null)
-            {
-                foreach (var p in Model)
+<div class="container-fluid">
+
+    <!-- ======================================
+         KPI SUMMARY CARDS
+         ====================================== -->
+    <div class="row mb-4">
+        <!-- Card 1: Total Properties -->
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="kpi-card position-relative">
+                <i class="bi bi-buildings kpi-icon"></i>
+                <div class="kpi-title">Total Properties</div>
+                <div class="kpi-value">@Model.TotalProperties</div>
+                <div class="kpi-subtitle">
+                    <span class="badge badge-positive">@Model.ActiveProperties Active</span>
+                    @if (Model.CreditHoldProperties > 0)
+                    {
+                        <span class="badge badge-danger ms-2">@Model.CreditHoldProperties On Hold</span>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 2: Total AR Balance -->
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="kpi-card position-relative">
+                <i class="bi bi-currency-dollar kpi-icon"></i>
+                <div class="kpi-title">Total AR Outstanding</div>
+                <div class="kpi-value">@Model.TotalARBalance.ToString("C0")</div>
+                <div class="kpi-subtitle">
+                    <span class="badge badge-info">Active: @Model.ARBalanceActive.ToString("C0")</span>
+                    @if (Model.ARBalanceCreditHold > 0)
+                    {
+                        <span class="badge badge-warning ms-2">Hold: @Model.ARBalanceCreditHold.ToString("C0")</span>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 3: Credit Utilization -->
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="kpi-card position-relative">
+                <i class="bi bi-graph-up kpi-icon"></i>
+                <div class="kpi-title">Credit Utilization</div>
+                <div class="kpi-value">
+                    @Model.CreditUtilizationRate.ToString("F1")%
+                    @if (Model.CreditUtilizationRate >= 80)
+                    {
+                        <i class="bi bi-exclamation-triangle-fill text-danger ms-2" style="font-size: 1.2rem;"></i>
+                    }
+                    else if (Model.CreditUtilizationRate >= 60)
+                    {
+                        <i class="bi bi-exclamation-circle-fill text-warning ms-2" style="font-size: 1.2rem;"></i>
+                    }
+                    else
+                    {
+                        <i class="bi bi-check-circle-fill text-success ms-2" style="font-size: 1.2rem;"></i>
+                    }
+                </div>
+                <div class="kpi-subtitle">
+                    Total Credit Limit: @Model.TotalCreditLimit.ToString("C0")
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 4: Collection Rate -->
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="kpi-card position-relative">
+                <i class="bi bi-pie-chart kpi-icon"></i>
+                <div class="kpi-title">Collection Rate</div>
+                <div class="kpi-value text-success">@Model.CollectionRate.ToString("F1")%</div>
+                <div class="kpi-subtitle">
+                    Avg Credit Limit: @Model.AverageCreditLimit.ToString("C0")
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* <!-- ======================================
+         TOP 5 PERFORMERS SECTION
+         ====================================== -->
+    @if (Model.TopPerformers != null && Model.TopPerformers.Any())
+    {
+        <div class="top-performers-section">
+            <h3 class="mb-4">
+                <i class="bi bi-trophy-fill me-2"></i>
+                Top 5 Properties by AR Balance
+            </h3>
+            <div class="row">
+                @foreach (var performer in Model.TopPerformers)
                 {
-                    <tr>
-                        <td>@p.CustomerNumber</td>
-                        <td>
-                            <a asp-controller="Properties" asp-action="PropertyDetails" asp-route-id="@p.CustomerId">
-                                @p.CustomerName
-                            </a>
-                        </td>
-                        <td>@p.PriceCode</td>
-                        <td>@p.MgmtCo</td>
-                        <td>@p.Address</td>
-                        <td>@p.City</td>
-                        <td>@p.State</td>
-                        <td>@p.Zip</td>
-                        <td>@p.PhoneNumber</td>
-                        <td>@p.Email</td>
-                        <td data-order="@p.ARBalance">@p.ARBalance?.ToString("C")</td>
-                        <td data-order="@p.EstablishedDate?.ToString("yyyy-MM-dd")">
-                            @(p.EstablishedDate?.ToString("MM/dd/yyyy") ?? "N/A")
-                        </td>
-                        @if (p.CreditHold == 1)
+                    <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+                        <div class="top-performer-card text-center">
+                            <div class="performer-rank">
+                                @if (performer.Rank == 1)
+                                {
+                                    <span>🥇</span>
+                                }
+                                else if (performer.Rank == 2)
+                                {
+
+                                    <span>🥈</span>
+                                }
+                                else if (performer.Rank == 3)
+                                {
+
+                                    <span>🥉</span>
+                                }
+                                else
+                                {
+
+                                    <span>#@performer.Rank</span>
+                                }
+                            </div>
+                            <div class="performer-name">@performer.CustomerName</div>
+                            <div class="performer-metric">@performer.ARBalance?.ToString("C0")</div>
+                            <div style="font-size: 0.85rem; margin-top: 0.5rem; opacity: 0.9;">
+                                @performer.City, @performer.State
+                            </div>
+                            <div style="font-size: 0.75rem; margin-top: 0.25rem; opacity: 0.8;">
+                                <i class="bi bi-person-badge me-1"></i>@performer.Salesperson
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    } *@
+
+    <!-- ======================================
+         ENHANCED PROPERTIES TABLE
+         ====================================== -->
+    <div class="card shadow-sm">
+        <div class="card-header bg-white py-3">
+            <h5 class="mb-0">
+                <i class="bi bi-table me-2"></i>
+                Properties Overview
+                <small class="text-muted ms-2">(@Model.TotalProperties total)</small>
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table id="erpTable" class="table table-hover table-bordered nowrap" style="width:100%">
+                    <thead>
+                        <tr>
+                            <th>Rank</th>
+                            <th>Customer #</th>
+                            <th>Property</th>
+                            <th>PriceCode</th>
+                            <th>Management Co</th>
+                            <th>Address</th>
+                            <th>City</th>
+                            <th>State</th>
+                            <th>Zip</th>
+                            <th>Phone</th>
+                            <th>Email</th>
+                            <th>AR Balance</th>
+                            <th>AR %</th>
+                            <th>Credit Limit</th>
+                            <th>Credit Util %</th>
+                            <th>Established</th>
+                            <th>Days Active</th>
+                            <th>Credit Hold</th>
+                            <th>Salesperson</th>
+                            <th>Attention To</th>
+                            <th>PO Required</th>
+                            <th>Whs ID</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Model.Properties != null && Model.Properties.Any())
                         {
-                            <td class="bg-danger text-light" style="font-weight: bold;">On Credit Hold</td>
+                            foreach (var p in Model.Properties)
+                            {
+                                <tr>
+                                    <!-- RANK with colored badge -->
+                                    <td data-order="@p.Rank">
+                                        <span class="rank-badge rank-@p.RankBadgeColor">
+                                            #@p.Rank
+                                        </span>
+                                    </td>
+
+                                    <!-- Customer Number -->
+                                    <td>@p.CustomerNumber</td>
+
+                                    <!-- Property Name (clickable link) -->
+                                    <td>
+                                        <a asp-controller="Properties"
+                                           asp-action="PropertyDetails"
+                                           asp-route-id="@p.CustomerId"
+                                           class="text-decoration-none fw-semibold">
+                                            @p.CustomerName
+                                        </a>
+                                    </td>
+
+                                    <!-- Price Code -->
+                                    <td>@p.PriceCode</td>
+
+                                    <!-- Management Company -->
+                                    <td>@p.MgmtCo</td>
+
+                                    <!-- Address -->
+                                    <td>@p.Address</td>
+
+                                    <!-- City -->
+                                    <td>@p.City</td>
+
+                                    <!-- State -->
+                                    <td>@p.State</td>
+
+                                    <!-- Zip -->
+                                    <td>@p.Zip</td>
+
+                                    <!-- Phone -->
+                                    <td>@p.PhoneNumber</td>
+
+                                    <!-- Email -->
+                                    <td>@p.Email</td>
+
+                                    <!-- AR Balance (sortable by actual value) -->
+                                    <td data-order="@p.ARBalance">
+                                        <strong>@p.ARBalance?.ToString("C")</strong>
+                                    </td>
+
+                                    <!-- AR Percentage -->
+                                    <td data-order="@p.ARBalancePercentage">
+                                        <span class="badge bg-info">@p.ARBalancePercentage.ToString("F1")%</span>
+                                    </td>
+
+                                    <!-- Credit Limit -->
+                                    <td data-order="@p.CreditLimit">
+                                        @p.CreditLimit?.ToString("C")
+                                    </td>
+
+                                    <!-- Credit Utilization with color coding -->
+                                    <td data-order="@p.CreditUtilization" class="@p.CreditUtilizationClass">
+                                        @if (p.CreditUtilization.HasValue)
+                                        {
+                                            <span>@p.CreditUtilization.Value.ToString("F1")%</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">N/A</span>
+                                        }
+                                    </td>
+
+                                    <!-- Established Date -->
+                                    <td data-order="@p.EstablishedDate?.ToString("yyyy-MM-dd")">
+                                        @(p.EstablishedDate?.ToString("MM/dd/yyyy") ?? "N/A")
+                                    </td>
+
+                                    <!-- Days Since Established -->
+                                    <td data-order="@p.DaysSinceEstablished">
+                                        @if (p.DaysSinceEstablished.HasValue)
+                                        {
+                                            <span>@p.DaysSinceEstablished.Value days</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">N/A</span>
+                                        }
+                                    </td>
+
+                                    <!-- Credit Hold Status -->
+                                    @if (p.CreditHold == 1)
+                                    {
+                                        <td>
+                                            <span class="credit-hold-badge">
+                                                <i class="bi bi-exclamation-octagon me-1"></i>
+                                                On Hold
+                                            </span>
+                                        </td>
+                                    }
+                                    else
+                                    {
+                                        <td><span class="text-muted">-</span></td>
+                                    }
+
+                                    <!-- Salesperson -->
+                                    <td>@p.Salesperson</td>
+
+                                    <!-- Attention To -->
+                                    <td>@p.AttentionTo</td>
+
+                                    <!-- PO Required -->
+                                    <td>
+                                        @if (p.PONumberRequired)
+                                        {
+                                            <span class="badge bg-warning text-dark">Yes</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">No</span>
+                                        }
+                                    </td>
+
+                                    <!-- Whs ID -->
+                                    <td>
+                                        @(p.WhsId?.ToString() ?? "N/A")
+                                    </td>
+
+                                    <!-- Action Button -->
+                                    <td>
+                                        <button class="btn btn-sm btn-primary create-task"
+                                                data-id="@p.CustomerId"
+                                                data-name="@p.CustomerName">
+                                            <i class="bi bi-plus-circle me-1"></i>
+                                            Create Task
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
                         }
                         else
                         {
-                            <td></td>
+                            <tr>
+                                <td colspan="22" class="text-center text-muted py-4">
+                                    <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+                                    <div class="mt-2">No property data found.</div>
+                                </td>
+                            </tr>
                         }
-                        <td>@p.Salesperson</td>
-                        <td>@p.AttentionTo</td>
-                        <td>@(p.PONumberRequired ? "Yes" : "No")</td>
-                        <td>@(p.WhsId?.ToString() ?? "N/A")</td>
-                        <td>
-                            <button class="btn btn-sm btn-primary create-task"
-                            data-id="@p.CustomerId"
-                            data-name="@p.CustomerName">
-                                Create Task
-                            </button>
-                        </td>
-                    </tr>
-                }
-            }
-            else
-            {
-                <tr><td colspan="18">No property data found.</td></tr>
-            }
-        </tbody>
-    </table>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 </div>
 
-@* Task Modal for ERP Properties *@
+@* Task Modal for ERP Properties (unchanged from original) *@
 <div class="modal fade" id="taskModal" tabindex="-1" role="dialog">
     <div class="modal-dialog" role="document">
         <form id="propertyTaskForm" asp-controller="Tasks" asp-action="CreateFromProperties" method="post">
@@ -181,7 +619,6 @@
                     }
                     else
                     {
-                        <!-- Hidden field for Sales Role -->
                         <input type="hidden" name="Task.AssignedTo" id="hiddenAssignedTo" value="@Context.Session.GetString("Users_Id")" />
                     }
                 </div>
@@ -204,7 +641,7 @@
     <script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
     <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.colVis.min.js"></script>
 
-    <!-- ✅ Required for export buttons -->
+    <!-- Export buttons -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
@@ -214,17 +651,16 @@
     <script src="~/assets/libs/datatables.net-searchpanes/js/dataTables.searchPanes.min.js"></script>
     <script src="~/assets/libs/datatables.net-searchpanes-bs5/js/searchPanes.bootstrap5.min.js"></script>
     <script src="~/assets/libs/datatables.net-select/js/dataTables.select.min.js"></script>
-    
     <script src="~/assets/libs/select2/js/select2.full.min.js"></script>
 
     <script>
-        var table; // 👈 make table globally accessible
+        var table;
 
         $(document).ready(function () {
+            // Initialize DataTable with enhanced features
             table = $('#erpTable').DataTable({
                 order: [
-                    [3, 'asc'], // 3 Mgmt Co
-                    [1, 'asc']  // 1 Property
+                    [0, 'asc']  // Order by Rank column (ascending = best to worst)
                 ],
                 dom: `
                   <"top mb-2"P>
@@ -248,21 +684,30 @@
                     {
                         extend: 'excelHtml5',
                         text: '<i class="bi bi-file-earmark-excel"></i> Excel',
-                        className: 'btn btn-outline-success rounded-pill shadow-sm me-2'
+                        className: 'btn btn-outline-success rounded-pill shadow-sm me-2',
+                        title: 'Properties Dashboard - ' + new Date().toLocaleDateString()
                     },
                     {
                         extend: 'pdfHtml5',
                         text: '<i class="bi bi-file-earmark-pdf"></i> PDF',
-                        className: 'btn btn-outline-danger rounded-pill shadow-sm'
+                        className: 'btn btn-outline-danger rounded-pill shadow-sm',
+                        title: 'Properties Dashboard',
+                        orientation: 'landscape'
                     }
                 ],
                 columnDefs: [
-                    { targets: [2, 6, 7, 8, 9, 14, 15], visible: false },
-                    { searchPanes: { show: true }, targets: [3, 5, 16] }, // Mgmt Co, City, Whs ID
+                    // Hide these columns by default (can be shown via column visibility)
+                    { targets: [3, 5, 7, 8, 9, 10, 19, 20], visible: false },
+
+                    // Enable search panes for Management Co and City
+                    { searchPanes: { show: true }, targets: [4, 6] },
                     { searchPanes: { show: false }, targets: '_all' }
-                ]
+                ],
+                pageLength: 25,
+                lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]]
             });
 
+            // Update filter count when search panes change
             table.on('searchPanes.statesLoaded', function () {
                 updateFilterCount();
             });
@@ -276,6 +721,7 @@
                 $('#filtersCount').text(count);
             }
 
+            // Create Task button handler
             $('#erpTable').on('click', '.create-task', function () {
                 const name = $(this).data('name');
                 const title = `Follow up for ${name}`;
@@ -284,25 +730,20 @@
 
                 $('#taskModal input[name="Task.Property"]').val(name);
                 $('#taskModal input[name="Task.Title"]').val(title);
-
-                // Set due date/time fields
                 $('#taskModal input[name="Task.DueDateDate"]').val(due.toISOString().split('T')[0]);
                 $('#taskModal input[name="Task.DueDateTime"]').val(due.toTimeString().slice(0, 5));
 
-                // ✅ Set AssignedTo for Salesperson role (in case it's using hidden input)
                 const loggedInUserId = '@Context.Session.GetString("Users_Id")';
                 $('#taskModal input#hiddenAssignedTo').val(loggedInUserId);
 
                 $('#taskModal').modal('show');
             });
-
         });
-    </script>
 
-    <script>
+        // Task form submission
         $(document).ready(function () {
             $('#propertyTaskForm').on('submit', function (e) {
-                e.preventDefault(); // prevent full page reload
+                e.preventDefault();
 
                 const form = $(this);
                 const formData = form.serialize();
@@ -315,8 +756,8 @@
                             text: 'The task was successfully created from the property.'
                         });
 
-                        $('#taskModal').modal('hide'); // close modal
-                        form[0].reset(); // clear form
+                        $('#taskModal').modal('hide');
+                        form[0].reset();
                     })
                     .fail(function (xhr) {
                         Swal.fire({
@@ -328,5 +769,4 @@
             });
         });
     </script>
-
 }

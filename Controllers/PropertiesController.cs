@@ -1,9 +1,11 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using SalesMetrics.Models;
 using SalesMetrics.Models.EFCore;
 using System.Data;
+using System.Collections.Generic;
+using System.Linq;
 using System.Security.Claims;
 using SalesMetrics.Services.Helpers;
 
@@ -33,6 +35,7 @@ namespace SalesMetrics.Controllers
 
         public IActionResult Properties()
         {
+            // === STEP 1: GET SESSION DATA (same as original) ===
             var userId = HttpContext.Session.GetString("UserId");
             var users_Id = HttpContext.Session.GetString("Users_Id");
             var officeLocation = HttpContext.Session.GetString("OfficeLocation");
@@ -54,15 +57,15 @@ namespace SalesMetrics.Controllers
                     return RedirectToAction("Login", "Auth");
             }
 
-            // Get assigned-to dropdown users based on session role + location
+            // Set ViewBag data for task modal
             var userList = UserHelper.GetActiveUsers(HttpContext, _configuration);
-
             ViewBag.Users = userList;
             ViewBag.UserId = userId;
             ViewBag.Users_Id = users_Id;
             ViewBag.RoleID = roleId;
             ViewBag.SalesmanID = salesmanId;
 
+            // === STEP 2: FETCH PROPERTIES FROM DATABASE (same as original) ===
             var connectionString = _configuration.GetConnectionString(officeLocation);
             var properties = new List<CustomerPropertyViewModel>();
 
@@ -112,13 +115,14 @@ namespace SalesMetrics.Controllers
                     )
                 ";
 
+            // If user is a salesperson (roleId = 2), filter by their SalesmanId
             if (roleId == 2 && !string.IsNullOrEmpty(salesmanId.ToString()))
             {
                 baseSql += " AND C.CUM_SMNMAS_ID = @SalesmanId";
             }
 
             using (SqlConnection conn = new SqlConnection(connectionString))
-            {                      
+            {
                 conn.Open();
                 var cmd = new SqlCommand(baseSql, conn);
 
@@ -126,7 +130,7 @@ namespace SalesMetrics.Controllers
                 {
                     cmd.Parameters.AddWithValue("@SalesmanId", salesmanId);
                 }
-                
+
                 using (var reader = cmd.ExecuteReader())
                 {
                     while (reader.Read())
@@ -157,7 +161,134 @@ namespace SalesMetrics.Controllers
                     }
                 }
             }
-            return View(properties);
+
+            // === STEP 3: BUILD DASHBOARD WITH KPIs AND RANKINGS ===
+            var dashboard = BuildPropertyDashboard(properties);
+
+            return View(dashboard);
+        }
+
+        // ============================================================
+        // DASHBOARD BUILDER - Calculates all KPIs and rankings
+        // ============================================================
+        /// <summary>
+        /// This method transforms the raw property list into a rich dashboard
+        /// with aggregate KPIs, rankings, and calculated metrics.
+        /// 
+        /// WHAT IT DOES:
+        /// 1. Calculates aggregate KPIs (totals, averages, rates)
+        /// 2. Assigns rankings to each property based on AR Balance
+        /// 3. Calculates percentage contributions for each property
+        /// 4. Identifies top 5 performers for special highlighting
+        /// </summary>
+        private PropertyDashboardViewModel BuildPropertyDashboard(List<CustomerPropertyViewModel> properties)
+        {
+            // === CALCULATE AGGREGATE KPIs ===
+
+            // Count properties by status
+            var totalProperties = properties.Count;
+            var activeProperties = properties.Count(p => p.CreditHold == 0);
+            var creditHoldProperties = properties.Count(p => p.CreditHold == 1);
+
+            // Sum financial metrics
+            var totalARBalance = properties.Sum(p => p.ARBalance ?? 0);
+            var totalCreditLimit = properties.Sum(p => p.CreditLimit ?? 0);
+            var avgCreditLimit = totalProperties > 0 ? totalCreditLimit / totalProperties : 0;
+
+            // Calculate rates (avoid division by zero)
+            var creditUtilizationRate = totalCreditLimit > 0
+                ? (totalARBalance / totalCreditLimit) * 100
+                : 0;
+
+            var collectionRate = totalCreditLimit > 0
+                ? ((totalCreditLimit - totalARBalance) / totalCreditLimit) * 100
+                : 0;
+
+            // Break down AR by credit status
+            var arBalanceActive = properties
+                .Where(p => p.CreditHold == 0)
+                .Sum(p => p.ARBalance ?? 0);
+
+            var arBalanceCreditHold = properties
+                .Where(p => p.CreditHold == 1)
+                .Sum(p => p.ARBalance ?? 0);
+
+            // === ASSIGN RANKINGS ===
+            // Order by AR Balance descending (highest balance = rank 1)
+            // Why? Properties with higher AR balances are more significant
+            // and represent larger customers or more active accounts
+            var rankedProperties = properties
+                .OrderByDescending(p => p.ARBalance ?? 0)
+                .Select((property, index) => new CustomerPropertyEnhancedViewModel
+                {
+                    // Copy all base properties
+                    CustomerId = property.CustomerId,
+                    CustomerNumber = property.CustomerNumber,
+                    CustomerName = property.CustomerName,
+                    PriceCode = property.PriceCode,
+                    MgmtCo = property.MgmtCo,
+                    Address = property.Address,
+                    City = property.City,
+                    State = property.State,
+                    Zip = property.Zip,
+                    PhoneNumber = property.PhoneNumber,
+                    Email = property.Email,
+                    CreditLimit = property.CreditLimit,
+                    EstablishedDate = property.EstablishedDate,
+                    CreditHold = property.CreditHold,
+                    ARBalance = property.ARBalance,
+                    AttentionTo = property.AttentionTo,
+                    PONumberRequired = property.PONumberRequired,
+                    SalesmanID = property.SalesmanID,
+                    Salesperson = property.Salesperson,
+
+                    // Add calculated fields
+                    Rank = index + 1,  // First property gets rank 1, second gets rank 2, etc.
+
+                    // Calculate what percentage of total AR this property represents
+                    ARBalancePercentage = totalARBalance > 0
+                        ? ((property.ARBalance ?? 0) / totalARBalance) * 100
+                        : 0,
+
+                    // Calculate credit utilization for this specific property
+                    CreditUtilization = property.CreditLimit.HasValue && property.CreditLimit > 0
+                        ? ((property.ARBalance ?? 0) / property.CreditLimit.Value) * 100
+                        : null,
+
+                    // Calculate how long this property has been established
+                    DaysSinceEstablished = property.EstablishedDate.HasValue
+                        ? (DateTime.Today - property.EstablishedDate.Value).Days
+                        : null
+                })
+                .ToList();
+
+            // === IDENTIFY TOP 5 PERFORMERS ===
+            // These will be displayed in a special "Top Performers" section
+            var topPerformers = rankedProperties
+                .Take(5)
+                .ToList();
+
+            // === BUILD AND RETURN DASHBOARD ===
+            return new PropertyDashboardViewModel
+            {
+                // Aggregate KPIs
+                TotalProperties = totalProperties,
+                ActiveProperties = activeProperties,
+                CreditHoldProperties = creditHoldProperties,
+                TotalARBalance = totalARBalance,
+                TotalCreditLimit = totalCreditLimit,
+                AverageCreditLimit = avgCreditLimit,
+                CreditUtilizationRate = creditUtilizationRate,
+                CollectionRate = collectionRate,
+                ARBalanceActive = arBalanceActive,
+                ARBalanceCreditHold = arBalanceCreditHold,
+
+                // Enhanced property list with rankings
+                Properties = rankedProperties,
+
+                // Top performers for special section
+                TopPerformers = topPerformers
+            };
         }
 
         public IActionResult PropertyDetails(string id) // id = CUM_CUSTOMER_NUMBER
@@ -173,7 +304,7 @@ namespace SalesMetrics.Controllers
                 Invoices = new List<Invoice>(),
                 WorkOrders = GetWorkOrdersByCustomer(id, officeLocation, roleId, salesmanId),
             };
-                        
+
             var connStr = _configuration.GetConnectionString(officeLocation);
 
             using (SqlConnection conn = new(connStr))
@@ -673,13 +804,13 @@ namespace SalesMetrics.Controllers
                 cmd.Parameters.AddWithValue("@CreatedDate", DateTime.Now);
 
                 cmd.ExecuteNonQuery();
-            }   
+            }
             catch (Exception ex)
             {
                 // Log the exception (not implemented here)
                 return BadRequest("An error occurred while adding the note: " + ex.Message);
             }
-            
+
 
             return RedirectToAction("PropertyDetails", new { id = PropertyId });
         }

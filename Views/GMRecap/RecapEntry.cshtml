@@ -628,19 +628,32 @@
             }
 
             function autoSave() {
-                showAutoSaveIndicator();
+                const data = getFormData();
 
-                // TODO: Implement AJAX call to save draft
-                /*
+                // Only save if there's at least one field with content
+                if (!data.Fields || data.Fields.length === 0) {
+                    return;
+                }
+
                 fetch('/GMRecap/SaveDraft', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'RequestVerificationToken': document.querySelector('[name="__RequestVerificationToken"]')?.value
                     },
-                    body: JSON.stringify(getFormData())
+                    body: JSON.stringify(data)
+                })
+                .then(response => response.json())
+                .then(result => {
+                    if (result.success) {
+                        showAutoSaveIndicator();
+                    } else {
+                        console.warn('Auto-save failed:', result.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Auto-save error:', error);
                 });
-                */
             }
 
             function showAutoSaveIndicator() {
@@ -651,12 +664,33 @@
             }
 
             function getFormData() {
-                const formData = new FormData(form);
-                const data = {};
-                for (let [key, value] of formData.entries()) {
-                    data[key] = value;
-                }
-                return data;
+                // Get form values
+                const weekStartDate = document.querySelector('[name="WeekStartDate"]')?.value;
+                const gmUserId = parseInt(document.querySelector('[name="GMUserID"]')?.value);
+                const locationId = parseInt(document.querySelector('[name="LocationID"]')?.value);
+
+                // Get all field inputs
+                const fields = [];
+                const textareas = form.querySelectorAll('.field-textarea');
+
+                textareas.forEach((textarea, index) => {
+                    const fieldName = textarea.closest('.card-body')?.querySelector('[name*="FieldName"]')?.value;
+                    const fieldValue = textarea.value;
+
+                    if (fieldName && fieldValue && fieldValue.trim()) {
+                        fields.push({
+                            FieldName: fieldName,
+                            FieldValue: fieldValue
+                        });
+                    }
+                });
+
+                return {
+                    WeekStartDate: weekStartDate,
+                    GMUserID: gmUserId,
+                    LocationID: locationId,
+                    Fields: fields
+                };
             }
 
             // Initialize field statuses

@@ -70,38 +70,57 @@ namespace SalesMetrics.Controllers
             var properties = new List<CustomerPropertyViewModel>();
 
             var baseSql = @"
-                SELECT 
-	                C.[CUM_CUMMAS_ID],
-	                C.[CUM_CUSTOMER_NUMBER],
-                    C.[CUM_CUSTOMER_NAME],
-                    ISNULL(C.[CUM_ADDRESS_1], '') + ISNULL(C.[CUM_ADDRESS_2], '') + ISNULL(C.[CUM_ADDRESS_3], '') AS [ADDRESS],
-                    C.[CUM_CITY],
-                    C.[CUM_STATE],
-                    C.[CUM_ZIP],
-                    C.[CUM_PHONE_NUMBER],
-                    C.[CUM_EMAIL],
-                    C.[CUM_CREDIT_LIMIT],
-                    C.[CUM_ESTABLISHED_DATE],
-                    C.[CUM_AR_BALANCE],
-                    C.[CUM_PRICE_CODE],
-                    C.[CUM_ATTENTION_TO],
-                    C.[CUM_SMNMAS_ID],
-                    S.[SMN_SALESMAN_NAME],
-                    C.[Id],
-                    CAST(C.[CUM_CREDIT_HOLD_FLAG] as int) as [CUM_CREDIT_HOLD_FLAG],
-                    C.[CUM_PO_NUMBER_REQUIRED],
-	                P.[IPC_DESCRIPTION],
-	                (SELECT MAX(SOH_WHSMAS_ID) FROM SALES_HEADER WHERE SOH_CUMMAS_ID = C.CUM_CUMMAS_ID AND SOH_WHSMAS_ID <> 1 GROUP BY SOH_CUMMAS_ID) as [SOH_WHSMAS_ID]
+            WITH CustomerSalesData as (
+	            SELECT 
+		            SOH_CUMMAS_ID,
+		            SOH_CUSTOMER_NUMBER,
+		            SOH_WHSMAS_ID,
+		            CAST(MIN(SOH_ORDER_DATE) as DATE) [MinDATE],
+		            CAST(MAX(SOH_ORDER_DATE) as DATE) [MaxDATE],
+		            COUNT(SOH_NUMBER) [ORDERCOUNT]
+	
+	            FROM SALES_HEADER as S
+	            GROUP BY SOH_WHSMAS_ID, 
+		            SOH_CUMMAS_ID, 
+		            SOH_CUSTOMER_NUMBER
+            )
 
-                FROM [CUSTOMER_MASTER] AS C
-	                LEFT JOIN PRICE_CODES AS P ON C.CUM_PRICE_CODE = P.IPC_PRICE_CODE
-                    LEFT JOIN SALESMAN_MASTER as S on C.CUM_SMNMAS_ID = S.SMN_SMNMAS_ID
-                WHERE C.[CUM_CUSTOMER_NUMBER] NOT IN (
-	                    SELECT CAST(IM.INS_INSTALLER_NUMBER AS NVARCHAR(50))
-	                    FROM [INSTALLER_MASTER] IM
-	                    WHERE ISNUMERIC(IM.INS_INSTALLER_NUMBER) = 1
-                    )
-                ";
+            SELECT 
+                C.[CUM_CUMMAS_ID],
+                C.[CUM_CUSTOMER_NUMBER],
+                C.[CUM_CUSTOMER_NAME],
+                ISNULL(C.[CUM_ADDRESS_1], '') + ISNULL(C.[CUM_ADDRESS_2], '') + ISNULL(C.[CUM_ADDRESS_3], '') AS [ADDRESS],
+                C.[CUM_CITY],
+                C.[CUM_STATE],
+                C.[CUM_ZIP],
+                C.[CUM_PHONE_NUMBER],
+                C.[CUM_EMAIL],
+                C.[CUM_CREDIT_LIMIT],
+                C.[CUM_ESTABLISHED_DATE],
+                C.[CUM_AR_BALANCE],
+                C.[CUM_PRICE_CODE],
+                C.[CUM_ATTENTION_TO],
+                C.[CUM_SMNMAS_ID],
+                S.[SMN_SALESMAN_NAME],
+                C.[Id],
+                CAST(C.[CUM_CREDIT_HOLD_FLAG] as int) as [CUM_CREDIT_HOLD_FLAG],
+                C.[CUM_PO_NUMBER_REQUIRED],
+                P.[IPC_DESCRIPTION],
+	            CSD.SOH_WHSMAS_ID as [SOH_WHSMAS_ID]
+
+            FROM [CUSTOMER_MASTER] AS C
+                LEFT JOIN CustomerSalesData as CSD on C.CUM_CUSTOMER_NUMBER = CSD.SOH_CUSTOMER_NUMBER
+	            LEFT JOIN PRICE_CODES AS P ON C.CUM_PRICE_CODE = P.IPC_PRICE_CODE
+                LEFT JOIN SALESMAN_MASTER as S on C.CUM_SMNMAS_ID = S.SMN_SMNMAS_ID
+
+            WHERE 
+	            IPC_PRICE_CODE <> 1
+	            AND C.[CUM_CUSTOMER_NUMBER] NOT IN (
+                    SELECT CAST(IM.INS_INSTALLER_NUMBER AS NVARCHAR(50))
+                    FROM [INSTALLER_MASTER] IM
+                    WHERE ISNUMERIC(IM.INS_INSTALLER_NUMBER) = 1
+                )
+            ";
 
             // If user is a salesperson (roleId = 2), filter by their SalesmanId
             if (roleId == 2 && !string.IsNullOrEmpty(salesmanId.ToString()))
@@ -143,7 +162,8 @@ namespace SalesMetrics.Controllers
                             SalesmanID = reader.IsDBNull("CUM_SMNMAS_ID") ? 0 : reader.GetInt32("CUM_SMNMAS_ID"),
                             Salesperson = reader.IsDBNull("SMN_SALESMAN_NAME") ? "" : reader.GetString("SMN_SALESMAN_NAME"),
                             PONumberRequired = reader.GetBoolean("CUM_PO_NUMBER_REQUIRED"),
-                            MgmtCo = reader.IsDBNull("IPC_DESCRIPTION") ? "" : reader.GetString("IPC_DESCRIPTION")
+                            MgmtCo = reader.IsDBNull("IPC_DESCRIPTION") ? "" : reader.GetString("IPC_DESCRIPTION"),
+                            WhsID = reader.IsDBNull("SOH_WHSMAS_ID") ? 0 : reader.GetInt32("SOH_WHSMAS_ID")
                         });
                     }
                 }

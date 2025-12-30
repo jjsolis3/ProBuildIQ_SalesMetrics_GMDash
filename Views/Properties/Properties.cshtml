@@ -294,7 +294,7 @@
         </div>
     </div>
 
-    <!-- ======================================
+    @* <!-- ======================================
          TOP 5 PERFORMERS SECTION
          ====================================== -->
     @if (Model.TopPerformers != null && Model.TopPerformers.Any())
@@ -343,7 +343,7 @@
                 }
             </div>
         </div>
-    }
+    } *@
 
     <!-- ======================================
          ENHANCED PROPERTIES TABLE
@@ -382,6 +382,7 @@
                             <th>Salesperson</th>
                             <th>Attention To</th>
                             <th>PO Required</th>
+                            <th>Whs ID</th>
                             <th>Action</th>
                         </tr>
                     </thead>
@@ -510,6 +511,11 @@
                                         {
                                             <span class="text-muted">No</span>
                                         }
+                                    </td>
+
+                                    <!-- Whs ID -->
+                                    <td>
+                                        @p.WhsID
                                     </td>
 
                                     <!-- Action Button -->

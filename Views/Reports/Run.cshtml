@@ -475,9 +475,12 @@ else if (Model.ShowResults)
                 // Hide loading overlay after DataTable is fully initialized
                 initComplete: function() {
                     $('#loadingOverlay').fadeOut(600);
+                    // Apply row highlighting on initial load
+                    applyRowHighlighting();
                 }
             });
 
+            // Re-apply highlighting on every redraw (pagination, search, sort)
             resultsTable.on('draw.dt', function() {
                 applyRowHighlighting();
             });

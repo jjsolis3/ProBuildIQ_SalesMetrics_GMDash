@@ -2,6 +2,65 @@
     var roleId = Context.Session.GetString("RoleId");
 }
 
+<style>
+    /* Collapsible sidebar styles */
+    .menu-section-header {
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.75rem 1rem;
+        margin: 0.5rem 0;
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 8px;
+        transition: all 0.3s ease;
+        font-weight: 600;
+        font-size: 0.85rem;
+        color: #495057;
+    }
+
+    .menu-section-header:hover {
+        background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .menu-section-header .chevron {
+        transition: transform 0.3s ease;
+        font-size: 0.75rem;
+    }
+
+    .menu-section-header[aria-expanded="true"] .chevron {
+        transform: rotate(180deg);
+    }
+
+    .menu-section-content {
+        padding-left: 0.5rem;
+    }
+
+    .menu-section-content .ms-3 {
+        margin-bottom: 0.25rem;
+    }
+
+    .menu-section-content .ms-3 a {
+        padding: 0.6rem 1rem;
+        border-radius: 6px;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .menu-section-content .ms-3 a:hover {
+        background-color: #f8f9fa;
+        transform: translateX(4px);
+    }
+
+    /* Add smooth collapse animation */
+    .collapsing {
+        transition: height 0.3s ease;
+    }
+</style>
+
 <!-- ========== Left Sidebar Start ========== -->
 <div class="sidebar-left">
 
@@ -14,118 +73,198 @@
                 @if(roleId == "1" || roleId == "4")
                 {
                     <!-- GM DASHBOARD and RECAP ENTRY/LIST-->
-                    <li class="menu-title">📊 GENERAL MGR</li>
-                    <li class="ms-3">
-                        <a href="/GMDash/Index">
-                            <i class="fas fa-chart-bar"></i>
-                            <span>GM Dashboard</span>
-                        </a>
-                    </li>
-                    <li class="ms-3">
-                        <a href="/GMRecap/RecapEntry">
-                            <i class="fas fa-inbox"></i>
-                            <span>Enter Weekly Recap</span>
-                        </a>
-                    </li>
-                    <li class="ms-3">
-                        <a href="/GMRecap/RecapList">
-                            <i class="fas fa-list-ol"></i>
-                            <span>View Weekly Recap</span>
-                        </a>
+                    <li>
+                        <div class="menu-section-header" data-bs-toggle="collapse" data-bs-target="#gmSection" aria-expanded="true">
+                            <span>📊 GENERAL MGR</span>
+                            <span class="chevron">▼</span>
+                        </div>
+                        <div id="gmSection" class="collapse show menu-section-content">
+                            <ul class="list-unstyled">
+                                <li class="ms-3">
+                                    <a href="/GMDash/Index">
+                                        <i class="fas fa-chart-bar"></i>
+                                        <span>GM Dashboard</span>
+                                    </a>
+                                </li>
+                                <li class="ms-3">
+                                    <a href="/GMRecap/RecapEntry">
+                                        <i class="fas fa-inbox"></i>
+                                        <span>Enter Weekly Recap</span>
+                                    </a>
+                                </li>
+                                <li class="ms-3">
+                                    <a href="/GMRecap/RecapList">
+                                        <i class="fas fa-list-ol"></i>
+                                        <span>View Weekly Recap</span>
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
                     </li>
                 }
 
                 <!-- SALES DASHBOARD -->
-                <li class="menu-title">📈 DASHBOARD</li>
-                <li class="ms-3">
-                    <a href="/Dashboard/Index">
-                        <i class="fas fa-chart-line"></i>
-                        <span>Dashboard</span>
-                    </a>
+                <li>
+                    <div class="menu-section-header" data-bs-toggle="collapse" data-bs-target="#dashboardSection" aria-expanded="true">
+                        <span>📈 DASHBOARD</span>
+                        <span class="chevron">▼</span>
+                    </div>
+                    <div id="dashboardSection" class="collapse show menu-section-content">
+                        <ul class="list-unstyled">
+                            <li class="ms-3">
+                                <a href="/Dashboard/Index">
+                                    <i class="fas fa-chart-line"></i>
+                                    <span>Dashboard</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
                 </li>
                 @if (roleId != "5" && roleId != "6")
                 {
                     <!-- SALES TASK ACTIVITIES -->
-                    <li class="menu-title">📋 TASKS</li>
-                    @if (roleId == "1" || roleId == "3" || roleId == "4")
-                    {
-                        <li class="ms-3">
-                            <a href="/Tasks/AdminTask">
-                                <i class="fa fa-clipboard-check"></i>
-                                <span>View All Tasks</span>
-                            </a>
-                        </li>
-                    }
-
-                    <li class="ms-3">
-                        <a href="/Tasks/Task">
-                            <i class="fa fa-tasks"></i>
-                            <span>My Tasks</span>
-                        </a>
-                    </li>
-                    <li class="ms-3">
-                        <a href="/Tasks/Schedule">
-                            <i class="fa fa-calendar"></i>
-                            <span>Calendar</span>
-                        </a>
+                    <li>
+                        <div class="menu-section-header" data-bs-toggle="collapse" data-bs-target="#tasksSection" aria-expanded="true">
+                            <span>📋 TASKS</span>
+                            <span class="chevron">▼</span>
+                        </div>
+                        <div id="tasksSection" class="collapse show menu-section-content">
+                            <ul class="list-unstyled">
+                                @if (roleId == "1" || roleId == "3" || roleId == "4")
+                                {
+                                    <li class="ms-3">
+                                        <a href="/Tasks/AdminTask">
+                                            <i class="fa fa-clipboard-check"></i>
+                                            <span>View All Tasks</span>
+                                        </a>
+                                    </li>
+                                }
+                                <li class="ms-3">
+                                    <a href="/Tasks/Task">
+                                        <i class="fa fa-tasks"></i>
+                                        <span>My Tasks</span>
+                                    </a>
+                                </li>
+                                <li class="ms-3">
+                                    <a href="/Tasks/Schedule">
+                                        <i class="fa fa-calendar"></i>
+                                        <span>Calendar</span>
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
                     </li>
                 }
 
                 @if (roleId != "2")
                 {
                     <!-- SALESPERSON METRICS -->
-                    <li class="menu-title">📊 SALES REPS</li>
-                    <li class="ms-3">
-                        <a href="/Salesperson/Index">
-                            <i class="fa fa-users"></i>
-                            <span>Sales Pulse</span>
-                        </a>
+                    <li>
+                        <div class="menu-section-header" data-bs-toggle="collapse" data-bs-target="#salesRepsSection" aria-expanded="true">
+                            <span>📊 SALES REPS</span>
+                            <span class="chevron">▼</span>
+                        </div>
+                        <div id="salesRepsSection" class="collapse show menu-section-content">
+                            <ul class="list-unstyled">
+                                <li class="ms-3">
+                                    <a href="/Salesperson/Index">
+                                        <i class="fa fa-users"></i>
+                                        <span>Sales Pulse</span>
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
                     </li>
                 }
 
                 <!-- SALES JOURNALIGN -->
-                <li class="menu-title">✎ JOURNAL</li>
-                <li class="ms-3">
-                    <a href="/Journal/Index">
-                        <i class="fa fa-book"></i>
-                        <span>My Journal</span>
-                    </a>
+                <li>
+                    <div class="menu-section-header" data-bs-toggle="collapse" data-bs-target="#journalSection" aria-expanded="true">
+                        <span>✎ JOURNAL</span>
+                        <span class="chevron">▼</span>
+                    </div>
+                    <div id="journalSection" class="collapse show menu-section-content">
+                        <ul class="list-unstyled">
+                            <li class="ms-3">
+                                <a href="/Journal/Index">
+                                    <i class="fa fa-book"></i>
+                                    <span>My Journal</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
                 </li>
 
                 <!-- JOB SCHEDULE / ORDERS -->
-                <li class="menu-title">🗓️ JOB SCHEDULE</li>
-                <li class="ms-3">
-                    <a href="/Orders/Orders">
-                        <i class="fa fa-truck"></i>
-                        <span>Work Orders</span>
-                    </a>
+                <li>
+                    <div class="menu-section-header" data-bs-toggle="collapse" data-bs-target="#jobScheduleSection" aria-expanded="true">
+                        <span>🗓️ JOB SCHEDULE</span>
+                        <span class="chevron">▼</span>
+                    </div>
+                    <div id="jobScheduleSection" class="collapse show menu-section-content">
+                        <ul class="list-unstyled">
+                            <li class="ms-3">
+                                <a href="/Orders/Orders">
+                                    <i class="fa fa-truck"></i>
+                                    <span>Work Orders</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
                 </li>
 
                 <!-- SALES PROPERTIES -->
-                <li class="menu-title">🏢 MANAGEMENT</li>
-                <li class="ms-3">
-                    <a href="/Management/Management">
-                        <i class="fa fa-building"></i>
-                        <span>Management Co.</span>
-                    </a>
+                <li>
+                    <div class="menu-section-header" data-bs-toggle="collapse" data-bs-target="#managementSection" aria-expanded="true">
+                        <span>🏢 MANAGEMENT</span>
+                        <span class="chevron">▼</span>
+                    </div>
+                    <div id="managementSection" class="collapse show menu-section-content">
+                        <ul class="list-unstyled">
+                            <li class="ms-3">
+                                <a href="/Management/Management">
+                                    <i class="fa fa-building"></i>
+                                    <span>Management Co.</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
                 </li>
 
                 <!-- SALES PROPERTIES -->
-                <li class="menu-title">🏢 PROPERTIES</li>
-                <li class="ms-3">
-                    <a href="/Properties/Properties">
-                        <i class="fa fa-building"></i>
-                        <span>Properties</span>
-                    </a>
+                <li>
+                    <div class="menu-section-header" data-bs-toggle="collapse" data-bs-target="#propertiesSection" aria-expanded="true">
+                        <span>🏢 PROPERTIES</span>
+                        <span class="chevron">▼</span>
+                    </div>
+                    <div id="propertiesSection" class="collapse show menu-section-content">
+                        <ul class="list-unstyled">
+                            <li class="ms-3">
+                                <a href="/Properties/Properties">
+                                    <i class="fa fa-building"></i>
+                                    <span>Properties</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
                 </li>
 
                 <!-- PROSPECTING (YARDI) -->
-                <li class="menu-title">💼 PROSPECTING</li>
-                <li class="ms-3">
-                    <a href="/Yardi/YardiProperties">
-                        <i class="mdi mdi-briefcase-account "></i>
-                        <span>Yardi Properties</span>
-                    </a>
+                <li>
+                    <div class="menu-section-header" data-bs-toggle="collapse" data-bs-target="#prospectingSection" aria-expanded="true">
+                        <span>💼 PROSPECTING</span>
+                        <span class="chevron">▼</span>
+                    </div>
+                    <div id="prospectingSection" class="collapse show menu-section-content">
+                        <ul class="list-unstyled">
+                            <li class="ms-3">
+                                <a href="/Yardi/YardiProperties">
+                                    <i class="mdi mdi-briefcase-account "></i>
+                                    <span>Yardi Properties</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
                 </li>
 
                 @* @if (roleId == "1")
@@ -158,54 +297,90 @@
                 @if (roleId == "1" || roleId == "4")
                 {
                     <!-- Reporting & Analytics -->
-                    <li class="menu-title">📈 Reports</li>
-                    <li class="ms-3">
-                        <a href="/Reports">
-                            <i class="fa fa-chart-line"></i>
-                            <span>Reports</span>
-                        </a>
+                    <li>
+                        <div class="menu-section-header" data-bs-toggle="collapse" data-bs-target="#reportsSection" aria-expanded="true">
+                            <span>📈 REPORTS</span>
+                            <span class="chevron">▼</span>
+                        </div>
+                        <div id="reportsSection" class="collapse show menu-section-content">
+                            <ul class="list-unstyled">
+                                <li class="ms-3">
+                                    <a href="/Reports">
+                                        <i class="fa fa-chart-line"></i>
+                                        <span>Reports</span>
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
                     </li>
                 }
 
                 <!-- User / Profile -->
-                <li class="menu-title">👤 Account</li>
-                <li class="ms-3">
-                    <a href="/Accounts/Profile">
-                        <i class="fa fa-user"></i>
-                        <span>Profile</span>
-                    </a>
+                <li>
+                    <div class="menu-section-header" data-bs-toggle="collapse" data-bs-target="#accountSection" aria-expanded="true">
+                        <span>👤 ACCOUNT</span>
+                        <span class="chevron">▼</span>
+                    </div>
+                    <div id="accountSection" class="collapse show menu-section-content">
+                        <ul class="list-unstyled">
+                            <li class="ms-3">
+                                <a href="/Accounts/Profile">
+                                    <i class="fa fa-user"></i>
+                                    <span>Profile</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
                 </li>
-                
+
                 @if (roleId == "1")
                 {
                     <!-- Admin / Settings -->
-                    <li class="menu-title">⚙️ Admin / Settings</li>
-                    <li class="ms-3">
-                        <a href="/Accounts/Index">
-                            <i class="fa fa-user-cog"></i>
-                            <span>Access Controls</span>
-                        </a>
-                    </li>
-                    <li class="ms-3">
-                        <a href="/Yardi/Upload">
-                            <i class="fa fa-upload"></i>
-                            <span>Yardi Upload</span>
-                        </a>
+                    <li>
+                        <div class="menu-section-header" data-bs-toggle="collapse" data-bs-target="#adminSection" aria-expanded="false">
+                            <span>⚙️ ADMIN / SETTINGS</span>
+                            <span class="chevron">▼</span>
+                        </div>
+                        <div id="adminSection" class="collapse menu-section-content">
+                            <ul class="list-unstyled">
+                                <li class="ms-3">
+                                    <a href="/Accounts/Index">
+                                        <i class="fa fa-user-cog"></i>
+                                        <span>Access Controls</span>
+                                    </a>
+                                </li>
+                                <li class="ms-3">
+                                    <a href="/Yardi/Upload">
+                                        <i class="fa fa-upload"></i>
+                                        <span>Yardi Upload</span>
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
                     </li>
 
                     <!-- Web App Errors -->
-                    <li class="menu-title">⚠️ WEB APP ERRORS</li>
-                    <li class="ms-3">
-                        <a href="/ErrorLog/Dashboard">
-                            <i class="fa fa-exclamation-triangle"></i>
-                            <span>Error Dashboard</span>
-                        </a>
-                    </li>
-                    <li class="ms-3">
-                        <a href="/ErrorLog/Index">
-                            <i class="fa fa-list"></i>
-                            <span>Error Logs</span>
-                        </a>
+                    <li>
+                        <div class="menu-section-header" data-bs-toggle="collapse" data-bs-target="#errorsSection" aria-expanded="false">
+                            <span>⚠️ WEB APP ERRORS</span>
+                            <span class="chevron">▼</span>
+                        </div>
+                        <div id="errorsSection" class="collapse menu-section-content">
+                            <ul class="list-unstyled">
+                                <li class="ms-3">
+                                    <a href="/ErrorLog/Dashboard">
+                                        <i class="fa fa-exclamation-triangle"></i>
+                                        <span>Error Dashboard</span>
+                                    </a>
+                                </li>
+                                <li class="ms-3">
+                                    <a href="/ErrorLog/Index">
+                                        <i class="fa fa-list"></i>
+                                        <span>Error Logs</span>
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
                     </li>
                 }
             </ul>

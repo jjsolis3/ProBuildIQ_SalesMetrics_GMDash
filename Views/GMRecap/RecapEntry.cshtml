@@ -1,28 +1,11 @@
 ﻿@model SalesMetrics.Models.GMRecapCardViewModel
+@using SalesMetrics.Models
 
 @{
     ViewBag.Title = "GM Weekly Recap Entry";
-    var recapFields = new[] {
-        new { Name = "Wins", Category = "Performance", Icon = "🏆" },
-        new { Name = "Loses", Category = "Performance", Icon = "📉" },
-        new { Name = "Needs", Category = "Performance", Icon = "🎯" },
-        new { Name = "The Team", Category = "Team", Icon = "👥" },
-        new { Name = "1-1's with Sales Reps", Category = "Team", Icon = "💬" },
-        new { Name = "Ride-along with Sales Reps", Category = "Team", Icon = "🚗" },
-        new { Name = "Actual vs Projected Sales #'s", Category = "Performance", Icon = "📊" },
-        new { Name = "Average Jobs per Day", Category = "Operations", Icon = "📈" },
-        new { Name = "Reschedules", Category = "Operations", Icon = "📅" },
-        new { Name = "Aged Inventory", Category = "Operations", Icon = "📦" },
-        new { Name = "Tablet %", Category = "Operations", Icon = "📱" },
-        new { Name = "Weekly Focus", Category = "Operations", Icon = "💡" },
-        new { Name = "A/R Update", Category = "Finance", Icon = "💰" },
-        new { Name = "Open Orders", Category = "Finance", Icon = "🧾" },
-        new { Name = "New Accounts", Category = "Accounts", Icon = "🆕" },
-        new { Name = "Lost Accounts", Category = "Accounts", Icon = "❌" },
-        new { Name = "Customer Events", Category = "Customer Relations", Icon = "🎉" },
-        new { Name = "Customer Visits", Category = "Customer Relations", Icon = "🏠" },
-        new { Name = "Ordering Issues", Category = "Customer Relations", Icon = "📢" }
-    };
+
+    // Use centralized field definitions - SINGLE SOURCE OF TRUTH
+    var recapFields = GMRecapFieldDefinitions.AllFields;
 
     // Auto-calculate the current week's Monday as the WeekStartDate
     var today = DateTime.Today;
@@ -628,19 +611,38 @@
             }
 
             function autoSave() {
-                showAutoSaveIndicator();
+                const data = getFormData();
 
-                // TODO: Implement AJAX call to save draft
-                /*
+                // Only save if there's at least one field with content
+                if (!data.Fields || data.Fields.length === 0) {
+                    return;
+                }
+
+                // Debug: log the data being sent
+                console.log('Auto-save data:', data);
+
                 fetch('/GMRecap/SaveDraft', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'RequestVerificationToken': document.querySelector('[name="__RequestVerificationToken"]')?.value
+                        'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify(getFormData())
+                    body: JSON.stringify(data)
+                })
+                .then(response => {
+                    console.log('Auto-save response status:', response.status);
+                    return response.json();
+                })
+                .then(result => {
+                    console.log('Auto-save result:', result);
+                    if (result.success) {
+                        showAutoSaveIndicator();
+                    } else {
+                        console.warn('Auto-save failed:', result.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Auto-save error:', error);
                 });
-                */
             }
 
             function showAutoSaveIndicator() {
@@ -651,12 +653,37 @@
             }
 
             function getFormData() {
-                const formData = new FormData(form);
-                const data = {};
-                for (let [key, value] of formData.entries()) {
-                    data[key] = value;
-                }
-                return data;
+                // Get form values
+                const weekStartDate = document.querySelector('[name="WeekStartDate"]')?.value;
+                const gmUserIdValue = document.querySelector('[name="GMUserID"]')?.value;
+                const locationIdValue = document.querySelector('[name="LocationID"]')?.value;
+
+                // Parse integers and handle NaN by defaulting to 0
+                const gmUserId = parseInt(gmUserIdValue) || 0;
+                const locationId = parseInt(locationIdValue) || 0;
+
+                // Get all field inputs
+                const fields = [];
+                const textareas = form.querySelectorAll('.field-textarea');
+
+                textareas.forEach((textarea, index) => {
+                    const fieldName = textarea.closest('.card-body')?.querySelector('[name*="FieldName"]')?.value;
+                    const fieldValue = textarea.value;
+
+                    if (fieldName && fieldValue && fieldValue.trim()) {
+                        fields.push({
+                            FieldName: fieldName,
+                            FieldValue: fieldValue
+                        });
+                    }
+                });
+
+                return {
+                    WeekStartDate: weekStartDate,
+                    GMUserID: gmUserId,
+                    LocationID: locationId,
+                    Fields: fields
+                };
             }
 
             // Initialize field statuses

@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Caching.Memory;
 using SalesMetrics.Models;
 using SalesMetrics.Services;
 using System;
@@ -17,12 +18,16 @@ namespace SalesMetrics.Controllers
     {
         private readonly IConfiguration _configuration;
         private readonly IErrorLoggingService _errorLoggingService;
+        private readonly IMemoryCache _cache;
+        private const string RECAP_LIST_CACHE_KEY = "GMRecapList";
+        private const int CACHE_DURATION_MINUTES = 5;
 
         // RESTORED: Constructor with IErrorLoggingService dependency injection
-        public GMRecapController(IConfiguration configuration, IErrorLoggingService errorLoggingService)
+        public GMRecapController(IConfiguration configuration, IErrorLoggingService errorLoggingService, IMemoryCache cache)
         {
             _configuration = configuration;
             _errorLoggingService = errorLoggingService;
+            _cache = cache;
         }
 
         [HttpGet]
@@ -276,6 +281,9 @@ namespace SalesMetrics.Controllers
 
                 await tran.CommitAsync();
 
+                // Invalidate cache after successful submission
+                _cache.Remove(RECAP_LIST_CACHE_KEY);
+
                 // Provide feedback to user
                 if (skippedFields.Any())
                 {
@@ -332,13 +340,19 @@ namespace SalesMetrics.Controllers
         [HttpGet]
         public async Task<IActionResult> RecapList()
         {
+            // Try to get cached data first
+            if (_cache.TryGetValue(RECAP_LIST_CACHE_KEY, out List<GMRecapCardViewModel> cachedRecaps))
+            {
+                return View("RecapList", cachedRecaps);
+            }
+
             var connStr = _configuration.GetConnectionString("SalesMetrics");
             var recapCards = new List<GMRecapCardViewModel>();
 
             using var conn = new SqlConnection(connStr);
             await conn.OpenAsync();
 
-            // Get all recaps with GM names - FIXED SQL SYNTAX
+            // OPTIMIZED: Get all recaps with GM names
             var recapCmd = new SqlCommand(@"
         SELECT E.RecapID, E.WeekStartDate, E.GMUserID, E.LocationID,
                U.FirstName + ' ' + U.LastName as GMName, E.CreatedDate
@@ -363,28 +377,54 @@ namespace SalesMetrics.Controllers
             }
             reader.Close();
 
-            // Load fields for each recap
-            foreach (var recap in recapCards)
+            // OPTIMIZED: Load ALL fields in ONE query (fixes N+1 problem)
+            if (recapCards.Any())
             {
-                var fieldCmd = new SqlCommand(@"
-            SELECT FieldName, FieldValue, CreatedDate
-            FROM [dbo].[GMWeeklyRecapField] 
-            WHERE RecapID = @RecapID
+                var recapIds = string.Join(",", recapCards.Select(r => r.RecapID));
+                var fieldsCmd = new SqlCommand($@"
+            SELECT RecapID, FieldName, FieldValue, CreatedDate
+            FROM [dbo].[GMWeeklyRecapField]
+            WHERE RecapID IN ({recapIds})
+            ORDER BY RecapID
         ", conn);
-                fieldCmd.Parameters.AddWithValue("@RecapID", recap.RecapID);
 
-                using var fieldReader = await fieldCmd.ExecuteReaderAsync();
+                using var fieldReader = await fieldsCmd.ExecuteReaderAsync();
+
+                // Group fields by RecapID for quick lookup
+                var fieldsByRecapId = new Dictionary<int, List<RecapField>>();
+
                 while (await fieldReader.ReadAsync())
                 {
-                    recap.Fields.Add(new RecapField
+                    int recapId = fieldReader.GetInt32(0);
+                    var field = new RecapField
                     {
-                        FieldName = fieldReader.GetString(0),
-                        FieldValue = fieldReader.IsDBNull(1) ? "" : fieldReader.GetString(1),
-                        CreatedDate = fieldReader.IsDBNull(2) ? DateTime.MinValue : fieldReader.GetDateTime(2)
-                    });
+                        FieldName = fieldReader.GetString(1),
+                        FieldValue = fieldReader.IsDBNull(2) ? "" : fieldReader.GetString(2),
+                        CreatedDate = fieldReader.IsDBNull(3) ? DateTime.MinValue : fieldReader.GetDateTime(3)
+                    };
+
+                    if (!fieldsByRecapId.ContainsKey(recapId))
+                    {
+                        fieldsByRecapId[recapId] = new List<RecapField>();
+                    }
+                    fieldsByRecapId[recapId].Add(field);
                 }
-                fieldReader.Close();
+
+                // Assign fields to their respective recaps
+                foreach (var recap in recapCards)
+                {
+                    if (fieldsByRecapId.TryGetValue(recap.RecapID, out var fields))
+                    {
+                        recap.Fields = fields;
+                    }
+                }
             }
+
+            // Cache the results for 5 minutes
+            var cacheOptions = new MemoryCacheEntryOptions()
+                .SetAbsoluteExpiration(TimeSpan.FromMinutes(CACHE_DURATION_MINUTES));
+
+            _cache.Set(RECAP_LIST_CACHE_KEY, recapCards, cacheOptions);
 
             return View("RecapList", recapCards);
         }
@@ -589,6 +629,10 @@ namespace SalesMetrics.Controllers
                     }
 
                     await tran.CommitAsync();
+
+                    // Invalidate cache after successful update
+                    _cache.Remove(RECAP_LIST_CACHE_KEY);
+
                     TempData["SuccessMessage"] = "Your recap has been updated successfully.";
                     return RedirectToAction("RecapList");
                 }
@@ -662,6 +706,10 @@ namespace SalesMetrics.Controllers
                     }
 
                     await tran.CommitAsync();
+
+                    // Invalidate cache after successful deletion
+                    _cache.Remove(RECAP_LIST_CACHE_KEY);
+
                     TempData["SuccessMessage"] = "Your recap entry has been deleted successfully.";
                 }
                 catch (SqlException sqlEx)
@@ -712,6 +760,24 @@ namespace SalesMetrics.Controllers
         {
             try
             {
+                // CRITICAL: Check if model is null (deserialization failed)
+                if (model == null)
+                {
+                    await _errorLoggingService.LogWarningAsync(
+                        "SaveDraft received null model - JSON deserialization failed",
+                        HttpContext,
+                        JsonSerializer.Serialize(new { ContentType = HttpContext.Request.ContentType }),
+                        "GMRecap-SaveDraft"
+                    );
+                    return Json(new { success = false, message = "Invalid data format - model is null" });
+                }
+
+                // Additional validation
+                if (model.WeekStartDate == default)
+                {
+                    return Json(new { success = false, message = "Invalid week start date" });
+                }
+
                 var userClaim = HttpContext.User.FindFirst("Users_ID");
                 if (userClaim == null || !int.TryParse(userClaim.Value, out int user_id))
                 {
@@ -797,6 +863,10 @@ namespace SalesMetrics.Controllers
                     }
 
                     await tran.CommitAsync();
+
+                    // Invalidate cache after saving draft (since it affects the recap list)
+                    _cache.Remove(RECAP_LIST_CACHE_KEY);
+
                     return Json(new { success = true, message = "Draft saved successfully" });
                 }
                 catch (Exception ex)

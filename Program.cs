@@ -17,6 +17,25 @@ var connectionString = builder.Configuration.GetConnectionString("SalesMetrics")
 // Add services to the container
 builder.Services.AddControllersWithViews();
 builder.Services.AddSignalR(); // Add SignalR
+
+// Add Memory Cache for performance optimization
+builder.Services.AddMemoryCache();
+
+// Add Response Compression for faster data transfer
+builder.Services.AddResponseCompression(options =>
+{
+    options.EnableForHttps = true;
+    options.MimeTypes = new[]
+    {
+        "text/html",
+        "text/css",
+        "text/javascript",
+        "application/javascript",
+        "application/json",
+        "text/json"
+    };
+});
+
 builder.Services.AddSingleton<IReportCatalog, ReportCatalog>();
 builder.Services.AddSingleton<IReportRunner, ReportRunner>();
 builder.Services.AddSingleton<IReportAuthorizationService, ReportAuthorizationService>();
@@ -109,6 +128,10 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+// Enable Response Compression
+app.UseResponseCompression();
+
 app.UseStaticFiles();
 app.UseRouting();
 

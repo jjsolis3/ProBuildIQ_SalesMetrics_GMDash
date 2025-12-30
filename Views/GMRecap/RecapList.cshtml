@@ -1,9 +1,14 @@
 ﻿@model List<SalesMetrics.Models.GMRecapCardViewModel>
+@using SalesMetrics.Models
 
 @{
     ViewBag.Title = "GM Weekly Recap Dashboard";
     var currentUser = User.FindFirst("Users_ID")?.Value;
     var isAdmin = User.IsInRole("Admin") || User.FindFirst("RoleId")?.Value == "1";
+
+    // Use centralized field definitions - SINGLE SOURCE OF TRUTH
+    var recapFields = GMRecapFieldDefinitions.AllFields;
+    var totalFields = GMRecapFieldDefinitions.TotalFieldCount;
 }
 
 @section styles {
@@ -244,15 +249,44 @@
             box-shadow: 0 3px 15px rgba(0,0,0,0.1);
             padding: 25px;
             position: sticky;
-            top: 100px;
+            top: 20px; /* Reduced from 100px for better visibility */
             border: 1px solid #e9ecef;
+            max-height: calc(100vh - 40px); /* Full viewport height minus small margin */
+            overflow-y: auto; /* Enable vertical scrolling within the panel */
+            overflow-x: hidden; /* Prevent horizontal scroll */
+            align-self: flex-start; /* Important: Allows sticky to work in flexbox */
         }
+
+            /* Custom scrollbar styling for details panel */
+            .details-panel::-webkit-scrollbar {
+                width: 8px;
+            }
+
+            .details-panel::-webkit-scrollbar-track {
+                background: #f1f1f1;
+                border-radius: 10px;
+            }
+
+            .details-panel::-webkit-scrollbar-thumb {
+                background: #ff6720;
+                border-radius: 10px;
+            }
+
+            .details-panel::-webkit-scrollbar-thumb:hover {
+                background: #ff8c42;
+            }
 
             .details-panel h4 {
                 color: #2f363D;
                 margin-bottom: 20px;
                 padding-bottom: 10px;
                 border-bottom: 2px solid #ff6720;
+                position: sticky;
+                top: -25px; /* Stick to top of panel when scrolling */
+                background: white;
+                z-index: 10;
+                margin-top: -25px; /* Offset parent padding */
+                padding-top: 25px; /* Add back padding for spacing */
             }
 
         .empty-state {
@@ -323,6 +357,15 @@
                 position: relative;
                 top: auto;
                 margin-top: 25px;
+                max-height: none; /* Remove height limit on mobile */
+                overflow-y: visible; /* Allow natural scrolling on mobile */
+            }
+
+            .details-panel h4 {
+                position: relative; /* Remove sticky on mobile */
+                top: auto;
+                margin-top: 0;
+                padding-top: 0;
             }
 
             .dashboard-header {
@@ -344,7 +387,7 @@
             <p>Track and manage weekly recap submissions from all General Managers</p>
         </div>
         <div class="col-md-4 text-md-end">
-            <a href="/GMRecap/RecapEntry" class="btn btn-light btn-lg">
+            <a href="/GMRecap/RecapEntry" class="btn btn-primary btn-lg">
                 <i class="fas fa-plus-circle me-2"></i>New Recap Entry
             </a>
         </div>
@@ -412,12 +455,12 @@
         @foreach (var weekGroup in Model.GroupBy(x => x.WeekStartDate).OrderByDescending(g => g.Key))
         {
             var weekStats = weekGroup.ToList();
-            var avgCompletion = weekStats.Average(w => (double)(w.Fields?.Count ?? 0)) / 14 * 100; // Assuming 14 total fields
+            var avgCompletion = weekStats.Average(w => (double)(w.Fields?.Count ?? 0)) / totalFields * 100; // Dynamic field count
 
             <div class="week-section week-group" data-week="@weekGroup.Key.ToString("yyyy-MM-dd")">
                 <div class="week-header">
                     <div>
-                        <h5><i class="fas fa-calendar-week me-2"></i>Week of @weekGroup.Key.ToString("MMMM dd, yyyy")</h5>
+                        <h5 class="text-white"><i class="fas fa-calendar-week me-2"></i>Week of @weekGroup.Key.ToString("MMMM dd, yyyy")</h5>
                         <small><i class="fas fa-chart-pie me-1"></i>@weekStats.Count entries • Avg completion: @Math.Round(avgCompletion, 1)%</small>
                     </div>
                     <div>
@@ -431,7 +474,7 @@
                     @foreach (var entry in weekGroup.OrderBy(e => e.GMName))
                     {
                         var fieldCount = entry.Fields?.Count ?? 0;
-                        var completionRate = (double)fieldCount / 14 * 100; // Assuming 14 total fields
+                        var completionRate = (double)fieldCount / totalFields * 100; // Dynamic field count
                         var completionClass = completionRate >= 80 ? "completion-high" :
                         completionRate >= 50 ? "completion-medium" : "completion-low";
                         var isMyEntry = currentUser != null && entry.GMUserID.ToString() == currentUser;

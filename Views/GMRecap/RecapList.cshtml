@@ -271,13 +271,41 @@
             position: sticky;
             top: 100px;
             border: 1px solid #e9ecef;
+            max-height: calc(100vh - 120px); /* Limit height to viewport minus offset */
+            overflow-y: auto; /* Enable vertical scrolling within the panel */
+            overflow-x: hidden; /* Prevent horizontal scroll */
         }
+
+            /* Custom scrollbar styling for details panel */
+            .details-panel::-webkit-scrollbar {
+                width: 8px;
+            }
+
+            .details-panel::-webkit-scrollbar-track {
+                background: #f1f1f1;
+                border-radius: 10px;
+            }
+
+            .details-panel::-webkit-scrollbar-thumb {
+                background: #ff6720;
+                border-radius: 10px;
+            }
+
+            .details-panel::-webkit-scrollbar-thumb:hover {
+                background: #ff8c42;
+            }
 
             .details-panel h4 {
                 color: #2f363D;
                 margin-bottom: 20px;
                 padding-bottom: 10px;
                 border-bottom: 2px solid #ff6720;
+                position: sticky;
+                top: -25px; /* Stick to top of panel when scrolling */
+                background: white;
+                z-index: 10;
+                margin-top: -25px; /* Offset parent padding */
+                padding-top: 25px; /* Add back padding for spacing */
             }
 
         .empty-state {
@@ -348,7 +376,17 @@
                 position: relative;
                 top: auto;
                 margin-top: 25px;
+                max-height: none; /* Remove height limit on mobile */
+                overflow-y: visible; /* Allow natural scrolling on mobile */
             }
+
+            .details-panel h4 {
+                position: relative; /* Remove sticky on mobile */
+                top: auto;
+                margin-top: 0;
+                padding-top: 0;
+            }
+        }
 
             .dashboard-header {
                 text-align: center;

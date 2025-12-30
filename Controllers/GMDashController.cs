@@ -186,7 +186,7 @@ namespace SalesMetrics.Controllers
                 LEFT JOIN SALES_HEADER S WITH (NOLOCK) 
                     ON IHF.IHF_ORDER_NUMBER = S.SOH_NUMBER
                 WHERE IHF.IHF_INVOICE_DATE BETWEEN @YTDStart AND @Today
-                  AND IHF.IHF_WAREHOUSE_NUMBER IN (1)
+                  AND IHF.IHF_WHSMAS_ID IN (1)
                   AND (@Location <> 'LAX' OR ISNULL(S.SOH_SMNMAS_ID, 0) <> 24);
             ";
 

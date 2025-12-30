@@ -760,6 +760,24 @@ namespace SalesMetrics.Controllers
         {
             try
             {
+                // CRITICAL: Check if model is null (deserialization failed)
+                if (model == null)
+                {
+                    await _errorLoggingService.LogWarningAsync(
+                        "SaveDraft received null model - JSON deserialization failed",
+                        HttpContext,
+                        JsonSerializer.Serialize(new { ContentType = HttpContext.Request.ContentType }),
+                        "GMRecap-SaveDraft"
+                    );
+                    return Json(new { success = false, message = "Invalid data format - model is null" });
+                }
+
+                // Additional validation
+                if (model.WeekStartDate == default)
+                {
+                    return Json(new { success = false, message = "Invalid week start date" });
+                }
+
                 var userClaim = HttpContext.User.FindFirst("Users_ID");
                 if (userClaim == null || !int.TryParse(userClaim.Value, out int user_id))
                 {

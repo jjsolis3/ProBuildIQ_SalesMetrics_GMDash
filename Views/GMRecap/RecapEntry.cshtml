@@ -618,16 +618,22 @@
                     return;
                 }
 
+                // Debug: log the data being sent
+                console.log('Auto-save data:', data);
+
                 fetch('/GMRecap/SaveDraft', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'RequestVerificationToken': document.querySelector('[name="__RequestVerificationToken"]')?.value
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(data)
                 })
-                .then(response => response.json())
+                .then(response => {
+                    console.log('Auto-save response status:', response.status);
+                    return response.json();
+                })
                 .then(result => {
+                    console.log('Auto-save result:', result);
                     if (result.success) {
                         showAutoSaveIndicator();
                     } else {

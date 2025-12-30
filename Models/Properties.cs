@@ -140,6 +140,7 @@ namespace SalesMetrics.Models
         public bool PONumberRequired { get; set; }
         public int SalesmanID { get; set; }
         public string? Salesperson { get; set; }
+        public int WhsID { get; set; }
     }
 
     public class PropertyDetailsViewModel

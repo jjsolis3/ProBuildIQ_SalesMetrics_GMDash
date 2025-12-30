@@ -2,481 +2,456 @@
 
 @{
     ViewBag.Title = "GM Weekly Recap Entry";
-    Layout = "~/Views/Shared/_Layout.cshtml";
-
-    // Define field categories for tabbed interface
-    var fieldCategories = new Dictionary<string, List<string>>
-    {
-        { "Performance", new List<string> { "Wins", "Loses", "Actual vs Projected Sales #'s", "Average Jobs per Day" } },
-        { "Team", new List<string> { "The Team", "1-1's with Sales Reps", "Ride-along with Sales Reps" } },
-        { "Operations", new List<string> { "Needs", "Reschedules" } },
-        { "Accounts", new List<string> { "A/R Update", "New Accounts", "Lost Accounts" } },
-        { "Customer Relations", new List<string> { "Customer Events", "Customer Visits" } }
+    var recapFields = new[] {
+        new { Name = "Wins", Category = "Performance", Icon = "🏆" },
+        new { Name = "Loses", Category = "Performance", Icon = "📉" },
+        new { Name = "Needs", Category = "Performance", Icon = "🎯" },
+        new { Name = "The Team", Category = "Team", Icon = "👥" },
+        new { Name = "1-1's with Sales Reps", Category = "Team", Icon = "💬" },
+        new { Name = "Ride-along with Sales Reps", Category = "Team", Icon = "🚗" },
+        new { Name = "Actual vs Projected Sales #'s", Category = "Performance", Icon = "📊" },
+        new { Name = "Average Jobs per Day", Category = "Operations", Icon = "📈" },
+        new { Name = "Reschedules", Category = "Operations", Icon = "📅" },
+        new { Name = "Aged Inventory", Category = "Operations", Icon = "📦" },
+        new { Name = "Tablet %", Category = "Operations", Icon = "📱" },
+        new { Name = "Weekly Focus", Category = "Operations", Icon = "💡" },
+        new { Name = "A/R Update", Category = "Finance", Icon = "💰" },
+        new { Name = "Open Orders", Category = "Finance", Icon = "🧾" },
+        new { Name = "New Accounts", Category = "Accounts", Icon = "🆕" },
+        new { Name = "Lost Accounts", Category = "Accounts", Icon = "❌" },
+        new { Name = "Customer Events", Category = "Customer Relations", Icon = "🎉" },
+        new { Name = "Customer Visits", Category = "Customer Relations", Icon = "🏠" },
+        new { Name = "Ordering Issues", Category = "Customer Relations", Icon = "📢" }
     };
 
-    var allFields = fieldCategories.SelectMany(c => c.Value).ToList();
-    var existingFieldNames = Model.Fields?.Select(f => f.FieldName).Distinct().ToHashSet() ?? new HashSet<string>();
-    var globalIndex = 0;
+    // Auto-calculate the current week's Monday as the WeekStartDate
+    var today = DateTime.Today;
+    var weekStart = today.AddDays(-(int)today.DayOfWeek + (int)DayOfWeek.Monday);
+    Model.WeekStartDate = weekStart;
+
+    var categories = recapFields.GroupBy(f => f.Category).ToList();
 }
 
 @section styles {
     <style>
-        /* RESTORED: Company Color Theming */
-        :root {
-            --sf-orange: #ff6720;
-            --sf-orange-light: #ff8c42;
-            --sf-orange-lighter: #ffb366;
-            --sf-gray: #7C878E;
-            --sf-dark: #2f363D;
-        }
-
-        .bg-sf-orange {
-            background: linear-gradient(135deg, var(--sf-orange) 0%, var(--sf-orange-light) 50%, var(--sf-orange-lighter) 100%);
-        }
-
-        /* RESTORED: Page Header */
-        .page-header {
-            background: linear-gradient(135deg, var(--sf-orange) 0%, var(--sf-orange-light) 100%);
-            color: white;
-            padding: 25px 30px;
-            border-radius: 15px;
-            margin-bottom: 25px;
-            box-shadow: 0 4px 15px rgba(255, 103, 32, 0.3);
-        }
-
-            .page-header h3 {
-                margin: 0;
-                font-weight: 600;
-            }
-
-        /* RESTORED: Week Header */
-        .week-header {
-            background: white;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 25px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-            border-left: 5px solid var(--sf-orange);
-        }
-
-        /* RESTORED: Progress Sidebar */
         .progress-sidebar {
-            position: sticky;
+            position: fixed;
             top: 100px;
+            right: 20px;
+            width: 280px;
+            z-index: 1000;
             background: white;
-            border-radius: 15px;
-            padding: 20px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            border: 1px solid #e0e0e0;
         }
 
         .progress-header {
-            background: linear-gradient(135deg, var(--sf-orange) 0%, var(--sf-orange-light) 100%);
+            background: linear-gradient(135deg, #ff6720 0%, #ff8c42 50%, #ffb366 100%);
             color: white;
             padding: 15px;
-            border-radius: 10px;
-            margin-bottom: 20px;
+            border-radius: 10px 10px 0 0;
             text-align: center;
+            box-shadow: 0 2px 8px rgba(255, 103, 32, 0.3);
         }
 
-        .progress-ring {
-            width: 120px;
-            height: 120px;
-            margin: 0 auto 20px;
-            position: relative;
+        .progress-body {
+            padding: 15px;
+            max-height: 600px;
+            overflow-y: auto;
         }
 
-        .progress-ring-circle {
-            transform: rotate(-90deg);
-            transform-origin: center;
+        .progress-bar-container {
+            background: #f0f0f0;
+            height: 8px;
+            border-radius: 4px;
+            margin: 10px 0;
+            overflow: hidden;
         }
 
-        .progress-ring-bg {
-            fill: none;
-            stroke: #e9ecef;
-            stroke-width: 8;
-        }
-
-        .progress-ring-progress {
-            fill: none;
-            stroke: var(--sf-orange);
-            stroke-width: 8;
-            stroke-linecap: round;
-            transition: stroke-dashoffset 0.5s ease;
-        }
-
-        .progress-percentage {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 1.8rem;
-            font-weight: bold;
-            color: var(--sf-dark);
+        .progress-bar-fill {
+            background: linear-gradient(90deg, #ff6720, #ff8c42);
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.3s ease;
+            box-shadow: 0 2px 4px rgba(255, 103, 32, 0.3);
         }
 
         .field-checklist {
-            max-height: 300px;
-            overflow-y: auto;
+            margin-top: 15px;
         }
 
         .field-check-item {
             display: flex;
             align-items: center;
-            padding: 8px 12px;
-            border-radius: 8px;
-            margin-bottom: 5px;
-            transition: all 0.2s ease;
+            padding: 8px 0;
+            border-bottom: 1px solid #f0f0f0;
         }
 
-            .field-check-item.filled {
-                background: linear-gradient(90deg, #d4edda 0%, #f8f9fa 100%);
+            .field-check-item:last-child {
+                border-bottom: none;
             }
 
-            .field-check-item.previously-filled {
-                background: linear-gradient(90deg, #fff3e0 0%, #f8f9fa 100%);
-            }
-
-            .field-check-item.empty {
-                background: #f8f9fa;
-            }
+        .field-status-icon {
+            width: 20px;
+            margin-right: 10px;
+            text-align: center;
+        }
 
         .field-filled {
-            color: #28a745;
+            color: #ff6720;
         }
 
         .field-empty {
-            color: #6c757d;
+            color: #7C878E;
         }
 
         .field-previously-filled {
-            color: var(--sf-orange);
+            color: #2f363D;
         }
 
-        /* RESTORED: Category Tabs */
-        .category-tabs {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 5px;
-            margin-bottom: 20px;
-            background: #f8f9fa;
-            padding: 10px;
-            border-radius: 15px;
-        }
-
+        /* FIXED: Enhanced category tab styling with !important to override Bootstrap */
         .category-tab {
-            border: none;
-            background: white;
-            color: var(--sf-gray);
-            border-radius: 25px;
-            padding: 12px 20px;
-            transition: all 0.3s ease;
-            border: 2px solid transparent;
-            font-weight: 500;
+            border: none !important;
+            background: #f8f9fa !important;
+            color: #7C878E !important;
+            border-radius: 25px 25px 0 0 !important;
+            padding: 12px 20px !important;
+            margin-right: 5px;
+            transition: all 0.3s ease !important;
+            border: 2px solid transparent !important;
+            position: relative;
         }
 
-            .category-tab.active {
-                background: linear-gradient(135deg, var(--sf-orange) 0%, var(--sf-orange-light) 100%);
-                color: white;
-                border-color: var(--sf-orange);
-                box-shadow: 0 3px 10px rgba(255, 103, 32, 0.3);
+            .category-tab.active,
+            .category-tab:focus,
+            .category-tab.show {
+                background: linear-gradient(135deg, #ff6720 0%, #ff8c42 50%, #ffb366 100%) !important;
+                color: white !important;
+                border-color: #ff6720 !important;
+                box-shadow: 0 3px 10px rgba(255, 103, 32, 0.3) !important;
                 transform: translateY(-2px);
             }
 
             .category-tab:hover:not(.active) {
-                background: linear-gradient(135deg, var(--sf-orange) 0%, var(--sf-orange-light) 100%);
-                color: white;
+                background: linear-gradient(135deg, #ff6720 0%, #ff8c42 100%) !important;
+                color: white !important;
                 transform: translateY(-1px);
-                box-shadow: 0 2px 8px rgba(255, 103, 32, 0.2);
+                box-shadow: 0 2px 8px rgba(255, 103, 32, 0.2) !important;
             }
 
-        /* RESTORED: Field Cards */
-        .category-content {
-            display: none;
-        }
-
-            .category-content.active {
-                display: block;
-                animation: fadeIn 0.3s ease;
+            /* Force the active badge styling */
+            .category-tab.active .badge,
+            .category-tab:focus .badge,
+            .category-tab.show .badge {
+                background: rgba(255, 255, 255, 0.2) !important;
+                color: white !important;
             }
 
         .field-card {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-            margin-bottom: 20px;
-            overflow: hidden;
             transition: all 0.3s ease;
             border: 2px solid transparent;
         }
 
-            .field-card:hover {
-                box-shadow: 0 4px 20px rgba(255, 103, 32, 0.15);
-                transform: translateY(-2px);
+            .field-card.filled {
+                border-color: #ff6720;
+                box-shadow: 0 2px 8px rgba(255, 103, 32, 0.2);
             }
 
             .field-card.previously-filled {
-                border-color: var(--sf-orange);
+                border-color: #2f363D;
+                background-color: #f8f9fa;
             }
 
-        .field-card-header {
-            background: linear-gradient(135deg, var(--sf-orange) 0%, var(--sf-orange-light) 100%);
-            color: white;
-            padding: 15px 20px;
-            font-weight: 600;
+        .field-header {
             display: flex;
-            justify-content: space-between;
             align-items: center;
+            justify-content: space-between;
         }
 
-        .previously-filled-badge {
-            background: rgba(255, 255, 255, 0.2);
-            padding: 4px 12px;
-            border-radius: 15px;
-            font-size: 0.8rem;
-            font-weight: normal;
+        .field-icon {
+            font-size: 1.2em;
+            margin-right: 8px;
         }
 
-        .field-card-body {
+        .char-counter {
+            font-size: 0.8em;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+
+        .auto-save-indicator {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: linear-gradient(135deg, #ff6720 0%, #ff8c42 100%);
+            color: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 9999;
+            box-shadow: 0 2px 8px rgba(255, 103, 32, 0.3);
+        }
+
+            .auto-save-indicator.show {
+                opacity: 1;
+            }
+
+        .tab-content {
+            border-top: 3px solid #ff6720;
+            background: white;
             padding: 20px;
+            border-radius: 0 10px 10px 10px;
+            box-shadow: 0 2px 8px rgba(255, 103, 32, 0.1);
         }
 
-        .field-textarea {
-            border: 2px solid #e9ecef;
-            border-radius: 10px;
-            padding: 15px;
-            transition: all 0.3s ease;
-            resize: vertical;
-            min-height: 100px;
-        }
-
-            .field-textarea:focus {
-                border-color: var(--sf-orange);
-                box-shadow: 0 0 0 3px rgba(255, 103, 32, 0.1);
-                outline: none;
-            }
-
-        /* RESTORED: Clean form notice */
-        .clean-form-notice {
-            background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
-            border: 2px solid #2196f3;
-            border-radius: 10px;
-            padding: 15px;
-            margin-bottom: 20px;
-            color: #1565c0;
-        }
-
-            .clean-form-notice .notice-icon {
-                color: #2196f3;
-                margin-right: 10px;
-                font-size: 1.2em;
-            }
-
-        /* RESTORED: Sticky Submit */
         .sticky-submit {
             position: sticky;
             bottom: 0;
             background: white;
-            padding: 20px;
-            border-top: 2px solid #e9ecef;
-            border-radius: 15px 15px 0 0;
-            box-shadow: 0 -4px 20px rgba(0,0,0,0.1);
-            z-index: 100;
+            padding: 1rem;
+            text-align: center;
+            z-index: 10;
+            border-top: 2px solid #ff6720;
+            box-shadow: 0 -2px 10px rgba(255, 103, 32, 0.1);
         }
 
-        .btn-submit {
-            background: linear-gradient(135deg, var(--sf-orange) 0%, var(--sf-orange-light) 100%);
-            border: none;
-            color: white;
-            padding: 15px 40px;
-            border-radius: 10px;
-            font-size: 1.1rem;
-            font-weight: 600;
+        /* Company brand colors and additional enhancements */
+        .btn-success {
+            background: linear-gradient(135deg, #ff6720 0%, #ff8c42 100%) !important;
+            border: none !important;
+            box-shadow: 0 3px 12px rgba(255, 103, 32, 0.3);
             transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(255, 103, 32, 0.3);
         }
 
-            .btn-submit:hover {
+            .btn-success:hover {
+                background: linear-gradient(135deg, #e55a1c 0%, #ff8c42 100%) !important;
                 transform: translateY(-2px);
-                box-shadow: 0 6px 20px rgba(255, 103, 32, 0.4);
-                color: white;
+                box-shadow: 0 5px 15px rgba(255, 103, 32, 0.4) !important;
             }
 
-        @@keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(10px);
+        /* FIXED: Better week header styling */
+        .week-header {
+            background: linear-gradient(135deg, #f8f9fa 0%, #fff5f1 100%);
+            border: 2px solid #ff6720;
+            border-radius: 10px;
+            color: #2f363D;
+            padding: 15px 20px;
+            font-size: 1.1rem;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(255, 103, 32, 0.1);
+        }
+
+        .card-header {
+            background: linear-gradient(135deg, #ff6720 0%, #ff8c42 100%);
+            color: white;
+            font-weight: bold;
+        }
+
+        /* Custom scrollbar for progress sidebar */
+        .progress-body::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .progress-body::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 3px;
+        }
+
+        .progress-body::-webkit-scrollbar-thumb {
+            background: linear-gradient(135deg, #ff6720 0%, #ff8c42 100%);
+            border-radius: 3px;
+        }
+
+            .progress-body::-webkit-scrollbar-thumb:hover {
+                background: linear-gradient(135deg, #e55a1c 0%, #ff6720 100%);
             }
 
-            to {
+        /* Enhanced field focus states */
+        .field-textarea:focus {
+            border-color: #ff6720;
+            box-shadow: 0 0 0 0.2rem rgba(255, 103, 32, 0.25);
+        }
+
+        /* Pulse animation for active progress indicators */
+        .field-status-icon .field-filled {
+            animation: pulse-orange 2s infinite;
+        }
+
+        @@keyframes pulse-orange {
+            0% {
                 opacity: 1;
-                transform: translateY(0);
+            }
+
+            50% {
+                opacity: 0.7;
+            }
+
+            100% {
+                opacity: 1;
             }
         }
 
         @@media (max-width: 1200px) {
             .progress-sidebar {
                 position: relative;
-                top: auto;
                 width: 100%;
                 margin-bottom: 20px;
+                right: auto;
+                top: auto;
             }
         }
     </style>
 }
 
 <div class="container-fluid">
+    <!-- Auto-save indicator -->
+    <div id="autoSaveIndicator" class="auto-save-indicator">
+        ✅ Auto-saved
+    </div>
+
     <!-- Main Content Area -->
     <div class="row">
-        <!-- Left Column: Form -->
         <div class="col-xl-9 col-lg-8">
-            <!-- Page Header -->
-            <div class="page-header">
-                <div class="d-flex align-items-center justify-content-between">
-                    <div>
-                        <h3><i class="fas fa-clipboard-list me-2"></i> GM Weekly Recap Entry</h3>
-                        <p class="mb-0 mt-2 opacity-75">Submit your weekly recap for review</p>
-                    </div>
-                    <a href="@Url.Action("RecapList", "GMRecap")" class="btn btn-light">
-                        <i class="fas fa-list me-1"></i> View All Recaps
-                    </a>
-                </div>
-            </div>
+            <h3 class="mb-4">📋 GM Weekly Recap</h3>
 
-            <!-- Week Header -->
+            <!-- FIXED: Week header with inline text -->
             <div class="week-header">
                 <div class="d-flex align-items-center">
                     <div class="me-3">
-                        <i class="fas fa-calendar-week" style="font-size: 1.5em; color: var(--sf-orange);"></i>
+                        <i class="fas fa-calendar-week text-primary" style="font-size: 1.5em; color: #ff6720 !important;"></i>
                     </div>
                     <div>
-                        <span style="color: var(--sf-orange); font-weight: bold; margin-right: 10px;">Week Starting:</span>
+                        <span style="color: #ff6720; font-weight: bold; margin-right: 10px;">Week Starting:</span>
                         <span class="fw-bold" style="font-size: 1.1rem;">@Model.WeekStartDate.ToString("MMMM dd, yyyy")</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Clean Form Notice -->
-            <div class="clean-form-notice">
-                <div class="d-flex align-items-center">
-                    <i class="fas fa-info-circle notice-icon"></i>
-                    <div>
-                        <strong>New Entry Form:</strong> This form creates <strong>new separate entries</strong> for each field.
-                        To edit existing entries, use the <a href="@Url.Action("RecapList", "GMRecap")" style="color: #1565c0; text-decoration: underline;">Recap List</a> page.
                     </div>
                 </div>
             </div>
 
             <form asp-action="SubmitWeeklyRecap" asp-controller="GMRecap" method="post" id="recapForm">
                 <input type="hidden" name="GMUserID" value="@User.FindFirst("Users_ID")?.Value" />
-                <input type="hidden" name="LocationID" value="@User.FindFirst("LocationId")?.Value" />
+                <input type="hidden" name="LocationID" value="@User.FindFirst("Location")?.Value" />
                 <input type="hidden" name="WeekStartDate" value="@Model.WeekStartDate.ToString("yyyy-MM-dd")" />
 
                 <!-- Category Tabs -->
-                <div class="category-tabs">
-                    @foreach (var category in fieldCategories.Keys)
+                <ul class="nav nav-pills mb-3" id="categoryTabs" role="tablist">
+                    @for (int categoryIndex = 0; categoryIndex < categories.Count; categoryIndex++)
                     {
-                        var isFirst = category == fieldCategories.Keys.First();
-                        <button type="button" class="category-tab @(isFirst ? "active" : "")"
-                                data-category="@category.Replace(" ", "-").ToLower()">
-                            <i class="fas @GetCategoryIcon(category) me-1"></i> @category
-                        </button>
+                        var category = categories[categoryIndex];
+                        var tabId = category.Key.Replace(" ", "").Replace("'", "");
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link category-tab @(categoryIndex == 0 ? "active" : "")"
+                                    id="@(tabId)-tab"
+                                    data-bs-toggle="pill"
+                                    data-bs-target="#@tabId"
+                                    type="button"
+                                    role="tab">
+                                @category.Key
+                                <span class="badge bg-light text-dark ms-2" id="@(tabId)-count">0/@category.Count()</span>
+                            </button>
+                        </li>
+                    }
+                </ul>
+
+                <!-- Tab Content -->
+                <div class="tab-content" id="categoryTabContent">
+                    @for (int categoryIndex = 0; categoryIndex < categories.Count; categoryIndex++)
+                    {
+                        var category = categories[categoryIndex];
+                        var fieldsInCategory = category.ToList();
+                        var tabId = category.Key.Replace(" ", "").Replace("'", "");
+
+                        <div class="tab-pane fade @(categoryIndex == 0 ? "show active" : "")"
+                             id="@tabId"
+                             role="tabpanel">
+
+                            <div class="row g-3">
+                                @for (int fieldIndex = 0; fieldIndex < fieldsInCategory.Count; fieldIndex++)
+                                {
+                                    var field = fieldsInCategory[fieldIndex];
+                                    var globalIndex = Array.FindIndex(recapFields, f => f.Name == field.Name);
+                                    var existingField = Model.Fields?.FirstOrDefault(f => f.FieldName == field.Name);
+
+                                    <div class="col-md-6">
+                                        <div class="card field-card h-100 @(existingField != null && !string.IsNullOrWhiteSpace(existingField.FieldValue) ? "previously-filled" : "")"
+                                             data-field="@field.Name">
+                                            <div class="card-header">
+                                                <div class="field-header">
+                                                    <span>
+                                                        <span class="field-icon">@field.Icon</span>
+                                                        @field.Name
+                                                    </span>
+                                                    @if (existingField != null && !string.IsNullOrWhiteSpace(existingField.FieldValue))
+                                                    {
+                                                        <span class="badge bg-info">Previously Filled</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                            <div class="card-body">
+                                                <input type="hidden" name="Fields[@globalIndex].FieldName" value="@field.Name" />
+                                                <textarea name="Fields[@globalIndex].FieldValue"
+                                                  class="form-control field-textarea"
+                                                  rows="3"
+                                                  data-field-name="@field.Name"
+                                                  placeholder="Enter @field.Name here...">@(existingField?.FieldValue ?? "")</textarea>
+                                                <div class="char-counter">
+                                                    <span class="current-chars">@(existingField?.FieldValue?.Length ?? 0)</span> characters
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
                     }
                 </div>
 
-                <!-- Category Content -->
-                @foreach (var category in fieldCategories)
-                {
-                    var isFirst = category.Key == fieldCategories.Keys.First();
-                    <div class="category-content @(isFirst ? "active" : "")"
-                         id="category-@category.Key.Replace(" ", "-").ToLower()">
-                        <div class="row">
-                            @foreach (var fieldName in category.Value)
-                            {
-                                var isPreviouslyFilled = existingFieldNames.Contains(fieldName);
-                                var existingCount = Model.Fields?.Count(f => f.FieldName == fieldName) ?? 0;
-
-                                <div class="col-md-6">
-                                    <div class="field-card @(isPreviouslyFilled ? "previously-filled" : "")">
-                                        <div class="field-card-header">
-                                            <span>@fieldName</span>
-                                            @if (isPreviouslyFilled)
-                                            {
-                                                <span class="previously-filled-badge">
-                                                    <i class="fas fa-check-circle me-1"></i> @existingCount entry(ies)
-                                                </span>
-                                            }
-                                        </div>
-                                        <div class="field-card-body">
-                                            <input type="hidden" name="Fields[@globalIndex].FieldName" value="@fieldName" />
-                                            <textarea name="Fields[@globalIndex].FieldValue"
-                                              class="form-control field-textarea"
-                                              rows="3"
-                                              data-field-name="@fieldName"
-                                              placeholder="Enter @fieldName here..."></textarea>
-                                        </div>
-                                    </div>
-                                </div>
-                                globalIndex++;
-                            }
-                        </div>
-                    </div>
-                }
-
-                <div class="sticky-submit mt-4 text-end">
-                    <button type="submit" class="btn btn-submit">
-                        <i class="fas fa-paper-plane me-2"></i> Submit Recap
+                <div class="sticky-submit mt-4">
+                    <button type="submit" class="btn btn-success btn-lg px-5">
+                        ✅ Submit Weekly Recap
                     </button>
                 </div>
             </form>
         </div>
 
-        <!-- Right Column: Progress Sidebar -->
+        <!-- Progress Sidebar -->
         <div class="col-xl-3 col-lg-4">
             <div class="progress-sidebar">
                 <div class="progress-header">
-                    <h5 class="mb-0"><i class="fas fa-tasks me-2"></i> Progress Tracker</h5>
-                </div>
-
-                <!-- Progress Ring -->
-                <div class="progress-ring">
-                    <svg viewBox="0 0 120 120" class="progress-ring-circle">
-                        <circle class="progress-ring-bg" cx="60" cy="60" r="50"></circle>
-                        <circle class="progress-ring-progress" cx="60" cy="60" r="50"
-                                stroke-dasharray="314" stroke-dashoffset="314" id="progressCircle"></circle>
-                    </svg>
-                    <div class="progress-percentage">
-                        <span id="progressPercent">0</span>%
+                    <h5 class="mb-1">📊 Progress Tracker</h5>
+                    <div class="mb-2">
+                        <span id="completedCount">0</span> of @recapFields.Length fields completed
                     </div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar-fill" id="progressBar" style="width: 0%"></div>
+                    </div>
+                    <small><span id="progressPercent">0</span>% Complete</small>
                 </div>
+                <div class="progress-body">
+                    <div class="field-checklist" id="fieldChecklist">
+                        @foreach (var field in recapFields)
+                        {
+                            var existingField = Model.Fields?.FirstOrDefault(f => f.FieldName == field.Name);
+                            var hasValue = existingField != null && !string.IsNullOrWhiteSpace(existingField.FieldValue);
 
-                <div class="text-center mb-3">
-                    <span class="text-muted">Fields Completed: </span>
-                    <strong><span id="completedCount">0</span> of @allFields.Count</strong>
-                </div>
-
-                <!-- Field Checklist -->
-                <div class="field-checklist">
-                    @foreach (var fieldName in allFields)
-                    {
-                        var isPrevious = existingFieldNames.Contains(fieldName);
-                        <div class="field-check-item @(isPrevious ? "previously-filled" : "empty")"
-                             data-field="@fieldName">
-                            <i class="fas @(isPrevious ? "fa-check-circle field-previously-filled" : "fa-circle field-empty") me-2"
-                               id="icon-@fieldName.Replace(" ", "-").Replace("'", "").Replace("#", "").ToLower()"></i>
-                            <span class="small">@fieldName</span>
-                        </div>
-                    }
-                </div>
-
-                <div class="mt-3 pt-3 border-top">
-                    <small class="text-muted d-block mb-2">
-                        <i class="fas fa-info-circle me-1"></i> Legend:
-                    </small>
-                    <div class="d-flex flex-column gap-1">
-                        <small><i class="fas fa-check-circle text-success me-1"></i> Filled Now</small>
-                        <small><i class="fas fa-check-circle field-previously-filled me-1"></i> Previous Entry</small>
-                        <small><i class="fas fa-circle text-muted me-1"></i> Empty</small>
+                            <div class="field-check-item" data-field="@field.Name">
+                                <div class="field-status-icon">
+                                    @if (hasValue)
+                                    {
+                                        <i class="fas fa-check-circle field-previously-filled"></i>
+                                    }
+                                    else
+                                    {
+                                        <i class="far fa-circle field-empty"></i>
+                                    }
+                                </div>
+                                <div class="flex-grow-1">
+                                    <small>@field.Icon @field.Name</small>
+                                </div>
+                            </div>
+                        }
                     </div>
                 </div>
             </div>
@@ -484,95 +459,208 @@
     </div>
 </div>
 
-@functions {
-    string GetCategoryIcon(string category)
-    {
-        return category switch
-        {
-            "Performance" => "fa-chart-line",
-            "Team" => "fa-users",
-            "Operations" => "fa-cogs",
-            "Accounts" => "fa-file-invoice-dollar",
-            "Customer Relations" => "fa-handshake",
-            _ => "fa-folder"
-        };
-    }
-}
-
 @section Scripts {
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('recapForm');
             const textareas = document.querySelectorAll('.field-textarea');
-            const totalFields = @allFields.Count;
-            const progressCircle = document.getElementById('progressCircle');
+            const progressBar = document.getElementById('progressBar');
             const progressPercent = document.getElementById('progressPercent');
             const completedCount = document.getElementById('completedCount');
-            const circumference = 314; // 2 * PI * 50
+            const autoSaveIndicator = document.getElementById('autoSaveIndicator');
+            const totalFields = @recapFields.Length;
+            let autoSaveTimer;
 
-            // Category tab switching
+            // Initialize progress
+            updateProgress();
+            updateCategoryBadges();
+
+            // FIXED: Handle tab switching to maintain gradient styling
             document.querySelectorAll('.category-tab').forEach(tab => {
-                tab.addEventListener('click', function() {
-                    // Remove active from all tabs
-                    document.querySelectorAll('.category-tab').forEach(t => t.classList.remove('active'));
-                    document.querySelectorAll('.category-content').forEach(c => c.classList.remove('active'));
+                tab.addEventListener('shown.bs.tab', function() {
+                    // Force re-apply active styling after Bootstrap tab switch
+                    setTimeout(() => {
+                        this.style.background = 'linear-gradient(135deg, #ff6720 0%, #ff8c42 50%, #ffb366 100%)';
+                        this.style.color = 'white';
+                        this.style.borderColor = '#ff6720';
+                        this.style.boxShadow = '0 3px 10px rgba(255, 103, 32, 0.3)';
 
-                    // Add active to clicked tab
-                    this.classList.add('active');
-                    const categoryId = 'category-' + this.getAttribute('data-category');
-                    document.getElementById(categoryId).classList.add('active');
+                        // Update badge styling
+                        const badge = this.querySelector('.badge');
+                        if (badge) {
+                            badge.style.background = 'rgba(255, 255, 255, 0.2)';
+                            badge.style.color = 'white';
+                        }
+                    }, 50);
+                });
+
+                // Remove active styling from inactive tabs
+                tab.addEventListener('hidden.bs.tab', function() {
+                    this.style.background = '#f8f9fa';
+                    this.style.color = '#7C878E';
+                    this.style.borderColor = 'transparent';
+                    this.style.boxShadow = 'none';
+                    this.style.transform = 'translateY(0)';
+
+                    // Reset badge styling
+                    const badge = this.querySelector('.badge');
+                    if (badge) {
+                        badge.style.background = '#f8f9fa';
+                        badge.style.color = '#7C878E';
+                    }
                 });
             });
 
-            // Progress tracking
+            // Add event listeners to all textareas
+            textareas.forEach(textarea => {
+                // Character counter
+                textarea.addEventListener('input', function() {
+                    const charCounter = this.parentElement.querySelector('.current-chars');
+                    charCounter.textContent = this.value.length;
+
+                    // Update field status
+                    updateFieldStatus(this);
+                    updateProgress();
+                    updateCategoryBadges();
+
+                    // Setup auto-save
+                    clearTimeout(autoSaveTimer);
+                    autoSaveTimer = setTimeout(() => {
+                        autoSave();
+                    }, 30000); // 30 seconds
+                });
+
+                // Initialize character counter
+                const charCounter = textarea.parentElement.querySelector('.current-chars');
+                charCounter.textContent = textarea.value.length;
+            });
+
+            function updateFieldStatus(textarea) {
+                const fieldName = textarea.dataset.fieldName;
+                const fieldCard = textarea.closest('.field-card');
+                const checklistItem = document.querySelector(`[data-field="${fieldName}"] .field-status-icon i`);
+
+                if (textarea.value.trim()) {
+                    fieldCard.classList.add('filled');
+                    checklistItem.className = 'fas fa-check-circle field-filled';
+                } else {
+                    fieldCard.classList.remove('filled');
+                    if (fieldCard.classList.contains('previously-filled')) {
+                        checklistItem.className = 'fas fa-check-circle field-previously-filled';
+                    } else {
+                        checklistItem.className = 'far fa-circle field-empty';
+                    }
+                }
+            }
+
             function updateProgress() {
                 let completed = 0;
                 textareas.forEach(textarea => {
-                    const fieldName = textarea.getAttribute('data-field-name');
-                    const checkItem = document.querySelector(`.field-check-item[data-field="${fieldName}"]`);
-                    const iconId = 'icon-' + fieldName.replace(/ /g, '-').replace(/'/g, '').replace(/#/g, '').toLowerCase();
-                    const icon = document.getElementById(iconId);
-
-                    if (textarea.value.trim()) {
+                    if (textarea.value.trim() || textarea.closest('.field-card').classList.contains('previously-filled')) {
                         completed++;
-                        if (checkItem) {
-                            checkItem.classList.remove('empty', 'previously-filled');
-                            checkItem.classList.add('filled');
-                        }
-                        if (icon) {
-                            icon.classList.remove('fa-circle', 'field-empty', 'field-previously-filled');
-                            icon.classList.add('fa-check-circle', 'text-success');
-                        }
-                    } else if (checkItem && checkItem.classList.contains('previously-filled')) {
-                        // Keep previous state
-                        completed++;
-                    } else {
-                        if (checkItem) {
-                            checkItem.classList.remove('filled');
-                            checkItem.classList.add('empty');
-                        }
-                        if (icon) {
-                            icon.classList.remove('fa-check-circle', 'text-success');
-                            icon.classList.add('fa-circle', 'field-empty');
-                        }
                     }
                 });
 
                 const percentage = Math.round((completed / totalFields) * 100);
-                const offset = circumference - (percentage / 100) * circumference;
-
-                progressCircle.style.strokeDashoffset = offset;
+                progressBar.style.width = percentage + '%';
                 progressPercent.textContent = percentage;
                 completedCount.textContent = completed;
             }
 
-            // Add input listeners to all textareas
-            textareas.forEach(textarea => {
-                textarea.addEventListener('input', updateProgress);
-            });
+            function updateCategoryBadges() {
+                document.querySelectorAll('[id$="-count"]').forEach(badge => {
+                    const categoryName = badge.id.replace('-count', '');
+                    const tabPane = document.getElementById(categoryName);
+                    if (tabPane) {
+                        const categoryFields = tabPane.querySelectorAll('.field-textarea');
 
-            // Initial progress calculation
-            updateProgress();
+                        let completed = 0;
+                        categoryFields.forEach(field => {
+                            if (field.value.trim() || field.closest('.field-card').classList.contains('previously-filled')) {
+                                completed++;
+                            }
+                        });
+
+                        const total = categoryFields.length;
+                        const isComplete = completed === total;
+
+                        // Update badge text
+                        badge.textContent = `${completed}/${total}`;
+
+                        // Update badge styling based on completion
+                        badge.classList.remove('bg-light', 'bg-success', 'bg-warning', 'text-dark', 'text-white');
+
+                        if (isComplete && total > 0) {
+                            // Completed category - use primary color
+                            badge.style.background = 'linear-gradient(135deg, #ff6720 0%, #ff8c42 100%)';
+                            badge.style.color = 'white';
+                            badge.style.boxShadow = '0 2px 4px rgba(255, 103, 32, 0.3)';
+                        } else if (completed > 0) {
+                            // Partially completed - use secondary color
+                            badge.style.background = '#7C878E';
+                            badge.style.color = 'white';
+                            badge.style.boxShadow = '0 2px 4px rgba(124, 135, 142, 0.3)';
+                        } else {
+                            // Not started - light background
+                            badge.style.background = '#f8f9fa';
+                            badge.style.color = '#7C878E';
+                            badge.style.boxShadow = 'none';
+                        }
+
+                        // Update tab button styling for inactive tabs
+                        const tabButton = document.getElementById(categoryName + '-tab');
+                        if (tabButton && !tabButton.classList.contains('active')) {
+                            if (isComplete && total > 0) {
+                                tabButton.style.borderLeft = '4px solid #ff6720';
+                                tabButton.style.background = 'linear-gradient(135deg, #f8f9fa 0%, #fff5f1 100%)';
+                            } else if (completed > 0) {
+                                tabButton.style.borderLeft = '4px solid #7C878E';
+                                tabButton.style.background = '#f8f9fa';
+                            } else {
+                                tabButton.style.borderLeft = 'none';
+                                tabButton.style.background = '#f8f9fa';
+                            }
+                        }
+                    }
+                });
+            }
+
+            function autoSave() {
+                showAutoSaveIndicator();
+
+                // TODO: Implement AJAX call to save draft
+                /*
+                fetch('/GMRecap/SaveDraft', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': document.querySelector('[name="__RequestVerificationToken"]')?.value
+                    },
+                    body: JSON.stringify(getFormData())
+                });
+                */
+            }
+
+            function showAutoSaveIndicator() {
+                autoSaveIndicator.classList.add('show');
+                setTimeout(() => {
+                    autoSaveIndicator.classList.remove('show');
+                }, 2000);
+            }
+
+            function getFormData() {
+                const formData = new FormData(form);
+                const data = {};
+                for (let [key, value] of formData.entries()) {
+                    data[key] = value;
+                }
+                return data;
+            }
+
+            // Initialize field statuses
+            textareas.forEach(updateFieldStatus);
         });
     </script>
 
@@ -596,8 +684,7 @@
                 text: 'Would you like to submit another recap or view all recaps?',
                 showCancelButton: true,
                 confirmButtonText: 'Submit Another',
-                cancelButtonText: 'View All Recaps',
-                confirmButtonColor: '#ff6720'
+                cancelButtonText: 'View All Recaps'
             }).then((result) => {
                 if (result.isConfirmed) {
                     window.location.href = '@Url.Action("RecapEntry", "GMRecap")';

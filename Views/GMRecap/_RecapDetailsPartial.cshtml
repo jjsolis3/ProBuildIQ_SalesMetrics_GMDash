@@ -1,61 +1,77 @@
 ﻿@model SalesMetrics.Models.GMRecapCardViewModel
 
 <style>
-    .detail-card {
+    /* Company themed styles for recap details */
+    .recap-details-card {
         border: none;
-        border-radius: 12px;
+        border-radius: 15px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
         overflow: hidden;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+        background: white;
     }
 
-    .detail-header {
-        background: linear-gradient(135deg, #ff6720 0%, #ff8c42 100%);
+    .recap-details-header {
+        background: linear-gradient(135deg, #ff6720 0%, #ff8c42 50%, #ffb366 100%);
         color: white;
         padding: 20px;
+        position: relative;
     }
 
-        .detail-header h5 {
+        .recap-details-header h5 {
             margin: 0;
-            font-weight: 600;
+            font-weight: bold;
+            font-size: 1.2em;
         }
 
-    .detail-meta {
-        background: rgba(255, 255, 255, 0.15);
-        padding: 8px 15px;
-        border-radius: 8px;
-        margin-top: 10px;
-        font-size: 0.9rem;
+        .recap-details-header .week-info {
+            opacity: 0.95;
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+
+        .recap-details-header .gm-info {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.9em;
+        }
+
+    .recap-details-body {
+        padding: 25px;
+        background: white;
     }
 
     .field-section {
-        margin-bottom: 20px;
-        border-radius: 10px;
+        margin-bottom: 25px;
+        border-radius: 12px;
         overflow: hidden;
-        box-shadow: 0 1px 5px rgba(0,0,0,0.05);
+        border: 1px solid #e9ecef;
+        transition: all 0.3s ease;
     }
+
+        .field-section:hover {
+            box-shadow: 0 3px 12px rgba(255, 103, 32, 0.1);
+            transform: translateY(-2px);
+        }
 
     .field-section-header {
         background: linear-gradient(135deg, #2f363D 0%, #7C878E 100%);
         color: white;
-        padding: 12px 18px;
-        font-weight: 600;
+        padding: 15px 20px;
+        font-weight: bold;
+        font-size: 1.1em;
         display: flex;
         align-items: center;
-        justify-content: space-between;
     }
 
         .field-section-header i {
             margin-right: 10px;
-            font-size: 1.1em;
+            font-size: 1.2em;
         }
-
-    .entry-count-badge {
-        background: rgba(255, 255, 255, 0.2);
-        padding: 3px 10px;
-        border-radius: 12px;
-        font-size: 0.8rem;
-        font-weight: normal;
-    }
 
     .field-entries {
         background: #f8f9fa;
@@ -64,12 +80,12 @@
     .field-entry-item {
         border: none;
         border-bottom: 1px solid #e9ecef;
-        padding: 15px 18px;
+        padding: 15px 20px;
         background: white;
         display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        transition: background-color 0.2s ease;
+        justify-content: between;
+        align-items: start;
+        transition: background-color 0.3s ease;
     }
 
         .field-entry-item:hover {
@@ -86,61 +102,34 @@
     }
 
     .field-entry-text {
-        font-size: 0.95rem;
-        line-height: 1.5;
+        font-size: 1em;
+        line-height: 1.4;
         color: #2f363D;
+        margin-bottom: 8px;
     }
+
+    .field-entry-meta {
+        font-size: 0.85em;
+        color: #7C878E;
+        display: flex;
+        align-items: center;
+    }
+
+        .field-entry-meta i {
+            margin-right: 5px;
+            color: #ff6720;
+        }
 
     .field-entry-timestamp {
         flex-shrink: 0;
         text-align: right;
-        font-size: 0.75rem;
+        font-size: 0.8em;
         color: #7C878E;
-        background: #f0f2f4;
+        background: #f8f9fa;
         padding: 5px 10px;
-        border-radius: 8px;
-        white-space: nowrap;
+        border-radius: 12px;
+        border: 1px solid #e9ecef;
     }
-
-    .action-buttons {
-        display: flex;
-        gap: 10px;
-        margin-top: 20px;
-        padding-top: 15px;
-        border-top: 2px solid #e9ecef;
-    }
-
-    .btn-edit {
-        background: linear-gradient(135deg, #ffc107 0%, #ffdb4d 100%);
-        color: #2f363D;
-        border: none;
-        padding: 10px 20px;
-        border-radius: 8px;
-        font-weight: 600;
-        transition: all 0.3s ease;
-    }
-
-        .btn-edit:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(255, 193, 7, 0.4);
-            color: #2f363D;
-        }
-
-    .btn-delete {
-        background: linear-gradient(135deg, #dc3545 0%, #e85d6a 100%);
-        color: white;
-        border: none;
-        padding: 10px 20px;
-        border-radius: 8px;
-        font-weight: 600;
-        transition: all 0.3s ease;
-    }
-
-        .btn-delete:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(220, 53, 69, 0.4);
-            color: white;
-        }
 
     .empty-state {
         text-align: center;
@@ -149,38 +138,143 @@
     }
 
         .empty-state i {
-            font-size: 2.5rem;
+            color: #ff6720;
             margin-bottom: 15px;
-            opacity: 0.5;
         }
+
+    .action-buttons {
+        margin-top: 25px;
+        padding-top: 20px;
+        border-top: 2px solid #f0f0f0;
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+    }
+
+    .btn-edit-custom {
+        background: linear-gradient(135deg, #ffc107 0%, #ffb366 100%);
+        border: none;
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        box-shadow: 0 3px 10px rgba(255, 193, 7, 0.3);
+        display: flex;
+        align-items: center;
+    }
+
+        .btn-edit-custom:hover {
+            background: linear-gradient(135deg, #e0a800 0%, #ffc107 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(255, 193, 7, 0.4);
+            color: white;
+        }
+
+        .btn-edit-custom i {
+            margin-right: 8px;
+        }
+
+    .btn-delete-custom {
+        background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+        border: none;
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        box-shadow: 0 3px 10px rgba(220, 53, 69, 0.3);
+        display: flex;
+        align-items: center;
+    }
+
+        .btn-delete-custom:hover {
+            background: linear-gradient(135deg, #c82333 0%, #a71e2a 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(220, 53, 69, 0.4);
+            color: white;
+        }
+
+        .btn-delete-custom i {
+            margin-right: 8px;
+        }
+
+    .field-count-badge {
+        background: rgba(255, 255, 255, 0.2);
+        color: white;
+        padding: 4px 10px;
+        border-radius: 15px;
+        font-size: 0.8em;
+        font-weight: 600;
+        margin-left: auto;
+    }
+
+    /* Field category icons */
+    .field-icon-performance::before {
+        content: "📊";
+    }
+
+    .field-icon-team::before {
+        content: "👥";
+    }
+
+    .field-icon-operations::before {
+        content: "⚙️";
+    }
+
+    .field-icon-finance::before {
+        content = "💰";
+    }
+
+    .field-icon-accounts::before {
+        content: "📋";
+    }
+
+    .field-icon-customer::before {
+        content: "🤝";
+    }
+
+    .field-icon-default::before {
+        content: "📝";
+    }
+
+    .view-only-message {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 15px 20px;
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        font-size: 0.9em;
+        width: 100%;
+        text-align: center;
+    }
 </style>
 
-<div class="detail-card">
-    <div class="detail-header">
-        <h5><i class="fas fa-clipboard-check me-2"></i> Recap Details</h5>
-        <div class="detail-meta">
-            <div class="d-flex justify-content-between align-items-center">
-                <span><i class="fas fa-calendar-alt me-1"></i> Week of @Model.WeekStartDate.ToString("MMMM dd, yyyy")</span>
-            </div>
-            <div class="mt-2">
-                <span><i class="fas fa-user me-1"></i> @Model.GMName</span>
-            </div>
+<div class="recap-details-card">
+    <div class="recap-details-header">
+        <div class="gm-info">
+            <i class="fas fa-user-tie me-1"></i>@Model.GMName
+        </div>
+        <h5><i class="fas fa-calendar-week me-2"></i>Week of @Model.WeekStartDate.ToString("MMMM dd, yyyy")</h5>
+        <div class="week-info">
+            <i class="fas fa-clock me-1"></i>Submitted: @Model.CreatedDate.ToString("MMM dd, yyyy 'at' h:mm tt")
         </div>
     </div>
 
-    <div class="p-3">
+    <div class="recap-details-body">
         @if (Model.Fields != null && Model.Fields.Count > 0)
         {
-            @foreach (var group in Model.Fields.GroupBy(f => f.FieldName).OrderBy(g => g.Key))
+            @foreach (var group in Model.Fields.GroupBy(f => f.FieldName))
             {
-                var entryCount = group.Count();
+                var fieldIcon = GetFieldIcon(group.Key);
+
                 <div class="field-section">
                     <div class="field-section-header">
-                        <span>
-                            <i class="fas @GetFieldIcon(group.Key)"></i>
-                            @group.Key
-                        </span>
-                        <span class="entry-count-badge">@entryCount @(entryCount == 1 ? "entry" : "entries")</span>
+                        <span class="@fieldIcon"></span>
+                        <span>@group.Key</span>
+                        <span class="field-count-badge">@group.Count() @(group.Count() == 1 ? "entry" : "entries")</span>
                     </div>
                     <div class="field-entries">
                         @foreach (var entry in group.OrderByDescending(f => f.CreatedDate))
@@ -188,12 +282,16 @@
                             <div class="field-entry-item">
                                 <div class="field-entry-content">
                                     <div class="field-entry-text">@entry.FieldValue</div>
+                                    <div class="field-entry-meta">
+                                        <i class="fas fa-pencil-alt"></i>
+                                        Entry #@(group.ToList().IndexOf(entry) + 1)
+                                    </div>
                                 </div>
                                 <div class="field-entry-timestamp">
                                     <i class="fas fa-clock me-1"></i>
                                     @entry.CreatedDate.ToString("MMM dd")
-                                    <br />
-                                    @entry.CreatedDate.ToString("hh:mm tt")
+                                    <br>
+                                    <small>@entry.CreatedDate.ToString("h:mm tt")</small>
                                 </div>
                             </div>
                         }
@@ -204,48 +302,56 @@
         else
         {
             <div class="empty-state">
-                <i class="fas fa-inbox"></i>
-                <p>No fields submitted for this recap.</p>
+                <i class="fas fa-inbox fa-3x mb-3"></i>
+                <h5>No Fields Submitted</h5>
+                <p class="text-muted">This recap entry doesn't contain any field submissions yet.</p>
             </div>
         }
 
         <div class="action-buttons">
-            <button type="button" class="btn btn-edit flex-grow-1" onclick="loadEditRecapModal(@Model.RecapID)">
-                <i class="fas fa-edit me-1"></i> Edit Recap
-            </button>
+            @{
+                var currentUserId = User.FindFirst("Users_ID")?.Value;
+                var canEdit = currentUserId != null && currentUserId == Model.GMUserID.ToString();
+            }
 
-            <form asp-action="DeleteRecap" asp-controller="GMRecap" method="post"
-                  onsubmit="return confirm('Are you sure you want to delete this recap entry? This action cannot be undone.');"
-                  class="flex-grow-1">
-                <input type="hidden" name="recapId" value="@Model.RecapID" />
-                <button type="submit" class="btn btn-delete w-100">
-                    <i class="fas fa-trash-alt me-1"></i> Delete
+            @if (canEdit)
+            {
+                <button class="btn btn-edit-custom" type="button" onclick="loadEditRecapModal(@Model.RecapID)">
+                    <i class="fas fa-edit"></i>Edit Recap
                 </button>
-            </form>
+
+                <form asp-action="DeleteRecap" asp-controller="GMRecap" method="post"
+                      onsubmit="return confirm('Are you sure you want to delete this recap entry? This action cannot be undone.')"
+                      style="margin: 0;">
+                    <input type="hidden" name="recapId" value="@Model.RecapID" />
+                    <button type="submit" class="btn btn-delete-custom">
+                        <i class="fas fa-trash-alt"></i>Delete Recap
+                    </button>
+                </form>
+            }
+            else
+            {
+                <div class="view-only-message">
+                    <i class="fas fa-eye me-2" style="color: #7C878E;"></i>
+                    <span style="color: #7C878E; font-style: italic;">View-only access - This entry was created by @Model.GMName</span>
+                </div>
+            }
         </div>
     </div>
 </div>
 
 @functions {
-    string GetFieldIcon(string fieldName)
+    private string GetFieldIcon(string fieldName)
     {
-        return fieldName switch
+        return fieldName?.ToLower() switch
         {
-            "Wins" => "fa-trophy",
-            "Loses" => "fa-thumbs-down",
-            "Needs" => "fa-tasks",
-            "The Team" => "fa-users",
-            "Actual vs Projected Sales #'s" => "fa-chart-line",
-            "Average Jobs per Day" => "fa-calendar-day",
-            "Reschedules" => "fa-calendar-times",
-            "A/R Update" => "fa-file-invoice-dollar",
-            "New Accounts" => "fa-user-plus",
-            "Lost Accounts" => "fa-user-minus",
-            "Customer Events" => "fa-handshake",
-            "Customer Visits" => "fa-building",
-            "1-1's with Sales Reps" => "fa-comments",
-            "Ride-along with Sales Reps" => "fa-car",
-            _ => "fa-clipboard"
+            var name when name.Contains("win") || name.Contains("lose") || name.Contains("need") || name.Contains("sales") || name.Contains("job") => "field-icon-performance",
+            var name when name.Contains("team") || name.Contains("1-1") || name.Contains("ride") => "field-icon-team",
+            var name when name.Contains("reschedule") || name.Contains("operation") => "field-icon-operations",
+            var name when name.Contains("a/r") || name.Contains("update") => "field-icon-finance",
+            var name when name.Contains("account") => "field-icon-accounts",
+            var name when name.Contains("customer") || name.Contains("visit") || name.Contains("event") => "field-icon-customer",
+            _ => "field-icon-default"
         };
     }
 }

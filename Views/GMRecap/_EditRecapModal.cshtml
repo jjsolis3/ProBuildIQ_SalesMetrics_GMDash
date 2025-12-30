@@ -1,39 +1,455 @@
 ﻿@model SalesMetrics.Models.GMRecapCardViewModel
 
+<style>
+    /* Company themed modal styles */
+    .edit-modal-content {
+        border: none;
+        border-radius: 15px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        overflow: hidden;
+    }
+
+    .edit-modal-header {
+        background: linear-gradient(135deg, #ff6720 0%, #ff8c42 50%, #ffb366 100%);
+        color: white;
+        padding: 20px 25px;
+        border: none;
+        position: relative;
+    }
+
+        .edit-modal-header h5 {
+            margin: 0;
+            font-weight: bold;
+            font-size: 1.3em;
+        }
+
+        .edit-modal-header .week-badge {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 0.85em;
+            margin-top: 5px;
+            display: inline-block;
+        }
+
+    .btn-close-custom {
+        background: rgba(255, 255, 255, 0.2);
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-radius: 50%;
+        width: 35px;
+        height: 35px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.3s ease;
+    }
+
+        .btn-close-custom:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: rotate(90deg);
+        }
+
+        .btn-close-custom::before {
+            content: "×";
+            color: white;
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+
+    .edit-modal-body {
+        padding: 30px;
+        background: linear-gradient(135deg, #f8f9fa 0%, #fff5f1 100%);
+        max-height: 70vh;
+        overflow-y: auto;
+    }
+
+    .edit-field-card {
+        border: none;
+        border-radius: 12px;
+        margin-bottom: 20px;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        overflow: hidden;
+    }
+
+        .edit-field-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 20px rgba(255, 103, 32, 0.15);
+        }
+
+    .edit-field-header {
+        background: linear-gradient(135deg, #2f363D 0%, #7C878E 100%);
+        color: white;
+        padding: 15px 20px;
+        font-weight: bold;
+        font-size: 1em;
+        display: flex;
+        align-items: center;
+        position: relative;
+    }
+
+        .edit-field-header::after {
+            content: "";
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: linear-gradient(90deg, #ff6720, #ff8c42);
+        }
+
+    .field-icon {
+        margin-right: 10px;
+        font-size: 1.1em;
+    }
+
+    .edit-field-body {
+        padding: 20px;
+        background: white;
+    }
+
+    .edit-textarea {
+        border: 2px solid #e9ecef;
+        border-radius: 8px;
+        padding: 12px 15px;
+        font-size: 0.95em;
+        line-height: 1.4;
+        transition: all 0.3s ease;
+        resize: vertical;
+        min-height: 100px;
+    }
+
+        .edit-textarea:focus {
+            border-color: #ff6720;
+            box-shadow: 0 0 0 0.2rem rgba(255, 103, 32, 0.25);
+            outline: none;
+        }
+
+    .char-counter {
+        text-align: right;
+        font-size: 0.8em;
+        color: #7C878E;
+        margin-top: 8px;
+    }
+
+        .char-counter .current-chars {
+            font-weight: bold;
+            color: #ff6720;
+        }
+
+    .edit-modal-footer {
+        padding: 20px 30px;
+        background: white;
+        border-top: 2px solid #f0f0f0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .btn-save-custom {
+        background: linear-gradient(135deg, #ff6720 0%, #ff8c42 100%);
+        border: none;
+        color: white;
+        padding: 12px 25px;
+        border-radius: 8px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        box-shadow: 0 3px 12px rgba(255, 103, 32, 0.3);
+        display: flex;
+        align-items: center;
+        font-size: 1em;
+    }
+
+        .btn-save-custom:hover {
+            background: linear-gradient(135deg, #e55a1c 0%, #ff8c42 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(255, 103, 32, 0.4);
+            color: white;
+        }
+
+        .btn-save-custom i {
+            margin-right: 8px;
+            font-size: 1.1em;
+        }
+
+    .btn-cancel-custom {
+        background: linear-gradient(135deg, #7C878E 0%, #adb5bd 100%);
+        border: none;
+        color: white;
+        padding: 12px 25px;
+        border-radius: 8px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        box-shadow: 0 3px 10px rgba(124, 135, 142, 0.3);
+        display: flex;
+        align-items: center;
+        font-size: 1em;
+    }
+
+        .btn-cancel-custom:hover {
+            background: linear-gradient(135deg, #6c757d 0%, #7C878E 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(124, 135, 142, 0.4);
+            color: white;
+        }
+
+        .btn-cancel-custom i {
+            margin-right: 8px;
+        }
+
+    .progress-indicator {
+        background: #e9ecef;
+        height: 4px;
+        border-radius: 2px;
+        margin: 15px 0;
+        overflow: hidden;
+    }
+
+    .progress-fill {
+        background: linear-gradient(90deg, #ff6720, #ff8c42);
+        height: 100%;
+        border-radius: 2px;
+        transition: width 0.3s ease;
+    }
+
+    .fields-summary {
+        background: rgba(255, 103, 32, 0.1);
+        border: 1px solid rgba(255, 103, 32, 0.2);
+        border-radius: 8px;
+        padding: 12px 15px;
+        margin-bottom: 20px;
+        color: #2f363D;
+    }
+
+    .fields-summary-title {
+        font-weight: bold;
+        color: #ff6720;
+        margin-bottom: 5px;
+        display: flex;
+        align-items: center;
+    }
+
+        .fields-summary-title i {
+            margin-right: 8px;
+        }
+
+    /* Custom scrollbar */
+    .edit-modal-body::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    .edit-modal-body::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 4px;
+    }
+
+    .edit-modal-body::-webkit-scrollbar-thumb {
+        background: linear-gradient(135deg, #ff6720 0%, #ff8c42 100%);
+        border-radius: 4px;
+    }
+
+        .edit-modal-body::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(135deg, #e55a1c 0%, #ff6720 100%);
+        }
+
+    /* Field category icons */
+    .icon-performance::before {
+        content: "📊";
+    }
+
+    .icon-team::before {
+        content: "👥";
+    }
+
+    .icon-operations::before {
+        content: "⚙️";
+    }
+
+    .icon-finance::before {
+        content: "💰";
+    }
+
+    .icon-accounts::before {
+        content: "📋";
+    }
+
+    .icon-customer::before {
+        content: "🤝";
+    }
+
+    .icon-default::before {
+        content: "📝";
+    }
+
+    /* Animation for modal entrance */
+    .modal.fade .modal-dialog {
+        transform: scale(0.8);
+        transition: transform 0.3s ease-out;
+    }
+
+    .modal.show .modal-dialog {
+        transform: scale(1);
+    }
+</style>
+
 <div class="modal fade" id="editRecapModal" tabindex="-1" aria-labelledby="editRecapModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl">
-        <div class="modal-content">
+        <div class="modal-content edit-modal-content">
             <form id="editRecapForm" asp-action="UpdateRecap" asp-controller="GMRecap" method="post">
-                <div class="modal-header bg-warning text-white">
-                    <h5 class="modal-title">Edit Recap - Week of @Model.WeekStartDate.ToString("MMMM dd, yyyy")</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <div class="modal-header edit-modal-header">
+                    <div>
+                        <h5 class="modal-title">
+                            <i class="fas fa-edit me-2"></i>Edit Weekly Recap
+                        </h5>
+                        <div class="week-badge">
+                            <i class="fas fa-calendar-week me-1"></i>
+                            Week of @Model.WeekStartDate.ToString("MMMM dd, yyyy")
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close-custom" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <div class="modal-body">
+
+                <div class="modal-body edit-modal-body">
                     <input type="hidden" name="RecapID" value="@Model.RecapID" />
                     <input type="hidden" name="WeekStartDate" value="@Model.WeekStartDate.ToString("yyyy-MM-dd")" />
+
+                    <!-- Fields Summary -->
+                    <div class="fields-summary">
+                        <div class="fields-summary-title">
+                            <i class="fas fa-info-circle"></i>
+                            Editing @Model.Fields.Count Field@(Model.Fields.Count == 1 ? "" : "s")
+                        </div>
+                        <small>Make your changes below and click "Save Changes" to update your recap entry.</small>
+
+                        <!-- Progress Indicator -->
+                        <div class="progress-indicator">
+                            <div class="progress-fill" id="editProgressFill" style="width: 0%"></div>
+                        </div>
+                        <small class="text-muted">
+                            <span id="editCompletedFields">0</span> of @Model.Fields.Count fields have content
+                        </small>
+                    </div>
 
                     <div class="row g-4">
                         @for (int i = 0; i < Model.Fields.Count; i++)
                         {
-                            <div class="col-md-6">
-                                <div class="card border-info">
-                                    <div class="card-header bg-primary text-white">
-                                        @Model.Fields[i].FieldName
+                            var fieldIcon = GetFieldIcon(Model.Fields[i].FieldName);
+
+                            <div class="col-lg-6">
+                                <div class="card edit-field-card">
+                                    <div class="card-header edit-field-header">
+                                        <span class="field-icon @fieldIcon"></span>
+                                        <span>@Model.Fields[i].FieldName</span>
                                     </div>
-                                    <div class="card-body">
+                                    <div class="card-body edit-field-body">
                                         <input type="hidden" name="Fields[@i].FieldName" value="@Model.Fields[i].FieldName" />
-                                        <textarea name="Fields[@i].FieldValue" class="form-control" rows="3">@Model.Fields[i].FieldValue</textarea>
+                                        <textarea name="Fields[@i].FieldValue"
+                                              class="form-control edit-textarea"
+                                              rows="4"
+                                              data-field-name="@Model.Fields[i].FieldName"
+                                              placeholder="Enter details for @Model.Fields[i].FieldName...">@Model.Fields[i].FieldValue</textarea>
+                                        <div class="char-counter">
+                                            <span class="current-chars">@(Model.Fields[i].FieldValue?.Length ?? 0)</span> characters
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         }
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="submit" class="btn btn-success">💾 Save Changes</button>
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+
+                <div class="modal-footer edit-modal-footer">
+                    <div class="d-flex gap-3">
+                        <button type="button" class="btn btn-cancel-custom" data-bs-dismiss="modal">
+                            <i class="fas fa-times"></i>Cancel
+                        </button>
+                        <button type="submit" class="btn btn-save-custom">
+                            <i class="fas fa-save"></i>Save Changes
+                        </button>
+                    </div>
+
+                    <div class="text-muted">
+                        <small>
+                            <i class="fas fa-clock me-1"></i>
+                            Last updated: @Model.CreatedDate.ToString("MMM dd, yyyy 'at' h:mm tt")
+                        </small>
+                    </div>
                 </div>
             </form>
         </div>
     </div>
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize progress tracking for edit modal
+        const editTextareas = document.querySelectorAll('#editRecapModal .edit-textarea');
+        const editProgressFill = document.getElementById('editProgressFill');
+        const editCompletedFields = document.getElementById('editCompletedFields');
+        const totalEditFields = editTextareas.length;
+
+        function updateEditProgress() {
+            let completed = 0;
+            editTextareas.forEach(textarea => {
+                if (textarea.value.trim()) {
+                    completed++;
+                }
+            });
+
+            const percentage = totalEditFields > 0 ? Math.round((completed / totalEditFields) * 100) : 0;
+            if (editProgressFill) {
+                editProgressFill.style.width = percentage + '%';
+            }
+            if (editCompletedFields) {
+                editCompletedFields.textContent = completed;
+            }
+        }
+
+        // Add event listeners to all edit textareas
+        editTextareas.forEach(textarea => {
+            // Character counter and progress updates
+            textarea.addEventListener('input', function() {
+                const charCounter = this.parentElement.querySelector('.current-chars');
+                if (charCounter) {
+                    charCounter.textContent = this.value.length;
+                }
+                updateEditProgress();
+            });
+
+            // Initialize character counter
+            const charCounter = textarea.parentElement.querySelector('.current-chars');
+            if (charCounter) {
+                charCounter.textContent = textarea.value.length;
+            }
+        });
+
+        // Initialize progress
+        updateEditProgress();
+
+        // Add save confirmation
+        document.getElementById('editRecapForm').addEventListener('submit', function(e) {
+            const filledFields = Array.from(editTextareas).filter(t => t.value.trim()).length;
+            if (filledFields === 0) {
+                e.preventDefault();
+                alert('Please fill in at least one field before saving.');
+                return false;
+            }
+        });
+    });
+</script>
+
+@functions {
+    private string GetFieldIcon(string fieldName)
+    {
+        return fieldName?.ToLower() switch
+        {
+            var name when name.Contains("win") || name.Contains("lose") || name.Contains("need") || name.Contains("sales") || name.Contains("job") => "icon-performance",
+            var name when name.Contains("team") || name.Contains("1-1") || name.Contains("ride") => "icon-team",
+            var name when name.Contains("reschedule") || name.Contains("operation") => "icon-operations",
+            var name when name.Contains("a/r") || name.Contains("update") => "icon-finance",
+            var name when name.Contains("account") => "icon-accounts",
+            var name when name.Contains("customer") || name.Contains("visit") || name.Contains("event") => "icon-customer",
+            _ => "icon-default"
+        };
+    }
+}

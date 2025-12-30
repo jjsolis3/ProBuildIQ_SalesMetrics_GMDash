@@ -655,8 +655,12 @@
             function getFormData() {
                 // Get form values
                 const weekStartDate = document.querySelector('[name="WeekStartDate"]')?.value;
-                const gmUserId = parseInt(document.querySelector('[name="GMUserID"]')?.value);
-                const locationId = parseInt(document.querySelector('[name="LocationID"]')?.value);
+                const gmUserIdValue = document.querySelector('[name="GMUserID"]')?.value;
+                const locationIdValue = document.querySelector('[name="LocationID"]')?.value;
+
+                // Parse integers and handle NaN by defaulting to 0
+                const gmUserId = parseInt(gmUserIdValue) || 0;
+                const locationId = parseInt(locationIdValue) || 0;
 
                 // Get all field inputs
                 const fields = [];

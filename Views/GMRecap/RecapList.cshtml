@@ -269,11 +269,12 @@
             box-shadow: 0 3px 15px rgba(0,0,0,0.1);
             padding: 25px;
             position: sticky;
-            top: 100px;
+            top: 20px; /* Reduced from 100px for better visibility */
             border: 1px solid #e9ecef;
-            max-height: calc(100vh - 120px); /* Limit height to viewport minus offset */
+            max-height: calc(100vh - 40px); /* Full viewport height minus small margin */
             overflow-y: auto; /* Enable vertical scrolling within the panel */
             overflow-x: hidden; /* Prevent horizontal scroll */
+            align-self: flex-start; /* Important: Allows sticky to work in flexbox */
         }
 
             /* Custom scrollbar styling for details panel */

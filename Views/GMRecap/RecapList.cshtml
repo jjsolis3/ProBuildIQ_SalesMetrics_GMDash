@@ -4,6 +4,31 @@
     ViewBag.Title = "GM Weekly Recap Dashboard";
     var currentUser = User.FindFirst("Users_ID")?.Value;
     var isAdmin = User.IsInRole("Admin") || User.FindFirst("RoleId")?.Value == "1";
+
+    // Define all recap fields (must match RecapEntry.cshtml)
+    var recapFields = new[] {
+        new { Name = "Wins", Category = "Performance", Icon = "🏆" },
+        new { Name = "Loses", Category = "Performance", Icon = "📉" },
+        new { Name = "Needs", Category = "Performance", Icon = "🎯" },
+        new { Name = "The Team", Category = "Team", Icon = "👥" },
+        new { Name = "1-1's with Sales Reps", Category = "Team", Icon = "💬" },
+        new { Name = "Ride-along with Sales Reps", Category = "Team", Icon = "🚗" },
+        new { Name = "Actual vs Projected Sales #'s", Category = "Performance", Icon = "📊" },
+        new { Name = "Average Jobs per Day", Category = "Operations", Icon = "📈" },
+        new { Name = "Reschedules", Category = "Operations", Icon = "📅" },
+        new { Name = "Aged Inventory", Category = "Operations", Icon = "📦" },
+        new { Name = "Tablet %", Category = "Operations", Icon = "📱" },
+        new { Name = "Weekly Focus", Category = "Operations", Icon = "💡" },
+        new { Name = "A/R Update", Category = "Finance", Icon = "💰" },
+        new { Name = "Open Orders", Category = "Finance", Icon = "📋" },
+        new { Name = "New Accounts", Category = "Accounts", Icon = "✨" },
+        new { Name = "Lost Accounts", Category = "Accounts", Icon = "❌" },
+        new { Name = "Customer Events", Category = "Customer Relations", Icon = "🎉" },
+        new { Name = "Customer Visits", Category = "Customer Relations", Icon = "🏠" },
+        new { Name = "Ordering Issues", Category = "Customer Relations", Icon = "📢" }
+    };
+
+    var totalFields = recapFields.Length; // Dynamic total: 19 fields
 }
 
 @section styles {
@@ -412,7 +437,7 @@
         @foreach (var weekGroup in Model.GroupBy(x => x.WeekStartDate).OrderByDescending(g => g.Key))
         {
             var weekStats = weekGroup.ToList();
-            var avgCompletion = weekStats.Average(w => (double)(w.Fields?.Count ?? 0)) / 14 * 100; // Assuming 14 total fields
+            var avgCompletion = weekStats.Average(w => (double)(w.Fields?.Count ?? 0)) / totalFields * 100; // Dynamic field count
 
             <div class="week-section week-group" data-week="@weekGroup.Key.ToString("yyyy-MM-dd")">
                 <div class="week-header">
@@ -431,7 +456,7 @@
                     @foreach (var entry in weekGroup.OrderBy(e => e.GMName))
                     {
                         var fieldCount = entry.Fields?.Count ?? 0;
-                        var completionRate = (double)fieldCount / 14 * 100; // Assuming 14 total fields
+                        var completionRate = (double)fieldCount / totalFields * 100; // Dynamic field count
                         var completionClass = completionRate >= 80 ? "completion-high" :
                         completionRate >= 50 ? "completion-medium" : "completion-low";
                         var isMyEntry = currentUser != null && entry.GMUserID.ToString() == currentUser;

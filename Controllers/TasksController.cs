@@ -2119,7 +2119,7 @@ namespace SalesMetrics.Controllers
                 var length = int.Parse(Request.Form["length"].FirstOrDefault() ?? "10");
                 var searchValue = Request.Form["search[value]"].FirstOrDefault() ?? "";
                 var sortColumnIndex = int.Parse(Request.Form["order[0][column]"].FirstOrDefault() ?? "10");
-                var sortDirection = Request.Form["order[0][dir]"].FirstOrDefault() ?? "desc");
+                var sortDirection = Request.Form["order[0][dir]"].FirstOrDefault() ?? "desc";
 
                 // Get cached user list or fetch it
                 var users = GetCachedUsers(userContext.LocationId);
@@ -2162,13 +2162,13 @@ namespace SalesMetrics.Controllers
                         type = task.Type ?? "",
                         property = task.Property ?? "",
                         location = task.Location,
-                        dueDate = task.DueDate.ToString("MM/dd/yyyy hh:mm tt"),
-                        completedDate = task.CompletedDate?.ToString("MM/dd/yyyy hh:mm tt") ?? "",
+                        dueDate = task.DueDate.ToString(),
+                        completedDate = task.CompletedDate?.ToString() ?? "",
                         status = task.Status ?? "Pending",
                         assignedTo = task.AssignedTo,
-                        assignedToName = assignedUser != null ? $"{assignedUser.FName} {assignedUser.LName}" : "Unassigned",
-                        createdBy = createdByUser != null ? $"{createdByUser.FName} {createdByUser.LName}" : task.CreatedBy,
-                        createdDate = task.CreatedDate.ToString("MM/dd/yyyy hh:mm tt")
+                        assignedToName = assignedUser != null ? $"{assignedUser.FirstName} {assignedUser.LastName}" : "Unassigned",
+                        createdBy = createdByUser != null ? $"{createdByUser.FirstName} {createdByUser.LastName}" : task.CreatedBy,
+                        createdDate = task.CreatedDate.ToString()
                     };
                 }).ToList();
 
@@ -2203,7 +2203,7 @@ namespace SalesMetrics.Controllers
                 var length = int.Parse(Request.Form["length"].FirstOrDefault() ?? "10");
                 var searchValue = Request.Form["search[value]"].FirstOrDefault() ?? "";
                 var sortColumnIndex = int.Parse(Request.Form["order[0][column]"].FirstOrDefault() ?? "5");
-                var sortDirection = Request.Form["order[0][dir]"].FirstOrDefault() ?? "desc");
+                var sortDirection = Request.Form["order[0][dir]"].FirstOrDefault() ?? "desc";
 
                 // Get user's tasks
                 var allTasks = GetTasksByUserId(userContext.Users_Id, userContext.LocationId);
@@ -2238,8 +2238,8 @@ namespace SalesMetrics.Controllers
                     type = task.Type ?? "",
                     property = task.Property ?? "",
                     location = task.Location,
-                    createdDate = task.CreatedDate.ToString("MM/dd/yyyy hh:mm tt"),
-                    dueDate = task.DueDate.ToString("MM/dd/yyyy hh:mm tt"),
+                    createdDate = task.CreatedDate.ToString(),
+                    dueDate = task.DueDate.ToString(),
                     status = task.Status ?? "Pending",
                     isSyncedToGoogle = task.IsSyncedToGoogle
                 }).ToList();

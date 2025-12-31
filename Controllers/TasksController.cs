@@ -22,6 +22,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using System.Data;
 using System.Threading.Tasks;
 using Google.Apis.Gmail.v1.Data;
+using Microsoft.Extensions.Caching.Memory;
 
 
 namespace SalesMetrics.Controllers
@@ -32,12 +33,14 @@ namespace SalesMetrics.Controllers
         private readonly IConfiguration _configuration;
         private readonly SalesMetricsDbContext _context;
         private readonly INotificationService _notificationService;
+        private readonly IMemoryCache _cache;
 
-        public TasksController(IConfiguration configuration, SalesMetricsDbContext context, INotificationService notificationService)
+        public TasksController(IConfiguration configuration, SalesMetricsDbContext context, INotificationService notificationService, IMemoryCache cache)
         {
             _configuration = configuration;
             _context = context;
             _notificationService = notificationService;
+            _cache = cache;
         }
 
         private UserContext GetUserContext()
@@ -2095,6 +2098,231 @@ namespace SalesMetrics.Controllers
 
             TempData["Success"] = "Task synced with Google.";
             return RedirectToAction("Task");
+        }
+
+        // ==================== SERVER-SIDE DATATABLES FOR PERFORMANCE ====================
+
+        /// <summary>
+        /// Server-side DataTables endpoint for AdminTask page with caching
+        /// Supports pagination, sorting, searching, and filtering
+        /// </summary>
+        [HttpPost]
+        public JsonResult GetAdminTasksData()
+        {
+            try
+            {
+                var userContext = GetUserContext();
+
+                // DataTables parameters
+                var draw = int.Parse(Request.Form["draw"].FirstOrDefault() ?? "1");
+                var start = int.Parse(Request.Form["start"].FirstOrDefault() ?? "0");
+                var length = int.Parse(Request.Form["length"].FirstOrDefault() ?? "10");
+                var searchValue = Request.Form["search[value]"].FirstOrDefault() ?? "";
+                var sortColumnIndex = int.Parse(Request.Form["order[0][column]"].FirstOrDefault() ?? "10");
+                var sortDirection = Request.Form["order[0][dir]"].FirstOrDefault() ?? "desc");
+
+                // Get cached user list or fetch it
+                var users = GetCachedUsers(userContext.LocationId);
+
+                // Get all tasks for location (consider adding caching here too with short TTL)
+                var allTasks = GetAllTasksByLocation(userContext.LocationId);
+
+                // Apply search filter
+                if (!string.IsNullOrEmpty(searchValue))
+                {
+                    allTasks = allTasks.Where(t =>
+                        (t.Title != null && t.Title.Contains(searchValue, StringComparison.OrdinalIgnoreCase)) ||
+                        (t.Description != null && t.Description.Contains(searchValue, StringComparison.OrdinalIgnoreCase)) ||
+                        (t.Type != null && t.Type.Contains(searchValue, StringComparison.OrdinalIgnoreCase)) ||
+                        (t.Property != null && t.Property.Contains(searchValue, StringComparison.OrdinalIgnoreCase)) ||
+                        (t.Status != null && t.Status.Contains(searchValue, StringComparison.OrdinalIgnoreCase))
+                    ).ToList();
+                }
+
+                // Apply sorting
+                allTasks = ApplyTaskSorting(allTasks, sortColumnIndex, sortDirection, users);
+
+                // Get total count before pagination
+                var recordsTotal = allTasks.Count;
+
+                // Apply pagination
+                var pagedTasks = allTasks.Skip(start).Take(length).ToList();
+
+                // Format data for DataTables
+                var data = pagedTasks.Select(task =>
+                {
+                    var assignedUser = users?.FirstOrDefault(u => u.Users_ID == task.AssignedTo);
+                    var createdByUser = users?.FirstOrDefault(u => u.Users_ID.ToString() == task.CreatedBy);
+
+                    return new
+                    {
+                        taskID = task.TaskID,
+                        title = task.Title ?? "",
+                        description = task.Description ?? "",
+                        type = task.Type ?? "",
+                        property = task.Property ?? "",
+                        location = task.Location,
+                        dueDate = task.DueDate.ToString("MM/dd/yyyy hh:mm tt"),
+                        completedDate = task.CompletedDate?.ToString("MM/dd/yyyy hh:mm tt") ?? "",
+                        status = task.Status ?? "Pending",
+                        assignedTo = task.AssignedTo,
+                        assignedToName = assignedUser != null ? $"{assignedUser.FName} {assignedUser.LName}" : "Unassigned",
+                        createdBy = createdByUser != null ? $"{createdByUser.FName} {createdByUser.LName}" : task.CreatedBy,
+                        createdDate = task.CreatedDate.ToString("MM/dd/yyyy hh:mm tt")
+                    };
+                }).ToList();
+
+                return Json(new
+                {
+                    draw = draw,
+                    recordsTotal = GetAllTasksByLocation(userContext.LocationId).Count,
+                    recordsFiltered = recordsTotal,
+                    data = data
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in GetAdminTasksData: {ex.Message}");
+                return Json(new { draw = 1, recordsTotal = 0, recordsFiltered = 0, data = new List<object>(), error = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Server-side DataTables endpoint for user's own tasks with caching
+        /// </summary>
+        [HttpPost]
+        public JsonResult GetMyTasksData()
+        {
+            try
+            {
+                var userContext = GetUserContext();
+
+                // DataTables parameters
+                var draw = int.Parse(Request.Form["draw"].FirstOrDefault() ?? "1");
+                var start = int.Parse(Request.Form["start"].FirstOrDefault() ?? "0");
+                var length = int.Parse(Request.Form["length"].FirstOrDefault() ?? "10");
+                var searchValue = Request.Form["search[value]"].FirstOrDefault() ?? "";
+                var sortColumnIndex = int.Parse(Request.Form["order[0][column]"].FirstOrDefault() ?? "5");
+                var sortDirection = Request.Form["order[0][dir]"].FirstOrDefault() ?? "desc");
+
+                // Get user's tasks
+                var allTasks = GetTasksByUserId(userContext.Users_Id, userContext.LocationId);
+
+                // Apply search filter
+                if (!string.IsNullOrEmpty(searchValue))
+                {
+                    allTasks = allTasks.Where(t =>
+                        (t.Title != null && t.Title.Contains(searchValue, StringComparison.OrdinalIgnoreCase)) ||
+                        (t.Description != null && t.Description.Contains(searchValue, StringComparison.OrdinalIgnoreCase)) ||
+                        (t.Type != null && t.Type.Contains(searchValue, StringComparison.OrdinalIgnoreCase)) ||
+                        (t.Property != null && t.Property.Contains(searchValue, StringComparison.OrdinalIgnoreCase)) ||
+                        (t.Status != null && t.Status.Contains(searchValue, StringComparison.OrdinalIgnoreCase))
+                    ).ToList();
+                }
+
+                // Apply sorting
+                allTasks = ApplyMyTaskSorting(allTasks, sortColumnIndex, sortDirection);
+
+                // Get total count before pagination
+                var recordsTotal = allTasks.Count;
+
+                // Apply pagination
+                var pagedTasks = allTasks.Skip(start).Take(length).ToList();
+
+                // Format data for DataTables
+                var data = pagedTasks.Select(task => new
+                {
+                    taskID = task.TaskID,
+                    title = task.Title ?? "",
+                    description = task.Description ?? "",
+                    type = task.Type ?? "",
+                    property = task.Property ?? "",
+                    location = task.Location,
+                    createdDate = task.CreatedDate.ToString("MM/dd/yyyy hh:mm tt"),
+                    dueDate = task.DueDate.ToString("MM/dd/yyyy hh:mm tt"),
+                    status = task.Status ?? "Pending",
+                    isSyncedToGoogle = task.IsSyncedToGoogle
+                }).ToList();
+
+                return Json(new
+                {
+                    draw = draw,
+                    recordsTotal = GetTasksByUserId(userContext.Users_Id, userContext.LocationId).Count,
+                    recordsFiltered = recordsTotal,
+                    data = data
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in GetMyTasksData: {ex.Message}");
+                return Json(new { draw = 1, recordsTotal = 0, recordsFiltered = 0, data = new List<object>(), error = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Get cached user list with 5-minute TTL
+        /// </summary>
+        private List<User> GetCachedUsers(int locationId)
+        {
+            string cacheKey = $"Users_Location_{locationId}";
+
+            if (!_cache.TryGetValue(cacheKey, out List<User> users))
+            {
+                users = GetActiveUsers(locationId);
+
+                var cacheOptions = new MemoryCacheEntryOptions()
+                    .SetAbsoluteExpiration(TimeSpan.FromMinutes(5))
+                    .SetSlidingExpiration(TimeSpan.FromMinutes(2));
+
+                _cache.Set(cacheKey, users, cacheOptions);
+            }
+
+            return users ?? new List<User>();
+        }
+
+        /// <summary>
+        /// Apply sorting for AdminTask table
+        /// </summary>
+        private List<SalesTask> ApplyTaskSorting(List<SalesTask> tasks, int columnIndex, string direction, List<User> users)
+        {
+            var orderedTasks = columnIndex switch
+            {
+                0 => direction == "asc" ? tasks.OrderBy(t => t.TaskID) : tasks.OrderByDescending(t => t.TaskID),
+                1 => direction == "asc" ? tasks.OrderBy(t => t.Title) : tasks.OrderByDescending(t => t.Title),
+                2 => direction == "asc" ? tasks.OrderBy(t => t.Description) : tasks.OrderByDescending(t => t.Description),
+                3 => direction == "asc" ? tasks.OrderBy(t => t.Type) : tasks.OrderByDescending(t => t.Type),
+                4 => direction == "asc" ? tasks.OrderBy(t => t.Property) : tasks.OrderByDescending(t => t.Property),
+                5 => direction == "asc" ? tasks.OrderBy(t => t.Location) : tasks.OrderByDescending(t => t.Location),
+                6 => direction == "asc" ? tasks.OrderBy(t => t.DueDate) : tasks.OrderByDescending(t => t.DueDate),
+                7 => direction == "asc" ? tasks.OrderBy(t => t.CompletedDate) : tasks.OrderByDescending(t => t.CompletedDate),
+                8 => direction == "asc" ? tasks.OrderBy(t => t.Status) : tasks.OrderByDescending(t => t.Status),
+                9 => direction == "asc" ? tasks.OrderBy(t => t.AssignedTo) : tasks.OrderByDescending(t => t.AssignedTo),
+                10 => direction == "asc" ? tasks.OrderBy(t => t.CreatedDate) : tasks.OrderByDescending(t => t.CreatedDate),
+                _ => tasks.OrderByDescending(t => t.CreatedDate)
+            };
+
+            return orderedTasks.ToList();
+        }
+
+        /// <summary>
+        /// Apply sorting for My Tasks table
+        /// </summary>
+        private List<SalesTask> ApplyMyTaskSorting(List<SalesTask> tasks, int columnIndex, string direction)
+        {
+            var orderedTasks = columnIndex switch
+            {
+                0 => direction == "asc" ? tasks.OrderBy(t => t.TaskID) : tasks.OrderByDescending(t => t.TaskID),
+                1 => direction == "asc" ? tasks.OrderBy(t => t.Title) : tasks.OrderByDescending(t => t.Title),
+                2 => direction == "asc" ? tasks.OrderBy(t => t.Description) : tasks.OrderByDescending(t => t.Description),
+                3 => direction == "asc" ? tasks.OrderBy(t => t.Type) : tasks.OrderByDescending(t => t.Type),
+                4 => direction == "asc" ? tasks.OrderBy(t => t.Property) : tasks.OrderByDescending(t => t.Property),
+                5 => direction == "asc" ? tasks.OrderBy(t => t.CreatedDate) : tasks.OrderByDescending(t => t.CreatedDate),
+                6 => direction == "asc" ? tasks.OrderBy(t => t.DueDate) : tasks.OrderByDescending(t => t.DueDate),
+                7 => direction == "asc" ? tasks.OrderBy(t => t.Status) : tasks.OrderByDescending(t => t.Status),
+                _ => tasks.OrderByDescending(t => t.CreatedDate)
+            };
+
+            return orderedTasks.ToList();
         }
 
         // END CLASS

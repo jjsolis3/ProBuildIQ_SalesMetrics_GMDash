@@ -100,11 +100,11 @@ public sealed class PdfService : IPdfService
                             // Handle signatures differently
                             if (fieldInfo.type == "signature" && value is string sigPath && !string.IsNullOrWhiteSpace(sigPath))
                             {
-                                DrawSignature(gfx, sigPath, coord.x, coord.y, coord.width, coord.height);
+                                DrawSignature(gfx, page, sigPath, coord.x, coord.y, coord.width, coord.height);
                             }
                             else if (value is string textValue)
                             {
-                                DrawText(gfx, font, brush, textValue, coord.x, coord.y);
+                                DrawTextWithCoordinateConversion(gfx, page, font, brush, textValue, coord.x, coord.y);
                             }
                         }
                     }
@@ -195,7 +195,7 @@ public sealed class PdfService : IPdfService
     /// <summary>
     /// Draw signature image on PDF
     /// </summary>
-    private void DrawSignature(XGraphics gfx, string imagePath, double x, double y, double width, double height)
+    private void DrawSignature(XGraphics gfx, PdfPage page, string imagePath, double x, double y, double width, double height)
     {
         if (!File.Exists(imagePath)) return;
 
@@ -206,7 +206,6 @@ public sealed class PdfService : IPdfService
 
             // Convert from top-left origin to bottom-left origin (PDF coordinate system)
             // The y coordinate from the wizard is from top, PDF needs from bottom
-            var page = gfx.PdfPage;
             var pdfY = page.Height - y - height;
 
             gfx.DrawImage(img, x, pdfY, width, height);
@@ -215,6 +214,20 @@ public sealed class PdfService : IPdfService
         {
             Console.WriteLine($"Error drawing signature: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Draw text on PDF with coordinate conversion from screen to PDF coordinates
+    /// </summary>
+    private static void DrawTextWithCoordinateConversion(XGraphics gfx, PdfPage page, XFont font, XBrush brush, string text, double x, double y)
+    {
+        // Convert from top-left origin to bottom-left origin (PDF coordinate system)
+        // The y coordinate from the wizard is from top, PDF needs from bottom
+        // For text, we need to position at the baseline, not the top-left corner
+        // Adding font height to y to get the baseline position
+        var pdfY = page.Height - y;
+
+        gfx.DrawString(text, font, brush, new XPoint(x, pdfY), XStringFormats.Default);
     }
 
     /// <summary>

@@ -153,6 +153,46 @@ public class SignTemplatesController : Controller
         return RedirectToAction(nameof(Edit), new { id = copy.TemplateKey });
     }
 
+    // POST: /SignTemplates/Delete
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> Delete(string templateKey)
+    {
+        var template = await _db.SignTemplates.FirstOrDefaultAsync(t => t.TemplateKey == templateKey);
+        if (template == null) return NotFound();
+
+        // Check if template is being used by any envelopes
+        var envelopeCount = await _db.SignEnvelopes.CountAsync(e => e.TemplateKey == templateKey);
+        if (envelopeCount > 0)
+        {
+            TempData["ErrorMessage"] = $"Cannot delete template '{template.DisplayName}' because it is being used by {envelopeCount} envelope(s). Please deactivate it instead.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        // Delete associated PDF file if exists
+        if (!string.IsNullOrWhiteSpace(template.PdfFilePath))
+        {
+            var pdfPath = Path.Combine(_env.ContentRootPath, "Content", "Templates", template.PdfFilePath);
+            if (System.IO.File.Exists(pdfPath))
+            {
+                try
+                {
+                    System.IO.File.Delete(pdfPath);
+                }
+                catch (Exception ex)
+                {
+                    // Log error but continue with deletion
+                    Console.WriteLine($"Error deleting PDF file: {ex.Message}");
+                }
+            }
+        }
+
+        _db.SignTemplates.Remove(template);
+        await _db.SaveChangesAsync();
+
+        TempData["SuccessMessage"] = $"Template '{template.DisplayName}' deleted successfully.";
+        return RedirectToAction(nameof(Index));
+    }
+
     private List<string> GetRazorViewPaths()
     {
         // enumerate /Views/SignTemplates/*.cshtml

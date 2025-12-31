@@ -1,0 +1,354 @@
+@model SalesMetrics.Models.AnnouncementDashboardViewModel
+@{
+    ViewData["Title"] = "Announcements Hub";
+}
+
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 mb-1">📢 Announcements Hub</h1>
+                    <p class="text-muted mb-0">Create and manage organization-wide communications</p>
+                </div>
+                <div>
+                    <a href="@Url.Action("Templates", "Announcements")" class="btn btn-outline-secondary me-2">
+                        <i class="fas fa-file-alt"></i> Templates
+                    </a>
+                    <a href="@Url.Action("Create", "Announcements")" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Create Announcement
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="fas fa-check-circle me-2"></i>@TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="fas fa-exclamation-circle me-2"></i>@TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card border-left-primary shadow-sm h-100">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Total Sent</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">@Model.TotalSent</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-paper-plane fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-left-success shadow-sm h-100">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Active</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">@Model.TotalActive</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-left-info shadow-sm h-100">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Scheduled</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">@Model.TotalScheduled</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-clock fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-left-warning shadow-sm h-100">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Avg Read Rate</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">@Model.AverageReadRate.ToString("F1")%</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-chart-line fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <ul class="nav nav-tabs mb-3" id="announcementTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="active-tab" data-bs-toggle="tab" data-bs-target="#active" type="button" role="tab">
+                Active <span class="badge bg-success ms-1">@Model.ActiveAnnouncements.Count</span>
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="scheduled-tab" data-bs-toggle="tab" data-bs-target="#scheduled" type="button" role="tab">
+                Scheduled <span class="badge bg-info ms-1">@Model.ScheduledAnnouncements.Count</span>
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="expired-tab" data-bs-toggle="tab" data-bs-target="#expired" type="button" role="tab">
+                Expired <span class="badge bg-secondary ms-1">@Model.ExpiredAnnouncements.Count</span>
+            </button>
+        </li>
+    </ul>
+
+    <!-- Tab Content -->
+    <div class="tab-content" id="announcementTabContent">
+        <!-- Active Tab -->
+        <div class="tab-pane fade show active" id="active" role="tabpanel">
+            @if (Model.ActiveAnnouncements.Any())
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Target</th>
+                                <th>Priority</th>
+                                <th>Sent Date</th>
+                                <th>Recipients</th>
+                                <th>Read Rate</th>
+                                <th>Expires</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var announcement in Model.ActiveAnnouncements)
+                            {
+                                <tr>
+                                    <td>
+                                        <strong>@announcement.Title</strong><br/>
+                                        <small class="text-muted">@announcement.Message.Substring(0, Math.Min(60, announcement.Message.Length))...</small>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-light text-dark">@announcement.TargetName</span>
+                                    </td>
+                                    <td>
+                                        @if (announcement.Priority == "Urgent")
+                                        {
+                                            <span class="badge bg-danger">Urgent</span>
+                                        }
+                                        else if (announcement.Priority == "High")
+                                        {
+                                            <span class="badge bg-warning">High</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-info">Normal</span>
+                                        }
+                                    </td>
+                                    <td>@announcement.SentDate?.ToString("MMM dd, yyyy")</td>
+                                    <td>@announcement.SentCount</td>
+                                    <td>
+                                        <div class="progress" style="height: 20px;">
+                                            <div class="progress-bar @(announcement.ReadPercentage > 70 ? "bg-success" : announcement.ReadPercentage > 40 ? "bg-warning" : "bg-danger")"
+                                                 role="progressbar"
+                                                 style="width: @announcement.ReadPercentage%"
+                                                 aria-valuenow="@announcement.ReadPercentage"
+                                                 aria-valuemin="0"
+                                                 aria-valuemax="100">
+                                                @announcement.ReadPercentage.ToString("F0")%
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>@(announcement.ExpiresDate?.ToString("MMM dd, yyyy") ?? "Never")</td>
+                                    <td>
+                                        <a href="@Url.Action("Details", "Announcements", new { id = announcement.BroadcastMessageId })"
+                                           class="btn btn-sm btn-outline-primary" title="View Details">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>No active announcements found.
+                </div>
+            }
+        </div>
+
+        <!-- Scheduled Tab -->
+        <div class="tab-pane fade" id="scheduled" role="tabpanel">
+            @if (Model.ScheduledAnnouncements.Any())
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Target</th>
+                                <th>Priority</th>
+                                <th>Scheduled For</th>
+                                <th>Created By</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var announcement in Model.ScheduledAnnouncements)
+                            {
+                                <tr>
+                                    <td>
+                                        <strong>@announcement.Title</strong><br/>
+                                        <small class="text-muted">@announcement.Message.Substring(0, Math.Min(60, announcement.Message.Length))...</small>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-light text-dark">@announcement.TargetName</span>
+                                    </td>
+                                    <td>
+                                        @if (announcement.Priority == "Urgent")
+                                        {
+                                            <span class="badge bg-danger">Urgent</span>
+                                        }
+                                        else if (announcement.Priority == "High")
+                                        {
+                                            <span class="badge bg-warning">High</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-info">Normal</span>
+                                        }
+                                    </td>
+                                    <td>@announcement.ScheduledDate?.ToString("MMM dd, yyyy h:mm tt")</td>
+                                    <td>@announcement.CreatedByName</td>
+                                    <td>
+                                        <a href="@Url.Action("Edit", "Announcements", new { id = announcement.BroadcastMessageId })"
+                                           class="btn btn-sm btn-outline-secondary" title="Edit">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        <form method="post" action="@Url.Action("Send", "Announcements", new { id = announcement.BroadcastMessageId })" class="d-inline">
+                                            @Html.AntiForgeryToken()
+                                            <button type="submit" class="btn btn-sm btn-outline-success" title="Send Now" onclick="return confirm('Send this announcement now?')">
+                                                <i class="fas fa-paper-plane"></i>
+                                            </button>
+                                        </form>
+                                        <form method="post" action="@Url.Action("Delete", "Announcements", new { id = announcement.BroadcastMessageId })" class="d-inline">
+                                            @Html.AntiForgeryToken()
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete" onclick="return confirm('Delete this announcement?')">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>No scheduled announcements found.
+                </div>
+            }
+        </div>
+
+        <!-- Expired Tab -->
+        <div class="tab-pane fade" id="expired" role="tabpanel">
+            @if (Model.ExpiredAnnouncements.Any())
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Target</th>
+                                <th>Sent Date</th>
+                                <th>Expired Date</th>
+                                <th>Recipients</th>
+                                <th>Read Rate</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var announcement in Model.ExpiredAnnouncements)
+                            {
+                                <tr class="text-muted">
+                                    <td>
+                                        <strong>@announcement.Title</strong><br/>
+                                        <small>@announcement.Message.Substring(0, Math.Min(60, announcement.Message.Length))...</small>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-light text-dark">@announcement.TargetName</span>
+                                    </td>
+                                    <td>@announcement.SentDate?.ToString("MMM dd, yyyy")</td>
+                                    <td>@announcement.ExpiresDate?.ToString("MMM dd, yyyy")</td>
+                                    <td>@announcement.SentCount</td>
+                                    <td>@announcement.ReadPercentage.ToString("F0")%</td>
+                                    <td>
+                                        <a href="@Url.Action("Details", "Announcements", new { id = announcement.BroadcastMessageId })"
+                                           class="btn btn-sm btn-outline-primary" title="View Details">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                        <form method="post" action="@Url.Action("Delete", "Announcements", new { id = announcement.BroadcastMessageId })" class="d-inline">
+                                            @Html.AntiForgeryToken()
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete" onclick="return confirm('Delete this announcement?')">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>No expired announcements found.
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<style>
+    .border-left-primary {
+        border-left: 0.25rem solid #4e73df !important;
+    }
+    .border-left-success {
+        border-left: 0.25rem solid #1cc88a !important;
+    }
+    .border-left-info {
+        border-left: 0.25rem solid #36b9cc !important;
+    }
+    .border-left-warning {
+        border-left: 0.25rem solid #f6c23e !important;
+    }
+</style>

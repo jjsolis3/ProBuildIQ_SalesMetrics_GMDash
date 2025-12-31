@@ -1,0 +1,349 @@
+using Microsoft.EntityFrameworkCore;
+using SalesMetrics.Data;
+using SalesMetrics.Models;
+using SalesMetrics.Models.EFCore;
+
+namespace SalesMetrics.Services.Settings
+{
+    public class SettingsService : ISettingsService
+    {
+        private readonly SalesMetricsDbContext _context;
+
+        public SettingsService(SalesMetricsDbContext context)
+        {
+            _context = context;
+        }
+
+        public async Task<SettingsDashboardViewModel> GetDashboardDataAsync()
+        {
+            var notificationSettings = await GetNotificationSettingsAsync();
+            var securitySettings = await GetSecuritySettingsAsync();
+
+            return new SettingsDashboardViewModel
+            {
+                NotificationSettings = notificationSettings,
+                SecuritySettings = securitySettings,
+                ActiveTab = "notifications"
+            };
+        }
+
+        // ======================================================================
+        // Notification Settings
+        // ======================================================================
+
+        public async Task<List<NotificationSettingsViewModel>> GetNotificationSettingsAsync()
+        {
+            var settings = await _context.NotificationSettings
+                .OrderBy(ns => ns.CategoryName)
+                .ToListAsync();
+
+            return settings.Select(s => MapToNotificationSettingsViewModel(s)).ToList();
+        }
+
+        public async Task<NotificationSettingsViewModel?> GetNotificationSettingByIdAsync(int id)
+        {
+            var setting = await _context.NotificationSettings.FindAsync(id);
+            return setting != null ? MapToNotificationSettingsViewModel(setting) : null;
+        }
+
+        public async Task<NotificationSettingsViewModel?> GetNotificationSettingByCategoryAsync(string categoryName)
+        {
+            var setting = await _context.NotificationSettings
+                .FirstOrDefaultAsync(ns => ns.CategoryName == categoryName);
+            return setting != null ? MapToNotificationSettingsViewModel(setting) : null;
+        }
+
+        public async Task UpdateNotificationSettingAsync(UpdateNotificationSettingRequest request, int modifiedByUserId)
+        {
+            var setting = await _context.NotificationSettings.FindAsync(request.NotificationSettingsId);
+            if (setting == null)
+                throw new Exception("Notification setting not found");
+
+            setting.IsEnabled = request.IsEnabled;
+            setting.NotifyAssignee = request.NotifyAssignee;
+            setting.NotifyManager = request.NotifyManager;
+            setting.NotifyTaskOwner = request.NotifyTaskOwner;
+            setting.EnableInAppNotification = request.EnableInAppNotification;
+            setting.EnableEmailNotification = request.EnableEmailNotification;
+            setting.ReminderHoursBefore = request.ReminderHoursBefore;
+            setting.SpecificStatuses = request.SpecificStatusIds != null ? string.Join(",", request.SpecificStatusIds) : null;
+            setting.LastModifiedDate = DateTime.Now;
+            setting.LastModifiedByUserId = modifiedByUserId;
+
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task InitializeDefaultNotificationSettingsAsync()
+        {
+            // Check if already initialized
+            if (await _context.NotificationSettings.AnyAsync())
+                return;
+
+            var defaultSettings = new List<NotificationSettingsEntity>
+            {
+                new NotificationSettingsEntity
+                {
+                    CategoryName = "TaskAssigned",
+                    IsEnabled = true,
+                    NotifyAssignee = true,
+                    NotifyManager = false,
+                    NotifyTaskOwner = false,
+                    EnableInAppNotification = true,
+                    EnableEmailNotification = false,
+                    LastModifiedDate = DateTime.Now,
+                    LastModifiedByUserId = 1
+                },
+                new NotificationSettingsEntity
+                {
+                    CategoryName = "StatusChanged",
+                    IsEnabled = true,
+                    NotifyAssignee = true,
+                    NotifyManager = false,
+                    NotifyTaskOwner = true,
+                    EnableInAppNotification = true,
+                    EnableEmailNotification = false,
+                    LastModifiedDate = DateTime.Now,
+                    LastModifiedByUserId = 1
+                },
+                new NotificationSettingsEntity
+                {
+                    CategoryName = "NoteAdded",
+                    IsEnabled = true,
+                    NotifyAssignee = true,
+                    NotifyManager = false,
+                    NotifyTaskOwner = false,
+                    EnableInAppNotification = true,
+                    EnableEmailNotification = false,
+                    LastModifiedDate = DateTime.Now,
+                    LastModifiedByUserId = 1
+                },
+                new NotificationSettingsEntity
+                {
+                    CategoryName = "DueDateReminder",
+                    IsEnabled = true,
+                    NotifyAssignee = true,
+                    NotifyManager = false,
+                    NotifyTaskOwner = false,
+                    EnableInAppNotification = true,
+                    EnableEmailNotification = false,
+                    ReminderHoursBefore = 24,
+                    LastModifiedDate = DateTime.Now,
+                    LastModifiedByUserId = 1
+                },
+                new NotificationSettingsEntity
+                {
+                    CategoryName = "DocumentSigning",
+                    IsEnabled = true,
+                    NotifyAssignee = true,
+                    NotifyManager = false,
+                    NotifyTaskOwner = false,
+                    EnableInAppNotification = true,
+                    EnableEmailNotification = false,
+                    LastModifiedDate = DateTime.Now,
+                    LastModifiedByUserId = 1
+                }
+            };
+
+            _context.NotificationSettings.AddRange(defaultSettings);
+            await _context.SaveChangesAsync();
+        }
+
+        // ======================================================================
+        // Security Settings
+        // ======================================================================
+
+        public async Task<List<SecuritySettingViewModel>> GetSecuritySettingsAsync()
+        {
+            var settings = await _context.SecuritySettings
+                .OrderBy(ss => ss.Category)
+                .ThenBy(ss => ss.SettingKey)
+                .ToListAsync();
+
+            return settings.Select(s => MapToSecuritySettingViewModel(s)).ToList();
+        }
+
+        public async Task<List<SecuritySettingViewModel>> GetSecuritySettingsByCategoryAsync(string category)
+        {
+            var settings = await _context.SecuritySettings
+                .Where(ss => ss.Category == category)
+                .OrderBy(ss => ss.SettingKey)
+                .ToListAsync();
+
+            return settings.Select(s => MapToSecuritySettingViewModel(s)).ToList();
+        }
+
+        public async Task<SecuritySettingViewModel?> GetSecuritySettingByKeyAsync(string settingKey)
+        {
+            var setting = await _context.SecuritySettings
+                .FirstOrDefaultAsync(ss => ss.SettingKey == settingKey);
+            return setting != null ? MapToSecuritySettingViewModel(setting) : null;
+        }
+
+        public async Task UpdateSecuritySettingAsync(UpdateSecuritySettingRequest request, int modifiedByUserId)
+        {
+            var setting = await _context.SecuritySettings.FindAsync(request.SecuritySettingsId);
+            if (setting == null)
+                throw new Exception("Security setting not found");
+
+            setting.SettingValue = request.SettingValue;
+            setting.LastModifiedDate = DateTime.Now;
+            setting.LastModifiedByUserId = modifiedByUserId;
+
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task<string?> GetSecuritySettingValueAsync(string settingKey)
+        {
+            var setting = await _context.SecuritySettings
+                .FirstOrDefaultAsync(ss => ss.SettingKey == settingKey);
+            return setting?.SettingValue;
+        }
+
+        public async Task InitializeDefaultSecuritySettingsAsync()
+        {
+            // Check if already initialized
+            if (await _context.SecuritySettings.AnyAsync())
+                return;
+
+            var defaultSettings = new List<SecuritySettingsEntity>
+            {
+                new SecuritySettingsEntity
+                {
+                    SettingKey = "SessionTimeoutMinutes",
+                    SettingValue = "30",
+                    Description = "Session timeout in minutes",
+                    Category = "Session",
+                    LastModifiedDate = DateTime.Now,
+                    LastModifiedByUserId = 1
+                },
+                new SecuritySettingsEntity
+                {
+                    SettingKey = "PasswordMinLength",
+                    SettingValue = "8",
+                    Description = "Minimum password length",
+                    Category = "Password",
+                    LastModifiedDate = DateTime.Now,
+                    LastModifiedByUserId = 1
+                },
+                new SecuritySettingsEntity
+                {
+                    SettingKey = "RequireSpecialChar",
+                    SettingValue = "true",
+                    Description = "Require special characters in password",
+                    Category = "Password",
+                    LastModifiedDate = DateTime.Now,
+                    LastModifiedByUserId = 1
+                },
+                new SecuritySettingsEntity
+                {
+                    SettingKey = "RequireUppercase",
+                    SettingValue = "true",
+                    Description = "Require uppercase letters in password",
+                    Category = "Password",
+                    LastModifiedDate = DateTime.Now,
+                    LastModifiedByUserId = 1
+                },
+                new SecuritySettingsEntity
+                {
+                    SettingKey = "RequireNumber",
+                    SettingValue = "true",
+                    Description = "Require numbers in password",
+                    Category = "Password",
+                    LastModifiedDate = DateTime.Now,
+                    LastModifiedByUserId = 1
+                },
+                new SecuritySettingsEntity
+                {
+                    SettingKey = "PasswordExpiryDays",
+                    SettingValue = "90",
+                    Description = "Password expiry period in days (0 = never)",
+                    Category = "Password",
+                    LastModifiedDate = DateTime.Now,
+                    LastModifiedByUserId = 1
+                }
+            };
+
+            _context.SecuritySettings.AddRange(defaultSettings);
+            await _context.SaveChangesAsync();
+        }
+
+        // ======================================================================
+        // Private helper methods
+        // ======================================================================
+
+        private NotificationSettingsViewModel MapToNotificationSettingsViewModel(NotificationSettingsEntity entity)
+        {
+            return new NotificationSettingsViewModel
+            {
+                NotificationSettingsId = entity.NotificationSettingsId,
+                CategoryName = entity.CategoryName,
+                CategoryDisplayName = GetCategoryDisplayName(entity.CategoryName),
+                CategoryDescription = GetCategoryDescription(entity.CategoryName),
+                IsEnabled = entity.IsEnabled,
+                NotifyAssignee = entity.NotifyAssignee,
+                NotifyManager = entity.NotifyManager,
+                NotifyTaskOwner = entity.NotifyTaskOwner,
+                EnableInAppNotification = entity.EnableInAppNotification,
+                EnableEmailNotification = entity.EnableEmailNotification,
+                ReminderHoursBefore = entity.ReminderHoursBefore,
+                SpecificStatusIds = !string.IsNullOrEmpty(entity.SpecificStatuses)
+                    ? entity.SpecificStatuses.Split(',').Select(int.Parse).ToList()
+                    : null
+            };
+        }
+
+        private SecuritySettingViewModel MapToSecuritySettingViewModel(SecuritySettingsEntity entity)
+        {
+            var viewModel = new SecuritySettingViewModel
+            {
+                SecuritySettingsId = entity.SecuritySettingsId,
+                SettingKey = entity.SettingKey,
+                SettingValue = entity.SettingValue,
+                Description = entity.Description,
+                Category = entity.Category
+            };
+
+            // Determine input type based on setting key
+            if (entity.SettingKey.StartsWith("Require") || entity.SettingValue.ToLower() == "true" || entity.SettingValue.ToLower() == "false")
+            {
+                viewModel.InputType = "boolean";
+            }
+            else if (int.TryParse(entity.SettingValue, out _))
+            {
+                viewModel.InputType = "number";
+            }
+            else
+            {
+                viewModel.InputType = "text";
+            }
+
+            return viewModel;
+        }
+
+        private string GetCategoryDisplayName(string categoryName)
+        {
+            return categoryName switch
+            {
+                "TaskAssigned" => "Task Assigned",
+                "StatusChanged" => "Status Changed",
+                "NoteAdded" => "Note Added",
+                "DueDateReminder" => "Due Date Reminder",
+                "DocumentSigning" => "Document Signing",
+                _ => categoryName
+            };
+        }
+
+        private string GetCategoryDescription(string categoryName)
+        {
+            return categoryName switch
+            {
+                "TaskAssigned" => "Notify users when a task is assigned to them",
+                "StatusChanged" => "Notify users when a task status changes",
+                "NoteAdded" => "Notify users when a note is added to a task",
+                "DueDateReminder" => "Remind users about upcoming task due dates",
+                "DocumentSigning" => "Notify users about document signing requests",
+                _ => "No description available"
+            };
+        }
+    }
+}

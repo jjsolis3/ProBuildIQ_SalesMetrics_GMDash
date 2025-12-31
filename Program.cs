@@ -72,6 +72,10 @@ builder.Services.AddScoped<SalesMetrics.Services.Signing.INotificationService, S
 builder.Services.AddScoped<SalesMetrics.Services.Notifications.INotificationService, SalesMetrics.Services.Notifications.NotificationService>(); // In-app notification service
 builder.Services.AddScoped<IEnvelopeService, EnvelopeService>();
 
+// Announcements and Settings services
+builder.Services.AddScoped<SalesMetrics.Services.Announcements.IAnnouncementService, SalesMetrics.Services.Announcements.AnnouncementService>();
+builder.Services.AddScoped<SalesMetrics.Services.Settings.ISettingsService, SalesMetrics.Services.Settings.SettingsService>();
+
 // Google OAuth + Cookie Auth
 builder.Services.AddAuthentication(options =>
 {

@@ -1,0 +1,282 @@
+@model SalesMetrics.Models.AnnouncementCreateEditViewModel
+@{
+    ViewData["Title"] = Model.BroadcastMessageId.HasValue ? "Edit Announcement" : (Model.IsTemplate ? "Create Template" : "Create Announcement");
+    var locations = ViewBag.Locations as List<SalesMetrics.Models.EFCore.LocationEntity>;
+    var roles = ViewBag.Roles as List<SalesMetrics.Models.EFCore.RoleEntity>;
+}
+
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 mb-1">@ViewData["Title"]</h1>
+                    <p class="text-muted mb-0">Fill out the form below to create @(Model.IsTemplate ? "a template" : "an announcement")</p>
+                </div>
+                <div>
+                    <a href="@Url.Action("Index", "Announcements")" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left"></i> Back to Announcements
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <form asp-action="@(Model.BroadcastMessageId.HasValue ? "Edit" : "Create")" method="post">
+                        @Html.AntiForgeryToken()
+                        @Html.HiddenFor(m => m.BroadcastMessageId)
+                        @Html.HiddenFor(m => m.IsTemplate)
+
+                        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+                        <!-- Title -->
+                        <div class="mb-3">
+                            <label asp-for="Title" class="form-label">Title <span class="text-danger">*</span></label>
+                            <input asp-for="Title" class="form-control" placeholder="Enter announcement title" />
+                            <span asp-validation-for="Title" class="text-danger"></span>
+                        </div>
+
+                        <!-- Message -->
+                        <div class="mb-3">
+                            <label asp-for="Message" class="form-label">Message <span class="text-danger">*</span></label>
+                            <textarea asp-for="Message" class="form-control" rows="6" placeholder="Enter your announcement message..." id="messageEditor"></textarea>
+                            <span asp-validation-for="Message" class="text-danger"></span>
+                            <small class="form-text text-muted">
+                                Character count: <span id="charCount">0</span> / 2000
+                            </small>
+                        </div>
+
+                        <!-- Target Type -->
+                        <div class="mb-3">
+                            <label asp-for="TargetType" class="form-label">Target Audience <span class="text-danger">*</span></label>
+                            <select asp-for="TargetType" class="form-select" id="targetTypeSelect">
+                                <option value="AllUsers">All Users</option>
+                                <option value="Location">Specific Location</option>
+                                <option value="Role">Specific Role</option>
+                            </select>
+                            <span asp-validation-for="TargetType" class="text-danger"></span>
+                        </div>
+
+                        <!-- Target Location (conditional) -->
+                        <div class="mb-3" id="locationGroup" style="display: none;">
+                            <label asp-for="TargetLocationId" class="form-label">Select Location</label>
+                            <select asp-for="TargetLocationId" class="form-select">
+                                <option value="">-- Select Location --</option>
+                                @if (locations != null)
+                                {
+                                    @foreach (var location in locations)
+                                    {
+                                        <option value="@location.LocationId">@location.LocationName</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+
+                        <!-- Target Role (conditional) -->
+                        <div class="mb-3" id="roleGroup" style="display: none;">
+                            <label asp-for="TargetRoleId" class="form-label">Select Role</label>
+                            <select asp-for="TargetRoleId" class="form-select">
+                                <option value="">-- Select Role --</option>
+                                @if (roles != null)
+                                {
+                                    @foreach (var role in roles)
+                                    {
+                                        <option value="@role.RoleId">@role.RoleName</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+
+                        <!-- Priority -->
+                        <div class="mb-3">
+                            <label asp-for="Priority" class="form-label">Priority <span class="text-danger">*</span></label>
+                            <select asp-for="Priority" class="form-select">
+                                <option value="Normal">Normal - Standard announcement</option>
+                                <option value="High">High - Important announcement</option>
+                                <option value="Urgent">Urgent - Requires immediate attention</option>
+                            </select>
+                            <span asp-validation-for="Priority" class="text-danger"></span>
+                        </div>
+
+                        @if (!Model.IsTemplate)
+                        {
+                            <!-- Send Immediately -->
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    <input asp-for="SendImmediately" class="form-check-input" type="checkbox" id="sendImmediatelyCheck" />
+                                    <label class="form-check-label" for="sendImmediately Check">
+                                        Send Immediately
+                                    </label>
+                                </div>
+                                <small class="form-text text-muted">
+                                    If unchecked, you can schedule the announcement for a later date
+                                </small>
+                            </div>
+
+                            <!-- Scheduled Date (conditional) -->
+                            <div class="mb-3" id="scheduledDateGroup" style="display: none;">
+                                <label asp-for="ScheduledDate" class="form-label">Schedule For</label>
+                                <input asp-for="ScheduledDate" type="datetime-local" class="form-control" />
+                                <span asp-validation-for="ScheduledDate" class="text-danger"></span>
+                            </div>
+                        }
+
+                        <!-- Expiration Date -->
+                        <div class="mb-3">
+                            <label asp-for="ExpiresDate" class="form-label">Expiration Date (Optional)</label>
+                            <input asp-for="ExpiresDate" type="datetime-local" class="form-control" />
+                            <span asp-validation-for="ExpiresDate" class="text-danger"></span>
+                            <small class="form-text text-muted">
+                                Leave blank if the announcement should not expire
+                            </small>
+                        </div>
+
+                        @if (Model.IsTemplate)
+                        {
+                            <!-- Template Category -->
+                            <div class="mb-3">
+                                <label asp-for="TemplateCategory" class="form-label">Template Category</label>
+                                <select asp-for="TemplateCategory" class="form-select">
+                                    <option value="">-- Select Category --</option>
+                                    <option value="Welcome">Welcome</option>
+                                    <option value="Policy">Policy Update</option>
+                                    <option value="Alert">Alert</option>
+                                    <option value="Event">Event</option>
+                                    <option value="Reminder">Reminder</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                        }
+
+                        <!-- Buttons -->
+                        <div class="d-flex justify-content-between">
+                            <a href="@Url.Action("Index", "Announcements")" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> @(Model.SendImmediately && !Model.IsTemplate ? "Create & Send" : (Model.IsTemplate ? "Save Template" : "Save Announcement"))
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Preview Panel -->
+        <div class="col-lg-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Preview</h5>
+                </div>
+                <div class="card-body">
+                    <div class="notification-preview" id="notificationPreview">
+                        <div class="alert alert-info" role="alert" id="previewContent">
+                            <h6 class="alert-heading" id="previewTitle">Announcement Title</h6>
+                            <p id="previewMessage">Your announcement message will appear here...</p>
+                            <hr>
+                            <p class="mb-0 small">
+                                <strong>Target:</strong> <span id="previewTarget">All Users</span><br/>
+                                <strong>Priority:</strong> <span id="previewPriority" class="badge bg-info">Normal</span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+
+    <script>
+        $(document).ready(function() {
+            // Update character count
+            function updateCharCount() {
+                var length = $('#messageEditor').val().length;
+                $('#charCount').text(length);
+                if (length > 2000) {
+                    $('#charCount').addClass('text-danger');
+                } else {
+                    $('#charCount').removeClass('text-danger');
+                }
+            }
+
+            $('#messageEditor').on('input', updateCharCount);
+            updateCharCount();
+
+            // Toggle target-specific dropdowns
+            function toggleTargetGroups() {
+                var targetType = $('#targetTypeSelect').val();
+                $('#locationGroup').hide();
+                $('#roleGroup').hide();
+
+                if (targetType === 'Location') {
+                    $('#locationGroup').show();
+                } else if (targetType === 'Role') {
+                    $('#roleGroup').show();
+                }
+
+                updatePreview();
+            }
+
+            $('#targetTypeSelect').on('change', toggleTargetGroups);
+            toggleTargetGroups();
+
+            // Toggle scheduled date field
+            function toggleScheduledDate() {
+                if ($('#sendImmediatelyCheck').is(':checked')) {
+                    $('#scheduledDateGroup').hide();
+                } else {
+                    $('#scheduledDateGroup').show();
+                }
+            }
+
+            $('#sendImmediatelyCheck').on('change', toggleScheduledDate);
+            toggleScheduledDate();
+
+            // Live preview
+            function updatePreview() {
+                var title = $('#Title').val() || 'Announcement Title';
+                var message = $('#messageEditor').val() || 'Your announcement message will appear here...';
+                var targetType = $('#targetTypeSelect').val();
+                var priority = $('#Priority').val();
+
+                var targetText = 'All Users';
+                if (targetType === 'Location') {
+                    var locationText = $('#TargetLocationId option:selected').text();
+                    targetText = locationText && locationText !== '-- Select Location --' ? locationText : 'Specific Location';
+                } else if (targetType === 'Role') {
+                    var roleText = $('#TargetRoleId option:selected').text();
+                    targetText = roleText && roleText !== '-- Select Role --' ? roleText : 'Specific Role';
+                }
+
+                $('#previewTitle').text(title);
+                $('#previewMessage').text(message);
+                $('#previewTarget').text(targetText);
+
+                var priorityBadge = $('#previewPriority');
+                priorityBadge.removeClass('bg-info bg-warning bg-danger');
+                priorityBadge.text(priority);
+
+                if (priority === 'Urgent') {
+                    priorityBadge.addClass('bg-danger');
+                    $('#previewContent').removeClass('alert-info alert-warning').addClass('alert-danger');
+                } else if (priority === 'High') {
+                    priorityBadge.addClass('bg-warning');
+                    $('#previewContent').removeClass('alert-info alert-danger').addClass('alert-warning');
+                } else {
+                    priorityBadge.addClass('bg-info');
+                    $('#previewContent').removeClass('alert-warning alert-danger').addClass('alert-info');
+                }
+            }
+
+            $('#Title, #messageEditor, #targetTypeSelect, #TargetLocationId, #TargetRoleId, #Priority').on('input change', updatePreview);
+            updatePreview();
+        });
+    </script>
+}

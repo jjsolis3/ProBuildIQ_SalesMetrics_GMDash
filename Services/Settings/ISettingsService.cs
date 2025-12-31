@@ -1,0 +1,25 @@
+using SalesMetrics.Models;
+
+namespace SalesMetrics.Services.Settings
+{
+    public interface ISettingsService
+    {
+        // Dashboard
+        Task<SettingsDashboardViewModel> GetDashboardDataAsync();
+
+        // Notification Settings
+        Task<List<NotificationSettingsViewModel>> GetNotificationSettingsAsync();
+        Task<NotificationSettingsViewModel?> GetNotificationSettingByIdAsync(int id);
+        Task<NotificationSettingsViewModel?> GetNotificationSettingByCategoryAsync(string categoryName);
+        Task UpdateNotificationSettingAsync(UpdateNotificationSettingRequest request, int modifiedByUserId);
+        Task InitializeDefaultNotificationSettingsAsync();
+
+        // Security Settings
+        Task<List<SecuritySettingViewModel>> GetSecuritySettingsAsync();
+        Task<List<SecuritySettingViewModel>> GetSecuritySettingsByCategoryAsync(string category);
+        Task<SecuritySettingViewModel?> GetSecuritySettingByKeyAsync(string settingKey);
+        Task UpdateSecuritySettingAsync(UpdateSecuritySettingRequest request, int modifiedByUserId);
+        Task<string?> GetSecuritySettingValueAsync(string settingKey);
+        Task InitializeDefaultSecuritySettingsAsync();
+    }
+}

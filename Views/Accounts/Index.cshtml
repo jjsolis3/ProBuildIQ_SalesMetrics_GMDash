@@ -1,4 +1,4 @@
-﻿@model List<SalesMetrics.Models.EFCore.UserEntity>
+﻿@model List<SalesMetrics.Models.UserWithAssignmentsViewModel>
 
 @{
     ViewBag.Title = "Users";
@@ -24,6 +24,7 @@
                 <th>Role</th>
                 <th>Sales ID</th>
                 <th>Location</th>
+                <th>Assigned Locations</th>
                 <th>Active</th>
                 <th>Last Login</th>
                 <th>Action</th>
@@ -38,9 +39,22 @@
                     <td>@user.LastName</td>
                     <td>@user.Username</td>
                     <td>@user.Email</td>
-                    <td>@user.RoleId</td>
+                    <td><span class="badge bg-info">@user.RoleName</span></td>
                     <td>@user.SalesmanId</td>
-                    <td>@user.Location</td>
+                    <td><span class="badge bg-secondary">@user.LocationName</span></td>
+                    <td>
+                        @if (user.AssignedLocations.Any())
+                        {
+                            @foreach (var loc in user.AssignedLocations)
+                            {
+                                <span class="badge bg-primary me-1">@loc</span>
+                            }
+                        }
+                        else
+                        {
+                            <span class="text-muted">None</span>
+                        }
+                    </td>
                     <td>
                         @if (user.IsActive)
                         {

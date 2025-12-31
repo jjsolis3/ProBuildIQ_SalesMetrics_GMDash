@@ -9,9 +9,9 @@
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.5px;
-        padding: 0.75rem 1rem 0.5rem;
-        margin-top: 1rem;
-        margin-bottom: 0.25rem;
+        padding: 0.5rem 1rem 0.5rem;
+        margin-top: 0.90rem;
+        margin-bottom: 0.15rem;
         color: #6c757d;
         border-bottom: 2px solid #e9ecef;
     }
@@ -209,21 +209,27 @@
                             <span>Reports</span>
                         </a>
                     </li>
-                }
 
-                <!-- User / Profile -->
-                <li class="menu-title">ACCOUNT</li>
-                <li class="ms-3">
-                    <a href="/Accounts/Profile">
-                        <i class="fa fa-user"></i>
-                        <span>Profile</span>
-                    </a>
-                </li>
+                    <!-- Communication -->
+                    <li class="menu-title">COMMUNICATION</li>
+                    <li class="ms-3">
+                        <a href="/Announcements/Index">
+                            <i class="fas fa-bullhorn"></i>
+                            <span>Announcements</span>
+                        </a>
+                    </li>
+                }
 
                 @if (roleId == "1")
                 {
                     <!-- Admin / Settings -->
                     <li class="menu-title">ADMIN / SETTINGS</li>
+                    <li class="ms-3">
+                        <a href="/Settings/Index">
+                            <i class="fas fa-cog"></i>
+                            <span>System Settings</span>
+                        </a>
+                    </li>
                     <li class="ms-3">
                         <a href="/Accounts/Index">
                             <i class="fa fa-user-cog"></i>

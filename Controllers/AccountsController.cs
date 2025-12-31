@@ -26,41 +26,93 @@ namespace SalesMetrics.Controllers
         [HttpGet]
         public IActionResult Index()
         {
-            var users = new List<UserEntity>(); // Use your model class here
+            var usersWithAssignments = new List<UserWithAssignmentsViewModel>();
             string connStr = _configuration.GetConnectionString("SalesMetrics");
 
             using (var conn = new SqlConnection(connStr))
             {
                 conn.Open();
-                var cmd = new SqlCommand("SELECT * FROM Users", conn);
-                using var reader = cmd.ExecuteReader();
 
+                // Fetch users with role and location names
+                var cmd = new SqlCommand(@"
+                    SELECT
+                        u.Users_ID, u.FirstName, u.LastName, u.Username, u.Email, u.UserID,
+                        u.RoleID, r.RoleName,
+                        u.SalesmanID, u.SalesmanNumber,
+                        u.Location,
+                        CASE u.Location
+                            WHEN 1 THEN 'LAX'
+                            WHEN 2 THEN 'LSV'
+                            WHEN 3 THEN 'CHN'
+                            WHEN 4 THEN 'PHX'
+                            WHEN 5 THEN 'SND'
+                            ELSE 'Unknown'
+                        END as LocationName,
+                        u.CreatedDate, u.IsActive, u.LastLoginDate
+                    FROM Users u
+                    LEFT JOIN Roles r ON u.RoleID = r.RoleID
+                    ORDER BY u.Users_ID
+                ", conn);
+
+                using var reader = cmd.ExecuteReader();
                 while (reader.Read())
                 {
-                    users.Add(new UserEntity
+                    var user = new UserWithAssignmentsViewModel
                     {
                         Users_ID = Convert.ToInt32(reader["Users_ID"]),
-                        FirstName = reader["FirstName"].ToString(),
-                        LastName = reader["LastName"].ToString(),
-                        Username = reader["Username"].ToString(),
-                        Email = reader["Email"].ToString(),
+                        FirstName = reader["FirstName"]?.ToString() ?? "",
+                        LastName = reader["LastName"]?.ToString() ?? "",
+                        Username = reader["Username"]?.ToString() ?? "",
+                        Email = reader["Email"]?.ToString() ?? "",
                         UserId = Convert.ToInt32(reader["UserID"]),
                         RoleId = Convert.ToInt32(reader["RoleID"]),
-                        // if SalemanID is nullable, handle it accordingly
+                        RoleName = reader["RoleName"]?.ToString() ?? "",
                         SalesmanId = reader["SalesmanID"] != DBNull.Value ? Convert.ToInt32(reader["SalesmanID"]) : 0,
-                        // if salesmanNumber is nullable, handle it accordingly
-                        SalesmanNumber = reader["SalesmanID"] != DBNull.Value ? reader["SalesmanNumber"].ToString() : "",
+                        SalesmanNumber = reader["SalesmanNumber"]?.ToString() ?? "",
                         Location = Convert.ToInt32(reader["Location"]),
+                        LocationName = reader["LocationName"]?.ToString() ?? "",
                         CreatedDate = Convert.ToDateTime(reader["CreatedDate"]),
                         IsActive = reader["IsActive"] != DBNull.Value && Convert.ToBoolean(reader["IsActive"]),
                         LastLoginDate = reader["LastLoginDate"] != DBNull.Value ? Convert.ToDateTime(reader["LastLoginDate"]) : null
-                    });
+                    };
+                    usersWithAssignments.Add(user);
+                }
+                reader.Close();
+
+                // Fetch assigned locations for each user
+                foreach (var user in usersWithAssignments)
+                {
+                    var assignedLocations = new List<string>();
+                    var locCmd = new SqlCommand(@"
+                        SELECT LocationID
+                        FROM UserLocationAssignments
+                        WHERE UserID = @UserId AND IsActive = 'YES'
+                        ORDER BY LocationID
+                    ", conn);
+                    locCmd.Parameters.AddWithValue("@UserId", user.UserId);
+
+                    using var locReader = locCmd.ExecuteReader();
+                    while (locReader.Read())
+                    {
+                        int locId = Convert.ToInt32(locReader["LocationID"]);
+                        string locName = locId switch
+                        {
+                            1 => "LAX",
+                            2 => "LSV",
+                            3 => "CHN",
+                            4 => "PHX",
+                            5 => "SND",
+                            _ => "?"
+                        };
+                        assignedLocations.Add(locName);
+                    }
+
+                    user.AssignedLocations = assignedLocations;
                 }
             }
 
-            ViewBag.FlaggedUsers = GetFlaggedUsers(); // Get flagged users for display
-
-            return View(users);
+            ViewBag.FlaggedUsers = GetFlaggedUsers();
+            return View(usersWithAssignments);
         }
 
         // USER PROFILE PAGE
@@ -458,19 +510,22 @@ namespace SalesMetrics.Controllers
 
                     // Remove all previous location assignments
                     var deleteCmd = new SqlCommand("DELETE FROM UserLocationAssignments WHERE UserID = @UserId", conn);
-                    deleteCmd.Parameters.AddWithValue("@UserId", model.Users_Id);
+                    deleteCmd.Parameters.AddWithValue("@UserId", model.UserId);
                     deleteCmd.ExecuteNonQuery();
 
-                    // Reinsert selected location (for now just Users.Location — you'll update UI for multi-check support soon)
-                    foreach (var locId in model.AssignedLocationIds)
+                    // Reinsert selected locations
+                    if (model.AssignedLocationIds != null && model.AssignedLocationIds.Any())
                     {
-                        var insertCmd = new SqlCommand(@"
-                        INSERT INTO UserLocationAssignments (UserID, LocationID, IsActive, DateAssigned)
-                        VALUES (@UserId, @LocationId, 'YES', GETDATE())
-                    ", conn);
-                        insertCmd.Parameters.AddWithValue("@UserId", model.Users_Id);
-                        insertCmd.Parameters.AddWithValue("@LocationId", locId);
-                        insertCmd.ExecuteNonQuery();
+                        foreach (var locId in model.AssignedLocationIds)
+                        {
+                            var insertCmd = new SqlCommand(@"
+                            INSERT INTO UserLocationAssignments (UserID, LocationID, IsActive, DateAssigned)
+                            VALUES (@UserId, @LocationId, 'YES', GETDATE())
+                        ", conn);
+                            insertCmd.Parameters.AddWithValue("@UserId", model.UserId);
+                            insertCmd.Parameters.AddWithValue("@LocationId", locId);
+                            insertCmd.ExecuteNonQuery();
+                        }
                     }
 
                 }
@@ -531,15 +586,18 @@ namespace SalesMetrics.Controllers
             cmd.ExecuteNonQuery();
 
             // 🔻 assigned multiple locations for user
-            foreach (var locId in model.AssignedLocationIds)
+            if (model.AssignedLocationIds != null && model.AssignedLocationIds.Any())
             {
-                var insertCmd = new SqlCommand(@"
-                    INSERT INTO UserLocationAssignments (UserID, LocationID, IsActive, DateAssigned)
-                    VALUES (@UserId, @LocationId, 'YES', GETDATE())
-                ", conn);
-                insertCmd.Parameters.AddWithValue("@UserId", model.Users_Id);
-                insertCmd.Parameters.AddWithValue("@LocationId", locId);
-                insertCmd.ExecuteNonQuery();
+                foreach (var locId in model.AssignedLocationIds)
+                {
+                    var insertCmd = new SqlCommand(@"
+                        INSERT INTO UserLocationAssignments (UserID, LocationID, IsActive, DateAssigned)
+                        VALUES (@UserId, @LocationId, 'YES', GETDATE())
+                    ", conn);
+                    insertCmd.Parameters.AddWithValue("@UserId", model.UserId);
+                    insertCmd.Parameters.AddWithValue("@LocationId", locId);
+                    insertCmd.ExecuteNonQuery();
+                }
             }
 
             TempData["Success"] = "New user created.";

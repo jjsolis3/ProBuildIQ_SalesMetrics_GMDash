@@ -40,6 +40,8 @@ public partial class SalesMetricsDbContext : DbContext
     public DbSet<NotificationEntity> Notifications { get; set; } = default!;
     public DbSet<NotificationRecipientEntity> NotificationRecipients { get; set; } = default!;
     public DbSet<BroadcastMessageEntity> BroadcastMessages { get; set; } = default!;
+    public DbSet<NotificationSettingsEntity> NotificationSettings { get; set; } = default!;
+    public DbSet<SecuritySettingsEntity> SecuritySettings { get; set; } = default!;
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -260,6 +262,48 @@ public partial class SalesMetricsDbContext : DbContext
             entity.Property(e => e.ExpiresDate).HasColumnType("datetime");
             entity.Property(e => e.IsActive).HasDefaultValue(true);
             entity.Property(e => e.Priority).HasMaxLength(20).HasDefaultValue("Normal");
+            entity.Property(e => e.ScheduledDate).HasColumnType("datetime");
+            entity.Property(e => e.IsSent).HasDefaultValue(false);
+            entity.Property(e => e.SentDate).HasColumnType("datetime");
+            entity.Property(e => e.SentCount).HasDefaultValue(0);
+            entity.Property(e => e.ReadCount).HasDefaultValue(0);
+            entity.Property(e => e.IsTemplate).HasDefaultValue(false);
+            entity.Property(e => e.TemplateCategory).HasMaxLength(50);
+        });
+
+        modelBuilder.Entity<NotificationSettingsEntity>(entity =>
+        {
+            entity.HasKey(e => e.NotificationSettingsId);
+            entity.Property(e => e.NotificationSettingsId).HasColumnName("NotificationSettingsID");
+            entity.Property(e => e.CategoryName).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.IsEnabled).HasDefaultValue(true);
+            entity.Property(e => e.NotifyAssignee).HasDefaultValue(true);
+            entity.Property(e => e.NotifyManager).HasDefaultValue(false);
+            entity.Property(e => e.NotifyTaskOwner).HasDefaultValue(false);
+            entity.Property(e => e.EnableInAppNotification).HasDefaultValue(true);
+            entity.Property(e => e.EnableEmailNotification).HasDefaultValue(false);
+            entity.Property(e => e.ReminderHoursBefore).HasDefaultValue(24);
+            entity.Property(e => e.SpecificStatuses).HasMaxLength(255);
+            entity.Property(e => e.LastModifiedDate).HasColumnType("datetime").HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.LastModifiedByUserId).HasColumnName("LastModifiedByUserID");
+
+            // Create unique index on CategoryName
+            entity.HasIndex(e => e.CategoryName).IsUnique();
+        });
+
+        modelBuilder.Entity<SecuritySettingsEntity>(entity =>
+        {
+            entity.HasKey(e => e.SecuritySettingsId);
+            entity.Property(e => e.SecuritySettingsId).HasColumnName("SecuritySettingsID");
+            entity.Property(e => e.SettingKey).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.SettingValue).HasMaxLength(1000).IsRequired();
+            entity.Property(e => e.Description).HasMaxLength(500);
+            entity.Property(e => e.Category).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.LastModifiedDate).HasColumnType("datetime").HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.LastModifiedByUserId).HasColumnName("LastModifiedByUserID");
+
+            // Create unique index on SettingKey
+            entity.HasIndex(e => e.SettingKey).IsUnique();
         });
 
         OnModelCreatingPartial(modelBuilder);

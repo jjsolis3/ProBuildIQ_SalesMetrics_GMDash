@@ -1,0 +1,412 @@
+@model SalesMetrics.Models.SettingsDashboardViewModel
+@{
+    ViewData["Title"] = "System Settings";
+}
+
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 mb-1">⚙️ System Settings</h1>
+                    <p class="text-muted mb-0">Configure notifications, security, and access controls</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="fas fa-check-circle me-2"></i>@TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="fas fa-exclamation-circle me-2"></i>@TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <!-- Tabs -->
+    <ul class="nav nav-tabs nav-fill mb-4" id="settingsTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link @(Model.ActiveTab == "notifications" ? "active" : "")" id="notifications-tab" data-bs-toggle="tab" data-bs-target="#notifications" type="button" role="tab">
+                <i class="fas fa-bell"></i> Notification Settings
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link @(Model.ActiveTab == "security" ? "active" : "")" id="security-tab" data-bs-toggle="tab" data-bs-target="#security" type="button" role="tab">
+                <i class="fas fa-shield-alt"></i> Security Settings
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link @(Model.ActiveTab == "general" ? "active" : "")" id="general-tab" data-bs-toggle="tab" data-bs-target="#general" type="button" role="tab">
+                <i class="fas fa-cog"></i> General Settings
+            </button>
+        </li>
+    </ul>
+
+    <!-- Tab Content -->
+    <div class="tab-content" id="settingsTabContent">
+        <!-- Notifications Tab -->
+        <div class="tab-pane fade @(Model.ActiveTab == "notifications" ? "show active" : "")" id="notifications" role="tabpanel">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Notification Categories</h5>
+                    <p class="mb-0 text-muted small">Configure which events trigger notifications and who receives them</p>
+                </div>
+                <div class="card-body">
+                    @if (Model.NotificationSettings.Any())
+                    {
+                        @foreach (var setting in Model.NotificationSettings)
+                        {
+                            <div class="notification-setting-card card mb-3 border">
+                                <div class="card-body">
+                                    <div class="row align-items-center">
+                                        <div class="col-md-4">
+                                            <div class="d-flex align-items-center">
+                                                <div class="form-check form-switch me-3">
+                                                    <input class="form-check-input notification-enabled-toggle"
+                                                           type="checkbox"
+                                                           id="enabled_@setting.NotificationSettingsId"
+                                                           data-setting-id="@setting.NotificationSettingsId"
+                                                           @(setting.IsEnabled ? "checked" : "") />
+                                                </div>
+                                                <div>
+                                                    <h6 class="mb-1">@setting.CategoryDisplayName</h6>
+                                                    <p class="text-muted small mb-0">@setting.CategoryDescription</p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="col-md-8">
+                                            <div class="row">
+                                                <div class="col-md-3">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input notify-setting"
+                                                               type="checkbox"
+                                                               id="assignee_@setting.NotificationSettingsId"
+                                                               data-setting-id="@setting.NotificationSettingsId"
+                                                               data-field="NotifyAssignee"
+                                                               @(setting.NotifyAssignee ? "checked" : "")
+                                                               @(!setting.IsEnabled ? "disabled" : "") />
+                                                        <label class="form-check-label small" for="assignee_@setting.NotificationSettingsId">
+                                                            Assignee
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input notify-setting"
+                                                               type="checkbox"
+                                                               id="manager_@setting.NotificationSettingsId"
+                                                               data-setting-id="@setting.NotificationSettingsId"
+                                                               data-field="NotifyManager"
+                                                               @(setting.NotifyManager ? "checked" : "")
+                                                               @(!setting.IsEnabled ? "disabled" : "") />
+                                                        <label class="form-check-label small" for="manager_@setting.NotificationSettingsId">
+                                                            Manager
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input notify-setting"
+                                                               type="checkbox"
+                                                               id="owner_@setting.NotificationSettingsId"
+                                                               data-setting-id="@setting.NotificationSettingsId"
+                                                               data-field="NotifyTaskOwner"
+                                                               @(setting.NotifyTaskOwner ? "checked" : "")
+                                                               @(!setting.IsEnabled ? "disabled" : "") />
+                                                        <label class="form-check-label small" for="owner_@setting.NotificationSettingsId">
+                                                            Task Owner
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input notify-setting"
+                                                               type="checkbox"
+                                                               id="inapp_@setting.NotificationSettingsId"
+                                                               data-setting-id="@setting.NotificationSettingsId"
+                                                               data-field="EnableInAppNotification"
+                                                               @(setting.EnableInAppNotification ? "checked" : "")
+                                                               @(!setting.IsEnabled ? "disabled" : "") />
+                                                        <label class="form-check-label small" for="inapp_@setting.NotificationSettingsId">
+                                                            In-App
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            @if (setting.CategoryName == "DueDateReminder")
+                                            {
+                                                <div class="row mt-2">
+                                                    <div class="col-md-6">
+                                                        <label class="form-label small">Remind (hours before due date)</label>
+                                                        <input type="number"
+                                                               class="form-control form-control-sm reminder-hours"
+                                                               data-setting-id="@setting.NotificationSettingsId"
+                                                               value="@(setting.ReminderHoursBefore ?? 24)"
+                                                               min="1"
+                                                               max="168"
+                                                               @(!setting.IsEnabled ? "disabled" : "") />
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        <div class="text-end mt-3">
+                            <button type="button" class="btn btn-primary" id="saveNotificationSettings">
+                                <i class="fas fa-save"></i> Save Changes
+                            </button>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>No notification settings found.
+                            <form method="post" action="@Url.Action("InitializeDefaults", "Settings")" class="d-inline">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="btn btn-sm btn-outline-primary">Initialize Default Settings</button>
+                            </form>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Security Tab -->
+        <div class="tab-pane fade @(Model.ActiveTab == "security" ? "show active" : "")" id="security" role="tabpanel">
+            <div class="row">
+                @if (Model.SecuritySettings.Any())
+                {
+                    <!-- Group by category -->
+                    @foreach (var category in Model.SecuritySettings.GroupBy(s => s.Category).OrderBy(g => g.Key))
+                    {
+                        <div class="col-lg-6 mb-4">
+                            <div class="card shadow-sm h-100">
+                                <div class="card-header bg-light">
+                                    <h5 class="mb-0">@category.Key Settings</h5>
+                                </div>
+                                <div class="card-body">
+                                    @foreach (var setting in category)
+                                    {
+                                        <div class="mb-3">
+                                            <label class="form-label">
+                                                @setting.SettingKey.Replace("Password", "Password ").Replace("Require", "Require ").Replace("Session", "Session ")
+                                                @if (!string.IsNullOrEmpty(setting.Description))
+                                                {
+                                                    <i class="fas fa-info-circle text-muted" title="@setting.Description" data-bs-toggle="tooltip"></i>
+                                                }
+                                            </label>
+
+                                            @if (setting.InputType == "boolean")
+                                            {
+                                                <div class="form-check form-switch">
+                                                    <input class="form-check-input security-setting"
+                                                           type="checkbox"
+                                                           id="setting_@setting.SecuritySettingsId"
+                                                           data-setting-id="@setting.SecuritySettingsId"
+                                                           @(setting.SettingValue.ToLower() == "true" ? "checked" : "") />
+                                                    <label class="form-check-label" for="setting_@setting.SecuritySettingsId">
+                                                        @(setting.SettingValue.ToLower() == "true" ? "Enabled" : "Disabled")
+                                                    </label>
+                                                </div>
+                                            }
+                                            else if (setting.InputType == "number")
+                                            {
+                                                <input type="number"
+                                                       class="form-control security-setting"
+                                                       id="setting_@setting.SecuritySettingsId"
+                                                       data-setting-id="@setting.SecuritySettingsId"
+                                                       value="@setting.SettingValue"
+                                                       min="0" />
+                                            }
+                                            else
+                                            {
+                                                <input type="text"
+                                                       class="form-control security-setting"
+                                                       id="setting_@setting.SecuritySettingsId"
+                                                       data-setting-id="@setting.SecuritySettingsId"
+                                                       value="@setting.SettingValue" />
+                                            }
+                                            @if (!string.IsNullOrEmpty(setting.Description))
+                                            {
+                                                <small class="form-text text-muted">@setting.Description</small>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    <div class="col-12">
+                        <div class="text-end mt-3">
+                            <button type="button" class="btn btn-primary" id="saveSecuritySettings">
+                                <i class="fas fa-save"></i> Save Security Settings
+                            </button>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="col-12">
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>No security settings found.
+                            <form method="post" action="@Url.Action("InitializeDefaults", "Settings")" class="d-inline">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="btn btn-sm btn-outline-primary">Initialize Default Settings</button>
+                            </form>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- General Tab -->
+        <div class="tab-pane fade @(Model.ActiveTab == "general" ? "show active" : "")" id="general" role="tabpanel">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">General Application Settings</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">General settings coming soon. This section will include app-wide configurations such as branding, date/time formats, and default preferences.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Initialize tooltips
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl)
+            });
+
+            // Toggle dependent checkboxes when main toggle changes
+            $('.notification-enabled-toggle').on('change', function() {
+                var settingId = $(this).data('setting-id');
+                var isEnabled = $(this).is(':checked');
+
+                // Enable/disable dependent checkboxes
+                $(`[data-setting-id="${settingId}"].notify-setting`).prop('disabled', !isEnabled);
+                $(`.reminder-hours[data-setting-id="${settingId}"]`).prop('disabled', !isEnabled);
+            });
+
+            // Save notification settings
+            $('#saveNotificationSettings').on('click', function() {
+                var settings = [];
+                $('.notification-setting-card').each(function() {
+                    var $card = $(this);
+                    var settingId = $card.find('.notification-enabled-toggle').data('setting-id');
+
+                    var setting = {
+                        NotificationSettingsId: settingId,
+                        IsEnabled: $card.find('.notification-enabled-toggle').is(':checked'),
+                        NotifyAssignee: $card.find('[data-field="NotifyAssignee"]').is(':checked'),
+                        NotifyManager: $card.find('[data-field="NotifyManager"]').is(':checked'),
+                        NotifyTaskOwner: $card.find('[data-field="NotifyTaskOwner"]').is(':checked'),
+                        EnableInAppNotification: $card.find('[data-field="EnableInAppNotification"]').is(':checked'),
+                        EnableEmailNotification: false,
+                        ReminderHoursBefore: parseInt($card.find('.reminder-hours').val()) || null
+                    };
+
+                    settings.push(setting);
+                });
+
+                // Save each setting
+                var promises = settings.map(function(setting) {
+                    return $.ajax({
+                        url: '@Url.Action("UpdateNotificationSetting", "Settings")',
+                        type: 'POST',
+                        contentType: 'application/json',
+                        headers: {
+                            'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                        },
+                        data: JSON.stringify(setting)
+                    });
+                });
+
+                Promise.all(promises)
+                    .then(function() {
+                        toastr.success('Notification settings saved successfully!');
+                    })
+                    .catch(function(error) {
+                        toastr.error('Error saving notification settings');
+                        console.error(error);
+                    });
+            });
+
+            // Save security settings
+            $('#saveSecuritySettings').on('click', function() {
+                var settings = [];
+                $('.security-setting').each(function() {
+                    var $input = $(this);
+                    var settingId = $input.data('setting-id');
+                    var value;
+
+                    if ($input.attr('type') === 'checkbox') {
+                        value = $input.is(':checked') ? 'true' : 'false';
+                    } else {
+                        value = $input.val();
+                    }
+
+                    settings.push({
+                        SecuritySettingsId: settingId,
+                        SettingValue: value
+                    });
+                });
+
+                // Save each setting
+                var promises = settings.map(function(setting) {
+                    return $.ajax({
+                        url: '@Url.Action("UpdateSecuritySetting", "Settings")',
+                        type: 'POST',
+                        contentType: 'application/json',
+                        headers: {
+                            'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                        },
+                        data: JSON.stringify(setting)
+                    });
+                });
+
+                Promise.all(promises)
+                    .then(function() {
+                        toastr.success('Security settings saved successfully!');
+                    })
+                    .catch(function(error) {
+                        toastr.error('Error saving security settings');
+                        console.error(error);
+                    });
+            });
+        });
+    </script>
+}
+
+<style>
+    .notification-setting-card {
+        transition: all 0.3s ease;
+    }
+
+    .notification-setting-card:hover {
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
+    }
+
+    .form-check-input:disabled ~ .form-check-label {
+        opacity: 0.5;
+    }
+</style>

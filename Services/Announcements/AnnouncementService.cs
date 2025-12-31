@@ -92,7 +92,7 @@ namespace SalesMetrics.Services.Announcements
                         ? _context.Roles.Where(r => r.RoleId == b.TargetRoleId).Select(r => r.RoleName).FirstOrDefault()
                         : "All Users",
                     CreatedByUserId = b.CreatedByUserId,
-                    CreatedByName = _context.Users.Where(u => u.UsersId == b.CreatedByUserId).Select(u => u.UsersFirstName + " " + u.UsersLastName).FirstOrDefault(),
+                    CreatedByName = _context.Users.Where(u => u.Users_ID == b.CreatedByUserId).Select(u => u.FirstName + " " + u.LastName).FirstOrDefault(),
                     CreatedDate = b.CreatedDate,
                     ExpiresDate = b.ExpiresDate,
                     IsActive = b.IsActive,
@@ -197,17 +197,18 @@ namespace SalesMetrics.Services.Announcements
                 throw new Exception("Cannot send a template. Create an announcement from the template first.");
 
             // Send via NotificationService
-            await _notificationService.SendBroadcastMessageAsync(
-                title: entity.Title,
-                message: entity.Message,
-                targetType: entity.TargetType,
-                targetLocationId: entity.TargetLocationId,
-                targetRoleId: entity.TargetRoleId,
-                createdByUserId: sentByUserId,
-                priority: entity.Priority ?? "Normal",
-                expiresDate: entity.ExpiresDate,
-                broadcastMessageId: entity.BroadcastMessageId
-            );
+            var broadcastModel = new BroadcastMessageCreateViewModel
+            {
+                Title = entity.Title,
+                Message = entity.Message,
+                TargetType = entity.TargetType,
+                TargetLocationId = entity.TargetLocationId,
+                TargetRoleId = entity.TargetRoleId,
+                Priority = entity.Priority ?? "Normal",
+                ExpiresDate = entity.ExpiresDate
+            };
+
+            await _notificationService.SendBroadcastMessageAsync(broadcastModel, sentByUserId);
 
             // Update the entity
             entity.IsSent = true;
@@ -290,7 +291,7 @@ namespace SalesMetrics.Services.Announcements
                         ? _context.Roles.Where(r => r.RoleId == b.TargetRoleId).Select(r => r.RoleName).FirstOrDefault()
                         : "All Users",
                     CreatedByUserId = b.CreatedByUserId,
-                    CreatedByName = _context.Users.Where(u => u.UsersId == b.CreatedByUserId).Select(u => u.UsersFirstName + " " + u.UsersLastName).FirstOrDefault(),
+                    CreatedByName = _context.Users.Where(u => u.Users_ID == b.CreatedByUserId).Select(u => u.FirstName + " " + u.LastName).FirstOrDefault(),
                     CreatedDate = b.CreatedDate,
                     ExpiresDate = b.ExpiresDate,
                     IsActive = b.IsActive,
@@ -315,7 +316,7 @@ namespace SalesMetrics.Services.Announcements
             }
             else if (entity.TargetType == "Location" && entity.TargetLocationId.HasValue)
             {
-                return await _context.Users.Where(u => u.LocationId == entity.TargetLocationId.Value).CountAsync();
+                return await _context.Users.Where(u => u.Location == entity.TargetLocationId.Value).CountAsync();
             }
             else if (entity.TargetType == "Role" && entity.TargetRoleId.HasValue)
             {

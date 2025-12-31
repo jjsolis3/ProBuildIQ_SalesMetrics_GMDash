@@ -50,9 +50,9 @@ namespace SalesMetrics.Controllers
 
             // Get additional data for dropdowns
             ViewBag.TaskStatuses = _context.Tasks
-                .Select(t => new { t.TasksStatus })
+                .Select(t => new { t.Status })
                 .Distinct()
-                .OrderBy(t => t.TasksStatus)
+                .OrderBy(t => t.Status)
                 .ToList();
 
             return View(dashboard);

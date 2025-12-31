@@ -389,26 +389,42 @@ else if (Model.ShowResults)
             }
 
             function applyRowHighlighting() {
-                $('#resultsTable tbody tr').each(function() {
-                    var $row = $(this);
-                    var commissionGate = normalizeGateValue($row.data('commission-gate'));
-                    var targetMargin = normalizeGateValue($row.data('target-margin'));
-                    var commisionNo = commissionGate === 'NO';
-                    var targetNo = targetMargin === 'NO';
+                try {
+                    $('#resultsTable tbody tr').each(function() {
+                        try {
+                            var $row = $(this);
 
-                    // Remove any existing highlight classes
-                    $row.removeClass('row-warning row-danger');
+                            // Try to get data from attributes - use attr() instead of data()
+                            var commissionGate = $row.attr('data-commission-gate');
+                            var targetMargin = $row.attr('data-target-margin');
 
-                    // Apply highlighting based on conditions
-                    if (commissionNo && targetNo) {
-                        // Both are NO - Red highlighting
-                        $row.addClass('row-danger');
-                    } else if (commissionNo || targetNo) {
-                        // One is NO - Yellow highlighting
-                        $row.addClass('row-warning');
-                    }
-                    // Otherwise no highlighting (both are YES)
-                });
+                            // Normalize values
+                            commissionGate = normalizeGateValue(commissionGate);
+                            targetMargin = normalizeGateValue(targetMargin);
+
+                            // Check conditions
+                            var commisionNo = commissionGate === 'NO';
+                            var targetNo = targetMargin === 'NO';
+
+                            // Remove any existing highlight classes
+                            $row.removeClass('row-warning row-danger');
+
+                            // Apply highlighting based on conditions
+                            if (commisionNo && targetNo) {
+                                // Both are NO - Red highlighting
+                                $row.addClass('row-danger');
+                            } else if (commisionNo || targetNo) {
+                                // One is NO - Yellow highlighting
+                                $row.addClass('row-warning');
+                            }
+                            // Otherwise no highlighting (both are YES)
+                        } catch (rowError) {
+                            console.error('Error processing row:', rowError);
+                        }
+                    });
+                } catch (error) {
+                    console.error('Error in applyRowHighlighting:', error);
+                }
             }
 
             // Initialize DataTable with export buttons and features
@@ -475,9 +491,12 @@ else if (Model.ShowResults)
                 // Hide loading overlay after DataTable is fully initialized
                 initComplete: function() {
                     $('#loadingOverlay').fadeOut(600);
+                    // Apply row highlighting on initial load
+                    applyRowHighlighting();
                 }
             });
 
+            // Re-apply highlighting on every redraw (pagination, search, sort)
             resultsTable.on('draw.dt', function() {
                 applyRowHighlighting();
             });

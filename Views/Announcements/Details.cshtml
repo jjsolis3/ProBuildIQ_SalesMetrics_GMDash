@@ -1,0 +1,180 @@
+@model SalesMetrics.Models.AnnouncementViewModel
+@{
+    ViewData["Title"] = "Announcement Details";
+}
+
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 mb-1">Announcement Details</h1>
+                </div>
+                <div>
+                    <a href="@Url.Action("Index", "Announcements")" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left"></i> Back to Announcements
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <h4 class="mb-0">@Model.Title</h4>
+                </div>
+                <div class="card-body">
+                    <div class="mb-4">
+                        <h6 class="text-muted">Message</h6>
+                        <p style="white-space: pre-wrap;">@Model.Message</p>
+                    </div>
+
+                    <hr/>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="text-muted">Target Audience</h6>
+                            <p>
+                                <span class="badge bg-light text-dark">@Model.TargetName</span>
+                            </p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-muted">Priority</h6>
+                            <p>
+                                @if (Model.Priority == "Urgent")
+                                {
+                                    <span class="badge bg-danger">Urgent</span>
+                                }
+                                else if (Model.Priority == "High")
+                                {
+                                    <span class="badge bg-warning">High</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-info">Normal</span>
+                                }
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <h6 class="text-muted">Created By</h6>
+                            <p>@Model.CreatedByName</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-muted">Created Date</h6>
+                            <p>@Model.CreatedDate.ToString("MMMM dd, yyyy h:mm tt")</p>
+                        </div>
+                    </div>
+
+                    @if (Model.IsSent)
+                    {
+                        <div class="row mt-3">
+                            <div class="col-md-6">
+                                <h6 class="text-muted">Sent Date</h6>
+                                <p>@Model.SentDate?.ToString("MMMM dd, yyyy h:mm tt")</p>
+                            </div>
+                            <div class="col-md-6">
+                                <h6 class="text-muted">Expiration Date</h6>
+                                <p>@(Model.ExpiresDate?.ToString("MMMM dd, yyyy h:mm tt") ?? "Never")</p>
+                            </div>
+                        </div>
+                    }
+                    else if (Model.ScheduledDate.HasValue)
+                    {
+                        <div class="row mt-3">
+                            <div class="col-md-6">
+                                <h6 class="text-muted">Scheduled For</h6>
+                                <p>@Model.ScheduledDate?.ToString("MMMM dd, yyyy h:mm tt")</p>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            @if (Model.IsSent)
+            {
+                <div class="card shadow-sm mb-3">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">Analytics</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <h6 class="text-muted">Total Recipients</h6>
+                            <h3 class="mb-0">@Model.SentCount</h3>
+                        </div>
+
+                        <div class="mb-3">
+                            <h6 class="text-muted">Read Count</h6>
+                            <h3 class="mb-0">@Model.ReadCount</h3>
+                        </div>
+
+                        <div class="mb-3">
+                            <h6 class="text-muted">Read Rate</h6>
+                            <div class="progress" style="height: 30px;">
+                                <div class="progress-bar @(Model.ReadPercentage > 70 ? "bg-success" : Model.ReadPercentage > 40 ? "bg-warning" : "bg-danger")"
+                                     role="progressbar"
+                                     style="width: @Model.ReadPercentage%"
+                                     aria-valuenow="@Model.ReadPercentage"
+                                     aria-valuemin="0"
+                                     aria-valuemax="100">
+                                    <strong>@Model.ReadPercentage.ToString("F1")%</strong>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <h6 class="text-muted">Status</h6>
+                            <p>
+                                @if (Model.StatusBadge == "Sent")
+                                {
+                                    <span class="badge bg-success">@Model.StatusBadge</span>
+                                }
+                                else if (Model.StatusBadge == "Expired")
+                                {
+                                    <span class="badge bg-secondary">@Model.StatusBadge</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-info">@Model.StatusBadge</span>
+                                }
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Actions</h5>
+                </div>
+                <div class="card-body">
+                    @if (!Model.IsSent && !Model.IsTemplate)
+                    {
+                        <a href="@Url.Action("Edit", "Announcements", new { id = Model.BroadcastMessageId })" class="btn btn-primary btn-block mb-2 w-100">
+                            <i class="fas fa-edit"></i> Edit Announcement
+                        </a>
+                        <form method="post" action="@Url.Action("Send", "Announcements", new { id = Model.BroadcastMessageId })">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="btn btn-success btn-block mb-2 w-100" onclick="return confirm('Send this announcement now?')">
+                                <i class="fas fa-paper-plane"></i> Send Now
+                            </button>
+                        </form>
+                    }
+
+                    <form method="post" action="@Url.Action("Delete", "Announcements", new { id = Model.BroadcastMessageId })">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="btn btn-danger btn-block w-100" onclick="return confirm('Are you sure you want to delete this announcement?')">
+                            <i class="fas fa-trash"></i> Delete
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

@@ -2122,7 +2122,7 @@ namespace SalesMetrics.Controllers
                 var sortDirection = Request.Form["order[0][dir]"].FirstOrDefault() ?? "desc";
 
                 // Get cached user list or fetch it
-                var users = GetCachedUsers(userContext.LocationId);
+                var users = GetCachedUsers(userContext.LocationId, userContext.RoleId);
 
                 // Get all tasks for location (consider adding caching here too with short TTL)
                 var allTasks = GetAllTasksByLocation(userContext.LocationId);
@@ -2261,14 +2261,15 @@ namespace SalesMetrics.Controllers
 
         /// <summary>
         /// Get cached user list with 5-minute TTL
+        /// Cache is keyed by location and role since different roles see different users
         /// </summary>
-        private List<User> GetCachedUsers(int locationId)
+        private List<User> GetCachedUsers(int locationId, int roleId)
         {
-            string cacheKey = $"Users_Location_{locationId}";
+            string cacheKey = $"Users_Location_{locationId}_Role_{roleId}";
 
             if (!_cache.TryGetValue(cacheKey, out List<User> users))
             {
-                users = GetActiveUsers(locationId);
+                users = GetAllUsersForTaskDisplay(locationId, roleId);
 
                 var cacheOptions = new MemoryCacheEntryOptions()
                     .SetAbsoluteExpiration(TimeSpan.FromMinutes(5))

@@ -622,8 +622,9 @@
                 document.getElementById('pdfFileName').textContent = pdfFileName;
                 document.getElementById('pdfFileSize').textContent = 'Existing file';
 
-                // Fetch and load the PDF
-                const pdfUrl = `/Content/Templates/${pdfFileName}`;
+                // Fetch and load the PDF via controller action (not direct file access)
+                const templateKey = '@Model.TemplateKey';
+                const pdfUrl = `/SignTemplates/GetTemplatePdf/${encodeURIComponent(templateKey)}`;
 
                 fetch(pdfUrl)
                     .then(response => response.arrayBuffer())

@@ -61,15 +61,23 @@
     @if (Model.Recipient.Role == "Manager" && !Model.HasTenantRecipient)
     {
         <div class="card mb-3">
-            <div class="card-header">Add Tenant (to receive the consent)</div>
-            <div class="card-body row g-2">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Add Tenant (to receive the consent)</span>
+                <div class="form-check mb-0">
+                    <input class="form-check-input" type="checkbox" id="SkipTenant" name="SkipTenant" value="true">
+                    <label class="form-check-label" for="SkipTenant">
+                        Skip tenant signature (manager only)
+                    </label>
+                </div>
+            </div>
+            <div class="card-body row g-2" id="tenantFields">
                 <div class="col-md-6">
                     <label class="form-label">Tenant Full Name</label>
-                    <input name="TenantFullName" class="form-control" />
+                    <input name="TenantFullName" id="TenantFullName" class="form-control" />
                 </div>
                 <div class="col-md-6">
                     <label class="form-label">Tenant Email</label>
-                    <input name="TenantEmail" type="email" class="form-control" />
+                    <input name="TenantEmail" id="TenantEmail" type="email" class="form-control" />
                 </div>
             </div>
         </div>
@@ -104,6 +112,30 @@
 
 @section Scripts {
     <script>
+        // Handle skip tenant checkbox
+        const skipTenantCheckbox = document.getElementById('SkipTenant');
+        if (skipTenantCheckbox) {
+            skipTenantCheckbox.addEventListener('change', function() {
+                const tenantFields = document.getElementById('tenantFields');
+                const tenantNameInput = document.getElementById('TenantFullName');
+                const tenantEmailInput = document.getElementById('TenantEmail');
+
+                if (this.checked) {
+                    // Disable and clear tenant fields
+                    tenantFields.style.opacity = '0.5';
+                    tenantNameInput.disabled = true;
+                    tenantEmailInput.disabled = true;
+                    tenantNameInput.value = '';
+                    tenantEmailInput.value = '';
+                } else {
+                    // Enable tenant fields
+                    tenantFields.style.opacity = '1';
+                    tenantNameInput.disabled = false;
+                    tenantEmailInput.disabled = false;
+                }
+            });
+        }
+
         // Basic canvas setup
         const canvas = document.getElementById('sigPad');
         const ctx = canvas.getContext('2d');
@@ -184,16 +216,20 @@
           console.log('Has drawn ink:', hasInk);
 
           // Check if manager needs to add tenant
+          const skipTenantCheckbox = document.getElementById('SkipTenant');
           const isTenantSection = document.getElementById('TenantFullName');
           if (isTenantSection) {
+            const skipTenant = skipTenantCheckbox && skipTenantCheckbox.checked;
             const tenantName = document.getElementById('TenantFullName').value.trim();
             const tenantEmail = document.getElementById('TenantEmail').value.trim();
+            console.log('Skip tenant:', skipTenant);
             console.log('Tenant name:', tenantName);
             console.log('Tenant email:', tenantEmail);
 
-            if (!tenantName || !tenantEmail) {
+            // Only require tenant info if NOT skipping
+            if (!skipTenant && (!tenantName || !tenantEmail)) {
               e.preventDefault();
-              alert('Please enter the tenant name and email.');
+              alert('Please enter the tenant name and email, or check "Skip tenant signature".');
               return false;
             }
           }

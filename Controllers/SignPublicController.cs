@@ -109,20 +109,28 @@ public class SignPublicController : Controller
             return View(vm);
         }
 
-        // Manager must capture tenant info if no tenant recipient already
+        // Manager must capture tenant info if no tenant recipient already (unless skipping tenant)
         if (vm.Recipient.Role == "Manager" && vm.HasTenantRecipient == false)
         {
-            if (string.IsNullOrWhiteSpace(post.TenantFullName) || string.IsNullOrWhiteSpace(post.TenantEmail))
+            if (!post.SkipTenant)
             {
-                _logger.LogWarning("Manager validation failed: Tenant info missing");
-                ModelState.AddModelError("", "Please enter the tenant name and email.");
-                ViewBag.Token = token;
-                ViewBag.CompanyBranding = _branding;
-                return View(vm);
-            }
+                // Only require tenant info if not skipping
+                if (string.IsNullOrWhiteSpace(post.TenantFullName) || string.IsNullOrWhiteSpace(post.TenantEmail))
+                {
+                    _logger.LogWarning("Manager validation failed: Tenant info missing");
+                    ModelState.AddModelError("", "Please enter the tenant name and email, or check 'Skip tenant signature'.");
+                    ViewBag.Token = token;
+                    ViewBag.CompanyBranding = _branding;
+                    return View(vm);
+                }
 
-            _logger.LogInformation("Adding tenant recipient: {TenantName} <{TenantEmail}>", post.TenantFullName, post.TenantEmail);
-            await _svc.UpsertTenantRecipientAsync(vm.Envelope.EnvelopeId, post.TenantFullName.Trim(), post.TenantEmail.Trim());
+                _logger.LogInformation("Adding tenant recipient: {TenantName} <{TenantEmail}>", post.TenantFullName, post.TenantEmail);
+                await _svc.UpsertTenantRecipientAsync(vm.Envelope.EnvelopeId, post.TenantFullName.Trim(), post.TenantEmail.Trim());
+            }
+            else
+            {
+                _logger.LogInformation("Manager chose to skip tenant signature for envelope {EnvelopeId}", vm.Envelope.EnvelopeId);
+            }
         }
 
         // Capture the signature
@@ -191,7 +199,8 @@ public class SignPublicController : Controller
         _logger.LogInformation("Serving PDF template: {FilePath}", filePath);
 
         var fileBytes = await System.IO.File.ReadAllBytesAsync(filePath);
-        return File(fileBytes, "application/pdf", $"{template.DisplayName}.pdf");
+        Response.Headers.Add("Content-Disposition", "inline");
+        return File(fileBytes, "application/pdf");
     }
 }
 

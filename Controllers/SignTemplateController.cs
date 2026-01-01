@@ -193,6 +193,24 @@ public class SignTemplatesController : Controller
         return RedirectToAction(nameof(Index));
     }
 
+    // GET: /SignTemplates/GetTemplatePdf/{templateKey}
+    public async Task<IActionResult> GetTemplatePdf(string templateKey)
+    {
+        var template = await _db.SignTemplates.AsNoTracking().FirstOrDefaultAsync(t => t.TemplateKey == templateKey);
+
+        if (template == null || string.IsNullOrWhiteSpace(template.PdfFilePath))
+            return NotFound();
+
+        var filePath = Path.Combine(_env.ContentRootPath, "Content", "Templates", template.PdfFilePath);
+
+        if (!System.IO.File.Exists(filePath))
+            return NotFound();
+
+        var fileBytes = await System.IO.File.ReadAllBytesAsync(filePath);
+        Response.Headers.Add("Content-Disposition", "inline");
+        return File(fileBytes, "application/pdf");
+    }
+
     private List<string> GetRazorViewPaths()
     {
         // enumerate /Views/SignTemplates/*.cshtml

@@ -156,5 +156,42 @@ public class SignPublicController : Controller
         ViewBag.CompanyBranding = _branding;
         return View();
     }
+
+    // Preview PDF template before signing
+    [HttpGet("{token}/pdf")]
+    public async Task<IActionResult> PreviewPDF(string token)
+    {
+        _logger.LogInformation("PDF Preview requested for token: {Token}", token);
+
+        var vm = await _svc.GetReviewAsync(token, Request.Headers["User-Agent"], HttpContext.Connection.RemoteIpAddress?.ToString() ?? "n/a");
+
+        if (vm == null)
+        {
+            _logger.LogWarning("Token {Token} is invalid", token);
+            return NotFound("Invalid or expired link");
+        }
+
+        // Get the template to find the PDF file
+        var template = await _svc.GetTemplateByKeyAsync(vm.Envelope.TemplateKey);
+        if (template == null || string.IsNullOrWhiteSpace(template.PdfFilePath))
+        {
+            _logger.LogWarning("No PDF template found for template key: {TemplateKey}", vm.Envelope.TemplateKey);
+            return NotFound("PDF template not found");
+        }
+
+        // Construct the file path
+        var filePath = Path.Combine("Content", "Templates", template.PdfFilePath);
+
+        if (!System.IO.File.Exists(filePath))
+        {
+            _logger.LogWarning("PDF file not found: {FilePath}", filePath);
+            return NotFound("PDF file not found");
+        }
+
+        _logger.LogInformation("Serving PDF template: {FilePath}", filePath);
+
+        var fileBytes = await System.IO.File.ReadAllBytesAsync(filePath);
+        return File(fileBytes, "application/pdf", $"{template.DisplayName}.pdf");
+    }
 }
 

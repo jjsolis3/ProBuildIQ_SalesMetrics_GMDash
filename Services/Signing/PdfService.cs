@@ -76,14 +76,24 @@ public sealed class PdfService : IPdfService
         {
             try
             {
+                Console.WriteLine($"[PDF DEBUG] Parsing MergeSpec for envelope {envelopeId}");
+                Console.WriteLine($"[PDF DEBUG] MergeSpec JSON: {template.MergeSpecJson}");
+
                 var mergeSpec = JsonSerializer.Deserialize<MergeSpec>(template.MergeSpecJson);
                 if (mergeSpec?.fieldMapping != null)
                 {
+                    Console.WriteLine($"[PDF DEBUG] Found {mergeSpec.fieldMapping.Count} fields in MergeSpec");
+
                     foreach (var (fieldKey, fieldInfo) in mergeSpec.fieldMapping)
                     {
                         // Get the value for this field
                         if (!fieldData.TryGetValue(fieldKey, out var value))
+                        {
+                            Console.WriteLine($"[PDF DEBUG] Field '{fieldKey}' not found in field data - skipping");
                             continue;
+                        }
+
+                        Console.WriteLine($"[PDF DEBUG] Processing field '{fieldKey}' with value: {value}");
 
                         // Support multiple placements of the same field
                         var placements = fieldInfo.placements ?? new List<Coordinates>();
@@ -94,25 +104,36 @@ public sealed class PdfService : IPdfService
                             placements = new List<Coordinates> { fieldInfo.coordinates };
                         }
 
+                        Console.WriteLine($"[PDF DEBUG] Field '{fieldKey}' has {placements.Count} placement(s)");
+
                         // Place field at all specified locations
                         foreach (var coord in placements)
                         {
+                            Console.WriteLine($"[PDF DEBUG] Placing '{fieldKey}' at page={coord.page}, x={coord.x}, y={coord.y}, w={coord.width}, h={coord.height}");
+
                             // Handle signatures differently
                             if (fieldInfo.type == "signature" && value is string sigPath && !string.IsNullOrWhiteSpace(sigPath))
                             {
+                                Console.WriteLine($"[PDF DEBUG] Drawing signature for '{fieldKey}' from path: {sigPath}");
                                 DrawSignature(gfx, page, sigPath, coord.x, coord.y, coord.width, coord.height);
                             }
                             else if (value is string textValue)
                             {
+                                Console.WriteLine($"[PDF DEBUG] Drawing text for '{fieldKey}': {textValue}");
                                 DrawTextWithCoordinateConversion(gfx, page, font, brush, textValue, coord.x, coord.y);
                             }
                         }
                     }
                 }
+                else
+                {
+                    Console.WriteLine($"[PDF DEBUG] No field mappings found in MergeSpec");
+                }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error parsing MergeSpec: {ex.Message}");
+                Console.WriteLine($"[PDF ERROR] Error parsing MergeSpec: {ex.Message}");
+                Console.WriteLine($"[PDF ERROR] Stack trace: {ex.StackTrace}");
                 // Fall back to default behavior
                 StampFieldsLegacy(gfx, font, brush, fieldData);
             }

@@ -395,4 +395,11 @@ public sealed class EnvelopeService : IEnvelopeService
         await _db.SaveChangesAsync();
     }
 
+    public async Task<SignTemplate?> GetTemplateByKeyAsync(string templateKey)
+    {
+        return await _db.SignTemplates
+            .AsNoTracking()
+            .FirstOrDefaultAsync(t => t.TemplateKey == templateKey);
+    }
+
 }

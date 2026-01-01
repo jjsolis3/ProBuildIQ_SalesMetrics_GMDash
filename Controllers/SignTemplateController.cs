@@ -153,6 +153,97 @@ public class SignTemplatesController : Controller
         return RedirectToAction(nameof(Edit), new { id = copy.TemplateKey });
     }
 
+    // POST: /SignTemplates/Delete
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> Delete(string templateKey)
+    {
+        var template = await _db.SignTemplates.FirstOrDefaultAsync(t => t.TemplateKey == templateKey);
+        if (template == null) return NotFound();
+
+        // Check if template is being used by any envelopes
+        var envelopeCount = await _db.SignEnvelopes.CountAsync(e => e.TemplateKey == templateKey);
+        if (envelopeCount > 0)
+        {
+            TempData["ErrorMessage"] = $"Cannot delete template '{template.DisplayName}' because it is being used by {envelopeCount} envelope(s). Please deactivate it instead.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        // Delete associated PDF file if exists
+        if (!string.IsNullOrWhiteSpace(template.PdfFilePath))
+        {
+            var pdfPath = Path.Combine(_env.ContentRootPath, "Content", "Templates", template.PdfFilePath);
+            if (System.IO.File.Exists(pdfPath))
+            {
+                try
+                {
+                    System.IO.File.Delete(pdfPath);
+                }
+                catch (Exception ex)
+                {
+                    // Log error but continue with deletion
+                    Console.WriteLine($"Error deleting PDF file: {ex.Message}");
+                }
+            }
+        }
+
+        _db.SignTemplates.Remove(template);
+        await _db.SaveChangesAsync();
+
+        TempData["SuccessMessage"] = $"Template '{template.DisplayName}' deleted successfully.";
+        return RedirectToAction(nameof(Index));
+    }
+
+    // GET: /SignTemplates/GetTemplatePdf/{templateKey}
+    public async Task<IActionResult> GetTemplatePdf(string templateKey)
+    {
+        Console.WriteLine($"[GetTemplatePdf] Called with templateKey: {templateKey}");
+        Console.WriteLine($"[GetTemplatePdf] ContentRootPath: {_env.ContentRootPath}");
+
+        var template = await _db.SignTemplates.AsNoTracking().FirstOrDefaultAsync(t => t.TemplateKey == templateKey);
+
+        if (template == null)
+        {
+            Console.WriteLine($"[GetTemplatePdf] Template not found for key: {templateKey}");
+            return NotFound("Template not found");
+        }
+
+        Console.WriteLine($"[GetTemplatePdf] Template found: {template.DisplayName}");
+        Console.WriteLine($"[GetTemplatePdf] PdfFilePath from DB: {template.PdfFilePath}");
+
+        if (string.IsNullOrWhiteSpace(template.PdfFilePath))
+        {
+            Console.WriteLine($"[GetTemplatePdf] PdfFilePath is empty");
+            return NotFound("PDF file path is empty");
+        }
+
+        var filePath = Path.Combine(_env.ContentRootPath, "Content", "Templates", template.PdfFilePath);
+        Console.WriteLine($"[GetTemplatePdf] Full file path: {filePath}");
+        Console.WriteLine($"[GetTemplatePdf] File exists: {System.IO.File.Exists(filePath)}");
+
+        if (!System.IO.File.Exists(filePath))
+        {
+            Console.WriteLine($"[GetTemplatePdf] File not found at path: {filePath}");
+            // Try to list files in the directory to help diagnose
+            var directory = Path.Combine(_env.ContentRootPath, "Content", "Templates");
+            if (Directory.Exists(directory))
+            {
+                var files = Directory.GetFiles(directory);
+                Console.WriteLine($"[GetTemplatePdf] Files in Templates directory: {string.Join(", ", files.Select(Path.GetFileName))}");
+            }
+            else
+            {
+                Console.WriteLine($"[GetTemplatePdf] Templates directory doesn't exist: {directory}");
+            }
+            return NotFound("PDF file not found on disk");
+        }
+
+        var fileBytes = await System.IO.File.ReadAllBytesAsync(filePath);
+        Console.WriteLine($"[GetTemplatePdf] File read successfully. Size: {fileBytes.Length} bytes");
+
+        Response.Headers.Add("Content-Disposition", "inline");
+        return File(fileBytes, "application/pdf");
+    }
+
     private List<string> GetRazorViewPaths()
     {
         // enumerate /Views/SignTemplates/*.cshtml

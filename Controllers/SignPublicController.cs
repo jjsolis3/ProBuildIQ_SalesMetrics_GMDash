@@ -109,20 +109,28 @@ public class SignPublicController : Controller
             return View(vm);
         }
 
-        // Manager must capture tenant info if no tenant recipient already
+        // Manager must capture tenant info if no tenant recipient already (unless skipping tenant)
         if (vm.Recipient.Role == "Manager" && vm.HasTenantRecipient == false)
         {
-            if (string.IsNullOrWhiteSpace(post.TenantFullName) || string.IsNullOrWhiteSpace(post.TenantEmail))
+            if (!post.SkipTenant)
             {
-                _logger.LogWarning("Manager validation failed: Tenant info missing");
-                ModelState.AddModelError("", "Please enter the tenant name and email.");
-                ViewBag.Token = token;
-                ViewBag.CompanyBranding = _branding;
-                return View(vm);
-            }
+                // Only require tenant info if not skipping
+                if (string.IsNullOrWhiteSpace(post.TenantFullName) || string.IsNullOrWhiteSpace(post.TenantEmail))
+                {
+                    _logger.LogWarning("Manager validation failed: Tenant info missing");
+                    ModelState.AddModelError("", "Please enter the tenant name and email, or check 'Skip tenant signature'.");
+                    ViewBag.Token = token;
+                    ViewBag.CompanyBranding = _branding;
+                    return View(vm);
+                }
 
-            _logger.LogInformation("Adding tenant recipient: {TenantName} <{TenantEmail}>", post.TenantFullName, post.TenantEmail);
-            await _svc.UpsertTenantRecipientAsync(vm.Envelope.EnvelopeId, post.TenantFullName.Trim(), post.TenantEmail.Trim());
+                _logger.LogInformation("Adding tenant recipient: {TenantName} <{TenantEmail}>", post.TenantFullName, post.TenantEmail);
+                await _svc.UpsertTenantRecipientAsync(vm.Envelope.EnvelopeId, post.TenantFullName.Trim(), post.TenantEmail.Trim());
+            }
+            else
+            {
+                _logger.LogInformation("Manager chose to skip tenant signature for envelope {EnvelopeId}", vm.Envelope.EnvelopeId);
+            }
         }
 
         // Capture the signature
@@ -155,6 +163,44 @@ public class SignPublicController : Controller
         ViewBag.DownloadUrl = url;
         ViewBag.CompanyBranding = _branding;
         return View();
+    }
+
+    // Preview PDF template before signing
+    [HttpGet("{token}/pdf")]
+    public async Task<IActionResult> PreviewPDF(string token)
+    {
+        _logger.LogInformation("PDF Preview requested for token: {Token}", token);
+
+        var vm = await _svc.GetReviewAsync(token, Request.Headers["User-Agent"], HttpContext.Connection.RemoteIpAddress?.ToString() ?? "n/a");
+
+        if (vm == null)
+        {
+            _logger.LogWarning("Token {Token} is invalid", token);
+            return NotFound("Invalid or expired link");
+        }
+
+        // Get the template to find the PDF file
+        var template = await _svc.GetTemplateByKeyAsync(vm.Envelope.TemplateKey);
+        if (template == null || string.IsNullOrWhiteSpace(template.PdfFilePath))
+        {
+            _logger.LogWarning("No PDF template found for template key: {TemplateKey}", vm.Envelope.TemplateKey);
+            return NotFound("PDF template not found");
+        }
+
+        // Construct the file path
+        var filePath = Path.Combine("Content", "Templates", template.PdfFilePath);
+
+        if (!System.IO.File.Exists(filePath))
+        {
+            _logger.LogWarning("PDF file not found: {FilePath}", filePath);
+            return NotFound("PDF file not found");
+        }
+
+        _logger.LogInformation("Serving PDF template: {FilePath}", filePath);
+
+        var fileBytes = await System.IO.File.ReadAllBytesAsync(filePath);
+        Response.Headers.Add("Content-Disposition", "inline");
+        return File(fileBytes, "application/pdf");
     }
 }
 

@@ -296,34 +296,40 @@ var PDFFieldConfigurator = (function () {
 
     /**
      * Convert screen coordinates to PDF coordinates
+     * Screen coords are in pixels relative to canvas display
+     * PDF coords are in points (72 points per inch) in the actual PDF
      */
     function screenToPDFCoordinates(screenX, screenY) {
         const canvas = document.getElementById('pdfCanvas');
         if (!canvas) return { x: screenX, y: screenY };
 
-        // Get PDF scale from canvas
-        const rect = canvas.getBoundingClientRect();
-        pdfScale = canvas.width / rect.width;
+        // Use the PDF scale factor set when rendering the PDF
+        // This is set in window.pdfScale by the template wizard
+        const scale = window.pdfScale || 1.0;
 
-        // Convert to PDF points (accounting for scale)
-        const pdfX = Math.round(screenX * pdfScale);
-        const pdfY = Math.round(screenY * pdfScale);
+        // Convert screen pixels to PDF points
+        // If PDF is scaled down (e.g., 0.5), we divide to get actual PDF coordinates
+        const pdfX = Math.round(screenX / scale);
+        const pdfY = Math.round(screenY / scale);
 
         return { x: pdfX, y: pdfY };
     }
 
     /**
      * Convert PDF coordinates to screen coordinates
+     * PDF coords are in points, screen coords are in pixels
      */
     function pdfToScreenCoordinates(pdfX, pdfY) {
         const canvas = document.getElementById('pdfCanvas');
         if (!canvas) return { x: pdfX, y: pdfY };
 
-        const rect = canvas.getBoundingClientRect();
-        pdfScale = canvas.width / rect.width;
+        // Use the PDF scale factor set when rendering the PDF
+        const scale = window.pdfScale || 1.0;
 
-        const screenX = pdfX / pdfScale;
-        const screenY = pdfY / pdfScale;
+        // Convert PDF points to screen pixels
+        // If PDF is scaled down (e.g., 0.5), we multiply to get screen coordinates
+        const screenX = pdfX * scale;
+        const screenY = pdfY * scale;
 
         return { x: screenX, y: screenY };
     }
@@ -391,8 +397,9 @@ var PDFFieldConfigurator = (function () {
 
         // Convert PDF coordinates to screen coordinates
         const screenCoords = pdfToScreenCoordinates(field.x, field.y);
-        const screenWidth = field.width / pdfScale;
-        const screenHeight = field.height / pdfScale;
+        const scale = window.pdfScale || 1.0;
+        const screenWidth = field.width * scale;
+        const screenHeight = field.height * scale;
 
         // Create SVG group for field
         const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');

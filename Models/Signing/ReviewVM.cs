@@ -19,4 +19,5 @@ public sealed class ReviewPostVm
     public string? SigData { get; set; }
     public string? TenantFullName { get; set; } // manager-only
     public string? TenantEmail { get; set; }    // manager-only
+    public bool SkipTenant { get; set; }        // manager-only: skip tenant signature
 }

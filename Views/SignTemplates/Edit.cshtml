@@ -1,11 +1,194 @@
-﻿@model SalesMetrics.Domain.Signing.SignTemplate
+@model SalesMetrics.Domain.Signing.SignTemplate
 @{
     ViewData["Title"] = "Edit Template";
     var viewPaths = (List<string>)ViewBag.ViewPaths;
 }
+
+<style>
+    /* Field Selection */
+    .field-category {
+        margin-bottom: 1.5rem;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 1rem;
+        background: #f8f9fa;
+    }
+
+    .field-category-header {
+        font-weight: 600;
+        margin-bottom: 0.75rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .field-checkbox-group {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 0.5rem;
+    }
+
+    .field-checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem;
+        background: white;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background 0.2s ease;
+    }
+
+    .field-checkbox-label:hover {
+        background: #e7f1ff;
+    }
+
+    /* PDF Preview */
+    .pdf-preview-container {
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 1rem;
+        background: #f8f9fa;
+        margin-top: 1rem;
+    }
+
+    .pdf-preview-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+
+    #pdfCanvas {
+        max-width: 100%;
+        border: 1px solid #dee2e6;
+        background: white;
+        display: block;
+        margin: 0 auto;
+    }
+
+    .pdf-preview-controls {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+
+    /* Field Configurator Styles */
+    .field-palette {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: 0.5rem;
+    }
+
+    .field-palette-item {
+        padding: 0.75rem;
+        border: 2px solid #dee2e6;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        background: white;
+        text-align: center;
+        font-size: 0.875rem;
+        font-weight: 500;
+    }
+
+    .field-palette-item:hover {
+        border-color: #0d6efd;
+        background: #e7f1ff;
+        transform: translateY(-2px);
+    }
+
+    .field-palette-item.selected {
+        border-color: #0d6efd;
+        background: #0d6efd;
+        color: white;
+    }
+
+    .field-palette-item.placed {
+        border-color: #198754;
+        background: #d1e7dd;
+        cursor: default;
+        opacity: 0.6;
+    }
+
+    .field-palette-item.placed:hover {
+        transform: none;
+    }
+
+    .placed-fields-list {
+        max-height: 300px;
+        overflow-y: auto;
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        padding: 0.5rem;
+        background: white;
+    }
+
+    .placed-field-item {
+        padding: 0.5rem;
+        border-left: 3px solid #0d6efd;
+        background: #f8f9fa;
+        margin-bottom: 0.5rem;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background 0.2s ease;
+    }
+
+    .placed-field-item:hover {
+        background: #e7f1ff;
+    }
+
+    .placed-field-item.active {
+        background: #e7f1ff;
+        border-left-color: #198754;
+    }
+
+    .pdf-canvas-wrapper {
+        cursor: crosshair;
+    }
+
+    .pdf-canvas-wrapper.placement-mode {
+        cursor: crosshair;
+    }
+
+    .pdf-canvas-wrapper.drag-mode {
+        cursor: move;
+    }
+
+    /* Field boxes on PDF */
+    .field-box {
+        fill: rgba(13, 110, 253, 0.1);
+        stroke: #0d6efd;
+        stroke-width: 2;
+        cursor: move;
+        pointer-events: all;
+    }
+
+    .field-box:hover {
+        fill: rgba(13, 110, 253, 0.2);
+        stroke-width: 3;
+    }
+
+    .field-box.selected {
+        fill: rgba(25, 135, 84, 0.2);
+        stroke: #198754;
+        stroke-width: 3;
+    }
+
+    .field-label {
+        font-size: 10px;
+        fill: #0d6efd;
+        font-weight: bold;
+        pointer-events: none;
+        user-select: none;
+    }
+</style>
+
 <div class="card p-4">
     <h4 class="mb-3">Edit Template</h4>
-    <form asp-action="Edit" method="post" enctype="multipart/form-data">
+    <form asp-action="Edit" method="post" enctype="multipart/form-data" id="templateForm">
         <div class="row mb-3">
             <div class="col-md-4">
                 <label class="form-label">Template Key</label>
@@ -44,21 +227,433 @@
             <textarea asp-for="DefaultMessage" class="form-control" rows="2"></textarea>
         </div>
 
-        <div class="mb-3">
-            <label class="form-label">MergeSpec (JSON)</label>
-            <textarea asp-for="MergeSpecJson" class="form-control" rows="8" spellcheck="false"></textarea>
-            <small class="text-muted">e.g. { "merge":"property,order,customer", "fields": { "PropertyName":"ERP.Properties.Name" } }</small>
+        <!-- Field Selection -->
+        <div class="mb-4">
+            <h6>Select Fields to Include</h6>
+
+            <!-- Property Fields -->
+            <div class="field-category">
+                <div class="field-category-header">
+                    <input type="checkbox" class="form-check-input select-all-category" data-category="property" id="selectAllProperty" />
+                    <label for="selectAllProperty">🏢 Property Information</label>
+                </div>
+                <div class="field-checkbox-group">
+                    <label class="field-checkbox-label">
+                        <input type="checkbox" class="field-checkbox" data-category="property" value="PropertyName" />
+                        Property Name
+                    </label>
+                    <label class="field-checkbox-label">
+                        <input type="checkbox" class="field-checkbox" data-category="property" value="PropertyAddress" />
+                        Property Address
+                    </label>
+                    <label class="field-checkbox-label">
+                        <input type="checkbox" class="field-checkbox" data-category="property" value="PropertyPhone" />
+                        Property Phone
+                    </label>
+                </div>
+            </div>
+
+            <!-- Order Fields -->
+            <div class="field-category">
+                <div class="field-category-header">
+                    <input type="checkbox" class="form-check-input select-all-category" data-category="order" id="selectAllOrder" />
+                    <label for="selectAllOrder">📦 Work Order Information</label>
+                </div>
+                <div class="field-checkbox-group">
+                    <label class="field-checkbox-label">
+                        <input type="checkbox" class="field-checkbox" data-category="order" value="InstallationDate" />
+                        Installation Date
+                    </label>
+                    <label class="field-checkbox-label">
+                        <input type="checkbox" class="field-checkbox" data-category="order" value="UnitNumber" />
+                        Unit Number
+                    </label>
+                    <label class="field-checkbox-label">
+                        <input type="checkbox" class="field-checkbox" data-category="order" value="DeliveryDate" />
+                        Delivery Date
+                    </label>
+                </div>
+            </div>
+
+            <!-- Signature Fields -->
+            <div class="field-category">
+                <div class="field-category-header">
+                    <input type="checkbox" class="form-check-input select-all-category" data-category="signature" id="selectAllSignature" />
+                    <label for="selectAllSignature">✍️ Signature Fields</label>
+                </div>
+                <div class="field-checkbox-group">
+                    <label class="field-checkbox-label">
+                        <input type="checkbox" class="field-checkbox" data-category="signature" value="PropertyStaffName" />
+                        Property Staff Name
+                    </label>
+                    <label class="field-checkbox-label">
+                        <input type="checkbox" class="field-checkbox" data-category="signature" value="PropertyStaffSignature" />
+                        Property Staff Signature
+                    </label>
+                    <label class="field-checkbox-label">
+                        <input type="checkbox" class="field-checkbox" data-category="signature" value="PropertyStaffDate" />
+                        Property Staff Date
+                    </label>
+                    <label class="field-checkbox-label">
+                        <input type="checkbox" class="field-checkbox" data-category="signature" value="ResidentName" />
+                        Resident Name
+                    </label>
+                    <label class="field-checkbox-label">
+                        <input type="checkbox" class="field-checkbox" data-category="signature" value="ResidentSignature" />
+                        Resident Signature
+                    </label>
+                    <label class="field-checkbox-label">
+                        <input type="checkbox" class="field-checkbox" data-category="signature" value="ResidentPhone" />
+                        Resident Phone
+                    </label>
+                </div>
+            </div>
         </div>
 
+        <!-- Hidden field for MergeSpec JSON -->
+        <input type="hidden" asp-for="MergeSpecJson" id="mergeSpecJson" />
+
+        <!-- PDF Upload -->
         <div class="mb-3">
-            <label class="form-label">Base PDF (optional for pdf-stamp)</label>
-            <input type="file" name="pdfFile" class="form-control" accept=".pdf" />
-            <small class="text-muted">Uploaded to Content/Templates.</small>
+            <h6>Upload Base PDF @(string.IsNullOrWhiteSpace(Model.PdfFilePath) ? "(Required)" : "(Optional - currently using: " + Model.PdfFilePath + ")")</h6>
+            <input type="file" name="pdfFile" id="pdfFile" class="form-control" accept=".pdf" />
+            <small class="text-muted">Upload a PDF template for pdf-stamp rendering. Leave empty to keep current PDF.</small>
+            @if (!string.IsNullOrWhiteSpace(Model.PdfFilePath))
+            {
+                <input type="hidden" id="existingPdfPath" value="@Model.PdfFilePath" />
+                <div class="mt-2">
+                    <small class="text-success">
+                        <i class="bi bi-check-circle"></i> Current PDF: @Model.PdfFilePath
+                    </small>
+                </div>
+            }
         </div>
 
-        <div class="d-flex gap-2">
-            <button class="btn btn-success" type="submit">Save</button>
+        <!-- PDF Preview -->
+        <div class="pdf-preview-container" id="pdfPreviewContainer" style="display: none;">
+            <div class="pdf-preview-header">
+                <h6>PDF Preview</h6>
+                <div>
+                    <button type="button" class="btn btn-sm btn-info" id="enableFieldPlacement" style="display: none;">
+                        <i class="bi bi-cursor"></i> Place Fields on PDF
+                    </button>
+                    <button type="button" class="btn btn-sm btn-secondary" id="togglePreview">
+                        <i class="bi bi-arrows-angle-contract"></i> Collapse
+                    </button>
+                </div>
+            </div>
+            <div id="pdfPreviewContent">
+                <div class="text-center mb-2">
+                    <strong id="pdfFileName"></strong>
+                    <span class="text-muted">(<span id="pdfFileSize"></span>)</span>
+                </div>
+
+                <!-- PDF Canvas with Field Overlay -->
+                <div class="pdf-canvas-wrapper" style="position: relative; display: inline-block;">
+                    <canvas id="pdfCanvas"></canvas>
+                    <svg id="fieldOverlay" style="position: absolute; top: 0; left: 0; pointer-events: none; display: none;"></svg>
+                </div>
+
+                <div class="pdf-preview-controls">
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="prevPage">
+                        <i class="bi bi-chevron-left"></i> Previous
+                    </button>
+                    <span>Page <span id="currentPage">1</span> of <span id="totalPages">1</span></span>
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="nextPage">
+                        Next <i class="bi bi-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Visual Field Configurator -->
+        <div id="fieldConfiguratorPanel" style="display: none;">
+            <div class="card mt-3 p-3 bg-light">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="mb-0">
+                        <i class="bi bi-pin-map"></i> Visual Field Configurator
+                    </h6>
+                    <div>
+                        <button type="button" class="btn btn-sm btn-outline-danger" id="clearAllFields">
+                            <i class="bi bi-trash"></i> Clear All
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="disableFieldPlacement">
+                            <i class="bi bi-x"></i> Done
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Field Placement Instructions -->
+                <div class="alert alert-info mb-3">
+                    <strong>How to use:</strong>
+                    <ol class="mb-0 mt-2">
+                        <li>Select a field from the palette below</li>
+                        <li>Click on the PDF where you want to place it</li>
+                        <li>Drag placed fields to reposition them</li>
+                        <li>Click "Done" when finished</li>
+                    </ol>
+                </div>
+
+                <!-- Field Palette -->
+                <div class="row">
+                    <div class="col-md-8">
+                        <label class="form-label fw-bold">Field Palette (Click to select, then click PDF to place)</label>
+                        <div id="fieldPalette" class="field-palette">
+                            <!-- Dynamically populated based on selected checkboxes -->
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Placed Fields</label>
+                        <div id="placedFieldsList" class="placed-fields-list">
+                            <p class="text-muted small">No fields placed yet</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Field Properties Panel (appears when field is selected) -->
+                <div id="fieldPropertiesPanel" class="mt-3" style="display: none;">
+                    <hr />
+                    <h6>Field Properties</h6>
+                    <div class="row">
+                        <div class="col-md-3">
+                            <label class="form-label small">Field Name</label>
+                            <input type="text" id="fieldPropName" class="form-control form-control-sm" readonly />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small">X Position</label>
+                            <input type="number" id="fieldPropX" class="form-control form-control-sm" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small">Y Position</label>
+                            <input type="number" id="fieldPropY" class="form-control form-control-sm" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small">Width</label>
+                            <input type="number" id="fieldPropWidth" class="form-control form-control-sm" value="150" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small">Height</label>
+                            <input type="number" id="fieldPropHeight" class="form-control form-control-sm" value="20" />
+                        </div>
+                        <div class="col-md-1 d-flex align-items-end">
+                            <button type="button" class="btn btn-sm btn-danger w-100" id="deleteFieldBtn">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex gap-2 mt-4">
+            <button class="btn btn-success" type="submit">Save Changes</button>
             <a class="btn btn-secondary" asp-action="Index">Cancel</a>
         </div>
     </form>
 </div>
+
+@section Scripts {
+    <!-- PDF.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        // Set PDF.js worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
+
+    <!-- Template Field Selector -->
+    <script src="~/assets/js/template-field-selector.js"></script>
+
+    <!-- PDF Field Configurator -->
+    <script src="~/assets/js/pdf-field-configurator.js"></script>
+
+    <script>
+        // Initialize modules for edit mode
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize field selector
+            TemplateFieldSelector.init();
+
+            // Load existing MergeSpec and pre-select fields
+            const existingMergeSpec = document.getElementById('mergeSpecJson').value;
+            if (existingMergeSpec) {
+                try {
+                    const mergeSpec = JSON.parse(existingMergeSpec);
+
+                    // Pre-select checkboxes based on existing fields
+                    if (mergeSpec.fields && Array.isArray(mergeSpec.fields)) {
+                        mergeSpec.fields.forEach(fieldName => {
+                            const checkbox = document.querySelector(`.field-checkbox[value="${fieldName}"]`);
+                            if (checkbox) {
+                                checkbox.checked = true;
+                            }
+                        });
+                    }
+
+                    // Trigger field selection update to regenerate MergeSpec
+                    if (typeof TemplateFieldSelector !== 'undefined' && TemplateFieldSelector.updateMergeSpec) {
+                        TemplateFieldSelector.updateMergeSpec();
+                    }
+                } catch (e) {
+                    console.error('Error parsing existing MergeSpec:', e);
+                }
+            }
+
+            // Initialize PDF configurator
+            PDFFieldConfigurator.init();
+
+            // Load existing PDF if available
+            const existingPdfPath = document.getElementById('existingPdfPath');
+            if (existingPdfPath && existingPdfPath.value) {
+                loadExistingPDF(existingPdfPath.value);
+            }
+
+            // Handle PDF file selection
+            const pdfFileInput = document.getElementById('pdfFile');
+            pdfFileInput.addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (file && file.type === 'application/pdf') {
+                    // Show PDF preview
+                    const container = document.getElementById('pdfPreviewContainer');
+                    container.style.display = 'block';
+
+                    // Update file info
+                    document.getElementById('pdfFileName').textContent = file.name;
+                    const sizeKB = (file.size / 1024).toFixed(2);
+                    document.getElementById('pdfFileSize').textContent = sizeKB + ' KB';
+
+                    // Load PDF with PDF.js
+                    const fileReader = new FileReader();
+                    fileReader.onload = function(e) {
+                        const typedarray = new Uint8Array(e.target.result);
+
+                        pdfjsLib.getDocument(typedarray).promise.then(function(pdf) {
+                            window.pdfDoc = pdf;
+                            window.currentPage = 1;
+                            document.getElementById('totalPages').textContent = pdf.numPages;
+
+                            // Render first page
+                            renderPage(1);
+
+                            // Show field placement button if fields are selected
+                            const selectedFields = document.querySelectorAll('.field-checkbox:checked');
+                            if (selectedFields.length > 0) {
+                                document.getElementById('enableFieldPlacement').style.display = 'inline-block';
+                            }
+                        });
+                    };
+                    fileReader.readAsArrayBuffer(file);
+                }
+            });
+
+            // PDF page navigation
+            document.getElementById('prevPage').addEventListener('click', function() {
+                if (window.currentPage > 1) {
+                    window.currentPage--;
+                    renderPage(window.currentPage);
+                }
+            });
+
+            document.getElementById('nextPage').addEventListener('click', function() {
+                if (window.currentPage < window.pdfDoc.numPages) {
+                    window.currentPage++;
+                    renderPage(window.currentPage);
+                }
+            });
+
+            // Toggle preview
+            document.getElementById('togglePreview').addEventListener('click', function() {
+                const content = document.getElementById('pdfPreviewContent');
+                if (content.style.display === 'none') {
+                    content.style.display = 'block';
+                    this.innerHTML = '<i class="bi bi-arrows-angle-contract"></i> Collapse';
+                } else {
+                    content.style.display = 'none';
+                    this.innerHTML = '<i class="bi bi-arrows-angle-expand"></i> Expand';
+                }
+            });
+
+            // Render PDF page
+            function renderPage(pageNum) {
+                window.pdfDoc.getPage(pageNum).then(function(page) {
+                    const canvas = document.getElementById('pdfCanvas');
+                    const context = canvas.getContext('2d');
+
+                    // Set scale to fit container width
+                    const containerWidth = canvas.parentElement.clientWidth - 50;
+                    const viewport = page.getViewport({ scale: 1.0 });
+                    const scale = containerWidth / viewport.width;
+                    const scaledViewport = page.getViewport({ scale: scale });
+
+                    canvas.height = scaledViewport.height;
+                    canvas.width = scaledViewport.width;
+
+                    // Store scale for field configurator
+                    window.pdfScale = scale;
+
+                    const renderContext = {
+                        canvasContext: context,
+                        viewport: scaledViewport
+                    };
+
+                    page.render(renderContext).promise.then(function() {
+                        document.getElementById('currentPage').textContent = pageNum;
+
+                        // Update SVG overlay size
+                        const overlay = document.getElementById('fieldOverlay');
+                        overlay.setAttribute('width', canvas.width);
+                        overlay.setAttribute('height', canvas.height);
+
+                        // Reload existing field placements from MergeSpec if in configurator mode
+                        if (PDFFieldConfigurator && PDFFieldConfigurator.isActive) {
+                            PDFFieldConfigurator.loadExistingPlacements();
+                        }
+                    });
+                });
+            }
+
+            // Function to load existing PDF
+            function loadExistingPDF(pdfFileName) {
+                console.log('Loading existing PDF:', pdfFileName);
+
+                // Show PDF preview container
+                const container = document.getElementById('pdfPreviewContainer');
+                container.style.display = 'block';
+
+                // Update file info
+                document.getElementById('pdfFileName').textContent = pdfFileName;
+                document.getElementById('pdfFileSize').textContent = 'Existing file';
+
+                // Fetch and load the PDF via controller action (not direct file access)
+                const templateKey = '@Model.TemplateKey';
+                const pdfUrl = `/SignTemplates/GetTemplatePdf/${encodeURIComponent(templateKey)}`;
+
+                fetch(pdfUrl)
+                    .then(response => response.arrayBuffer())
+                    .then(arrayBuffer => {
+                        const typedarray = new Uint8Array(arrayBuffer);
+
+                        pdfjsLib.getDocument(typedarray).promise.then(function(pdf) {
+                            window.pdfDoc = pdf;
+                            window.currentPage = 1;
+                            document.getElementById('totalPages').textContent = pdf.numPages;
+
+                            // Render first page
+                            renderPage(1);
+
+                            // Show field placement button if fields are selected
+                            const selectedFields = document.querySelectorAll('.field-checkbox:checked');
+                            if (selectedFields.length > 0) {
+                                document.getElementById('enableFieldPlacement').style.display = 'inline-block';
+                            }
+                        }).catch(error => {
+                            console.error('Error loading PDF:', error);
+                            alert('Error loading PDF. Please upload a new one.');
+                        });
+                    })
+                    .catch(error => {
+                        console.error('Error fetching PDF:', error);
+                        alert('Could not fetch PDF file. Please upload a new one.');
+                    });
+            }
+        });
+    </script>
+}

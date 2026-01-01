@@ -23,5 +23,8 @@ namespace SalesMetrics.Services.Signing
         Task CaptureSignatureAsync(long envelopeId, long recipientId, string typedFullName, string sigDataBase64);
         Task ProgressToNextAsync(long envelopeId);
 
+        // Template access
+        Task<SignTemplate?> GetTemplateByKeyAsync(string templateKey);
+
     }
 }

@@ -39,36 +39,19 @@
 
     <!-- Document Preview Section -->
     <div class="pdf-preview mb-4">
-        <div class="pdf-preview-header">
-            <h5>
+        <div class="pdf-preview-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
                 <i class="bi bi-file-earmark-text"></i> Document Preview
             </h5>
+            <a href="/sign/@token/pdf" target="_blank" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-file-pdf"></i> View Full PDF Document
+            </a>
         </div>
-        <div class="pdf-preview-body">
-            <!-- Option 1: Display the HTML body content -->
+        <div class="pdf-preview-body mt-3">
+            <!-- Display the HTML body content -->
             <div class="document-content">
                 @Html.Raw(Model.HtmlBody)
             </div>
-
-            <!-- Option 2: If you want to show the actual PDF template as an image
-                 Uncomment this section and add a controller action to return the PDF as an image
-            <div class="text-center">
-                <img src="/sign/preview/@ViewBag.Token" alt="Document Preview" class="img-fluid" />
-            </div>
-            -->
-
-            <!-- Option 3: Embed the PDF template (requires PDF file URL)
-                 Uncomment if you have a URL to the base PDF template
-            <iframe src="@Url.Content("~/Content/Templates/SF_OccupiedReleaseForm_1.4.pdf")"
-                    class="pdf-embed"
-                    type="application/pdf">
-                <p>Your browser doesn't support PDF embedding.
-                   <a href="@Url.Content("~/Content/Templates/SF_OccupiedReleaseForm_1.4.pdf")" target="_blank">
-                       Click here to view the PDF
-                   </a>
-                </p>
-            </iframe>
-            -->
         </div>
     </div>
 
@@ -78,15 +61,23 @@
     @if (Model.Recipient.Role == "Manager" && !Model.HasTenantRecipient)
     {
         <div class="card mb-3">
-            <div class="card-header">Add Tenant (to receive the consent)</div>
-            <div class="card-body row g-2">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Add Tenant (to receive the consent)</span>
+                <div class="form-check mb-0">
+                    <input class="form-check-input" type="checkbox" id="SkipTenant" name="SkipTenant" value="true">
+                    <label class="form-check-label" for="SkipTenant">
+                        Skip tenant signature (manager only)
+                    </label>
+                </div>
+            </div>
+            <div class="card-body row g-2" id="tenantFields">
                 <div class="col-md-6">
                     <label class="form-label">Tenant Full Name</label>
-                    <input name="TenantFullName" class="form-control" />
+                    <input name="TenantFullName" id="TenantFullName" class="form-control" />
                 </div>
                 <div class="col-md-6">
                     <label class="form-label">Tenant Email</label>
-                    <input name="TenantEmail" type="email" class="form-control" />
+                    <input name="TenantEmail" id="TenantEmail" type="email" class="form-control" />
                 </div>
             </div>
         </div>
@@ -121,6 +112,30 @@
 
 @section Scripts {
     <script>
+        // Handle skip tenant checkbox
+        const skipTenantCheckbox = document.getElementById('SkipTenant');
+        if (skipTenantCheckbox) {
+            skipTenantCheckbox.addEventListener('change', function() {
+                const tenantFields = document.getElementById('tenantFields');
+                const tenantNameInput = document.getElementById('TenantFullName');
+                const tenantEmailInput = document.getElementById('TenantEmail');
+
+                if (this.checked) {
+                    // Disable and clear tenant fields
+                    tenantFields.style.opacity = '0.5';
+                    tenantNameInput.disabled = true;
+                    tenantEmailInput.disabled = true;
+                    tenantNameInput.value = '';
+                    tenantEmailInput.value = '';
+                } else {
+                    // Enable tenant fields
+                    tenantFields.style.opacity = '1';
+                    tenantNameInput.disabled = false;
+                    tenantEmailInput.disabled = false;
+                }
+            });
+        }
+
         // Basic canvas setup
         const canvas = document.getElementById('sigPad');
         const ctx = canvas.getContext('2d');
@@ -201,16 +216,20 @@
           console.log('Has drawn ink:', hasInk);
 
           // Check if manager needs to add tenant
+          const skipTenantCheckbox = document.getElementById('SkipTenant');
           const isTenantSection = document.getElementById('TenantFullName');
           if (isTenantSection) {
+            const skipTenant = skipTenantCheckbox && skipTenantCheckbox.checked;
             const tenantName = document.getElementById('TenantFullName').value.trim();
             const tenantEmail = document.getElementById('TenantEmail').value.trim();
+            console.log('Skip tenant:', skipTenant);
             console.log('Tenant name:', tenantName);
             console.log('Tenant email:', tenantEmail);
 
-            if (!tenantName || !tenantEmail) {
+            // Only require tenant info if NOT skipping
+            if (!skipTenant && (!tenantName || !tenantEmail)) {
               e.preventDefault();
-              alert('Please enter the tenant name and email.');
+              alert('Please enter the tenant name and email, or check "Skip tenant signature".');
               return false;
             }
           }

@@ -22,6 +22,8 @@ public sealed class PdfService : IPdfService
 
     public async Task<(byte[] bytes, string storagePath, byte[] sha256)> RenderAndSealAsync(long envelopeId)
     {
+        Console.WriteLine($"[PDF DEBUG] ===== STARTING PDF GENERATION FOR ENVELOPE {envelopeId} =====");
+
         // 1) Load envelope + template + recipients
         var env = await _db.SignEnvelopes
             .Include(e => e.Recipients)
@@ -33,11 +35,22 @@ public sealed class PdfService : IPdfService
             .AsNoTracking()
             .FirstAsync(t => t.TemplateKey == env.TemplateKey);
 
+        Console.WriteLine($"[PDF DEBUG] Template: {template.TemplateKey} ({template.DisplayName})");
+        Console.WriteLine($"[PDF DEBUG] PDF File: {template.PdfFilePath ?? "NONE - will use default"}");
+        Console.WriteLine($"[PDF DEBUG] Has MergeSpec: {!string.IsNullOrWhiteSpace(template.MergeSpecJson)}");
+
         var tenant = env.Recipients.FirstOrDefault(r => r.Role == "Tenant") ?? env.Recipients.First();
         var manager = env.Recipients.FirstOrDefault(r => r.Role == "Manager");
 
         // 2) Gather data from ERP
         var fieldData = await GatherFieldDataAsync(env, tenant, manager);
+
+        Console.WriteLine($"[PDF DEBUG] ========== ENVELOPE {envelopeId} ==========");
+        Console.WriteLine($"[PDF DEBUG] Field data gathered: {fieldData.Count} fields");
+        foreach (var kvp in fieldData)
+        {
+            Console.WriteLine($"[PDF DEBUG] Field '{kvp.Key}' = '{kvp.Value}'");
+        }
 
         // 3) Determine which PDF to use
         string templatePath;
@@ -76,14 +89,24 @@ public sealed class PdfService : IPdfService
         {
             try
             {
+                Console.WriteLine($"[PDF DEBUG] Parsing MergeSpec for envelope {envelopeId}");
+                Console.WriteLine($"[PDF DEBUG] MergeSpec JSON: {template.MergeSpecJson}");
+
                 var mergeSpec = JsonSerializer.Deserialize<MergeSpec>(template.MergeSpecJson);
                 if (mergeSpec?.fieldMapping != null)
                 {
+                    Console.WriteLine($"[PDF DEBUG] Found {mergeSpec.fieldMapping.Count} fields in MergeSpec");
+
                     foreach (var (fieldKey, fieldInfo) in mergeSpec.fieldMapping)
                     {
                         // Get the value for this field
                         if (!fieldData.TryGetValue(fieldKey, out var value))
+                        {
+                            Console.WriteLine($"[PDF DEBUG] Field '{fieldKey}' not found in field data - skipping");
                             continue;
+                        }
+
+                        Console.WriteLine($"[PDF DEBUG] Processing field '{fieldKey}' with value: {value}");
 
                         // Support multiple placements of the same field
                         var placements = fieldInfo.placements ?? new List<Coordinates>();
@@ -94,25 +117,36 @@ public sealed class PdfService : IPdfService
                             placements = new List<Coordinates> { fieldInfo.coordinates };
                         }
 
+                        Console.WriteLine($"[PDF DEBUG] Field '{fieldKey}' has {placements.Count} placement(s)");
+
                         // Place field at all specified locations
                         foreach (var coord in placements)
                         {
+                            Console.WriteLine($"[PDF DEBUG] Placing '{fieldKey}' at page={coord.page}, x={coord.x}, y={coord.y}, w={coord.width}, h={coord.height}");
+
                             // Handle signatures differently
                             if (fieldInfo.type == "signature" && value is string sigPath && !string.IsNullOrWhiteSpace(sigPath))
                             {
-                                DrawSignature(gfx, sigPath, coord.x, coord.y, coord.width, coord.height);
+                                Console.WriteLine($"[PDF DEBUG] Drawing signature for '{fieldKey}' from path: {sigPath}");
+                                DrawSignature(gfx, page, sigPath, coord.x, coord.y, coord.width, coord.height);
                             }
                             else if (value is string textValue)
                             {
-                                DrawText(gfx, font, brush, textValue, coord.x, coord.y);
+                                Console.WriteLine($"[PDF DEBUG] Drawing text for '{fieldKey}': {textValue}");
+                                DrawTextWithCoordinateConversion(gfx, page, font, brush, textValue, coord.x, coord.y);
                             }
                         }
                     }
                 }
+                else
+                {
+                    Console.WriteLine($"[PDF DEBUG] No field mappings found in MergeSpec");
+                }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error parsing MergeSpec: {ex.Message}");
+                Console.WriteLine($"[PDF ERROR] Error parsing MergeSpec: {ex.Message}");
+                Console.WriteLine($"[PDF ERROR] Stack trace: {ex.StackTrace}");
                 // Fall back to default behavior
                 StampFieldsLegacy(gfx, font, brush, fieldData);
             }
@@ -138,9 +172,15 @@ public sealed class PdfService : IPdfService
         var filePath = Path.Combine(dir, $"envelope-{envelopeId}.pdf");
         await File.WriteAllBytesAsync(filePath, bytes);
 
+        Console.WriteLine($"[PDF DEBUG] PDF saved to: {filePath}");
+        Console.WriteLine($"[PDF DEBUG] PDF size: {bytes.Length} bytes");
+
         // 9) Hash for tamper evidence
         var sha = HashHelper.Sha256(bytes);
         var webPath = filePath.Replace("wwwroot", "").Replace("\\", "/");
+
+        Console.WriteLine($"[PDF DEBUG] ===== PDF GENERATION COMPLETE FOR ENVELOPE {envelopeId} =====");
+
         return (bytes, webPath, sha);
     }
 
@@ -195,7 +235,7 @@ public sealed class PdfService : IPdfService
     /// <summary>
     /// Draw signature image on PDF
     /// </summary>
-    private void DrawSignature(XGraphics gfx, string imagePath, double x, double y, double width, double height)
+    private void DrawSignature(XGraphics gfx, PdfPage page, string imagePath, double x, double y, double width, double height)
     {
         if (!File.Exists(imagePath)) return;
 
@@ -206,7 +246,6 @@ public sealed class PdfService : IPdfService
 
             // Convert from top-left origin to bottom-left origin (PDF coordinate system)
             // The y coordinate from the wizard is from top, PDF needs from bottom
-            var page = gfx.PdfPage;
             var pdfY = page.Height - y - height;
 
             gfx.DrawImage(img, x, pdfY, width, height);
@@ -215,6 +254,20 @@ public sealed class PdfService : IPdfService
         {
             Console.WriteLine($"Error drawing signature: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Draw text on PDF with coordinate conversion from screen to PDF coordinates
+    /// </summary>
+    private static void DrawTextWithCoordinateConversion(XGraphics gfx, PdfPage page, XFont font, XBrush brush, string text, double x, double y)
+    {
+        // Convert from top-left origin to bottom-left origin (PDF coordinate system)
+        // The y coordinate from the wizard is from top, PDF needs from bottom
+        // For text, we need to position at the baseline, not the top-left corner
+        // Adding font height to y to get the baseline position
+        var pdfY = page.Height - y;
+
+        gfx.DrawString(text, font, brush, new XPoint(x, pdfY), XStringFormats.Default);
     }
 
     /// <summary>

@@ -196,17 +196,50 @@ public class SignTemplatesController : Controller
     // GET: /SignTemplates/GetTemplatePdf/{templateKey}
     public async Task<IActionResult> GetTemplatePdf(string templateKey)
     {
+        Console.WriteLine($"[GetTemplatePdf] Called with templateKey: {templateKey}");
+        Console.WriteLine($"[GetTemplatePdf] ContentRootPath: {_env.ContentRootPath}");
+
         var template = await _db.SignTemplates.AsNoTracking().FirstOrDefaultAsync(t => t.TemplateKey == templateKey);
 
-        if (template == null || string.IsNullOrWhiteSpace(template.PdfFilePath))
-            return NotFound();
+        if (template == null)
+        {
+            Console.WriteLine($"[GetTemplatePdf] Template not found for key: {templateKey}");
+            return NotFound("Template not found");
+        }
+
+        Console.WriteLine($"[GetTemplatePdf] Template found: {template.DisplayName}");
+        Console.WriteLine($"[GetTemplatePdf] PdfFilePath from DB: {template.PdfFilePath}");
+
+        if (string.IsNullOrWhiteSpace(template.PdfFilePath))
+        {
+            Console.WriteLine($"[GetTemplatePdf] PdfFilePath is empty");
+            return NotFound("PDF file path is empty");
+        }
 
         var filePath = Path.Combine(_env.ContentRootPath, "Content", "Templates", template.PdfFilePath);
+        Console.WriteLine($"[GetTemplatePdf] Full file path: {filePath}");
+        Console.WriteLine($"[GetTemplatePdf] File exists: {System.IO.File.Exists(filePath)}");
 
         if (!System.IO.File.Exists(filePath))
-            return NotFound();
+        {
+            Console.WriteLine($"[GetTemplatePdf] File not found at path: {filePath}");
+            // Try to list files in the directory to help diagnose
+            var directory = Path.Combine(_env.ContentRootPath, "Content", "Templates");
+            if (Directory.Exists(directory))
+            {
+                var files = Directory.GetFiles(directory);
+                Console.WriteLine($"[GetTemplatePdf] Files in Templates directory: {string.Join(", ", files.Select(Path.GetFileName))}");
+            }
+            else
+            {
+                Console.WriteLine($"[GetTemplatePdf] Templates directory doesn't exist: {directory}");
+            }
+            return NotFound("PDF file not found on disk");
+        }
 
         var fileBytes = await System.IO.File.ReadAllBytesAsync(filePath);
+        Console.WriteLine($"[GetTemplatePdf] File read successfully. Size: {fileBytes.Length} bytes");
+
         Response.Headers.Add("Content-Disposition", "inline");
         return File(fileBytes, "application/pdf");
     }

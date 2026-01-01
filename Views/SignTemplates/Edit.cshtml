@@ -318,6 +318,15 @@
             <h6>Upload Base PDF @(string.IsNullOrWhiteSpace(Model.PdfFilePath) ? "(Required)" : "(Optional - currently using: " + Model.PdfFilePath + ")")</h6>
             <input type="file" name="pdfFile" id="pdfFile" class="form-control" accept=".pdf" />
             <small class="text-muted">Upload a PDF template for pdf-stamp rendering. Leave empty to keep current PDF.</small>
+            @if (!string.IsNullOrWhiteSpace(Model.PdfFilePath))
+            {
+                <input type="hidden" id="existingPdfPath" value="@Model.PdfFilePath" />
+                <div class="mt-2">
+                    <small class="text-success">
+                        <i class="bi bi-check-circle"></i> Current PDF: @Model.PdfFilePath
+                    </small>
+                </div>
+            }
         </div>
 
         <!-- PDF Preview -->
@@ -491,6 +500,12 @@
             // Initialize PDF configurator
             PDFFieldConfigurator.init();
 
+            // Load existing PDF if available
+            const existingPdfPath = document.getElementById('existingPdfPath');
+            if (existingPdfPath && existingPdfPath.value) {
+                loadExistingPDF(existingPdfPath.value);
+            }
+
             // Handle PDF file selection
             const pdfFileInput = document.getElementById('pdfFile');
             pdfFileInput.addEventListener('change', function(e) {
@@ -593,6 +608,50 @@
                         }
                     });
                 });
+            }
+
+            // Function to load existing PDF
+            function loadExistingPDF(pdfFileName) {
+                console.log('Loading existing PDF:', pdfFileName);
+
+                // Show PDF preview container
+                const container = document.getElementById('pdfPreviewContainer');
+                container.style.display = 'block';
+
+                // Update file info
+                document.getElementById('pdfFileName').textContent = pdfFileName;
+                document.getElementById('pdfFileSize').textContent = 'Existing file';
+
+                // Fetch and load the PDF
+                const pdfUrl = `/Content/Templates/${pdfFileName}`;
+
+                fetch(pdfUrl)
+                    .then(response => response.arrayBuffer())
+                    .then(arrayBuffer => {
+                        const typedarray = new Uint8Array(arrayBuffer);
+
+                        pdfjsLib.getDocument(typedarray).promise.then(function(pdf) {
+                            window.pdfDoc = pdf;
+                            window.currentPage = 1;
+                            document.getElementById('totalPages').textContent = pdf.numPages;
+
+                            // Render first page
+                            renderPage(1);
+
+                            // Show field placement button if fields are selected
+                            const selectedFields = document.querySelectorAll('.field-checkbox:checked');
+                            if (selectedFields.length > 0) {
+                                document.getElementById('enableFieldPlacement').style.display = 'inline-block';
+                            }
+                        }).catch(error => {
+                            console.error('Error loading PDF:', error);
+                            alert('Error loading PDF. Please upload a new one.');
+                        });
+                    })
+                    .catch(error => {
+                        console.error('Error fetching PDF:', error);
+                        alert('Could not fetch PDF file. Please upload a new one.');
+                    });
             }
         });
     </script>

@@ -22,6 +22,8 @@ public sealed class PdfService : IPdfService
 
     public async Task<(byte[] bytes, string storagePath, byte[] sha256)> RenderAndSealAsync(long envelopeId)
     {
+        Console.WriteLine($"[PDF DEBUG] ===== STARTING PDF GENERATION FOR ENVELOPE {envelopeId} =====");
+
         // 1) Load envelope + template + recipients
         var env = await _db.SignEnvelopes
             .Include(e => e.Recipients)
@@ -33,11 +35,22 @@ public sealed class PdfService : IPdfService
             .AsNoTracking()
             .FirstAsync(t => t.TemplateKey == env.TemplateKey);
 
+        Console.WriteLine($"[PDF DEBUG] Template: {template.TemplateKey} ({template.DisplayName})");
+        Console.WriteLine($"[PDF DEBUG] PDF File: {template.PdfFilePath ?? "NONE - will use default"}");
+        Console.WriteLine($"[PDF DEBUG] Has MergeSpec: {!string.IsNullOrWhiteSpace(template.MergeSpecJson)}");
+
         var tenant = env.Recipients.FirstOrDefault(r => r.Role == "Tenant") ?? env.Recipients.First();
         var manager = env.Recipients.FirstOrDefault(r => r.Role == "Manager");
 
         // 2) Gather data from ERP
         var fieldData = await GatherFieldDataAsync(env, tenant, manager);
+
+        Console.WriteLine($"[PDF DEBUG] ========== ENVELOPE {envelopeId} ==========");
+        Console.WriteLine($"[PDF DEBUG] Field data gathered: {fieldData.Count} fields");
+        foreach (var kvp in fieldData)
+        {
+            Console.WriteLine($"[PDF DEBUG] Field '{kvp.Key}' = '{kvp.Value}'");
+        }
 
         // 3) Determine which PDF to use
         string templatePath;
@@ -159,9 +172,15 @@ public sealed class PdfService : IPdfService
         var filePath = Path.Combine(dir, $"envelope-{envelopeId}.pdf");
         await File.WriteAllBytesAsync(filePath, bytes);
 
+        Console.WriteLine($"[PDF DEBUG] PDF saved to: {filePath}");
+        Console.WriteLine($"[PDF DEBUG] PDF size: {bytes.Length} bytes");
+
         // 9) Hash for tamper evidence
         var sha = HashHelper.Sha256(bytes);
         var webPath = filePath.Replace("wwwroot", "").Replace("\\", "/");
+
+        Console.WriteLine($"[PDF DEBUG] ===== PDF GENERATION COMPLETE FOR ENVELOPE {envelopeId} =====");
+
         return (bytes, webPath, sha);
     }
 

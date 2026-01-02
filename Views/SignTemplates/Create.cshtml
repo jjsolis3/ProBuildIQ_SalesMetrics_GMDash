@@ -798,6 +798,18 @@
             TemplateFieldSelector.init();
             TemplateWizard.init();
             PDFFieldConfigurator.init();
+
+            // Auto-save field coordinates when form is submitted
+            // This ensures coordinates are saved even if user forgets to click "Done"
+            const templateForm = document.getElementById('templateForm');
+            if (templateForm) {
+                templateForm.addEventListener('submit', function(e) {
+                    if (typeof PDFFieldConfigurator !== 'undefined' && PDFFieldConfigurator.saveCoordinatesToMergeSpec) {
+                        console.log('[Create Form Submit] Auto-saving field coordinates before submission');
+                        PDFFieldConfigurator.saveCoordinatesToMergeSpec();
+                    }
+                });
+            }
         });
     </script>
 }

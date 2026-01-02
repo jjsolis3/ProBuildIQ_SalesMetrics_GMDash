@@ -100,6 +100,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Folder Include="Content\Templates\" />
     <Folder Include="wwwroot\assets\images\icons\" />
     <Folder Include="wwwroot\assets\libs\block-ui\node_modules\jquery\dist\" />
     <Folder Include="wwwroot\assets\libs\block-ui\node_modules\jquery\src\" />

@@ -282,11 +282,11 @@ public sealed class PdfService : IPdfService
             using var fs = File.OpenRead(imagePath);
             using var img = XImage.FromStream(() => fs);
 
-            // Convert from top-left origin to bottom-left origin (PDF coordinate system)
-            // The y coordinate from the wizard is from top, PDF needs from bottom
-            var pdfY = page.Height - y - height;
+            // COORDINATE FIX: Use coordinates as-is (already in correct PDF coordinate system)
+            // The JavaScript saves coordinates directly in PDF points with proper origin
+            Console.WriteLine($"[COORDINATE DEBUG] Drawing signature at x={x}, y={y}, page.Height={page.Height}");
 
-            gfx.DrawImage(img, x, pdfY, width, height);
+            gfx.DrawImage(img, x, y, width, height);
         }
         catch (Exception ex)
         {
@@ -295,17 +295,15 @@ public sealed class PdfService : IPdfService
     }
 
     /// <summary>
-    /// Draw text on PDF with coordinate conversion from screen to PDF coordinates
+    /// Draw text on PDF - coordinates are already in PDF coordinate system
     /// </summary>
     private static void DrawTextWithCoordinateConversion(XGraphics gfx, PdfPage page, XFont font, XBrush brush, string text, double x, double y)
     {
-        // Convert from top-left origin to bottom-left origin (PDF coordinate system)
-        // The y coordinate from the wizard is from top, PDF needs from bottom
-        // For text, we need to position at the baseline, not the top-left corner
-        // Adding font height to y to get the baseline position
-        var pdfY = page.Height - y;
+        // COORDINATE FIX: Use coordinates as-is (already in correct PDF coordinate system)
+        // The JavaScript saves coordinates directly in PDF points with proper origin
+        Console.WriteLine($"[COORDINATE DEBUG] Drawing text '{text}' at x={x}, y={y}, page.Height={page.Height}");
 
-        gfx.DrawString(text, font, brush, new XPoint(x, pdfY), XStringFormats.Default);
+        gfx.DrawString(text, font, brush, new XPoint(x, y), XStringFormats.Default);
     }
 
     /// <summary>

@@ -137,8 +137,16 @@ public sealed class EnvelopeService : IEnvelopeService
                     fieldValue = value?.ToString();
                 }
 
-                // Determine field type
-                var fieldType = fieldInfo.type ?? "text";
+                // Determine field type and map to valid database values
+                // Database constraint allows: text, checkbox, initials, date
+                var fieldType = fieldInfo.type switch
+                {
+                    "signature" => "text", // Signatures are stored as file paths (text)
+                    "checkbox" => "checkbox",
+                    "initials" => "initials",
+                    "date" => "date",
+                    _ => "text" // Default to text
+                };
 
                 var field = new SignField
                 {

@@ -577,10 +577,14 @@
                     const canvas = document.getElementById('pdfCanvas');
                     const context = canvas.getContext('2d');
 
-                    // Set scale to fit container width
-                    const containerWidth = canvas.parentElement.clientWidth - 50;
+                    // Set scale to fit container width with better sizing
+                    const container = canvas.parentElement;
+                    const containerWidth = Math.max(container.clientWidth || 800, 600); // Ensure minimum width
+                    const maxWidth = 1200; // Maximum width for better readability
+                    const targetWidth = Math.min(containerWidth - 50, maxWidth);
+
                     const viewport = page.getViewport({ scale: 1.0 });
-                    const scale = containerWidth / viewport.width;
+                    const scale = targetWidth / viewport.width;
                     const scaledViewport = page.getViewport({ scale: scale });
 
                     canvas.height = scaledViewport.height;
@@ -588,6 +592,7 @@
 
                     // Store scale for field configurator
                     window.pdfScale = scale;
+                    console.log(`PDF rendered at scale: ${scale.toFixed(2)}, canvas size: ${canvas.width}x${canvas.height}`);
 
                     const renderContext = {
                         canvasContext: context,
@@ -627,7 +632,12 @@
                 const pdfUrl = `/SignTemplates/GetTemplatePdf/${encodeURIComponent(templateKey)}`;
 
                 fetch(pdfUrl)
-                    .then(response => response.arrayBuffer())
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                        return response.arrayBuffer();
+                    })
                     .then(arrayBuffer => {
                         const typedarray = new Uint8Array(arrayBuffer);
 
@@ -645,13 +655,15 @@
                                 document.getElementById('enableFieldPlacement').style.display = 'inline-block';
                             }
                         }).catch(error => {
-                            console.error('Error loading PDF:', error);
-                            alert('Error loading PDF. Please upload a new one.');
+                            console.error('Error loading PDF with PDF.js:', error);
+                            console.log('PDF URL that failed:', pdfUrl);
+                            alert('Error loading PDF. The PDF file may be corrupted. Please upload a new one.');
                         });
                     })
                     .catch(error => {
-                        console.error('Error fetching PDF:', error);
-                        alert('Could not fetch PDF file. Please upload a new one.');
+                        console.error('Error fetching PDF from server:', error);
+                        console.log('Attempted URL:', pdfUrl);
+                        alert('Could not fetch PDF file from server. Please check the console for details or upload a new PDF.');
                     });
             }
         });

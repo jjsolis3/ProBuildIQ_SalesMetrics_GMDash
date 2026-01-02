@@ -403,6 +403,17 @@ var TemplateWizard = (function () {
             canvas.height = scaledViewport.height;
             canvas.width = scaledViewport.width;
 
+            // Store scale for field configurator coordinate conversion
+            window.pdfScale = scale;
+            console.log(`PDF rendered at scale: ${scale.toFixed(2)}, canvas size: ${canvas.width}x${canvas.height}`);
+
+            // Update SVG overlay dimensions to match canvas
+            const overlay = document.getElementById('fieldOverlay');
+            if (overlay) {
+                overlay.setAttribute('width', canvas.width);
+                overlay.setAttribute('height', canvas.height);
+            }
+
             // Render page
             const renderContext = {
                 canvasContext: context,

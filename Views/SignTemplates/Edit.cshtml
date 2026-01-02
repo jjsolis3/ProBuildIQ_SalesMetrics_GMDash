@@ -492,8 +492,32 @@
                     if (typeof TemplateFieldSelector !== 'undefined' && TemplateFieldSelector.updateMergeSpec) {
                         TemplateFieldSelector.updateMergeSpec();
                     }
+
+                    // Show "Place Fields on PDF" button if fields are selected and PDF is loaded
+                    updateFieldPlacementButtonVisibility();
                 } catch (e) {
                     console.error('Error parsing existing MergeSpec:', e);
+                }
+            }
+
+            // Watch for field checkbox changes to show/hide the "Place Fields on PDF" button
+            const fieldCheckboxes = document.querySelectorAll('.field-checkbox');
+            fieldCheckboxes.forEach(checkbox => {
+                checkbox.addEventListener('change', updateFieldPlacementButtonVisibility);
+            });
+
+            // Function to show/hide "Place Fields on PDF" button
+            function updateFieldPlacementButtonVisibility() {
+                const selectedFields = document.querySelectorAll('.field-checkbox:checked');
+                const pdfLoaded = window.pdfDoc !== undefined;
+                const enableBtn = document.getElementById('enableFieldPlacement');
+
+                if (enableBtn && pdfLoaded && selectedFields.length > 0) {
+                    console.log('[Field Button] Showing "Place Fields on PDF" button');
+                    enableBtn.style.display = 'inline-block';
+                } else if (enableBtn) {
+                    console.log('[Field Button] Hiding button - PDF loaded:', pdfLoaded, 'Fields selected:', selectedFields.length);
+                    enableBtn.style.display = 'none';
                 }
             }
 
@@ -546,10 +570,7 @@
                             renderPage(1);
 
                             // Show field placement button if fields are selected
-                            const selectedFields = document.querySelectorAll('.field-checkbox:checked');
-                            if (selectedFields.length > 0) {
-                                document.getElementById('enableFieldPlacement').style.display = 'inline-block';
-                            }
+                            updateFieldPlacementButtonVisibility();
                         });
                     };
                     fileReader.readAsArrayBuffer(file);
@@ -662,10 +683,7 @@
                             renderPage(1);
 
                             // Show field placement button if fields are selected
-                            const selectedFields = document.querySelectorAll('.field-checkbox:checked');
-                            if (selectedFields.length > 0) {
-                                document.getElementById('enableFieldPlacement').style.display = 'inline-block';
-                            }
+                            updateFieldPlacementButtonVisibility();
                         }).catch(error => {
                             console.error('Error loading PDF with PDF.js:', error);
                             console.log('PDF URL that failed:', pdfUrl);

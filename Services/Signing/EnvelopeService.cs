@@ -437,7 +437,7 @@ public sealed class EnvelopeService : IEnvelopeService
         return (true, null);
     }
 
-    public async Task UpsertTenantRecipientAsync(long envelopeId, string fullName, string email)
+    public async Task UpsertTenantRecipientAsync(long envelopeId, string fullName, string email, string? phone = null)
     {
         var env = await _db.SignEnvelopes.Include(e => e.Recipients).FirstAsync(e => e.EnvelopeId == envelopeId);
         var existing = env.Recipients.FirstOrDefault(r => r.Role == "Tenant");
@@ -452,6 +452,7 @@ public sealed class EnvelopeService : IEnvelopeService
                 Role = "Tenant",
                 FullName = fullName,
                 Email = email,
+                Phone = phone,                                       // NEW: Set tenant phone
                 SignerOrder = order,
                 AccessToken = TokenHelper.CreateSecureToken(32),    // REQUIRED: Generate access token
                 AccessTokenExpiresAt = env.ExpiresAtUtc,            // Set expiration
@@ -465,6 +466,7 @@ public sealed class EnvelopeService : IEnvelopeService
         {
             existing.FullName = fullName;
             existing.Email = email;
+            existing.Phone = phone;  // NEW: Update phone if provided
             await _db.SaveChangesAsync();
         }
     }

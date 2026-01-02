@@ -62,12 +62,13 @@ public class SignPublicController : Controller
     public async Task<IActionResult> Review(string token, [FromForm] ReviewPostVm post)
     {
         _logger.LogInformation("POST Review called with token: {Token}", token);
-        _logger.LogInformation("POST Data - Accept: {Accept}, TypedFullName: {Name}, SigDataLength: {SigLength}, TenantName: {TenantName}, TenantEmail: {TenantEmail}",
+        _logger.LogInformation("POST Data - Accept: {Accept}, TypedFullName: {Name}, SigDataLength: {SigLength}, TenantName: {TenantName}, TenantEmail: {TenantEmail}, TenantPhone: {TenantPhone}",
             post.Accept,
             post.TypedFullName,
             post.SigData?.Length ?? 0,
             post.TenantFullName,
-            post.TenantEmail);
+            post.TenantEmail,
+            post.TenantPhone);
 
         // add UA + IP to match the interface
         var vm = await _svc.GetReviewAsync(
@@ -124,8 +125,8 @@ public class SignPublicController : Controller
                     return View(vm);
                 }
 
-                _logger.LogInformation("Adding tenant recipient: {TenantName} <{TenantEmail}>", post.TenantFullName, post.TenantEmail);
-                await _svc.UpsertTenantRecipientAsync(vm.Envelope.EnvelopeId, post.TenantFullName.Trim(), post.TenantEmail.Trim());
+                _logger.LogInformation("Adding tenant recipient: {TenantName} <{TenantEmail}> Phone: {TenantPhone}", post.TenantFullName, post.TenantEmail, post.TenantPhone);
+                await _svc.UpsertTenantRecipientAsync(vm.Envelope.EnvelopeId, post.TenantFullName.Trim(), post.TenantEmail.Trim(), post.TenantPhone?.Trim());
             }
             else
             {

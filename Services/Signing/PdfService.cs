@@ -295,15 +295,21 @@ public sealed class PdfService : IPdfService
     }
 
     /// <summary>
-    /// Draw text on PDF - coordinates are already in PDF coordinate system
+    /// Draw text on PDF with proper baseline positioning
     /// </summary>
     private static void DrawTextWithCoordinateConversion(XGraphics gfx, PdfPage page, XFont font, XBrush brush, string text, double x, double y)
     {
-        // COORDINATE FIX: Use coordinates as-is (already in correct PDF coordinate system)
-        // The JavaScript saves coordinates directly in PDF points with proper origin
-        Console.WriteLine($"[COORDINATE DEBUG] Drawing text '{text}' at x={x}, y={y}, page.Height={page.Height}");
+        // TEXT POSITIONING FIX:
+        // When user places a field box at position (x,y), they're positioning the TOP of the box
+        // But DrawString positions text at the BASELINE (bottom of characters)
+        // We need to offset Y by the font size to align properly within the box
 
-        gfx.DrawString(text, font, brush, new XPoint(x, y), XStringFormats.Default);
+        const double baselineOffset = 14; // Font size (11) + small padding for better alignment
+        double textY = y + baselineOffset;
+
+        Console.WriteLine($"[COORDINATE DEBUG] Drawing text '{text}' - Box top y={y}, Baseline y={textY}, offset={baselineOffset}");
+
+        gfx.DrawString(text, font, brush, new XPoint(x, textY), XStringFormats.Default);
     }
 
     /// <summary>

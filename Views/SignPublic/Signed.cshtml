@@ -9,34 +9,46 @@
     <div class="card-header bg-success text-white fw-bold">
         <i class="bi bi-check-circle-fill"></i> Thank You!
     </div>
-    <div class="card-body">
-        <div class="alert alert-success mb-4">
-            <h5 class="alert-heading mb-3">
-                <i class="bi bi-check-circle"></i> Signature Recorded Successfully
-            </h5>
-            <p class="mb-0">Your signature has been captured and saved to the document.</p>
+    <div class="card-body p-4">
+        <!-- Signature Recorded Section -->
+        <div class="alert alert-success mb-4" style="padding: 1.5rem;">
+            <div class="d-flex align-items-start mb-3">
+                <i class="bi bi-check-circle fs-1 text-success me-3"></i>
+                <div class="flex-grow-1">
+                    <h5 class="fw-bold mb-2">Signature Recorded Successfully</h5>
+                    <p class="mb-0">Your signature has been captured and saved to the document.</p>
+                </div>
+            </div>
         </div>
 
         @if (!string.IsNullOrWhiteSpace(downloadUrl))
         {
-            <div class="alert alert-success mb-0">
-                <h5 class="alert-heading mb-3">
-                    <i class="bi bi-file-earmark-check-fill"></i> Document Complete
-                </h5>
-                <p class="mb-3">All parties have signed! You can download the completed document below:</p>
-                <a class="btn btn-success btn-lg" href="@downloadUrl" target="_blank">
-                    <i class="bi bi-download"></i> Download Signed PDF
-                </a>
+            <!-- Document Complete Section -->
+            <div class="alert alert-success mb-0" style="padding: 1.5rem;">
+                <div class="d-flex align-items-start mb-3">
+                    <i class="bi bi-file-earmark-check-fill fs-1 text-success me-3"></i>
+                    <div class="flex-grow-1">
+                        <h5 class="fw-bold mb-2">Document Complete</h5>
+                        <p class="mb-3">All parties have signed! You can download the completed document below:</p>
+                        <a class="btn btn-success btn-lg" href="@downloadUrl" target="_blank">
+                            <i class="bi bi-download"></i> Download Signed PDF
+                        </a>
+                    </div>
+                </div>
             </div>
         }
         else
         {
-            <div class="alert alert-info mb-0">
-                <h5 class="alert-heading mb-3">
-                    <i class="bi bi-clock-history"></i> Waiting for Additional Signatures
-                </h5>
-                <p class="mb-2">Your signature has been captured. The document is waiting for other parties to sign.</p>
-                <p class="mb-0">You will receive an email notification when all parties have signed and the final PDF is ready for download.</p>
+            <!-- Waiting for Signatures Section -->
+            <div class="alert alert-info mb-0" style="padding: 1.5rem;">
+                <div class="d-flex align-items-start">
+                    <i class="bi bi-clock-history fs-1 text-info me-3"></i>
+                    <div class="flex-grow-1">
+                        <h5 class="fw-bold mb-3">Waiting for Additional Signatures</h5>
+                        <p class="mb-2">Your signature has been captured. The document is waiting for other parties to sign.</p>
+                        <p class="mb-0">You will receive an email notification when all parties have signed and the final PDF is ready for download.</p>
+                    </div>
+                </div>
             </div>
         }
     </div>

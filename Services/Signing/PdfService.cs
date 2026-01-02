@@ -24,9 +24,10 @@ public sealed class PdfService : IPdfService
     {
         Console.WriteLine($"[PDF DEBUG] ===== STARTING PDF GENERATION FOR ENVELOPE {envelopeId} =====");
 
-        // 1) Load envelope + template + recipients
+        // 1) Load envelope + template + recipients + fields
         var env = await _db.SignEnvelopes
             .Include(e => e.Recipients)
+            .Include(e => e.Fields)  // Load SignField records
             .AsNoTracking()
             .FirstAsync(e => e.EnvelopeId == envelopeId);
 
@@ -38,11 +39,12 @@ public sealed class PdfService : IPdfService
         Console.WriteLine($"[PDF DEBUG] Template: {template.TemplateKey} ({template.DisplayName})");
         Console.WriteLine($"[PDF DEBUG] PDF File: {template.PdfFilePath ?? "NONE - will use default"}");
         Console.WriteLine($"[PDF DEBUG] Has MergeSpec: {!string.IsNullOrWhiteSpace(template.MergeSpecJson)}");
+        Console.WriteLine($"[PDF DEBUG] SignField records found: {env.Fields?.Count ?? 0}");
 
         var tenant = env.Recipients.FirstOrDefault(r => r.Role == "Tenant") ?? env.Recipients.First();
         var manager = env.Recipients.FirstOrDefault(r => r.Role == "Manager");
 
-        // 2) Gather data from ERP
+        // 2) Gather data from SignField records and supplement with ERP data
         var fieldData = await GatherFieldDataAsync(env, tenant, manager);
 
         Console.WriteLine($"[PDF DEBUG] ========== ENVELOPE {envelopeId} ==========");
@@ -186,6 +188,7 @@ public sealed class PdfService : IPdfService
 
     /// <summary>
     /// Gather all field values from envelope and ERP data
+    /// Priority: 1) SignField records, 2) ERP data, 3) Recipient data
     /// </summary>
     private async Task<Dictionary<string, object>> GatherFieldDataAsync(
         Domain.Signing.SignEnvelope env,
@@ -194,27 +197,62 @@ public sealed class PdfService : IPdfService
     {
         var data = new Dictionary<string, object>();
 
+        // First, populate from SignField records if they exist
+        if (env.Fields != null && env.Fields.Any())
+        {
+            Console.WriteLine($"[PDF DEBUG] Loading data from {env.Fields.Count} SignField records");
+            foreach (var field in env.Fields)
+            {
+                if (!string.IsNullOrWhiteSpace(field.FieldValue))
+                {
+                    data[field.FieldKey] = field.FieldValue;
+                    Console.WriteLine($"[PDF DEBUG] Field from DB: {field.FieldKey} = {field.FieldValue}");
+                }
+            }
+        }
+        else
+        {
+            Console.WriteLine($"[PDF DEBUG] No SignField records found, using legacy ERP data gathering");
+        }
+
+        // Supplement with ERP data for any missing fields
         // Property fields
-        var propertyName = await _merge.GetPropertyNameAsync(env.PropertyID) ?? "";
-        data["PropertyName"] = propertyName;
-        data["PropertyAddress"] = ""; // TODO: Get from ERP if needed
-        data["PropertyPhone"] = ""; // TODO: Get from ERP if needed
+        if (!data.ContainsKey("PropertyName"))
+        {
+            var propertyName = await _merge.GetPropertyNameAsync(env.PropertyID) ?? "";
+            data["PropertyName"] = propertyName;
+        }
+        if (!data.ContainsKey("PropertyAddress"))
+            data["PropertyAddress"] = ""; // TODO: Get from ERP if needed
+        if (!data.ContainsKey("PropertyPhone"))
+            data["PropertyPhone"] = ""; // TODO: Get from ERP if needed
 
         // Order fields
-        var unitNumber = await _merge.GetUnitNumberByOrderIdAsync(env.OrderId) ?? "";
-        data["UnitNumber"] = unitNumber;
-        data["InstallationDate"] = DateTime.UtcNow.ToString("MM/dd/yyyy");
-        data["DeliveryDate"] = ""; // TODO: Get from ERP if needed
+        if (!data.ContainsKey("UnitNumber"))
+        {
+            var unitNumber = await _merge.GetUnitNumberByOrderIdAsync(env.OrderId) ?? "";
+            data["UnitNumber"] = unitNumber;
+        }
+        if (!data.ContainsKey("InstallationDate"))
+            data["InstallationDate"] = DateTime.UtcNow.ToString("MM/dd/yyyy");
+        if (!data.ContainsKey("DeliveryDate"))
+            data["DeliveryDate"] = ""; // TODO: Get from ERP if needed
 
-        // Property Staff (Manager) fields
-        data["PropertyStaffName"] = manager?.FullName ?? "Property Staff";
-        data["PropertyStaffDate"] = manager?.SignedAtUtc?.ToLocalTime().ToString("MM/dd/yyyy") ?? "";
-        data["PropertyStaffSignature"] = GetSignatureFilePath(manager);
+        // Property Staff (Manager) fields - updated with signing data
+        if (!data.ContainsKey("PropertyStaffName"))
+            data["PropertyStaffName"] = manager?.FullName ?? "Property Staff";
+        if (!data.ContainsKey("PropertyStaffDate"))
+            data["PropertyStaffDate"] = manager?.SignedAtUtc?.ToLocalTime().ToString("MM/dd/yyyy") ?? "";
+        if (!data.ContainsKey("PropertyStaffSignature"))
+            data["PropertyStaffSignature"] = GetSignatureFilePath(manager) ?? "";
 
-        // Resident (Tenant) fields
-        data["ResidentName"] = tenant.FullName;
-        data["ResidentPhone"] = tenant.Phone ?? "";
-        data["ResidentSignature"] = GetSignatureFilePath(tenant);
+        // Resident (Tenant) fields - updated with signing data
+        if (!data.ContainsKey("ResidentName"))
+            data["ResidentName"] = tenant.FullName;
+        if (!data.ContainsKey("ResidentPhone"))
+            data["ResidentPhone"] = tenant.Phone ?? "";
+        if (!data.ContainsKey("ResidentSignature"))
+            data["ResidentSignature"] = GetSignatureFilePath(tenant) ?? "";
 
         return data;
     }

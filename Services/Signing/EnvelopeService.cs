@@ -7,6 +7,7 @@ using SalesMetrics.Utilities.Security;
 
 using Microsoft.Extensions.Options;
 using SalesMetrics.Services.Signing; // for AppSettings
+using System.Text.Json;
 
 namespace SalesMetrics.Services.Signing;
 
@@ -25,6 +26,14 @@ public sealed class EnvelopeService : IEnvelopeService
 
     public async Task<long> CreateAsync(int createdByUsersId, CreateEnvelopeVm vm)
     {
+        // Load the template to access MergeSpec and PDF path
+        var template = await _db.SignTemplates
+            .AsNoTracking()
+            .FirstOrDefaultAsync(t => t.TemplateKey == vm.TemplateKey);
+
+        if (template == null)
+            throw new InvalidOperationException($"Template '{vm.TemplateKey}' not found");
+
         var env = new SignEnvelope
         {
             TemplateKey = vm.TemplateKey,
@@ -55,8 +64,169 @@ public sealed class EnvelopeService : IEnvelopeService
         }
 
         _db.SignEnvelopes.Add(env);
+        await _db.SaveChangesAsync(); // Save to get EnvelopeId
+
+        // Create SignAttachment record for template PDF
+        if (!string.IsNullOrWhiteSpace(template.PdfFilePath))
+        {
+            env.Attachments = new List<SignAttachment>
+            {
+                new SignAttachment
+                {
+                    EnvelopeId = env.EnvelopeId,
+                    FileName = template.PdfFilePath,
+                    BlobPath = Path.Combine("Content", "Templates", template.PdfFilePath),
+                    MimeType = "application/pdf",
+                    UploadedByUsers_ID = createdByUsersId,
+                    UploadedDateUtc = DateTime.UtcNow
+                }
+            };
+        }
+
+        // Create SignField records from template MergeSpec
+        await CreateFieldsFromMergeSpecAsync(env, template, vm);
+
         await _db.SaveChangesAsync();
         return env.EnvelopeId;
+    }
+
+    /// <summary>
+    /// Create SignField records from template's MergeSpec JSON
+    /// </summary>
+    private async Task CreateFieldsFromMergeSpecAsync(SignEnvelope env, SignTemplate template, CreateEnvelopeVm vm)
+    {
+        if (string.IsNullOrWhiteSpace(template.MergeSpecJson))
+        {
+            Console.WriteLine($"[CreateFields] No MergeSpec found for template {template.TemplateKey}");
+            return;
+        }
+
+        try
+        {
+            Console.WriteLine($"[CreateFields] Parsing MergeSpec for envelope {env.EnvelopeId}");
+            var mergeSpec = JsonSerializer.Deserialize<MergeSpec>(template.MergeSpecJson);
+
+            if (mergeSpec?.fieldMapping == null || mergeSpec.fieldMapping.Count == 0)
+            {
+                Console.WriteLine($"[CreateFields] No field mappings found in MergeSpec");
+                return;
+            }
+
+            Console.WriteLine($"[CreateFields] Found {mergeSpec.fieldMapping.Count} fields in MergeSpec");
+
+            // Gather field data using the merge service
+            var fieldData = await GatherFieldDataForEnvelopeAsync(env);
+
+            env.Fields = new List<SignField>();
+
+            foreach (var (fieldKey, fieldInfo) in mergeSpec.fieldMapping)
+            {
+                // Determine which recipient this field belongs to
+                long? recipientId = null;
+                if (!string.IsNullOrWhiteSpace(fieldInfo.role))
+                {
+                    var recipient = env.Recipients.FirstOrDefault(r =>
+                        r.Role.Equals(fieldInfo.role, StringComparison.OrdinalIgnoreCase));
+                    recipientId = recipient?.RecipientId;
+                }
+
+                // Get the field value if available
+                string? fieldValue = null;
+                if (fieldData.TryGetValue(fieldKey, out var value))
+                {
+                    fieldValue = value?.ToString();
+                }
+
+                // Determine field type
+                var fieldType = fieldInfo.type ?? "text";
+
+                var field = new SignField
+                {
+                    EnvelopeId = env.EnvelopeId,
+                    RecipientId = recipientId,
+                    FieldKey = fieldKey,
+                    FieldType = fieldType,
+                    FieldValue = fieldValue
+                };
+
+                env.Fields.Add(field);
+                Console.WriteLine($"[CreateFields] Created field: {fieldKey} (type: {fieldType}, role: {fieldInfo.role ?? "N/A"}, value: {fieldValue ?? "NULL"})");
+            }
+
+            Console.WriteLine($"[CreateFields] Created {env.Fields.Count} SignField records");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[CreateFields ERROR] Failed to parse MergeSpec: {ex.Message}");
+            Console.WriteLine($"[CreateFields ERROR] Stack trace: {ex.StackTrace}");
+            // Don't throw - allow envelope creation to continue without fields
+        }
+    }
+
+    /// <summary>
+    /// Gather field data for envelope creation
+    /// </summary>
+    private async Task<Dictionary<string, object>> GatherFieldDataForEnvelopeAsync(SignEnvelope env)
+    {
+        var data = new Dictionary<string, object>();
+
+        try
+        {
+            // Property fields
+            var propertyName = await _merge.GetPropertyNameAsync(env.PropertyID) ?? "";
+            data["PropertyName"] = propertyName;
+            data["PropertyAddress"] = "";
+            data["PropertyPhone"] = "";
+
+            // Order fields
+            var unitNumber = await _merge.GetUnitNumberByOrderIdAsync(env.OrderId) ?? "";
+            data["UnitNumber"] = unitNumber;
+            data["InstallationDate"] = DateTime.UtcNow.ToString("MM/dd/yyyy");
+            data["DeliveryDate"] = "";
+
+            // Recipient fields - these will be populated at signing time
+            var manager = env.Recipients.FirstOrDefault(r => r.Role == "Manager");
+            var tenant = env.Recipients.FirstOrDefault(r => r.Role == "Tenant") ?? env.Recipients.First();
+
+            data["PropertyStaffName"] = manager?.FullName ?? "Property Staff";
+            data["PropertyStaffDate"] = ""; // Will be filled when signed
+            data["PropertyStaffSignature"] = ""; // Will be filled when signed
+
+            data["ResidentName"] = tenant.FullName;
+            data["ResidentPhone"] = tenant.Phone ?? "";
+            data["ResidentSignature"] = ""; // Will be filled when signed
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[GatherFieldData ERROR] {ex.Message}");
+        }
+
+        return data;
+    }
+
+    // MergeSpec JSON structure classes
+    private class MergeSpec
+    {
+        public List<string>? fields { get; set; }
+        public Dictionary<string, FieldMapping>? fieldMapping { get; set; }
+    }
+
+    private class FieldMapping
+    {
+        public string? source { get; set; }
+        public string? type { get; set; }
+        public string? role { get; set; }
+        public Coordinates? coordinates { get; set; }
+        public List<Coordinates>? placements { get; set; }
+    }
+
+    private class Coordinates
+    {
+        public int page { get; set; }
+        public double x { get; set; }
+        public double y { get; set; }
+        public double width { get; set; }
+        public double height { get; set; }
     }
 
     public async Task SendAsync(long envelopeId)

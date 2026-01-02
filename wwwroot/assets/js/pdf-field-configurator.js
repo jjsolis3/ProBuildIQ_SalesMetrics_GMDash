@@ -267,9 +267,14 @@ var PDFFieldConfigurator = (function () {
         // Convert screen coordinates to PDF coordinates
         const pdfCoords = screenToPDFCoordinates(x, y);
 
-        // Default dimensions based on field type
-        const defaultWidth = fieldDef.type === 'signature' ? 200 : 150;
-        const defaultHeight = fieldDef.type === 'signature' ? 50 : 20;
+        // Default dimensions based on field type (in screen pixels)
+        const defaultWidthScreen = fieldDef.type === 'signature' ? 200 : 150;
+        const defaultHeightScreen = fieldDef.type === 'signature' ? 50 : 20;
+
+        // Convert dimensions to PDF points
+        const scale = window.pdfScale || 1.0;
+        const defaultWidth = Math.round(defaultWidthScreen / scale);
+        const defaultHeight = Math.round(defaultHeightScreen / scale);
 
         // Generate unique ID for this field instance (allows multiple instances of same field)
         const instanceId = `${fieldKey}_${Date.now()}`;

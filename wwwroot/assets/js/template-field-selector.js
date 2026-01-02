@@ -306,6 +306,28 @@ var TemplateFieldSelector = (function () {
 
 
 
+        // Read existing MergeSpec to preserve placements
+
+        const hiddenInput = document.getElementById('mergeSpecJson');
+
+        let existingSpec = null;
+
+        if (hiddenInput && hiddenInput.value) {
+
+            try {
+
+                existingSpec = JSON.parse(hiddenInput.value);
+
+            } catch (e) {
+
+                console.warn('Could not parse existing MergeSpec:', e);
+
+            }
+
+        }
+
+
+
         // Create MergeSpec JSON
 
         const mergeSpec = {
@@ -318,7 +340,7 @@ var TemplateFieldSelector = (function () {
 
 
 
-        // Add field mappings
+        // Add field mappings, preserving placements from existing spec
 
         selectedFields.forEach(field => {
 
@@ -336,6 +358,22 @@ var TemplateFieldSelector = (function () {
 
             }
 
+
+
+            // Preserve placements if they exist in the current MergeSpec
+
+            if (existingSpec && existingSpec.fieldMapping && existingSpec.fieldMapping[field.fieldKey]) {
+
+                const existingField = existingSpec.fieldMapping[field.fieldKey];
+
+                if (existingField.placements && existingField.placements.length > 0) {
+
+                    mergeSpec.fieldMapping[field.fieldKey].placements = existingField.placements;
+
+                }
+
+            }
+
         });
 
 
@@ -343,8 +381,6 @@ var TemplateFieldSelector = (function () {
         // Update hidden input and preview
 
         const jsonString = JSON.stringify(mergeSpec, null, 2);
-
-        const hiddenInput = document.getElementById('mergeSpecJson');
 
         const jsonPreview = document.getElementById('jsonPreview');
 

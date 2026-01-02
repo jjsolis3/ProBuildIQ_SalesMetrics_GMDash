@@ -248,10 +248,16 @@ public sealed class EnvelopeService : IEnvelopeService
         {
             var baseUrl = _appSettings.BaseUrl.TrimEnd('/');
             var link = $"{baseUrl}/sign/{r.AccessToken}";
-            
+
+            // Build email body with optional custom message
+            var messageHtml = !string.IsNullOrWhiteSpace(env.MessageBody)
+                ? $"<p>{env.MessageBody}</p>"
+                : "";
+
             var html = $"""
                 <p>Hello {r.FullName},</p>
                 <p>Please review and sign the document: <b>{env.Subject}</b>.</p>
+                {messageHtml}
                 <p><a href="{link}">Open & Sign</a></p>
                 """;
             await _notify.SendEnvelopeEmailAsync(r.Email, r.FullName, env.Subject, html);

@@ -26,8 +26,8 @@
                     <span asp-validation-for="Subject" class="text-danger"></span>
                 </div>
                 <div class="col-md-12">
-                    <label class="form-label">Message</label>
-                    <textarea asp-for="MessageBody" class="form-control" rows="3"></textarea>
+                    <label class="form-label">Message <span class="text-muted small">(Optional)</span></label>
+                    <textarea asp-for="MessageBody" class="form-control" rows="3" placeholder="Add a custom message for recipients (optional)"></textarea>
                 </div>
 
                 <div class="col-md-3">

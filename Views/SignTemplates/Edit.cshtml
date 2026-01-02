@@ -500,6 +500,18 @@
             // Initialize PDF configurator
             PDFFieldConfigurator.init();
 
+            // Auto-save field coordinates before form submit
+            const templateForm = document.getElementById('templateForm');
+            if (templateForm) {
+                templateForm.addEventListener('submit', function(e) {
+                    // If configurator is active, save coordinates
+                    if (PDFFieldConfigurator && PDFFieldConfigurator.saveCoordinatesToMergeSpec) {
+                        console.log('[Form Submit] Auto-saving field coordinates');
+                        PDFFieldConfigurator.saveCoordinatesToMergeSpec();
+                    }
+                });
+            }
+
             // Load existing PDF if available
             const existingPdfPath = document.getElementById('existingPdfPath');
             if (existingPdfPath && existingPdfPath.value) {

@@ -193,9 +193,10 @@ public class SignTemplatesController : Controller
         return RedirectToAction(nameof(Index));
     }
 
-    // GET: /SignTemplates/GetTemplatePdf/{templateKey}
-    public async Task<IActionResult> GetTemplatePdf(string templateKey)
+    // GET: /SignTemplates/GetTemplatePdf/{id}
+    public async Task<IActionResult> GetTemplatePdf(string id)
     {
+        var templateKey = id; // Route parameter is 'id', but we use it as templateKey
         Console.WriteLine($"[GetTemplatePdf] Called with templateKey: {templateKey}");
         Console.WriteLine($"[GetTemplatePdf] ContentRootPath: {_env.ContentRootPath}");
 

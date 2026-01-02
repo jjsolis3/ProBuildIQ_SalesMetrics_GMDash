@@ -282,11 +282,14 @@ public sealed class PdfService : IPdfService
             using var fs = File.OpenRead(imagePath);
             using var img = XImage.FromStream(() => fs);
 
-            // COORDINATE FIX: Use coordinates as-is (already in correct PDF coordinate system)
-            // The JavaScript saves coordinates directly in PDF points with proper origin
-            Console.WriteLine($"[COORDINATE DEBUG] Drawing signature at x={x}, y={y}, page.Height={page.Height}");
+            // Convert from top-left origin (screen/canvas) to bottom-left origin (PDF standard)
+            // JavaScript saves y as distance from TOP of page
+            // PDF uses y as distance from BOTTOM of page
+            var pdfY = page.Height - y - height;
 
-            gfx.DrawImage(img, x, y, width, height);
+            Console.WriteLine($"[COORDINATE DEBUG] Signature - Page: {page.Width:F1}x{page.Height:F1}pt, Screen y={y}, PDF y={pdfY:F1}, height={height}");
+
+            gfx.DrawImage(img, x, pdfY, width, height);
         }
         catch (Exception ex)
         {
@@ -295,21 +298,25 @@ public sealed class PdfService : IPdfService
     }
 
     /// <summary>
-    /// Draw text on PDF with proper baseline positioning
+    /// Draw text on PDF with proper coordinate conversion and baseline positioning
     /// </summary>
     private static void DrawTextWithCoordinateConversion(XGraphics gfx, PdfPage page, XFont font, XBrush brush, string text, double x, double y)
     {
-        // TEXT POSITIONING FIX:
-        // When user places a field box at position (x,y), they're positioning the TOP of the box
-        // But DrawString positions text at the BASELINE (bottom of characters)
-        // We need to offset Y by the font size to align properly within the box
+        // Convert from top-left origin (screen/canvas) to bottom-left origin (PDF standard)
+        // JavaScript saves y as distance from TOP of page
+        // PDF uses y as distance from BOTTOM of page
+        //
+        // For text, we also need baseline offset:
+        // - Box top is at screen y
+        // - Baseline should be ~11pt below box top (font size)
+        // - In PDF coords (bottom-left): pdfY = page.Height - (y + baseline offset)
 
-        const double baselineOffset = 14; // Font size (11) + small padding for better alignment
-        double textY = y + baselineOffset;
+        const double baselineOffset = 11; // Font size for baseline positioning
+        var pdfY = page.Height - y - baselineOffset;
 
-        Console.WriteLine($"[COORDINATE DEBUG] Drawing text '{text}' - Box top y={y}, Baseline y={textY}, offset={baselineOffset}");
+        Console.WriteLine($"[COORDINATE DEBUG] Text '{text}' - Page: {page.Width:F1}x{page.Height:F1}pt, Screen y={y}, PDF y={pdfY:F1}");
 
-        gfx.DrawString(text, font, brush, new XPoint(x, textY), XStringFormats.Default);
+        gfx.DrawString(text, font, brush, new XPoint(x, pdfY), XStringFormats.Default);
     }
 
     /// <summary>

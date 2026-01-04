@@ -11,8 +11,14 @@ public sealed class SignEnvelope
     // Business context
     public int? PropertyID { get; set; }
     public int? OrderId { get; set; }
+    public string? OrderNumber { get; set; } // e.g., "90805.4" - display friendly order number
     public string? CustomerNumber { get; set; }
     public string? LocationCode { get; set; }
+
+    // Tenant skip tracking
+    public bool TenantSkipped { get; set; } // true if Property Staff skipped tenant signature
+    public string? TenantSkippedByName { get; set; } // Name of staff member who skipped tenant
+    public DateTime? TenantSkippedAtUtc { get; set; } // When tenant was skipped
 
     public string Status { get; set; } = "Draft"; // Draft|Sent|Viewed|Completed|Expired|Declined|Voided
     public DateTime? ExpiresAtUtc { get; set; }

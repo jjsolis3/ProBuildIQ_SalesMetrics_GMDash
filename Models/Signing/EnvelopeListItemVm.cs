@@ -15,6 +15,7 @@ public sealed class EnvelopeListItemVm
     public DateTime? ExpiresAtUtc { get; set; }
     public int RecipientCount { get; set; }
     public int SignedCount { get; set; }
-    public string? PropertyName { get; set; } // (optional—fill via ERP merge svc)
+    public string? PropertyName { get; set; } // Fetched from ERP or stored on envelope
+    public string? OrderNumber { get; set; } // Display friendly order number (e.g., "90805.4")
 }
 

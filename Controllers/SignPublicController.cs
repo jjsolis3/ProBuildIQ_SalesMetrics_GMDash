@@ -131,6 +131,8 @@ public class SignPublicController : Controller
             else
             {
                 _logger.LogInformation("Manager chose to skip tenant signature for envelope {EnvelopeId}", vm.Envelope.EnvelopeId);
+                // Mark envelope as tenant skipped
+                await _svc.MarkTenantSkippedAsync(vm.Envelope.EnvelopeId, vm.Recipient.FullName);
             }
         }
 

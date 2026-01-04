@@ -19,6 +19,8 @@
                     <tr>
                         <th>ID</th>
                         <th>Subject</th>
+                        <th>Property</th>
+                        <th>Order#</th>
                         <th>Status</th>
                         <th>Recipients</th>
                         <th>Sent</th>
@@ -32,6 +34,8 @@
                         <tr>
                             <td>@r.EnvelopeId</td>
                             <td>@r.Subject</td>
+                            <td><span class="text-muted small">@(r.PropertyName ?? "—")</span></td>
+                            <td><span class="text-muted small">@(r.OrderNumber ?? "—")</span></td>
                             <td>
                                 <span class="badge rounded-pill @(r.Status == "Completed" ? "bg-success" : "bg-warning text-dark")">@r.Status</span>
                             </td>

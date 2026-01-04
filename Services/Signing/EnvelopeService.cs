@@ -34,6 +34,15 @@ public sealed class EnvelopeService : IEnvelopeService
         if (template == null)
             throw new InvalidOperationException($"Template '{vm.TemplateKey}' not found");
 
+        // Fetch OrderNumber from ERP if OrderId is provided
+        string? orderNumber = null;
+        if (vm.OrderId.HasValue)
+        {
+            var orders = await _merge.GetOrdersForPropertyAsync(vm.PropertyID ?? 0);
+            var matchingOrder = orders.FirstOrDefault(o => o.OrderID == vm.OrderId.Value.ToString());
+            orderNumber = matchingOrder?.OrderID; // OrderID contains the display number like "90805.4"
+        }
+
         var env = new SignEnvelope
         {
             TemplateKey = vm.TemplateKey,
@@ -41,6 +50,7 @@ public sealed class EnvelopeService : IEnvelopeService
             MessageBody = vm.MessageBody,
             PropertyID = vm.PropertyID,
             OrderId = vm.OrderId,
+            OrderNumber = orderNumber,
             CustomerNumber = vm.CustomerNumber,
             LocationCode = vm.LocationCode,
             Status = "Draft",
@@ -317,11 +327,38 @@ public sealed class EnvelopeService : IEnvelopeService
         if (!string.IsNullOrWhiteSpace(office)) q = q.Where(e => e.LocationCode == office);
 
         var total = await q.CountAsync();
-        var rows = await q
+        var envelopes = await q
             .OrderByDescending(e => e.SentAtUtc ?? e.CreatedDateUtc)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(e => new EnvelopeListItemVm
+            .Select(e => new
+            {
+                e.EnvelopeId,
+                e.Subject,
+                e.TemplateKey,
+                e.Status,
+                e.LocationCode,
+                e.SentAtUtc,
+                e.CompletedAtUtc,
+                e.ExpiresAtUtc,
+                e.PropertyID,
+                e.OrderNumber,
+                RecipientCount = e.Recipients.Count,
+                SignedCount = e.Recipients.Count(r => r.SignedAtUtc != null),
+            })
+            .ToListAsync();
+
+        // Populate PropertyName from ERP for each envelope
+        var rows = new List<EnvelopeListItemVm>();
+        foreach (var e in envelopes)
+        {
+            string? propertyName = null;
+            if (e.PropertyID.HasValue)
+            {
+                propertyName = await _merge.GetPropertyNameAsync(e.PropertyID.Value);
+            }
+
+            rows.Add(new EnvelopeListItemVm
             {
                 EnvelopeId = e.EnvelopeId,
                 Subject = e.Subject,
@@ -331,10 +368,12 @@ public sealed class EnvelopeService : IEnvelopeService
                 SentAtUtc = e.SentAtUtc,
                 CompletedAtUtc = e.CompletedAtUtc,
                 ExpiresAtUtc = e.ExpiresAtUtc,
-                RecipientCount = e.Recipients.Count,
-                SignedCount = e.Recipients.Count(r => r.SignedAtUtc != null),
-            })
-            .ToListAsync();
+                RecipientCount = e.RecipientCount,
+                SignedCount = e.SignedCount,
+                PropertyName = propertyName,
+                OrderNumber = e.OrderNumber
+            });
+        }
 
         return (rows, total);
     }
@@ -469,6 +508,24 @@ public sealed class EnvelopeService : IEnvelopeService
             existing.Phone = phone;  // NEW: Update phone if provided
             await _db.SaveChangesAsync();
         }
+    }
+
+    public async Task MarkTenantSkippedAsync(long envelopeId, string skippedByName)
+    {
+        var env = await _db.SignEnvelopes.FirstAsync(e => e.EnvelopeId == envelopeId);
+        env.TenantSkipped = true;
+        env.TenantSkippedByName = skippedByName;
+        env.TenantSkippedAtUtc = DateTime.UtcNow;
+
+        _db.SignEvents.Add(new SignEvent
+        {
+            EnvelopeId = envelopeId,
+            EventType = "TenantSkipped",
+            OccurredAtUtc = DateTime.UtcNow,
+            MetaJson = $"{{\"skippedBy\":\"{skippedByName}\"}}"
+        });
+
+        await _db.SaveChangesAsync();
     }
 
     public async Task CaptureSignatureAsync(long envelopeId, long recipientId, string typedFullName, string sigDataBase64)

@@ -162,6 +162,31 @@ public sealed class PdfService : IPdfService
         // Optional: audit footer
         DrawSmall(gfx, $"Envelope #{env.EnvelopeId}", In(1.0), 36);
 
+        // Stamp "Tenant Signature Waived" notation if tenant was skipped
+        if (env.TenantSkipped)
+        {
+            var waivedFont = new XFont("Roboto", 10, XFontStyle.Bold);
+            var waivedBrush = XBrushes.Red;
+            var waivedText = $"TENANT SIGNATURE WAIVED BY {env.TenantSkippedByName?.ToUpper() ?? "PROPERTY STAFF"}";
+            var waivedDate = env.TenantSkippedAtUtc?.ToLocalTime().ToString("MM/dd/yyyy h:mm tt") ?? "";
+
+            // Draw a prominent notation in the tenant signature area
+            // Position it where the tenant signature would normally go
+            var notationY = page.Height - In(2.5); // Near bottom of page
+
+            // Draw a red box background
+            var boxRect = new XRect(In(0.5), notationY - In(0.15), In(7.0), In(0.5));
+            gfx.DrawRectangle(new XSolidBrush(XColor.FromArgb(255, 255, 240, 240)), boxRect);
+            gfx.DrawRectangle(new XPen(XColors.Red, 1.5), boxRect);
+
+            // Draw the text
+            gfx.DrawString(waivedText, waivedFont, waivedBrush, new XPoint(In(0.7), notationY + In(0.05)), XStringFormats.Default);
+            gfx.DrawString($"Date: {waivedDate}", new XFont("Roboto", 9, XFontStyle.Regular), XBrushes.DarkRed,
+                new XPoint(In(0.7), notationY + In(0.25)), XStringFormats.Default);
+
+            Console.WriteLine($"[PDF DEBUG] Added tenant skip notation for envelope {envelopeId}");
+        }
+
         // 7) Save to bytes
         using var ms = new MemoryStream();
         doc.Save(ms, false);

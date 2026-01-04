@@ -121,12 +121,24 @@ namespace SalesMetrics.Services.Signing
         {
             if (!propertyId.HasValue) return null;
 
-            var prop = await _db.YardiProperties
-                .Where(p => p.Property_ID == propertyId.Value)
-                .Select(p => p.PropertyName)
-                .FirstOrDefaultAsync();
+            // FIXED: Query CUSTOMER_MASTER table directly since PropertyID is CUM_CUMMAS_ID
+            // The property dropdown returns CUM_CUMMAS_ID, not YardiProperties.Property_ID
+            var officeLocation = _http.HttpContext?.Session.GetString("OfficeLocation") ?? "LAX";
+            var connStr = _config.GetConnectionString(officeLocation);
 
-            return prop;
+            using var conn = new SqlConnection(connStr);
+            await conn.OpenAsync();
+
+            var sql = @"
+                SELECT CUM_CUSTOMER_NAME
+                FROM CUSTOMER_MASTER
+                WHERE CUM_CUMMAS_ID = @propertyId";
+
+            using var cmd = new SqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@propertyId", propertyId.Value);
+
+            var result = await cmd.ExecuteScalarAsync();
+            return result?.ToString();
         }
 
         public async Task<string?> GetUnitNumberByOrderIdAsync(int? orderId)

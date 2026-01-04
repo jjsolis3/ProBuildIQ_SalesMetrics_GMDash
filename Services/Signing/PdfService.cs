@@ -187,6 +187,140 @@ public sealed class PdfService : IPdfService
     }
 
     /// <summary>
+    /// Generate a preview PDF showing only the fields that should be visible to the current recipient
+    /// - Manager view: Property fields only (PropertyName, InstallationDate, UnitNumber)
+    /// - Tenant view: Property fields + Manager signature and fields
+    /// </summary>
+    public async Task<byte[]> GeneratePreviewPdfAsync(long envelopeId, long currentRecipientId)
+    {
+        Console.WriteLine($"[PREVIEW PDF] ===== GENERATING PREVIEW FOR ENVELOPE {envelopeId}, RECIPIENT {currentRecipientId} =====");
+
+        // 1) Load envelope + template + recipients + fields
+        var env = await _db.SignEnvelopes
+            .Include(e => e.Recipients)
+            .Include(e => e.Fields)
+            .AsNoTracking()
+            .FirstAsync(e => e.EnvelopeId == envelopeId);
+
+        var currentRecipient = env.Recipients.First(r => r.RecipientId == currentRecipientId);
+        Console.WriteLine($"[PREVIEW PDF] Current recipient: {currentRecipient.FullName} ({currentRecipient.Role})");
+
+        var template = await _db.SignTemplates
+            .AsNoTracking()
+            .FirstAsync(t => t.TemplateKey == env.TemplateKey);
+
+        var tenant = env.Recipients.FirstOrDefault(r => r.Role == "Tenant") ?? env.Recipients.First();
+        var manager = env.Recipients.FirstOrDefault(r => r.Role == "Manager");
+
+        // 2) Determine which fields to show based on current recipient's role
+        var fieldData = await GatherFieldDataAsync(env, tenant, manager);
+        var fieldsToShow = new HashSet<string>();
+
+        if (currentRecipient.Role == "Manager")
+        {
+            // Manager sees only property fields
+            fieldsToShow.Add("PropertyName");
+            fieldsToShow.Add("InstallationDate");
+            fieldsToShow.Add("UnitNumber");
+            Console.WriteLine($"[PREVIEW PDF] Manager view - showing property fields only");
+        }
+        else if (currentRecipient.Role == "Tenant")
+        {
+            // Tenant sees property fields + manager's signature and info
+            fieldsToShow.Add("PropertyName");
+            fieldsToShow.Add("InstallationDate");
+            fieldsToShow.Add("UnitNumber");
+            fieldsToShow.Add("PropertyStaffName");
+            fieldsToShow.Add("PropertyStaffDate");
+            fieldsToShow.Add("PropertyStaffSignature");
+            Console.WriteLine($"[PREVIEW PDF] Tenant view - showing property fields + manager signature");
+        }
+
+        Console.WriteLine($"[PREVIEW PDF] Fields to display: {string.Join(", ", fieldsToShow)}");
+
+        // 3) Load the PDF template
+        string templatePath;
+        if (!string.IsNullOrWhiteSpace(template.PdfFilePath))
+        {
+            templatePath = Path.Combine("Content", "Templates", template.PdfFilePath);
+        }
+        else
+        {
+            templatePath = Path.Combine("Content", "Templates", "SF_OccupiedReleaseForm_1.4.pdf");
+        }
+
+        if (!File.Exists(templatePath))
+            throw new FileNotFoundException($"PDF template not found: {templatePath}", templatePath);
+
+        using var doc = PdfReader.Open(templatePath, PdfDocumentOpenMode.Modify);
+        var page = doc.Pages[0];
+        using var gfx = XGraphics.FromPdfPage(page);
+
+        var font = new XFont("Roboto", 11, XFontStyle.Regular);
+        var brush = XBrushes.Black;
+
+        // 4) Stamp only the fields that should be visible
+        if (!string.IsNullOrWhiteSpace(template.MergeSpecJson))
+        {
+            try
+            {
+                var mergeSpec = JsonSerializer.Deserialize<MergeSpec>(template.MergeSpecJson);
+                if (mergeSpec?.fieldMapping != null)
+                {
+                    foreach (var (fieldKey, fieldInfo) in mergeSpec.fieldMapping)
+                    {
+                        // Only show fields that are in the allowed list
+                        if (!fieldsToShow.Contains(fieldKey))
+                        {
+                            Console.WriteLine($"[PREVIEW PDF] Skipping field '{fieldKey}' - not visible to {currentRecipient.Role}");
+                            continue;
+                        }
+
+                        if (!fieldData.TryGetValue(fieldKey, out var value))
+                        {
+                            Console.WriteLine($"[PREVIEW PDF] Field '{fieldKey}' not found in field data");
+                            continue;
+                        }
+
+                        Console.WriteLine($"[PREVIEW PDF] Stamping field '{fieldKey}' = '{value}'");
+
+                        var placements = fieldInfo.placements ?? new List<Coordinates>();
+                        if (placements.Count == 0 && fieldInfo.coordinates != null)
+                        {
+                            placements = new List<Coordinates> { fieldInfo.coordinates };
+                        }
+
+                        foreach (var coord in placements)
+                        {
+                            if (fieldInfo.type == "signature" && value is string sigPath && !string.IsNullOrWhiteSpace(sigPath))
+                            {
+                                DrawSignature(gfx, page, sigPath, coord.x, coord.y, coord.width, coord.height);
+                            }
+                            else if (value is string textValue)
+                            {
+                                DrawTextWithCoordinateConversion(gfx, page, font, brush, textValue, coord.x, coord.y);
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[PREVIEW PDF ERROR] Error generating preview: {ex.Message}");
+            }
+        }
+
+        // 5) Return PDF bytes
+        using var ms = new MemoryStream();
+        doc.Save(ms, false);
+        var bytes = ms.ToArray();
+
+        Console.WriteLine($"[PREVIEW PDF] ===== PREVIEW GENERATION COMPLETE, SIZE: {bytes.Length} bytes =====");
+
+        return bytes;
+    }
+
+    /// <summary>
     /// Gather all field values from envelope and ERP data
     /// Priority: 1) SignField records, 2) ERP data, 3) Recipient data
     /// </summary>

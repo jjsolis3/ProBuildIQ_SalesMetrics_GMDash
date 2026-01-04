@@ -165,26 +165,76 @@ public sealed class PdfService : IPdfService
         // Stamp "Tenant Signature Waived" notation if tenant was skipped
         if (env.TenantSkipped)
         {
+            // Find the ResidentSignature field coordinates to overlay the stamp
+            Coordinates? residentSigCoords = null;
+
+            if (!string.IsNullOrWhiteSpace(template.MergeSpecJson))
+            {
+                try
+                {
+                    var mergeSpec = JsonSerializer.Deserialize<MergeSpec>(template.MergeSpecJson);
+                    if (mergeSpec?.fieldMapping != null && mergeSpec.fieldMapping.TryGetValue("ResidentSignature", out var residentSigField))
+                    {
+                        // Get the first placement for resident signature
+                        residentSigCoords = residentSigField.placements?.FirstOrDefault() ?? residentSigField.coordinates;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[PDF DEBUG] Could not find ResidentSignature coordinates: {ex.Message}");
+                }
+            }
+
+            // Use coordinates from MergeSpec if available, otherwise use default position
+            double stampX, stampY, stampWidth, stampHeight;
+            if (residentSigCoords != null)
+            {
+                // Position stamp over the resident signature field
+                stampX = residentSigCoords.x;
+                stampY = residentSigCoords.y;
+                stampWidth = residentSigCoords.width;
+                stampHeight = residentSigCoords.height;
+            }
+            else
+            {
+                // Fallback to default position (lower area of page)
+                stampX = In(0.5);
+                stampY = page.Height - In(2.5);
+                stampWidth = In(7.0);
+                stampHeight = In(0.6);
+            }
+
             var waivedFont = new XFont("Roboto", 10, XFontStyle.Bold);
             var waivedBrush = XBrushes.Red;
             var waivedText = $"TENANT SIGNATURE WAIVED BY {env.TenantSkippedByName?.ToUpper() ?? "PROPERTY STAFF"}";
             var waivedDate = env.TenantSkippedAtUtc?.ToLocalTime().ToString("MM/dd/yyyy h:mm tt") ?? "";
 
-            // Draw a prominent notation in the tenant signature area
-            // Position it where the tenant signature would normally go
-            var notationY = page.Height - In(2.5); // Near bottom of page
+            // Get manager phone for display
+            var managerPhone = manager?.Phone ?? "";
+            var phoneText = !string.IsNullOrWhiteSpace(managerPhone) ? $"Property Staff Phone: {managerPhone}" : "";
 
-            // Draw a red box background
-            var boxRect = new XRect(In(0.5), notationY - In(0.15), In(7.0), In(0.5));
-            gfx.DrawRectangle(new XSolidBrush(XColor.FromArgb(255, 255, 240, 240)), boxRect);
-            gfx.DrawRectangle(new XPen(XColors.Red, 1.5), boxRect);
+            // Draw a red box background over the resident signature area
+            var boxRect = new XRect(stampX, stampY, stampWidth, stampHeight);
+            gfx.DrawRectangle(new XSolidBrush(XColor.FromArgb(240, 255, 240, 240)), boxRect); // Semi-transparent red background
+            gfx.DrawRectangle(new XPen(XColors.Red, 2.0), boxRect); // Thicker red border
 
-            // Draw the text
-            gfx.DrawString(waivedText, waivedFont, waivedBrush, new XPoint(In(0.7), notationY + In(0.05)), XStringFormats.Default);
+            // Draw the text (adjusted for box size)
+            var textY = stampY + In(0.12);
+            gfx.DrawString(waivedText, waivedFont, waivedBrush, new XPoint(stampX + In(0.1), textY), XStringFormats.Default);
+
+            textY += In(0.18);
             gfx.DrawString($"Date: {waivedDate}", new XFont("Roboto", 9, XFontStyle.Regular), XBrushes.DarkRed,
-                new XPoint(In(0.7), notationY + In(0.25)), XStringFormats.Default);
+                new XPoint(stampX + In(0.1), textY), XStringFormats.Default);
 
-            Console.WriteLine($"[PDF DEBUG] Added tenant skip notation for envelope {envelopeId}");
+            // Add manager phone if available
+            if (!string.IsNullOrWhiteSpace(phoneText))
+            {
+                textY += In(0.18);
+                gfx.DrawString(phoneText, new XFont("Roboto", 9, XFontStyle.Regular), XBrushes.DarkRed,
+                    new XPoint(stampX + In(0.1), textY), XStringFormats.Default);
+            }
+
+            Console.WriteLine($"[PDF DEBUG] Added tenant skip notation over resident signature area at ({stampX}, {stampY})");
         }
 
         // 7) Save to bytes

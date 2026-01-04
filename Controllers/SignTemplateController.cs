@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
 using SalesMetrics.Data;
 using SalesMetrics.Domain.Signing;
+using SalesMetrics.Models.Signing;
 
 namespace SalesMetrics.Controllers;
 
@@ -29,6 +30,7 @@ public class SignTemplatesController : Controller
     public IActionResult Create()
     {
         ViewBag.ViewPaths = GetRazorViewPaths();
+        ViewBag.TemplateMetadata = TemplateMetadata.GetTemplateMetadata(); // NEW: Pass template metadata
         return View(new SignTemplate { IsActive = true, DefaultSubject = "Please review and sign" });
     }
 

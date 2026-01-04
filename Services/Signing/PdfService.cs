@@ -165,7 +165,8 @@ public sealed class PdfService : IPdfService
         // Stamp "Tenant Signature Waived" notation if tenant was skipped
         if (env.TenantSkipped)
         {
-            // Find the ResidentSignature field coordinates to overlay the stamp
+            // Find both ResidentName and ResidentSignature field coordinates to create combined stamp area
+            Coordinates? residentNameCoords = null;
             Coordinates? residentSigCoords = null;
 
             if (!string.IsNullOrWhiteSpace(template.MergeSpecJson))
@@ -173,23 +174,52 @@ public sealed class PdfService : IPdfService
                 try
                 {
                     var mergeSpec = JsonSerializer.Deserialize<MergeSpec>(template.MergeSpecJson);
-                    if (mergeSpec?.fieldMapping != null && mergeSpec.fieldMapping.TryGetValue("ResidentSignature", out var residentSigField))
+                    if (mergeSpec?.fieldMapping != null)
                     {
-                        // Get the first placement for resident signature
-                        residentSigCoords = residentSigField.placements?.FirstOrDefault() ?? residentSigField.coordinates;
+                        // Get ResidentName coordinates
+                        if (mergeSpec.fieldMapping.TryGetValue("ResidentName", out var residentNameField))
+                        {
+                            residentNameCoords = residentNameField.placements?.FirstOrDefault() ?? residentNameField.coordinates;
+                        }
+
+                        // Get ResidentSignature coordinates
+                        if (mergeSpec.fieldMapping.TryGetValue("ResidentSignature", out var residentSigField))
+                        {
+                            residentSigCoords = residentSigField.placements?.FirstOrDefault() ?? residentSigField.coordinates;
+                        }
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[PDF DEBUG] Could not find ResidentSignature coordinates: {ex.Message}");
+                    Console.WriteLine($"[PDF DEBUG] Could not find resident field coordinates: {ex.Message}");
                 }
             }
 
-            // Use coordinates from MergeSpec if available, otherwise use default position
+            // Calculate bounding box that covers both ResidentName and ResidentSignature
             double stampX, stampY, stampWidth, stampHeight;
-            if (residentSigCoords != null)
+            if (residentNameCoords != null && residentSigCoords != null)
             {
-                // Position stamp over the resident signature field
+                // Find the leftmost X coordinate
+                stampX = Math.Min(residentNameCoords.x, residentSigCoords.x);
+
+                // Find the topmost Y coordinate
+                stampY = Math.Min(residentNameCoords.y, residentSigCoords.y);
+
+                // Calculate width to cover both fields (rightmost edge - leftmost edge)
+                var rightEdgeName = residentNameCoords.x + residentNameCoords.width;
+                var rightEdgeSig = residentSigCoords.x + residentSigCoords.width;
+                stampWidth = Math.Max(rightEdgeName, rightEdgeSig) - stampX;
+
+                // Calculate height to cover both fields (bottommost edge - topmost edge)
+                var bottomEdgeName = residentNameCoords.y + residentNameCoords.height;
+                var bottomEdgeSig = residentSigCoords.y + residentSigCoords.height;
+                stampHeight = Math.Max(bottomEdgeName, bottomEdgeSig) - stampY;
+
+                Console.WriteLine($"[PDF DEBUG] Combined stamp area: Name({residentNameCoords.x},{residentNameCoords.y}) + Sig({residentSigCoords.x},{residentSigCoords.y}) = Stamp({stampX},{stampY},{stampWidth}x{stampHeight})");
+            }
+            else if (residentSigCoords != null)
+            {
+                // Fallback to just signature field if name field not found
                 stampX = residentSigCoords.x;
                 stampY = residentSigCoords.y;
                 stampWidth = residentSigCoords.width;
@@ -213,7 +243,7 @@ public sealed class PdfService : IPdfService
             var managerPhone = manager?.Phone ?? "";
             var phoneText = !string.IsNullOrWhiteSpace(managerPhone) ? $"Property Staff Phone: {managerPhone}" : "";
 
-            // Draw a red box background over the resident signature area
+            // Draw a red box background over both resident name and signature fields
             var boxRect = new XRect(stampX, stampY, stampWidth, stampHeight);
             gfx.DrawRectangle(new XSolidBrush(XColor.FromArgb(240, 255, 240, 240)), boxRect); // Semi-transparent red background
             gfx.DrawRectangle(new XPen(XColors.Red, 2.0), boxRect); // Thicker red border
@@ -234,7 +264,7 @@ public sealed class PdfService : IPdfService
                     new XPoint(stampX + In(0.1), textY), XStringFormats.Default);
             }
 
-            Console.WriteLine($"[PDF DEBUG] Added tenant skip notation over resident signature area at ({stampX}, {stampY})");
+            Console.WriteLine($"[PDF DEBUG] Added tenant skip notation covering ResidentName + ResidentSignature at ({stampX}, {stampY})");
         }
 
         // 7) Save to bytes

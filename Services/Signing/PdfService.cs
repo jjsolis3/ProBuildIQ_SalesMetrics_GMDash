@@ -74,6 +74,10 @@ public sealed class PdfService : IPdfService
         var page = doc.Pages[0];
         using var gfx = XGraphics.FromPdfPage(page);
 
+        // Log page dimensions for debugging coordinate issues
+        Console.WriteLine($"[PDF DEBUG] Page dimensions: {page.Width:F1} x {page.Height:F1} points");
+        Console.WriteLine($"[PDF DEBUG] Page size in inches: {page.Width/72:F2}\" x {page.Height/72:F2}\"");
+
         // 4) Fonts & brushes
         var font = new XFont("Roboto", 11, XFontStyle.Regular);
         var fontBold = new XFont("Roboto", 12, XFontStyle.Bold);
@@ -196,32 +200,38 @@ public sealed class PdfService : IPdfService
             }
 
             // Calculate bounding box that covers both ResidentName and ResidentSignature
+            // COORDINATE SYSTEM FIX: Convert from canvas (top-left) to PDF (bottom-left)
             double stampX, stampY, stampWidth, stampHeight;
             if (residentNameCoords != null && residentSigCoords != null)
             {
                 // Find the leftmost X coordinate
-                stampX = Math.Min(residentNameCoords.x, residentSigCoords.x);
+                var canvasX = Math.Min(residentNameCoords.x, residentSigCoords.x);
 
-                // Find the topmost Y coordinate
-                stampY = Math.Min(residentNameCoords.y, residentSigCoords.y);
+                // Find the topmost Y coordinate (in canvas coordinates)
+                var canvasY = Math.Min(residentNameCoords.y, residentSigCoords.y);
 
                 // Calculate width to cover both fields (rightmost edge - leftmost edge)
                 var rightEdgeName = residentNameCoords.x + residentNameCoords.width;
                 var rightEdgeSig = residentSigCoords.x + residentSigCoords.width;
-                stampWidth = Math.Max(rightEdgeName, rightEdgeSig) - stampX;
+                stampWidth = Math.Max(rightEdgeName, rightEdgeSig) - canvasX;
 
                 // Calculate height to cover both fields (bottommost edge - topmost edge)
                 var bottomEdgeName = residentNameCoords.y + residentNameCoords.height;
                 var bottomEdgeSig = residentSigCoords.y + residentSigCoords.height;
-                stampHeight = Math.Max(bottomEdgeName, bottomEdgeSig) - stampY;
+                stampHeight = Math.Max(bottomEdgeName, bottomEdgeSig) - canvasY;
 
-                Console.WriteLine($"[PDF DEBUG] Combined stamp area: Name({residentNameCoords.x},{residentNameCoords.y}) + Sig({residentSigCoords.x},{residentSigCoords.y}) = Stamp({stampX},{stampY},{stampWidth}x{stampHeight})");
+                // Convert to PDF coordinates (bottom-left origin)
+                stampX = canvasX;
+                stampY = page.Height - canvasY - stampHeight;
+
+                Console.WriteLine($"[PDF DEBUG] Combined stamp area: Name({residentNameCoords.x},{residentNameCoords.y}) + Sig({residentSigCoords.x},{residentSigCoords.y}) = Canvas({canvasX},{canvasY}) = PDF({stampX},{stampY},{stampWidth}x{stampHeight})");
             }
             else if (residentSigCoords != null)
             {
                 // Fallback to just signature field if name field not found
+                // Convert from canvas to PDF coordinates
                 stampX = residentSigCoords.x;
-                stampY = residentSigCoords.y;
+                stampY = page.Height - residentSigCoords.y - residentSigCoords.height;
                 stampWidth = residentSigCoords.width;
                 stampHeight = residentSigCoords.height;
             }
@@ -521,11 +531,17 @@ public sealed class PdfService : IPdfService
             using var fs = File.OpenRead(imagePath);
             using var img = XImage.FromStream(() => fs);
 
-            // PDFSharp uses same coordinate system as canvas (top-left origin)
-            // Use coordinates directly as saved from configurator
-            Console.WriteLine($"[COORDINATE DEBUG] Signature - Page: {page.Width:F1}x{page.Height:F1}pt, x={x}, y={y}, size={width}x{height}");
+            // COORDINATE SYSTEM FIX:
+            // JavaScript configurator uses top-left origin (y=0 at top, increases downward)
+            // PDFSharp/PDF spec uses bottom-left origin (y=0 at bottom, increases upward)
+            // Convert Y coordinate: pdfY = pageHeight - canvasY - height
+            // (Subtract height because Y is the bottom-left corner of the image in PDF coordinates)
 
-            gfx.DrawImage(img, x, y, width, height);
+            var pdfY = page.Height - y - height;
+
+            Console.WriteLine($"[COORDINATE DEBUG] Signature - Page: {page.Width:F1}x{page.Height:F1}pt, canvas y={y}, pdf y={pdfY}, size={width}x{height}");
+
+            gfx.DrawImage(img, x, pdfY, width, height);
         }
         catch (Exception ex)
         {
@@ -535,15 +551,22 @@ public sealed class PdfService : IPdfService
 
     /// <summary>
     /// Draw text on PDF with baseline offset
+    /// Converts from top-left origin (JavaScript/Canvas) to bottom-left origin (PDF/PDFSharp)
     /// </summary>
     private static void DrawTextWithCoordinateConversion(XGraphics gfx, PdfPage page, XFont font, XBrush brush, string text, double x, double y)
     {
-        // PDFSharp uses same coordinate system as canvas (top-left origin)
+        // COORDINATE SYSTEM FIX:
+        // JavaScript configurator uses top-left origin (y=0 at top, increases downward)
+        // PDFSharp/PDF spec uses bottom-left origin (y=0 at bottom, increases upward)
+        // We need to convert: pdfY = pageHeight - canvasY
+
+        var pdfY = page.Height - y;
+
         // Add small baseline offset so text appears properly within the field box
         const double baselineOffset = 12; // Slightly below box top for better visual alignment
-        var textY = y + baselineOffset;
+        var textY = pdfY - baselineOffset; // Subtract because we're in bottom-left coordinates
 
-        Console.WriteLine($"[COORDINATE DEBUG] Text '{text}' - Page: {page.Width:F1}x{page.Height:F1}pt, box y={y}, text y={textY}");
+        Console.WriteLine($"[COORDINATE DEBUG] Text '{text}' - Page: {page.Width:F1}x{page.Height:F1}pt, canvas y={y}, pdf y={pdfY}, final y={textY}");
 
         gfx.DrawString(text, font, brush, new XPoint(x, textY), XStringFormats.Default);
     }

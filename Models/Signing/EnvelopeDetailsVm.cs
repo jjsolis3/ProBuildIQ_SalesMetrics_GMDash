@@ -18,6 +18,10 @@ public sealed class EnvelopeDetailsVm
     public string? PdfPath { get; set; }
     public string? PdfSha256Hex { get; set; }
 
+    // Property and Order information
+    public string? PropertyName { get; set; }
+    public string? OrderNumber { get; set; }
+
     public List<RecipientVm> Recipients { get; set; } = new();
     public List<EventVm> Events { get; set; } = new();
 

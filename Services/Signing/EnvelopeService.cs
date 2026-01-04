@@ -286,6 +286,13 @@ public sealed class EnvelopeService : IEnvelopeService
             .FirstOrDefaultAsync(x => x.EnvelopeId == envelopeId);
         if (e is null) return null;
 
+        // Fetch property name if PropertyID is set
+        string? propertyName = null;
+        if (e.PropertyID.HasValue)
+        {
+            propertyName = await _merge.GetPropertyNameAsync(e.PropertyID.Value);
+        }
+
         return new EnvelopeDetailsVm
         {
             EnvelopeId = e.EnvelopeId,
@@ -299,6 +306,8 @@ public sealed class EnvelopeService : IEnvelopeService
             ExpiresAtUtc = e.ExpiresAtUtc,
             PdfPath = e.PdfStoragePath,
             PdfSha256Hex = e.PdfSha256 is null ? null : Convert.ToHexString(e.PdfSha256),
+            PropertyName = propertyName,
+            OrderNumber = e.OrderNumber,
             Recipients = e.Recipients.OrderBy(r => r.SignerOrder).Select(r => new EnvelopeDetailsVm.RecipientVm
             {
                 RecipientId = r.RecipientId,

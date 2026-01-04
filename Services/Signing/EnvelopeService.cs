@@ -517,13 +517,8 @@ public sealed class EnvelopeService : IEnvelopeService
         env.TenantSkippedByName = skippedByName;
         env.TenantSkippedAtUtc = DateTime.UtcNow;
 
-        _db.SignEvents.Add(new SignEvent
-        {
-            EnvelopeId = envelopeId,
-            EventType = "TenantSkipped",
-            OccurredAtUtc = DateTime.UtcNow,
-            MetaJson = $"{{\"skippedBy\":\"{skippedByName}\"}}"
-        });
+        // Note: Not logging as SignEvent since "TenantSkipped" is not in the allowed EventType constraint
+        // The envelope fields (TenantSkipped, TenantSkippedByName, TenantSkippedAtUtc) provide complete audit trail
 
         await _db.SaveChangesAsync();
     }

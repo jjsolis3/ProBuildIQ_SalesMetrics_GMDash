@@ -130,6 +130,14 @@ public sealed class PdfService : IPdfService
                         {
                             Console.WriteLine($"[PDF DEBUG] Placing '{fieldKey}' at page={coord.page}, x={coord.x}, y={coord.y}, w={coord.width}, h={coord.height}");
 
+                            // Draw debug rectangle if enabled
+                            if (debug)
+                            {
+                                var boxRect = new XRect(coord.x, coord.y, coord.width, coord.height);
+                                gfx.DrawRectangle(new XPen(XColors.Blue, 0.5), boxRect);
+                                DrawLabel(gfx, fieldKey, coord.x, coord.y - 5);
+                            }
+
                             // Handle signatures differently
                             if (fieldInfo.type == "signature" && value is string sigPath && !string.IsNullOrWhiteSpace(sigPath))
                             {

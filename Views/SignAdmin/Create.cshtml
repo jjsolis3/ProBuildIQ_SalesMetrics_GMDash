@@ -82,7 +82,10 @@
                             @* <input name="Recipients[@i].Role" class="form-control" value="@(Model.Recipients.ElementAtOrDefault(i)?.Role ?? "Manager")" /> *@
                             <select name="Recipeints[@i].Role" class="form-select">
                                 <option value="Manager" selected>Manager</option>
+                                <option value="Supervisor">Supervisor</option>
+                                <option value="Maintenance">Maintenance</option>
                                 <option value="Tenant">Tenant</option>
+                                <option value="Other">Other</option>
                             </select>
                         </div>
                         <div class="col-md-1">
@@ -260,7 +263,10 @@
           const isTemplateMessage = currentMessage === '' || currentMessage.includes('Envelope for');
 
           if (isTemplateMessage && propName !== 'Search by property name...') {
-            messageBody.value = `Envelope for ${propName} Order#: ${orderDisplay} Branch: ${branch}`;
+            messageBody.value = `Envelope for:  
+            Property: ${propName} 
+            Order#: ${orderDisplay} 
+            Branch: ${branch}`;
           }
         }
 

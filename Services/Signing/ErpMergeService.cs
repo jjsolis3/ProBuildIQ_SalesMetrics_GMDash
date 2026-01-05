@@ -52,19 +52,23 @@ namespace SalesMetrics.Services.Signing
 
             if (env.PropertyID.HasValue)
             {
-                var p = await GetPropertyByIdAsync(env.PropertyID.Value);
-                if (p != null)
+                // Get property data from CUSTOMER_MASTER (ERP), not YardiProperties
+                // PropertyID in SignEnvelope is CUM_CUMMAS_ID, not YardiProperties.Property_ID
+                var propertyName = await GetPropertyNameAsync(env.PropertyID.Value);
+                var propertyAddress = await GetPropertyAddressAsync(env.PropertyID.Value);
+
+                if (!string.IsNullOrEmpty(propertyName))
                 {
                     prop = new PropertyVm
                     {
-                        PropertyId = p.Property_ID,
-                        Name = p.PropertyName,
-                        Address = p.PropertyAddress,
-                        City = p.PropertyCity,
-                        State = p.PropertyState,
-                        Zip = p.PropertyZipCode,
-                        ManagerName = p.Manager,
-                        Phone = p.PropertyPhone,
+                        PropertyId = env.PropertyID.Value,
+                        Name = propertyName,
+                        Address = propertyAddress ?? "",
+                        City = "", // Not needed for email rendering
+                        State = "",
+                        Zip = "",
+                        ManagerName = "", // Not needed for email rendering
+                        Phone = "", // Not needed for email rendering
                         Unit = null // Will be set from order if available
                     };
                 }
@@ -273,13 +277,6 @@ namespace SalesMetrics.Services.Signing
             }
 
             return results;
-        }
-
-        // Helper method to get property by ID from YardiProperties table
-        private async Task<YardiPropertyEntity?> GetPropertyByIdAsync(int propertyId)
-        {
-            return await _db.YardiProperties
-                .FirstOrDefaultAsync(p => p.Property_ID == propertyId);
         }
 
         // Helper method to get order by ID from ERP

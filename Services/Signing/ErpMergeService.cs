@@ -141,6 +141,34 @@ namespace SalesMetrics.Services.Signing
             return result?.ToString();
         }
 
+        public async Task<string?> GetPropertyAddressAsync(int? propertyId)
+        {
+            if (!propertyId.HasValue) return null;
+
+            // Get address from YardiProperties table (which uses Property_ID, not CUM_CUMMAS_ID)
+            // Note: PropertyID in SignEnvelope is actually CUM_CUMMAS_ID, not YardiProperties.Property_ID
+            // So we need to query CUSTOMER_MASTER for the address
+            var officeLocation = _http.HttpContext?.Session.GetString("OfficeLocation") ?? "LAX";
+            var connStr = _config.GetConnectionString(officeLocation);
+
+            using var conn = new SqlConnection(connStr);
+            await conn.OpenAsync();
+
+            var sql = @"
+                SELECT ISNULL(CUM_ADDRESS_1, '') + ' ' + ISNULL(CUM_CITY, '') + ', ' + ISNULL(CUM_STATE, '') + ' ' + ISNULL(CUM_ZIP_CODE, '')
+                FROM CUSTOMER_MASTER
+                WHERE CUM_CUMMAS_ID = @propertyId";
+
+            using var cmd = new SqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@propertyId", propertyId.Value);
+
+            var result = await cmd.ExecuteScalarAsync();
+            var address = result?.ToString()?.Trim();
+
+            // Return null if address is empty or just commas/spaces
+            return string.IsNullOrWhiteSpace(address) || address == "," || address == ", " ? null : address;
+        }
+
         public async Task<string?> GetUnitNumberByOrderIdAsync(int? orderId)
         {
             if (!orderId.HasValue) return null;

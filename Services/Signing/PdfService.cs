@@ -466,7 +466,10 @@ public sealed class PdfService : IPdfService
             data["PropertyName"] = propertyName;
         }
         if (!data.ContainsKey("PropertyAddress"))
-            data["PropertyAddress"] = ""; // TODO: Get from ERP if needed
+        {
+            var propertyAddress = await _merge.GetPropertyAddressAsync(env.PropertyID) ?? "";
+            data["PropertyAddress"] = propertyAddress;
+        }
         if (!data.ContainsKey("PropertyPhone"))
             data["PropertyPhone"] = ""; // TODO: Get from ERP if needed
 

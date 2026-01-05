@@ -159,7 +159,7 @@ namespace SalesMetrics.Services.Signing
             await conn.OpenAsync();
 
             var sql = @"
-                SELECT ISNULL(CUM_ADDRESS_1, '') + ' ' + ISNULL(CUM_CITY, '') + ', ' + ISNULL(CUM_STATE, '') + ' ' + ISNULL(CUM_ZIP_CODE, '')
+                SELECT ISNULL(CUM_ADDRESS_1, '') + ' ' + ISNULL(CUM_CITY, '') + ', ' + ISNULL(CUM_STATE, '') + ' ' + ISNULL(CUM_ZIP, '')
                 FROM CUSTOMER_MASTER
                 WHERE CUM_CUMMAS_ID = @propertyId";
 

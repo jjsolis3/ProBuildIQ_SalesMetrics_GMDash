@@ -240,6 +240,14 @@
           updateMessageBody();
         });
 
+        // Update message body when branch is changed
+        const branchInput = document.querySelector('input[name="LocationCode"]');
+        if (branchInput) {
+          branchInput.addEventListener('input', () => {
+            updateMessageBody();
+          });
+        }
+
         // Auto-update message body with property, order, and branch info
         function updateMessageBody() {
           const messageBody = document.getElementById('messageBody');

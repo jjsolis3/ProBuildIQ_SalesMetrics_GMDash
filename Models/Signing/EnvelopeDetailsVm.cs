@@ -21,6 +21,7 @@ public sealed class EnvelopeDetailsVm
     // Property and Order information
     public string? PropertyName { get; set; }
     public string? OrderNumber { get; set; }
+    public string? UnitNumber { get; set; }
 
     public List<RecipientVm> Recipients { get; set; } = new();
     public List<EventVm> Events { get; set; } = new();

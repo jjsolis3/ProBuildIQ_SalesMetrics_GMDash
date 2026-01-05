@@ -22,10 +22,14 @@
                                         <strong>Property:</strong> @Model.PropertyName
                                     </div>
                                 }
-                                @if (!string.IsNullOrEmpty(Model.OrderNumber))
+                                @if (!string.IsNullOrEmpty(Model.OrderNumber) || !string.IsNullOrEmpty(Model.UnitNumber))
                                 {
                                     <div class="col-md-6">
                                         <strong>Order #:</strong> @Model.OrderNumber
+                                        @if (!string.IsNullOrEmpty(Model.UnitNumber))
+                                        {
+                                            <text> - Unit: @Model.UnitNumber</text>
+                                        }
                                     </div>
                                 }
                                 @if (!string.IsNullOrEmpty(Model.LocationCode))

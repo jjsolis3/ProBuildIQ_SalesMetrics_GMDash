@@ -282,6 +282,7 @@ public sealed class EnvelopeService : IEnvelopeService
         var e = await _db.SignEnvelopes
             .Include(x => x.Recipients)
             .Include(x => x.Events)
+            .Include(x => x.Fields)
             .AsNoTracking()
             .FirstOrDefaultAsync(x => x.EnvelopeId == envelopeId);
         if (e is null) return null;
@@ -292,6 +293,9 @@ public sealed class EnvelopeService : IEnvelopeService
         {
             propertyName = await _merge.GetPropertyNameAsync(e.PropertyID.Value);
         }
+
+        // Get UnitNumber from fields
+        var unitNumber = e.Fields?.FirstOrDefault(f => f.FieldKey == "UnitNumber")?.Value;
 
         return new EnvelopeDetailsVm
         {
@@ -308,6 +312,7 @@ public sealed class EnvelopeService : IEnvelopeService
             PdfSha256Hex = e.PdfSha256 is null ? null : Convert.ToHexString(e.PdfSha256),
             PropertyName = propertyName,
             OrderNumber = e.OrderNumber,
+            UnitNumber = unitNumber,
             Recipients = e.Recipients.OrderBy(r => r.SignerOrder).Select(r => new EnvelopeDetailsVm.RecipientVm
             {
                 RecipientId = r.RecipientId,

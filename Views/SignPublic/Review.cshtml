@@ -4,6 +4,8 @@
     Layout = "~/Views/Shared/PublicSigningLayout.cshtml";
     ViewData["Title"] = "Review & Sign";
     var token = (string)ViewBag.Token;
+    var manager = Model.Envelope.Recipients?.FirstOrDefault(r => r.Role == "Manager");
+    var tenant = Model.Envelope.Recipients?.FirstOrDefault(r => r.Role == "Tenant");
 }
 
 <!-- Display validation errors prominently -->
@@ -20,49 +22,108 @@
     </div>
 }
 
-<!-- FIXED: Changed from asp-action to direct action URL -->
 <form action="/sign/@token" method="post" id="signForm">
     @Html.AntiForgeryToken()
 
-    <!-- Property info (read-only) -->
-    @if (Model.Property != null)
-    {
-        <div class="alert alert-light border mb-3">
-            <div><strong>Property:</strong> @Model.Property.Name</div>
-            <div>@Model.Property.Address, @Model.Property.City, @Model.Property.State @Model.Property.Zip</div>
-            @if (!string.IsNullOrWhiteSpace(Model.Property.Unit))
-            {
-                <div><strong>Unit:</strong> @Model.Property.Unit</div>
-            }
+    <!-- Envelope Information Card -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="bi bi-envelope-fill"></i> Envelope #@Model.Envelope.EnvelopeId</h5>
         </div>
-    }
+        <div class="card-body">
+            <!-- Envelope Title -->
+            <div class="mb-3">
+                <h6 class="text-primary fw-bold mb-1">Document:</h6>
+                <p class="mb-0">@Model.Envelope.Subject</p>
+            </div>
 
-    <!-- Document Preview Section -->
-    <div class="pdf-preview mb-4">
-        <div class="pdf-preview-header d-flex justify-content-between align-items-center">
-            <h5 class="mb-0">
-                <i class="bi bi-file-earmark-text"></i> Document Preview
-            </h5>
-            <a href="/sign/@token/pdf" target="_blank" class="btn btn-outline-primary btn-sm">
-                <i class="bi bi-file-pdf"></i> View Full PDF Document
-            </a>
-        </div>
-        <div class="pdf-preview-body mt-3">
-            <!-- Display the HTML body content -->
-            <div class="document-content">
-                @Html.Raw(Model.HtmlBody)
+            <!-- Envelope Message -->
+            @if (!string.IsNullOrWhiteSpace(Model.Envelope.MessageBody))
+            {
+                <div class="mb-3">
+                    <h6 class="text-primary fw-bold mb-1">Message:</h6>
+                    <p class="mb-0">@Model.Envelope.MessageBody</p>
+                </div>
+            }
+
+            <!-- Property Information -->
+            @if (Model.Property != null)
+            {
+                <div class="mb-3">
+                    <h6 class="text-primary fw-bold mb-1">Property:</h6>
+                    <p class="mb-1">@Model.Property.Name</p>
+                    <p class="mb-0 text-muted">@Model.Property.Address, @Model.Property.City, @Model.Property.State @Model.Property.Zip</p>
+                    @if (!string.IsNullOrWhiteSpace(Model.Property.Unit))
+                    {
+                        <p class="mb-0"><strong>Unit:</strong> @Model.Property.Unit</p>
+                    }
+                </div>
+            }
+
+            <!-- Recipients Information -->
+            <div class="row">
+                @if (manager != null)
+                {
+                    <div class="col-md-6 mb-3">
+                        <h6 class="text-primary fw-bold mb-1">Property Manager:</h6>
+                        <p class="mb-0">@manager.FullName</p>
+                        @if (!string.IsNullOrWhiteSpace(manager.Email))
+                        {
+                            <p class="mb-0 text-muted small">@manager.Email</p>
+                        }
+                    </div>
+                }
+                @if (tenant != null)
+                {
+                    <div class="col-md-6 mb-3">
+                        <h6 class="text-primary fw-bold mb-1">Tenant:</h6>
+                        <p class="mb-0">@tenant.FullName</p>
+                        @if (!string.IsNullOrWhiteSpace(tenant.Email))
+                        {
+                            <p class="mb-0 text-muted small">@tenant.Email</p>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(tenant.Phone))
+                        {
+                            <p class="mb-0 text-muted small">@tenant.Phone</p>
+                        }
+                    </div>
+                }
             </div>
         </div>
     </div>
 
-    <!-- Property Info (below document preview for better UX) -->
+    <!-- Document Preview Section with PDF Viewer -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center bg-light">
+            <h5 class="mb-0">
+                <i class="bi bi-file-earmark-pdf"></i> Document Preview
+            </h5>
+            <a href="/sign/@token/pdf" target="_blank" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-arrows-fullscreen"></i> View Full PDF
+            </a>
+        </div>
+        <div class="card-body p-0">
+            <div id="pdfContainer" style="max-height: 600px; overflow-y: auto; background: #e9ecef;">
+                <canvas id="pdfCanvas" style="display: block; margin: 0 auto; background: white;"></canvas>
+            </div>
+            <div class="text-center p-2 border-top">
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="prevPage" disabled>
+                    <i class="bi bi-chevron-left"></i> Previous
+                </button>
+                <span class="mx-3">Page <span id="pageNum">1</span> of <span id="pageCount">1</span></span>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="nextPage" disabled>
+                    Next <i class="bi bi-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+    </div>
 
-    <!-- Manager-only: capture tenant -->
+    <!-- Manager: Capture Tenant Info -->
     @if (Model.Recipient.Role == "Manager" && !Model.HasTenantRecipient)
     {
-        <div class="card mb-3">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <span>Add Tenant (to receive the consent)</span>
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center bg-light">
+                <h5 class="mb-0"><i class="bi bi-person-plus"></i> Add Tenant Information</h5>
                 <div class="form-check mb-0">
                     <input class="form-check-input" type="checkbox" id="SkipTenant" name="SkipTenant" value="true">
                     <label class="form-check-label" for="SkipTenant">
@@ -70,75 +131,171 @@
                     </label>
                 </div>
             </div>
-            <div class="card-body row g-2" id="tenantFields">
-                <div class="col-md-6">
-                    <label class="form-label">Tenant Full Name</label>
-                    <input name="TenantFullName" id="TenantFullName" class="form-control" />
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Tenant Email</label>
-                    <input name="TenantEmail" id="TenantEmail" type="email" class="form-control" />
+            <div class="card-body" id="tenantFields">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Tenant Full Name <span class="text-danger">*</span></label>
+                        <input name="TenantFullName" id="TenantFullName" class="form-control" placeholder="Enter tenant's full name" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Tenant Email <span class="text-danger">*</span></label>
+                        <input name="TenantEmail" id="TenantEmail" type="email" class="form-control" placeholder="tenant@example.com" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Tenant Phone</label>
+                        <input name="TenantPhone" id="TenantPhone" type="tel" class="form-control" placeholder="(555) 123-4567" />
+                    </div>
                 </div>
             </div>
         </div>
     }
 
-    <!-- Consent -->
-    <div class="form-check mb-3">
-        <input class="form-check-input" type="checkbox" id="Accept" name="Accept" value="true">
-        <label class="form-check-label" for="Accept">
-            I have read and agree to the terms, and I adopt the signature below as my electronic signature.
-        </label>
-    </div>
-
-    <!-- Drawn signature -->
-    <div class="mb-3">
-        <label class="form-label">Draw your signature</label>
-        <div class="border rounded p-2">
-            <canvas id="sigPad" style="width:100%;height:120px;"></canvas>
-            <input type="hidden" id="SigData" name="SigData" />
+    <!-- Signature Section -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-light">
+            <h5 class="mb-0"><i class="bi bi-pen"></i> Your Signature</h5>
         </div>
-        <button type="button" class="btn btn-sm btn-outline-secondary mt-2" id="clearSig">Clear</button>
-    </div>
+        <div class="card-body">
+            <!-- Consent Checkbox -->
+            <div class="form-check mb-4 p-3 bg-light rounded">
+                <input class="form-check-input" type="checkbox" id="Accept" name="Accept" value="true">
+                <label class="form-check-label fw-bold" for="Accept">
+                    I have read and agree to the terms, and I adopt the signature below as my electronic signature.
+                </label>
+            </div>
 
-    <!-- Typed name -->
-    <div class="mb-4">
-        <label class="form-label">Type your full name</label>
-        <input class="form-control" id="TypedFullName" name="TypedFullName" />
-    </div>
+            <!-- Signature Canvas -->
+            <div class="mb-4">
+                <label class="form-label fw-bold">Draw your signature <span class="text-danger">*</span></label>
+                <div class="border rounded p-2 bg-white">
+                    <canvas id="sigPad" style="width:100%;height:150px;border:2px dashed #dee2e6;border-radius:4px;"></canvas>
+                    <input type="hidden" id="SigData" name="SigData" />
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-secondary mt-2" id="clearSig">
+                    <i class="bi bi-x-circle"></i> Clear Signature
+                </button>
+            </div>
 
-    <button class="btn btn-success" type="submit" id="submitBtn">Sign & Finish</button>
+            <!-- Typed Name -->
+            <div class="mb-4">
+                <label class="form-label fw-bold">Type your full name <span class="text-danger">*</span></label>
+                <input class="form-control" id="TypedFullName" name="TypedFullName" placeholder="Enter your full legal name" />
+            </div>
+
+            <button class="btn btn-success btn-lg w-100" type="submit" id="submitBtn">
+                <i class="bi bi-check-circle-fill"></i> Sign & Finish
+            </button>
+        </div>
+    </div>
 </form>
 
 @section Scripts {
+    <!-- PDF.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script>
-        // Handle skip tenant checkbox
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        // PDF Viewer Variables
+        let pdfDoc = null;
+        let pageNum = 1;
+        let pageRendering = false;
+        let pageNumPending = null;
+        const scale = 1.5;
+        const canvas = document.getElementById('pdfCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Load PDF
+        const pdfUrl = '/sign/@token/pdf';
+        pdfjsLib.getDocument(pdfUrl).promise.then(function(pdf) {
+            pdfDoc = pdf;
+            document.getElementById('pageCount').textContent = pdf.numPages;
+            renderPage(pageNum);
+
+            // Enable/disable navigation buttons
+            if (pdf.numPages > 1) {
+                document.getElementById('nextPage').disabled = false;
+            }
+        }).catch(function(error) {
+            console.error('Error loading PDF:', error);
+            document.getElementById('pdfContainer').innerHTML = '<div class="alert alert-warning m-3">Unable to load PDF preview. Please use the "View Full PDF" button above.</div>';
+        });
+
+        function renderPage(num) {
+            pageRendering = true;
+            pdfDoc.getPage(num).then(function(page) {
+                const viewport = page.getViewport({ scale: scale });
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+
+                const renderContext = {
+                    canvasContext: ctx,
+                    viewport: viewport
+                };
+
+                const renderTask = page.render(renderContext);
+                renderTask.promise.then(function() {
+                    pageRendering = false;
+                    if (pageNumPending !== null) {
+                        renderPage(pageNumPending);
+                        pageNumPending = null;
+                    }
+                });
+            });
+
+            document.getElementById('pageNum').textContent = num;
+
+            // Update button states
+            document.getElementById('prevPage').disabled = (num <= 1);
+            document.getElementById('nextPage').disabled = (num >= pdfDoc.numPages);
+        }
+
+        function queueRenderPage(num) {
+            if (pageRendering) {
+                pageNumPending = num;
+            } else {
+                renderPage(num);
+            }
+        }
+
+        document.getElementById('prevPage').addEventListener('click', function() {
+            if (pageNum <= 1) return;
+            pageNum--;
+            queueRenderPage(pageNum);
+        });
+
+        document.getElementById('nextPage').addEventListener('click', function() {
+            if (pageNum >= pdfDoc.numPages) return;
+            pageNum++;
+            queueRenderPage(pageNum);
+        });
+
+        // Skip Tenant Checkbox Handler
         const skipTenantCheckbox = document.getElementById('SkipTenant');
         if (skipTenantCheckbox) {
             skipTenantCheckbox.addEventListener('change', function() {
                 const tenantFields = document.getElementById('tenantFields');
                 const tenantNameInput = document.getElementById('TenantFullName');
                 const tenantEmailInput = document.getElementById('TenantEmail');
+                const tenantPhoneInput = document.getElementById('TenantPhone');
 
                 if (this.checked) {
-                    // Disable and clear tenant fields
                     tenantFields.style.opacity = '0.5';
                     tenantNameInput.disabled = true;
                     tenantEmailInput.disabled = true;
+                    tenantPhoneInput.disabled = true;
                     tenantNameInput.value = '';
                     tenantEmailInput.value = '';
+                    tenantPhoneInput.value = '';
                 } else {
-                    // Enable tenant fields
                     tenantFields.style.opacity = '1';
                     tenantNameInput.disabled = false;
                     tenantEmailInput.disabled = false;
+                    tenantPhoneInput.disabled = false;
                 }
             });
         }
 
-        // Basic canvas setup
-        const canvas = document.getElementById('sigPad');
-        const ctx = canvas.getContext('2d');
+        // Signature Pad Setup
         let drawing = false, hasInk = false;
 
         function resize() {
@@ -151,11 +308,25 @@
           ctx.lineCap = 'round';
           ctx.strokeStyle = '#000';
         }
-        resize();
-        window.addEventListener('resize', resize);
 
-        function pos(e) {
-          const rect = canvas.getBoundingClientRect();
+        const sigCanvas = document.getElementById('sigPad');
+        const sigCtx = sigCanvas.getContext('2d');
+
+        function resizeSigPad() {
+          const r = sigCanvas.getBoundingClientRect();
+          const ratio = window.devicePixelRatio || 1;
+          sigCanvas.width = r.width * ratio;
+          sigCanvas.height = r.height * ratio;
+          sigCtx.scale(ratio, ratio);
+          sigCtx.lineWidth = 2;
+          sigCtx.lineCap = 'round';
+          sigCtx.strokeStyle = '#000';
+        }
+        resizeSigPad();
+        window.addEventListener('resize', resizeSigPad);
+
+        function pos(e, targetCanvas) {
+          const rect = targetCanvas.getBoundingClientRect();
           const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
           const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
           return {x,y};
@@ -165,45 +336,46 @@
           e.preventDefault();
           drawing = true;
           hasInk = true;
-          const p = pos(e);
-          ctx.beginPath();
-          ctx.moveTo(p.x, p.y);
+          const p = pos(e, sigCanvas);
+          sigCtx.beginPath();
+          sigCtx.moveTo(p.x, p.y);
         }
 
         function move(e){
           if(!drawing) return;
           e.preventDefault();
-          const p = pos(e);
-          ctx.lineTo(p.x, p.y);
-          ctx.stroke();
+          const p = pos(e, sigCanvas);
+          sigCtx.lineTo(p.x, p.y);
+          sigCtx.stroke();
         }
 
         function end(e){
           if(!drawing) return;
           e.preventDefault();
           drawing = false;
-          const dataUrl = canvas.toDataURL('image/png');
+          const dataUrl = sigCanvas.toDataURL('image/png');
           document.getElementById('SigData').value = dataUrl;
           console.log('Signature captured, length:', dataUrl.length);
         }
 
-        canvas.addEventListener('mousedown', start);
-        canvas.addEventListener('mousemove', move);
-        canvas.addEventListener('mouseup', end);
-        canvas.addEventListener('mouseleave', end);
+        sigCanvas.addEventListener('mousedown', start);
+        sigCanvas.addEventListener('mousemove', move);
+        sigCanvas.addEventListener('mouseup', end);
+        sigCanvas.addEventListener('mouseleave', end);
 
-        canvas.addEventListener('touchstart', start);
-        canvas.addEventListener('touchmove', move);
-        canvas.addEventListener('touchend', end);
-        canvas.addEventListener('touchcancel', end);
+        sigCanvas.addEventListener('touchstart', start);
+        sigCanvas.addEventListener('touchmove', move);
+        sigCanvas.addEventListener('touchend', end);
+        sigCanvas.addEventListener('touchcancel', end);
 
         document.getElementById('clearSig').addEventListener('click', ()=>{
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          sigCtx.clearRect(0, 0, sigCanvas.width, sigCanvas.height);
           document.getElementById('SigData').value = '';
           hasInk = false;
           console.log('Signature cleared');
         });
 
+        // Form Submission Validation
         document.getElementById('signForm').addEventListener('submit', function(e){
           const accept = document.getElementById('Accept').checked;
           const name = document.getElementById('TypedFullName').value.trim();
@@ -226,7 +398,6 @@
             console.log('Tenant name:', tenantName);
             console.log('Tenant email:', tenantEmail);
 
-            // Only require tenant info if NOT skipping
             if (!skipTenant && (!tenantName || !tenantEmail)) {
               e.preventDefault();
               alert('Please enter the tenant name and email, or check "Skip tenant signature".');
@@ -254,7 +425,7 @@
 
           console.log('Form validation passed, submitting...');
           document.getElementById('submitBtn').disabled = true;
-          document.getElementById('submitBtn').textContent = 'Submitting...';
+          document.getElementById('submitBtn').innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Submitting...';
         });
     </script>
 }

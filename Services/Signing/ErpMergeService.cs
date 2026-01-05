@@ -52,19 +52,23 @@ namespace SalesMetrics.Services.Signing
 
             if (env.PropertyID.HasValue)
             {
-                var p = await GetPropertyByIdAsync(env.PropertyID.Value);
-                if (p != null)
+                // Get property data from CUSTOMER_MASTER (ERP), not YardiProperties
+                // PropertyID in SignEnvelope is CUM_CUMMAS_ID, not YardiProperties.Property_ID
+                var propertyName = await GetPropertyNameAsync(env.PropertyID.Value);
+                var propertyAddress = await GetPropertyAddressAsync(env.PropertyID.Value);
+
+                if (!string.IsNullOrEmpty(propertyName))
                 {
                     prop = new PropertyVm
                     {
-                        PropertyId = p.Property_ID,
-                        Name = p.PropertyName,
-                        Address = p.PropertyAddress,
-                        City = p.PropertyCity,
-                        State = p.PropertyState,
-                        Zip = p.PropertyZipCode,
-                        ManagerName = p.Manager,
-                        Phone = p.PropertyPhone,
+                        PropertyId = env.PropertyID.Value,
+                        Name = propertyName,
+                        Address = propertyAddress ?? "",
+                        City = "", // Not needed for email rendering
+                        State = "",
+                        Zip = "",
+                        ManagerName = "", // Not needed for email rendering
+                        Phone = "", // Not needed for email rendering
                         Unit = null // Will be set from order if available
                     };
                 }
@@ -121,12 +125,52 @@ namespace SalesMetrics.Services.Signing
         {
             if (!propertyId.HasValue) return null;
 
-            var prop = await _db.YardiProperties
-                .Where(p => p.Property_ID == propertyId.Value)
-                .Select(p => p.PropertyName)
-                .FirstOrDefaultAsync();
+            // FIXED: Query CUSTOMER_MASTER table directly since PropertyID is CUM_CUMMAS_ID
+            // The property dropdown returns CUM_CUMMAS_ID, not YardiProperties.Property_ID
+            var officeLocation = _http.HttpContext?.Session.GetString("OfficeLocation") ?? "LAX";
+            var connStr = _config.GetConnectionString(officeLocation);
 
-            return prop;
+            using var conn = new SqlConnection(connStr);
+            await conn.OpenAsync();
+
+            var sql = @"
+                SELECT CUM_CUSTOMER_NAME
+                FROM CUSTOMER_MASTER
+                WHERE CUM_CUMMAS_ID = @propertyId";
+
+            using var cmd = new SqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@propertyId", propertyId.Value);
+
+            var result = await cmd.ExecuteScalarAsync();
+            return result?.ToString();
+        }
+
+        public async Task<string?> GetPropertyAddressAsync(int? propertyId)
+        {
+            if (!propertyId.HasValue) return null;
+
+            // Get address from YardiProperties table (which uses Property_ID, not CUM_CUMMAS_ID)
+            // Note: PropertyID in SignEnvelope is actually CUM_CUMMAS_ID, not YardiProperties.Property_ID
+            // So we need to query CUSTOMER_MASTER for the address
+            var officeLocation = _http.HttpContext?.Session.GetString("OfficeLocation") ?? "LAX";
+            var connStr = _config.GetConnectionString(officeLocation);
+
+            using var conn = new SqlConnection(connStr);
+            await conn.OpenAsync();
+
+            var sql = @"
+                SELECT ISNULL(CUM_ADDRESS_1, '') + ' ' + ISNULL(CUM_CITY, '') + ', ' + ISNULL(CUM_STATE, '') + ' ' + ISNULL(CUM_ZIP, '')
+                FROM CUSTOMER_MASTER
+                WHERE CUM_CUMMAS_ID = @propertyId";
+
+            using var cmd = new SqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@propertyId", propertyId.Value);
+
+            var result = await cmd.ExecuteScalarAsync();
+            var address = result?.ToString()?.Trim();
+
+            // Return null if address is empty or just commas/spaces
+            return string.IsNullOrWhiteSpace(address) || address == "," || address == ", " ? null : address;
         }
 
         public async Task<string?> GetUnitNumberByOrderIdAsync(int? orderId)
@@ -233,13 +277,6 @@ namespace SalesMetrics.Services.Signing
             }
 
             return results;
-        }
-
-        // Helper method to get property by ID from YardiProperties table
-        private async Task<YardiPropertyEntity?> GetPropertyByIdAsync(int propertyId)
-        {
-            return await _db.YardiProperties
-                .FirstOrDefaultAsync(p => p.Property_ID == propertyId);
         }
 
         // Helper method to get order by ID from ERP

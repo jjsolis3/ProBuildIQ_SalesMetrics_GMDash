@@ -62,12 +62,13 @@ public class SignPublicController : Controller
     public async Task<IActionResult> Review(string token, [FromForm] ReviewPostVm post)
     {
         _logger.LogInformation("POST Review called with token: {Token}", token);
-        _logger.LogInformation("POST Data - Accept: {Accept}, TypedFullName: {Name}, SigDataLength: {SigLength}, TenantName: {TenantName}, TenantEmail: {TenantEmail}",
+        _logger.LogInformation("POST Data - Accept: {Accept}, TypedFullName: {Name}, SigDataLength: {SigLength}, TenantName: {TenantName}, TenantEmail: {TenantEmail}, TenantPhone: {TenantPhone}",
             post.Accept,
             post.TypedFullName,
             post.SigData?.Length ?? 0,
             post.TenantFullName,
-            post.TenantEmail);
+            post.TenantEmail,
+            post.TenantPhone);
 
         // add UA + IP to match the interface
         var vm = await _svc.GetReviewAsync(
@@ -124,12 +125,14 @@ public class SignPublicController : Controller
                     return View(vm);
                 }
 
-                _logger.LogInformation("Adding tenant recipient: {TenantName} <{TenantEmail}>", post.TenantFullName, post.TenantEmail);
-                await _svc.UpsertTenantRecipientAsync(vm.Envelope.EnvelopeId, post.TenantFullName.Trim(), post.TenantEmail.Trim());
+                _logger.LogInformation("Adding tenant recipient: {TenantName} <{TenantEmail}> Phone: {TenantPhone}", post.TenantFullName, post.TenantEmail, post.TenantPhone);
+                await _svc.UpsertTenantRecipientAsync(vm.Envelope.EnvelopeId, post.TenantFullName.Trim(), post.TenantEmail.Trim(), post.TenantPhone?.Trim());
             }
             else
             {
                 _logger.LogInformation("Manager chose to skip tenant signature for envelope {EnvelopeId}", vm.Envelope.EnvelopeId);
+                // Mark envelope as tenant skipped
+                await _svc.MarkTenantSkippedAsync(vm.Envelope.EnvelopeId, vm.Recipient.FullName);
             }
         }
 
@@ -167,7 +170,7 @@ public class SignPublicController : Controller
 
     // Preview PDF template before signing
     [HttpGet("{token}/pdf")]
-    public async Task<IActionResult> PreviewPDF(string token)
+    public async Task<IActionResult> PreviewPDF(string token, [FromServices] IPdfService pdfService)
     {
         _logger.LogInformation("PDF Preview requested for token: {Token}", token);
 
@@ -179,28 +182,43 @@ public class SignPublicController : Controller
             return NotFound("Invalid or expired link");
         }
 
-        // Get the template to find the PDF file
-        var template = await _svc.GetTemplateByKeyAsync(vm.Envelope.TemplateKey);
-        if (template == null || string.IsNullOrWhiteSpace(template.PdfFilePath))
+        try
         {
-            _logger.LogWarning("No PDF template found for template key: {TemplateKey}", vm.Envelope.TemplateKey);
-            return NotFound("PDF template not found");
+            // Generate progressive preview showing only fields visible to this recipient
+            _logger.LogInformation("Generating preview PDF for envelope {EnvelopeId}, recipient {RecipientId} ({Role})",
+                vm.Envelope.EnvelopeId, vm.Recipient.RecipientId, vm.Recipient.Role);
+
+            var fileBytes = await pdfService.GeneratePreviewPdfAsync(vm.Envelope.EnvelopeId, vm.Recipient.RecipientId);
+
+            Response.Headers.Add("Content-Disposition", "inline");
+            return File(fileBytes, "application/pdf");
         }
-
-        // Construct the file path
-        var filePath = Path.Combine("Content", "Templates", template.PdfFilePath);
-
-        if (!System.IO.File.Exists(filePath))
+        catch (Exception ex)
         {
-            _logger.LogWarning("PDF file not found: {FilePath}", filePath);
-            return NotFound("PDF file not found");
+            _logger.LogError(ex, "Error generating preview PDF for envelope {EnvelopeId}", vm.Envelope.EnvelopeId);
+
+            // Fallback to blank template if preview generation fails
+            var template = await _svc.GetTemplateByKeyAsync(vm.Envelope.TemplateKey);
+            if (template == null || string.IsNullOrWhiteSpace(template.PdfFilePath))
+            {
+                _logger.LogWarning("No PDF template found for template key: {TemplateKey}", vm.Envelope.TemplateKey);
+                return NotFound("PDF template not found");
+            }
+
+            var filePath = Path.Combine("Content", "Templates", template.PdfFilePath);
+
+            if (!System.IO.File.Exists(filePath))
+            {
+                _logger.LogWarning("PDF file not found: {FilePath}", filePath);
+                return NotFound("PDF file not found");
+            }
+
+            _logger.LogInformation("Serving fallback blank PDF template: {FilePath}", filePath);
+
+            var fileBytes = await System.IO.File.ReadAllBytesAsync(filePath);
+            Response.Headers.Add("Content-Disposition", "inline");
+            return File(fileBytes, "application/pdf");
         }
-
-        _logger.LogInformation("Serving PDF template: {FilePath}", filePath);
-
-        var fileBytes = await System.IO.File.ReadAllBytesAsync(filePath);
-        Response.Headers.Add("Content-Disposition", "inline");
-        return File(fileBytes, "application/pdf");
     }
 }
 

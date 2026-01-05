@@ -193,11 +193,16 @@
     }
 
     #pdfCanvas {
-        max-width: 100%;
         border: 1px solid #dee2e6;
         background: white;
         display: block;
         margin: 0 auto;
+    }
+
+    #pdfPreviewContent {
+        max-height: 800px;
+        overflow: auto;
+        text-align: center;
     }
 
     .pdf-preview-controls {
@@ -462,21 +467,65 @@
             <!-- Step 2: Document Template Selection -->
             <div class="wizard-step-content" data-step="2">
                 <h5 class="mb-3">Select Document Template</h5>
-                <p class="text-muted">Choose the Razor view that will render your document for review</p>
+                <p class="text-muted">Choose the template type that best fits your needs</p>
 
                 <div class="template-cards">
-                    @foreach (var viewPath in viewPaths)
-                    {
-                        var displayName = viewPath.Split('/').Last().Replace(".cshtml", "");
-                        var icon = displayName.Contains("Installation") ? "📋" :
-                                   displayName.Contains("Work") ? "🔧" :
-                                   displayName.Contains("Inspection") ? "✅" : "📄";
+                    @{
+                        var templateMetadata = ViewBag.TemplateMetadata as Dictionary<string, SalesMetrics.Models.Signing.TemplateMetadata>;
 
-                        <div class="template-card" data-view-path="@viewPath">
-                            <div class="template-card-icon">@icon</div>
-                            <div class="template-card-title">@displayName</div>
-                            <div class="template-card-description">@viewPath</div>
-                        </div>
+                        // Group templates by metadata availability
+                        var templatesWithMetadata = new List<(string Key, SalesMetrics.Models.Signing.TemplateMetadata Metadata)>();
+                        var templatesWithoutMetadata = new List<string>();
+
+                        foreach (var viewPath in viewPaths)
+                        {
+                            var fileName = viewPath.Split('/').Last().Replace(".cshtml", "");
+
+                            // Try to find metadata by filename match
+                            var matchingKey = templateMetadata?.Keys.FirstOrDefault(k =>
+                                fileName.Equals(k, StringComparison.OrdinalIgnoreCase) ||
+                                viewPath.Contains(k, StringComparison.OrdinalIgnoreCase));
+
+                            if (matchingKey != null && templateMetadata != null)
+                            {
+                                templatesWithMetadata.Add((matchingKey, templateMetadata[matchingKey]));
+                            }
+                            else
+                            {
+                                templatesWithoutMetadata.Add(viewPath);
+                            }
+                        }
+
+                        // Render templates WITH metadata (enhanced cards)
+                        foreach (var (key, meta) in templatesWithMetadata)
+                        {
+                            <div class="template-card" data-view-path="@meta.ViewPath">
+                                <div class="template-card-icon">@meta.Icon</div>
+                                <div class="template-card-title">@meta.DisplayName</div>
+                                <div class="mb-2">
+                                    <span class="badge bg-primary">@meta.Category</span>
+                                </div>
+                                <div class="template-card-description mb-2">@meta.Description</div>
+                                <div class="small text-muted" style="font-style: italic;">
+                                    @meta.UseCase
+                                </div>
+                            </div>
+                        }
+
+                        // Render templates WITHOUT metadata (basic cards)
+                        foreach (var viewPath in templatesWithoutMetadata)
+                        {
+                            var displayName = viewPath.Split('/').Last().Replace(".cshtml", "");
+                            var icon = displayName.Contains("Installation") ? "📋" :
+                                       displayName.Contains("Work") ? "🔧" :
+                                       displayName.Contains("Inspection") ? "✅" : "📄";
+
+                            <div class="template-card" data-view-path="@viewPath">
+                                <div class="template-card-icon">@icon</div>
+                                <div class="template-card-title">@displayName</div>
+                                <div class="template-card-description">@viewPath</div>
+                            </div>
+                        }
                     }
                 </div>
 
@@ -567,6 +616,19 @@
                                 <input type="checkbox" class="field-checkbox" data-category="signature" value="ResidentPhone" />
                                 Resident Phone
                             </label>
+                        </div>
+                    </div>
+
+                    <!-- Custom Fields Section -->
+                    <div class="field-category">
+                        <div class="field-category-header">
+                            <span>🎨 Custom Fields</span>
+                            <button type="button" class="btn btn-sm btn-outline-primary ms-2" id="addCustomFieldBtn">
+                                + Add Custom Field
+                            </button>
+                        </div>
+                        <div id="customFieldsList" class="mt-2">
+                            <p class="text-muted small mb-0">No custom fields added yet. Click "+ Add Custom Field" to create one.</p>
                         </div>
                     </div>
                 </div>
@@ -792,12 +854,146 @@
     <!-- PDF Field Configurator (Phase 3) -->
     <script src="~/assets/js/pdf-field-configurator.js"></script>
 
+    <!-- Custom Fields Manager -->
+    <script>
+        const CustomFieldsManager = {
+            customFieldCount: 0,
+            customFields: [],
+
+            init() {
+                const addBtn = document.getElementById('addCustomFieldBtn');
+                if (addBtn) {
+                    addBtn.addEventListener('click', () => this.addCustomField());
+                }
+            },
+
+            addCustomField() {
+                const container = document.getElementById('customFieldsList');
+                const index = this.customFieldCount++;
+
+                // Remove "no fields" message if this is the first field
+                if (this.customFieldCount === 1) {
+                    container.innerHTML = '';
+                }
+
+                const fieldHtml = `
+                    <div class="card mb-2 custom-field-item" data-field-index="${index}">
+                        <div class="card-body p-3">
+                            <div class="row g-2">
+                                <div class="col-md-3">
+                                    <label class="form-label small mb-1">Field Name *</label>
+                                    <input type="text" class="form-control form-control-sm custom-field-name"
+                                           placeholder="e.g., TenantID" data-index="${index}" required />
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label small mb-1">Type</label>
+                                    <select class="form-select form-select-sm custom-field-type" data-index="${index}">
+                                        <option value="text">Text</option>
+                                        <option value="signature">Signature</option>
+                                        <option value="date">Date</option>
+                                        <option value="number">Number</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label small mb-1">Default Value</label>
+                                    <input type="text" class="form-control form-control-sm custom-field-default"
+                                           placeholder="Optional" data-index="${index}" />
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label small mb-1">Required?</label>
+                                    <select class="form-select form-select-sm custom-field-required" data-index="${index}">
+                                        <option value="false">No</option>
+                                        <option value="true">Yes</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2 d-flex align-items-end">
+                                    <button type="button" class="btn btn-sm btn-outline-danger w-100 remove-custom-field"
+                                            data-index="${index}">
+                                        <i class="bi bi-trash"></i> Remove
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                container.insertAdjacentHTML('beforeend', fieldHtml);
+
+                // Add event listener to remove button
+                const removeBtn = container.querySelector(`[data-index="${index}"].remove-custom-field`);
+                removeBtn.addEventListener('click', () => this.removeCustomField(index));
+
+                // Add to checkbox list so it can be placed on PDF
+                this.syncToFieldCheckboxes();
+            },
+
+            removeCustomField(index) {
+                const fieldElement = document.querySelector(`.custom-field-item[data-field-index="${index}"]`);
+                if (fieldElement) {
+                    fieldElement.remove();
+                }
+
+                // Check if we need to show "no fields" message
+                const container = document.getElementById('customFieldsList');
+                if (container.children.length === 0) {
+                    container.innerHTML = '<p class="text-muted small mb-0">No custom fields added yet. Click "+ Add Custom Field" to create one.</p>';
+                }
+
+                this.syncToFieldCheckboxes();
+            },
+
+            // Sync custom fields to the field checkbox system so they can be placed on PDF
+            syncToFieldCheckboxes() {
+                const customFieldNames = this.getCustomFieldNames();
+
+                // Update field palette and checkbox system
+                if (typeof TemplateFieldSelector !== 'undefined' && TemplateFieldSelector.updateCustomFields) {
+                    TemplateFieldSelector.updateCustomFields(customFieldNames);
+                }
+            },
+
+            getCustomFieldNames() {
+                const fields = [];
+                document.querySelectorAll('.custom-field-name').forEach(input => {
+                    const name = input.value.trim();
+                    if (name) {
+                        fields.push({
+                            name: name,
+                            type: document.querySelector(`.custom-field-type[data-index="${input.dataset.index}"]`).value,
+                            defaultValue: document.querySelector(`.custom-field-default[data-index="${input.dataset.index}"]`).value,
+                            required: document.querySelector(`.custom-field-required[data-index="${input.dataset.index}"]`).value === 'true'
+                        });
+                    }
+                });
+                return fields;
+            },
+
+            // Get custom fields for review page
+            getCustomFieldsForReview() {
+                return this.getCustomFieldNames();
+            }
+        };
+    </script>
+
     <script>
         // Initialize all modules
         document.addEventListener('DOMContentLoaded', function() {
+            CustomFieldsManager.init();
             TemplateFieldSelector.init();
             TemplateWizard.init();
             PDFFieldConfigurator.init();
+
+            // Auto-save field coordinates when form is submitted
+            // This ensures coordinates are saved even if user forgets to click "Done"
+            const templateForm = document.getElementById('templateForm');
+            if (templateForm) {
+                templateForm.addEventListener('submit', function(e) {
+                    if (typeof PDFFieldConfigurator !== 'undefined' && PDFFieldConfigurator.saveCoordinatesToMergeSpec) {
+                        console.log('[Create Form Submit] Auto-saving field coordinates before submission');
+                        PDFFieldConfigurator.saveCoordinatesToMergeSpec();
+                    }
+                });
+            }
         });
     </script>
 }

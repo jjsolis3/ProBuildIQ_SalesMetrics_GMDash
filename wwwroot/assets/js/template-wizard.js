@@ -393,20 +393,30 @@ var TemplateWizard = (function () {
             const canvas = document.getElementById('pdfCanvas');
             const context = canvas.getContext('2d');
 
-            // Calculate scale to fit container (max width 800px)
-            const viewport = page.getViewport({ scale: 1.0 });
-            const maxWidth = 800;
-            const scale = maxWidth / viewport.width;
-            const scaledViewport = page.getViewport({ scale: scale });
+            // FIXED: Use fixed scale of 1.0 (100%) for consistent coordinates across all screen sizes
+            // This ensures coordinates are PDF-native and screen-independent
+            const scale = 1.0;
+            const viewport = page.getViewport({ scale: scale });
 
-            // Set canvas dimensions
-            canvas.height = scaledViewport.height;
-            canvas.width = scaledViewport.width;
+            // Set canvas dimensions to actual PDF size
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+
+            // Store scale for field configurator coordinate conversion
+            window.pdfScale = scale;
+            console.log(`PDF rendered at scale: ${scale.toFixed(2)} (100%), canvas size: ${canvas.width}x${canvas.height}`);
+
+            // Update SVG overlay dimensions to match canvas
+            const overlay = document.getElementById('fieldOverlay');
+            if (overlay) {
+                overlay.setAttribute('width', canvas.width);
+                overlay.setAttribute('height', canvas.height);
+            }
 
             // Render page
             const renderContext = {
                 canvasContext: context,
-                viewport: scaledViewport
+                viewport: viewport
             };
 
             page.render(renderContext);

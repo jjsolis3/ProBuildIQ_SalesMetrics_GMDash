@@ -26,8 +26,11 @@
                     <span asp-validation-for="Subject" class="text-danger"></span>
                 </div>
                 <div class="col-md-12">
-                    <label class="form-label">Message</label>
-                    <textarea asp-for="MessageBody" class="form-control" rows="3"></textarea>
+                    <label class="form-label">Message <span class="text-muted small">(Optional)</span></label>
+                    <textarea asp-for="MessageBody" id="messageBody" class="form-control" rows="3" placeholder="e.g., Envelope for [Property Name] Order#: [Order Number] Branch: [Branch]"></textarea>
+                    <div class="form-text">
+                        <small class="text-muted">Message will auto-populate when you select property and order</small>
+                    </div>
                 </div>
 
                 <div class="col-md-3">
@@ -227,7 +230,39 @@
           orderSelect.innerHTML = '<option value="">Select an order (optional)</option>' +
             items.map(o => `<option value="${o.id}">${o.display}</option>`).join('');
           orderSelect.disabled = false;
+
+          // Auto-populate message body
+          updateMessageBody();
         });
+
+        // Update message body when order is selected
+        orderSelect.addEventListener('change', () => {
+          updateMessageBody();
+        });
+
+        // Update message body when branch is changed
+        const branchInput = document.querySelector('input[name="LocationCode"]');
+        if (branchInput) {
+          branchInput.addEventListener('input', () => {
+            updateMessageBody();
+          });
+        }
+
+        // Auto-update message body with property, order, and branch info
+        function updateMessageBody() {
+          const messageBody = document.getElementById('messageBody');
+          const propName = propSearch.value || '[Property Name]';
+          const orderDisplay = orderSelect.options[orderSelect.selectedIndex]?.text || '[Order Number]';
+          const branch = document.querySelector('input[name="LocationCode"]')?.value || '[Branch]';
+
+          // Only auto-populate if message is empty or contains previous template
+          const currentMessage = messageBody.value.trim();
+          const isTemplateMessage = currentMessage === '' || currentMessage.includes('Envelope for');
+
+          if (isTemplateMessage && propName !== 'Search by property name...') {
+            messageBody.value = `Envelope for ${propName} Order#: ${orderDisplay} Branch: ${branch}`;
+          }
+        }
 
         // dismiss suggestions if clicking elsewhere
         document.addEventListener('click', (e) => {

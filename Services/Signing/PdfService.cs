@@ -24,9 +24,10 @@ public sealed class PdfService : IPdfService
     {
         Console.WriteLine($"[PDF DEBUG] ===== STARTING PDF GENERATION FOR ENVELOPE {envelopeId} =====");
 
-        // 1) Load envelope + template + recipients
+        // 1) Load envelope + template + recipients + fields
         var env = await _db.SignEnvelopes
             .Include(e => e.Recipients)
+            .Include(e => e.Fields)  // Load SignField records
             .AsNoTracking()
             .FirstAsync(e => e.EnvelopeId == envelopeId);
 
@@ -38,11 +39,12 @@ public sealed class PdfService : IPdfService
         Console.WriteLine($"[PDF DEBUG] Template: {template.TemplateKey} ({template.DisplayName})");
         Console.WriteLine($"[PDF DEBUG] PDF File: {template.PdfFilePath ?? "NONE - will use default"}");
         Console.WriteLine($"[PDF DEBUG] Has MergeSpec: {!string.IsNullOrWhiteSpace(template.MergeSpecJson)}");
+        Console.WriteLine($"[PDF DEBUG] SignField records found: {env.Fields?.Count ?? 0}");
 
         var tenant = env.Recipients.FirstOrDefault(r => r.Role == "Tenant") ?? env.Recipients.First();
         var manager = env.Recipients.FirstOrDefault(r => r.Role == "Manager");
 
-        // 2) Gather data from ERP
+        // 2) Gather data from SignField records and supplement with ERP data
         var fieldData = await GatherFieldDataAsync(env, tenant, manager);
 
         Console.WriteLine($"[PDF DEBUG] ========== ENVELOPE {envelopeId} ==========");
@@ -71,6 +73,10 @@ public sealed class PdfService : IPdfService
         using var doc = PdfReader.Open(templatePath, PdfDocumentOpenMode.Modify);
         var page = doc.Pages[0];
         using var gfx = XGraphics.FromPdfPage(page);
+
+        // Log page dimensions for debugging coordinate issues
+        Console.WriteLine($"[PDF DEBUG] Page dimensions: {page.Width:F1} x {page.Height:F1} points");
+        Console.WriteLine($"[PDF DEBUG] Page size in inches: {page.Width/72:F2}\" x {page.Height/72:F2}\"");
 
         // 4) Fonts & brushes
         var font = new XFont("Roboto", 11, XFontStyle.Regular);
@@ -124,6 +130,14 @@ public sealed class PdfService : IPdfService
                         {
                             Console.WriteLine($"[PDF DEBUG] Placing '{fieldKey}' at page={coord.page}, x={coord.x}, y={coord.y}, w={coord.width}, h={coord.height}");
 
+                            // Draw debug rectangle if enabled
+                            if (debug)
+                            {
+                                var boxRect = new XRect(coord.x, coord.y, coord.width, coord.height);
+                                gfx.DrawRectangle(new XPen(XColors.Blue, 0.5), boxRect);
+                                DrawLabel(gfx, fieldKey, coord.x, coord.y - 5);
+                            }
+
                             // Handle signatures differently
                             if (fieldInfo.type == "signature" && value is string sigPath && !string.IsNullOrWhiteSpace(sigPath))
                             {
@@ -160,6 +174,111 @@ public sealed class PdfService : IPdfService
         // Optional: audit footer
         DrawSmall(gfx, $"Envelope #{env.EnvelopeId}", In(1.0), 36);
 
+        // Stamp "Tenant Signature Waived" notation if tenant was skipped
+        if (env.TenantSkipped)
+        {
+            // Find both ResidentName and ResidentSignature field coordinates to create combined stamp area
+            Coordinates? residentNameCoords = null;
+            Coordinates? residentSigCoords = null;
+
+            if (!string.IsNullOrWhiteSpace(template.MergeSpecJson))
+            {
+                try
+                {
+                    var mergeSpec = JsonSerializer.Deserialize<MergeSpec>(template.MergeSpecJson);
+                    if (mergeSpec?.fieldMapping != null)
+                    {
+                        // Get ResidentName coordinates
+                        if (mergeSpec.fieldMapping.TryGetValue("ResidentName", out var residentNameField))
+                        {
+                            residentNameCoords = residentNameField.placements?.FirstOrDefault() ?? residentNameField.coordinates;
+                        }
+
+                        // Get ResidentSignature coordinates
+                        if (mergeSpec.fieldMapping.TryGetValue("ResidentSignature", out var residentSigField))
+                        {
+                            residentSigCoords = residentSigField.placements?.FirstOrDefault() ?? residentSigField.coordinates;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[PDF DEBUG] Could not find resident field coordinates: {ex.Message}");
+                }
+            }
+
+            // Calculate bounding box that covers both ResidentName and ResidentSignature
+            double stampX, stampY, stampWidth, stampHeight;
+            if (residentNameCoords != null && residentSigCoords != null)
+            {
+                // Find the leftmost X coordinate
+                stampX = Math.Min(residentNameCoords.x, residentSigCoords.x);
+
+                // Find the topmost Y coordinate
+                stampY = Math.Min(residentNameCoords.y, residentSigCoords.y);
+
+                // Calculate width to cover both fields (rightmost edge - leftmost edge)
+                var rightEdgeName = residentNameCoords.x + residentNameCoords.width;
+                var rightEdgeSig = residentSigCoords.x + residentSigCoords.width;
+                stampWidth = Math.Max(rightEdgeName, rightEdgeSig) - stampX;
+
+                // Calculate height to cover both fields (bottommost edge - topmost edge)
+                var bottomEdgeName = residentNameCoords.y + residentNameCoords.height;
+                var bottomEdgeSig = residentSigCoords.y + residentSigCoords.height;
+                stampHeight = Math.Max(bottomEdgeName, bottomEdgeSig) - stampY;
+
+                Console.WriteLine($"[PDF DEBUG] Combined stamp area: Name({residentNameCoords.x},{residentNameCoords.y}) + Sig({residentSigCoords.x},{residentSigCoords.y}) = Stamp({stampX},{stampY},{stampWidth}x{stampHeight})");
+            }
+            else if (residentSigCoords != null)
+            {
+                // Fallback to just signature field if name field not found
+                stampX = residentSigCoords.x;
+                stampY = residentSigCoords.y;
+                stampWidth = residentSigCoords.width;
+                stampHeight = residentSigCoords.height;
+            }
+            else
+            {
+                // Fallback to default position (lower area of page)
+                stampX = In(0.5);
+                stampY = In(1.5);
+                stampWidth = In(7.0);
+                stampHeight = In(0.6);
+            }
+
+            var waivedFont = new XFont("Roboto", 10, XFontStyle.Bold);
+            var waivedBrush = XBrushes.Red;
+            var waivedText = $"TENANT SIGNATURE WAIVED BY {env.TenantSkippedByName?.ToUpper() ?? "PROPERTY STAFF"}";
+            var waivedDate = env.TenantSkippedAtUtc?.ToLocalTime().ToString("MM/dd/yyyy h:mm tt") ?? "";
+
+            // Get manager phone for display
+            var managerPhone = manager?.Phone ?? "";
+            var phoneText = !string.IsNullOrWhiteSpace(managerPhone) ? $"Property Staff Phone: {managerPhone}" : "";
+
+            // Draw a red box background over both resident name and signature fields
+            var boxRect = new XRect(stampX, stampY, stampWidth, stampHeight);
+            gfx.DrawRectangle(new XSolidBrush(XColor.FromArgb(240, 255, 240, 240)), boxRect); // Semi-transparent red background
+            gfx.DrawRectangle(new XPen(XColors.Red, 2.0), boxRect); // Thicker red border
+
+            // Draw the text (adjusted for box size)
+            var textY = stampY + In(0.12);
+            gfx.DrawString(waivedText, waivedFont, waivedBrush, new XPoint(stampX + In(0.1), textY), XStringFormats.Default);
+
+            textY += In(0.18);
+            gfx.DrawString($"Date: {waivedDate}", new XFont("Roboto", 9, XFontStyle.Regular), XBrushes.DarkRed,
+                new XPoint(stampX + In(0.1), textY), XStringFormats.Default);
+
+            // Add manager phone if available
+            if (!string.IsNullOrWhiteSpace(phoneText))
+            {
+                textY += In(0.18);
+                gfx.DrawString(phoneText, new XFont("Roboto", 9, XFontStyle.Regular), XBrushes.DarkRed,
+                    new XPoint(stampX + In(0.1), textY), XStringFormats.Default);
+            }
+
+            Console.WriteLine($"[PDF DEBUG] Added tenant skip notation covering ResidentName + ResidentSignature at ({stampX}, {stampY})");
+        }
+
         // 7) Save to bytes
         using var ms = new MemoryStream();
         doc.Save(ms, false);
@@ -185,7 +304,142 @@ public sealed class PdfService : IPdfService
     }
 
     /// <summary>
+    /// Generate a preview PDF showing only the fields that should be visible to the current recipient
+    /// - Manager view: Property fields only (PropertyName, InstallationDate, UnitNumber)
+    /// - Tenant view: Property fields + Manager signature and fields
+    /// </summary>
+    public async Task<byte[]> GeneratePreviewPdfAsync(long envelopeId, long currentRecipientId)
+    {
+        Console.WriteLine($"[PREVIEW PDF] ===== GENERATING PREVIEW FOR ENVELOPE {envelopeId}, RECIPIENT {currentRecipientId} =====");
+
+        // 1) Load envelope + template + recipients + fields
+        var env = await _db.SignEnvelopes
+            .Include(e => e.Recipients)
+            .Include(e => e.Fields)
+            .AsNoTracking()
+            .FirstAsync(e => e.EnvelopeId == envelopeId);
+
+        var currentRecipient = env.Recipients.First(r => r.RecipientId == currentRecipientId);
+        Console.WriteLine($"[PREVIEW PDF] Current recipient: {currentRecipient.FullName} ({currentRecipient.Role})");
+
+        var template = await _db.SignTemplates
+            .AsNoTracking()
+            .FirstAsync(t => t.TemplateKey == env.TemplateKey);
+
+        var tenant = env.Recipients.FirstOrDefault(r => r.Role == "Tenant") ?? env.Recipients.First();
+        var manager = env.Recipients.FirstOrDefault(r => r.Role == "Manager");
+
+        // 2) Determine which fields to show based on current recipient's role
+        var fieldData = await GatherFieldDataAsync(env, tenant, manager);
+        var fieldsToShow = new HashSet<string>();
+
+        if (currentRecipient.Role == "Manager")
+        {
+            // Manager sees only property fields
+            fieldsToShow.Add("PropertyName");
+            fieldsToShow.Add("InstallationDate");
+            fieldsToShow.Add("UnitNumber");
+            Console.WriteLine($"[PREVIEW PDF] Manager view - showing property fields only");
+        }
+        else if (currentRecipient.Role == "Tenant")
+        {
+            // Tenant sees property fields + manager's signature and info
+            fieldsToShow.Add("PropertyName");
+            fieldsToShow.Add("InstallationDate");
+            fieldsToShow.Add("UnitNumber");
+            fieldsToShow.Add("PropertyStaffName");
+            fieldsToShow.Add("PropertyStaffDate");
+            fieldsToShow.Add("PropertyStaffSignature");
+            Console.WriteLine($"[PREVIEW PDF] Tenant view - showing property fields + manager signature");
+        }
+
+        Console.WriteLine($"[PREVIEW PDF] Fields to display: {string.Join(", ", fieldsToShow)}");
+
+        // 3) Load the PDF template
+        string templatePath;
+        if (!string.IsNullOrWhiteSpace(template.PdfFilePath))
+        {
+            templatePath = Path.Combine("Content", "Templates", template.PdfFilePath);
+        }
+        else
+        {
+            templatePath = Path.Combine("Content", "Templates", "SF_OccupiedReleaseForm_1.4.pdf");
+        }
+
+        if (!File.Exists(templatePath))
+            throw new FileNotFoundException($"PDF template not found: {templatePath}", templatePath);
+
+        using var doc = PdfReader.Open(templatePath, PdfDocumentOpenMode.Modify);
+        var page = doc.Pages[0];
+        using var gfx = XGraphics.FromPdfPage(page);
+
+        var font = new XFont("Roboto", 11, XFontStyle.Regular);
+        var brush = XBrushes.Black;
+
+        // 4) Stamp only the fields that should be visible
+        if (!string.IsNullOrWhiteSpace(template.MergeSpecJson))
+        {
+            try
+            {
+                var mergeSpec = JsonSerializer.Deserialize<MergeSpec>(template.MergeSpecJson);
+                if (mergeSpec?.fieldMapping != null)
+                {
+                    foreach (var (fieldKey, fieldInfo) in mergeSpec.fieldMapping)
+                    {
+                        // Only show fields that are in the allowed list
+                        if (!fieldsToShow.Contains(fieldKey))
+                        {
+                            Console.WriteLine($"[PREVIEW PDF] Skipping field '{fieldKey}' - not visible to {currentRecipient.Role}");
+                            continue;
+                        }
+
+                        if (!fieldData.TryGetValue(fieldKey, out var value))
+                        {
+                            Console.WriteLine($"[PREVIEW PDF] Field '{fieldKey}' not found in field data");
+                            continue;
+                        }
+
+                        Console.WriteLine($"[PREVIEW PDF] Stamping field '{fieldKey}' = '{value}'");
+
+                        var placements = fieldInfo.placements ?? new List<Coordinates>();
+                        if (placements.Count == 0 && fieldInfo.coordinates != null)
+                        {
+                            placements = new List<Coordinates> { fieldInfo.coordinates };
+                        }
+
+                        foreach (var coord in placements)
+                        {
+                            if (fieldInfo.type == "signature" && value is string sigPath && !string.IsNullOrWhiteSpace(sigPath))
+                            {
+                                DrawSignature(gfx, page, sigPath, coord.x, coord.y, coord.width, coord.height);
+                            }
+                            else if (value is string textValue)
+                            {
+                                DrawTextWithCoordinateConversion(gfx, page, font, brush, textValue, coord.x, coord.y);
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[PREVIEW PDF ERROR] Error generating preview: {ex.Message}");
+            }
+        }
+
+        // 5) Return PDF bytes
+        using var ms = new MemoryStream();
+        doc.Save(ms, false);
+        var bytes = ms.ToArray();
+
+        Console.WriteLine($"[PREVIEW PDF] ===== PREVIEW GENERATION COMPLETE, SIZE: {bytes.Length} bytes =====");
+
+        return bytes;
+    }
+
+    /// <summary>
     /// Gather all field values from envelope and ERP data
+    /// Priority: 1) SignField records, 2) ERP data, 3) Recipient data
     /// </summary>
     private async Task<Dictionary<string, object>> GatherFieldDataAsync(
         Domain.Signing.SignEnvelope env,
@@ -194,27 +448,65 @@ public sealed class PdfService : IPdfService
     {
         var data = new Dictionary<string, object>();
 
+        // First, populate from SignField records if they exist
+        if (env.Fields != null && env.Fields.Any())
+        {
+            Console.WriteLine($"[PDF DEBUG] Loading data from {env.Fields.Count} SignField records");
+            foreach (var field in env.Fields)
+            {
+                if (!string.IsNullOrWhiteSpace(field.FieldValue))
+                {
+                    data[field.FieldKey] = field.FieldValue;
+                    Console.WriteLine($"[PDF DEBUG] Field from DB: {field.FieldKey} = {field.FieldValue}");
+                }
+            }
+        }
+        else
+        {
+            Console.WriteLine($"[PDF DEBUG] No SignField records found, using legacy ERP data gathering");
+        }
+
+        // Supplement with ERP data for any missing fields
         // Property fields
-        var propertyName = await _merge.GetPropertyNameAsync(env.PropertyID) ?? "";
-        data["PropertyName"] = propertyName;
-        data["PropertyAddress"] = ""; // TODO: Get from ERP if needed
-        data["PropertyPhone"] = ""; // TODO: Get from ERP if needed
+        if (!data.ContainsKey("PropertyName"))
+        {
+            var propertyName = await _merge.GetPropertyNameAsync(env.PropertyID) ?? "";
+            data["PropertyName"] = propertyName;
+        }
+        if (!data.ContainsKey("PropertyAddress"))
+        {
+            var propertyAddress = await _merge.GetPropertyAddressAsync(env.PropertyID) ?? "";
+            data["PropertyAddress"] = propertyAddress;
+        }
+        if (!data.ContainsKey("PropertyPhone"))
+            data["PropertyPhone"] = ""; // TODO: Get from ERP if needed
 
         // Order fields
-        var unitNumber = await _merge.GetUnitNumberByOrderIdAsync(env.OrderId) ?? "";
-        data["UnitNumber"] = unitNumber;
-        data["InstallationDate"] = DateTime.UtcNow.ToString("MM/dd/yyyy");
-        data["DeliveryDate"] = ""; // TODO: Get from ERP if needed
+        if (!data.ContainsKey("UnitNumber"))
+        {
+            var unitNumber = await _merge.GetUnitNumberByOrderIdAsync(env.OrderId) ?? "";
+            data["UnitNumber"] = unitNumber;
+        }
+        if (!data.ContainsKey("InstallationDate"))
+            data["InstallationDate"] = DateTime.UtcNow.ToString("MM/dd/yyyy");
+        if (!data.ContainsKey("DeliveryDate"))
+            data["DeliveryDate"] = ""; // TODO: Get from ERP if needed
 
-        // Property Staff (Manager) fields
-        data["PropertyStaffName"] = manager?.FullName ?? "Property Staff";
-        data["PropertyStaffDate"] = manager?.SignedAtUtc?.ToLocalTime().ToString("MM/dd/yyyy") ?? "";
-        data["PropertyStaffSignature"] = GetSignatureFilePath(manager);
+        // Property Staff (Manager) fields - updated with signing data
+        if (!data.ContainsKey("PropertyStaffName"))
+            data["PropertyStaffName"] = manager?.FullName ?? "Property Staff";
+        if (!data.ContainsKey("PropertyStaffDate"))
+            data["PropertyStaffDate"] = manager?.SignedAtUtc?.ToLocalTime().ToString("MM/dd/yyyy") ?? "";
+        if (!data.ContainsKey("PropertyStaffSignature"))
+            data["PropertyStaffSignature"] = GetSignatureFilePath(manager) ?? "";
 
-        // Resident (Tenant) fields
-        data["ResidentName"] = tenant.FullName;
-        data["ResidentPhone"] = tenant.Phone ?? "";
-        data["ResidentSignature"] = GetSignatureFilePath(tenant);
+        // Resident (Tenant) fields - updated with signing data
+        if (!data.ContainsKey("ResidentName"))
+            data["ResidentName"] = tenant.FullName;
+        if (!data.ContainsKey("ResidentPhone"))
+            data["ResidentPhone"] = tenant.Phone ?? "";
+        if (!data.ContainsKey("ResidentSignature"))
+            data["ResidentSignature"] = GetSignatureFilePath(tenant) ?? "";
 
         return data;
     }
@@ -244,11 +536,11 @@ public sealed class PdfService : IPdfService
             using var fs = File.OpenRead(imagePath);
             using var img = XImage.FromStream(() => fs);
 
-            // Convert from top-left origin to bottom-left origin (PDF coordinate system)
-            // The y coordinate from the wizard is from top, PDF needs from bottom
-            var pdfY = page.Height - y - height;
+            // PDFSharp uses same coordinate system as canvas (top-left origin)
+            // Use coordinates directly as saved from configurator
+            Console.WriteLine($"[COORDINATE DEBUG] Signature - Page: {page.Width:F1}x{page.Height:F1}pt, x={x}, y={y}, size={width}x{height}");
 
-            gfx.DrawImage(img, x, pdfY, width, height);
+            gfx.DrawImage(img, x, y, width, height);
         }
         catch (Exception ex)
         {
@@ -257,17 +549,15 @@ public sealed class PdfService : IPdfService
     }
 
     /// <summary>
-    /// Draw text on PDF with coordinate conversion from screen to PDF coordinates
+    /// Draw text on PDF
     /// </summary>
     private static void DrawTextWithCoordinateConversion(XGraphics gfx, PdfPage page, XFont font, XBrush brush, string text, double x, double y)
     {
-        // Convert from top-left origin to bottom-left origin (PDF coordinate system)
-        // The y coordinate from the wizard is from top, PDF needs from bottom
-        // For text, we need to position at the baseline, not the top-left corner
-        // Adding font height to y to get the baseline position
-        var pdfY = page.Height - y;
+        // Use coordinates directly from configurator without adjustment
+        // The configurator saves Y coordinate for the baseline position
+        Console.WriteLine($"[COORDINATE DEBUG] Text '{text}' - Page: {page.Width:F1}x{page.Height:F1}pt, x={x}, y={y}");
 
-        gfx.DrawString(text, font, brush, new XPoint(x, pdfY), XStringFormats.Default);
+        gfx.DrawString(text, font, brush, new XPoint(x, y), XStringFormats.Default);
     }
 
     /// <summary>

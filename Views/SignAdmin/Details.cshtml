@@ -10,6 +10,39 @@
     <div class="card-body">
         <div class="row g-3">
             <div class="col-md-8">
+                @if (!string.IsNullOrEmpty(Model.PropertyName) || !string.IsNullOrEmpty(Model.OrderNumber) || !string.IsNullOrEmpty(Model.LocationCode))
+                {
+                    <div class="card border-0 mb-3">
+                        <div class="card-header bg-info text-white">Property Information</div>
+                        <div class="card-body">
+                            <div class="row g-2">
+                                @if (!string.IsNullOrEmpty(Model.PropertyName))
+                                {
+                                    <div class="col-md-12">
+                                        <strong>Property:</strong> @Model.PropertyName
+                                    </div>
+                                }
+                                @if (!string.IsNullOrEmpty(Model.OrderNumber) || !string.IsNullOrEmpty(Model.UnitNumber))
+                                {
+                                    <div class="col-md-6">
+                                        <strong>Order #:</strong> @Model.OrderNumber
+                                        @if (!string.IsNullOrEmpty(Model.UnitNumber))
+                                        {
+                                            <text> - Unit: @Model.UnitNumber</text>
+                                        }
+                                    </div>
+                                }
+                                @if (!string.IsNullOrEmpty(Model.LocationCode))
+                                {
+                                    <div class="col-md-6">
+                                        <strong>Branch:</strong> @Model.LocationCode
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+
                 <div class="card border-0 mb-3">
                     <div class="card-header bg-gradient" style="background:linear-gradient(90deg,#ff8c00,#ffb347)">Recipients</div>
                     <ul class="list-group list-group-flush">

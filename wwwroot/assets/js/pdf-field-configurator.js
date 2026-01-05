@@ -107,6 +107,9 @@ var PDFFieldConfigurator = (function () {
             enableBtn.style.display = 'none';
         }
 
+        // Load existing placements from MergeSpec
+        loadExistingPlacements();
+
         // Update field palette
         updateFieldPalette();
 
@@ -123,6 +126,7 @@ var PDFFieldConfigurator = (function () {
 
         // Render existing fields
         renderFieldsOnPDF();
+        updatePlacedFieldsList();
     }
 
     /**
@@ -263,9 +267,14 @@ var PDFFieldConfigurator = (function () {
         // Convert screen coordinates to PDF coordinates
         const pdfCoords = screenToPDFCoordinates(x, y);
 
-        // Default dimensions based on field type
-        const defaultWidth = fieldDef.type === 'signature' ? 200 : 150;
-        const defaultHeight = fieldDef.type === 'signature' ? 50 : 20;
+        // Default dimensions based on field type (in screen pixels)
+        const defaultWidthScreen = fieldDef.type === 'signature' ? 200 : 150;
+        const defaultHeightScreen = fieldDef.type === 'signature' ? 50 : 20;
+
+        // Convert dimensions to PDF points
+        const scale = window.pdfScale || 1.0;
+        const defaultWidth = Math.round(defaultWidthScreen / scale);
+        const defaultHeight = Math.round(defaultHeightScreen / scale);
 
         // Generate unique ID for this field instance (allows multiple instances of same field)
         const instanceId = `${fieldKey}_${Date.now()}`;
@@ -686,6 +695,50 @@ var PDFFieldConfigurator = (function () {
     }
 
     /**
+     * Load existing field placements from MergeSpec
+     */
+    function loadExistingPlacements() {
+        const mergeSpecInput = document.getElementById('mergeSpecJson');
+        if (!mergeSpecInput || !mergeSpecInput.value) return;
+
+        try {
+            const spec = JSON.parse(mergeSpecInput.value);
+
+            if (!spec.fieldMapping) return;
+
+            // Clear existing placed fields
+            placedFields = [];
+
+            // Load placements from MergeSpec
+            Object.keys(spec.fieldMapping).forEach(fieldKey => {
+                const fieldInfo = spec.fieldMapping[fieldKey];
+                const placements = fieldInfo.placements || [];
+
+                placements.forEach((placement, index) => {
+                    const fieldDef = fieldDefinitions[fieldKey];
+                    if (fieldDef) {
+                        placedFields.push({
+                            fieldKey: fieldKey,
+                            instanceId: `${fieldKey}_${Date.now()}_${index}`,
+                            displayName: fieldDef.displayName,
+                            type: fieldDef.type,
+                            page: placement.page || 1,
+                            x: placement.x,
+                            y: placement.y,
+                            width: placement.width,
+                            height: placement.height
+                        });
+                    }
+                });
+            });
+
+            console.log(`[PDFConfigurator] Loaded ${placedFields.length} existing field placements`);
+        } catch (error) {
+            console.error('Error loading existing placements:', error);
+        }
+    }
+
+    /**
      * Show enable button when PDF is loaded
      */
     function showEnableButton() {
@@ -721,7 +774,10 @@ var PDFFieldConfigurator = (function () {
         showEnableButton: showEnableButton,
         hideEnableButton: hideEnableButton,
         onPageChange: onPageChange,
-        renderFieldsOnPDF: renderFieldsOnPDF
+        renderFieldsOnPDF: renderFieldsOnPDF,
+        loadExistingPlacements: loadExistingPlacements,
+        saveCoordinatesToMergeSpec: saveCoordinatesToMergeSpec,
+        isActive: function() { return isPlacementMode; }
     };
 
 })();

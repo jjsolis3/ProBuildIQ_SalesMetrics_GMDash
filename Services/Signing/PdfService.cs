@@ -554,8 +554,10 @@ public sealed class PdfService : IPdfService
     private static void DrawTextWithCoordinateConversion(XGraphics gfx, PdfPage page, XFont font, XBrush brush, string text, double x, double y)
     {
         // PDFSharp uses same coordinate system as canvas (top-left origin)
-        // Add small baseline offset so text appears properly within the field box
-        const double baselineOffset = 12; // Slightly below box top for better visual alignment
+        // The Y coordinate from the configurator represents the TOP of the field box
+        // For an 11pt font, the ascent (height above baseline) is ~9pt
+        // So position baseline 9-10pt below the box top for proper alignment
+        const double baselineOffset = 10; // Match font ascent for natural positioning
         var textY = y + baselineOffset;
 
         Console.WriteLine($"[COORDINATE DEBUG] Text '{text}' - Page: {page.Width:F1}x{page.Height:F1}pt, box y={y}, text y={textY}");

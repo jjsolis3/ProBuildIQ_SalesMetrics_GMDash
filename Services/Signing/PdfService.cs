@@ -549,20 +549,15 @@ public sealed class PdfService : IPdfService
     }
 
     /// <summary>
-    /// Draw text on PDF with baseline offset
+    /// Draw text on PDF
     /// </summary>
     private static void DrawTextWithCoordinateConversion(XGraphics gfx, PdfPage page, XFont font, XBrush brush, string text, double x, double y)
     {
-        // PDFSharp uses same coordinate system as canvas (top-left origin)
-        // The Y coordinate from the configurator represents the TOP of the field box
-        // For an 11pt font, the ascent (height above baseline) is ~9pt
-        // So position baseline 9-10pt below the box top for proper alignment
-        const double baselineOffset = 10; // Match font ascent for natural positioning
-        var textY = y + baselineOffset;
+        // Use coordinates directly from configurator without adjustment
+        // The configurator saves Y coordinate for the baseline position
+        Console.WriteLine($"[COORDINATE DEBUG] Text '{text}' - Page: {page.Width:F1}x{page.Height:F1}pt, x={x}, y={y}");
 
-        Console.WriteLine($"[COORDINATE DEBUG] Text '{text}' - Page: {page.Width:F1}x{page.Height:F1}pt, box y={y}, text y={textY}");
-
-        gfx.DrawString(text, font, brush, new XPoint(x, textY), XStringFormats.Default);
+        gfx.DrawString(text, font, brush, new XPoint(x, y), XStringFormats.Default);
     }
 
     /// <summary>

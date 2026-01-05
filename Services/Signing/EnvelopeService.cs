@@ -295,7 +295,7 @@ public sealed class EnvelopeService : IEnvelopeService
         }
 
         // Get UnitNumber from fields
-        var unitNumber = e.Fields?.FirstOrDefault(f => f.FieldKey == "UnitNumber")?.Value;
+        var unitNumber = e.Fields?.FirstOrDefault(f => f.FieldKey == "UnitNumber")?.FieldValue;
 
         return new EnvelopeDetailsVm
         {

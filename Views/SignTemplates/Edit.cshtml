@@ -615,26 +615,22 @@
                     const canvas = document.getElementById('pdfCanvas');
                     const context = canvas.getContext('2d');
 
-                    // Set scale to fit container width with better sizing
-                    const container = canvas.parentElement;
-                    const containerWidth = Math.max(container.clientWidth || 800, 600); // Ensure minimum width
-                    const maxWidth = 1200; // Maximum width for better readability
-                    const targetWidth = Math.min(containerWidth - 50, maxWidth);
+                    // FIXED: Use fixed scale of 1.0 (100%) for consistent coordinates across all screen sizes
+                    // This ensures coordinates are PDF-native and screen-independent
+                    const scale = 1.0;
+                    const viewport = page.getViewport({ scale: scale });
 
-                    const viewport = page.getViewport({ scale: 1.0 });
-                    const scale = targetWidth / viewport.width;
-                    const scaledViewport = page.getViewport({ scale: scale });
+                    // Set canvas dimensions to actual PDF size
+                    canvas.height = viewport.height;
+                    canvas.width = viewport.width;
 
-                    canvas.height = scaledViewport.height;
-                    canvas.width = scaledViewport.width;
-
-                    // Store scale for field configurator
+                    // Store scale for field configurator coordinate conversion
                     window.pdfScale = scale;
-                    console.log(`PDF rendered at scale: ${scale.toFixed(2)}, canvas size: ${canvas.width}x${canvas.height}`);
+                    console.log(`PDF rendered at scale: ${scale.toFixed(2)} (100%), canvas size: ${canvas.width}x${canvas.height}`);
 
                     const renderContext = {
                         canvasContext: context,
-                        viewport: scaledViewport
+                        viewport: viewport
                     };
 
                     page.render(renderContext).promise.then(function() {

@@ -160,7 +160,6 @@ namespace SalesMetrics.Services.Erp.Clients
                     C.CUM_PRICE_CODE as PriceCode,
                     C.CUM_SMNMAS_ID as SalesmanId,
                     S.SMN_SALESMAN_NAME as SalesmanName,
-                    C.CUM_DATE_ESTABLISHED as EstablishedDate,
                     C.CUM_ATTENTION_TO as AttentionTo,
                     C.CUM_PO_NUMBER_REQUIRED as PONumberRequired
                 FROM CUSTOMER_MASTER C

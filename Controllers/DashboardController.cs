@@ -243,7 +243,7 @@ namespace SalesMetrics.Controllers
             // Map ErpWarehouse to Warehouses for backward compatibility
             // Filter to warehouse numbers < 10 (original logic)
             var whsList = erpWarehouses
-                .Where(w => w.WarehouseNumber < 10)
+                .Where(w => int.TryParse(w.WarehouseNumber, out var num) && num < 10)
                 .Select(w => new Warehouses
                 {
                     WhsID = w.WarehouseNumber,

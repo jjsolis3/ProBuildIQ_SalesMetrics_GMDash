@@ -615,7 +615,14 @@ namespace SalesMetrics.Services.Erp.Clients
             if (await reader.ReadAsync())
             {
                 var totalRevenue = reader.IsDBNull(0) ? 0m : reader.GetDecimal(0);
+                var amountDue = reader.IsDBNull(1) ? 0m : reader.GetDecimal(1);
+                var propertyCount = reader.IsDBNull(2) ? 0 : reader.GetInt32(2);
                 var totalInvoices = reader.IsDBNull(3) ? 0 : reader.GetInt32(3);
+                var paidInvoices = reader.IsDBNull(4) ? 0 : reader.GetInt32(4);
+                var overdueInvoices = reader.IsDBNull(5) ? 0 : reader.GetInt32(5);
+                var avgInvoiceAmount = reader.IsDBNull(6) ? 0m : reader.GetDecimal(6);
+                var maxInvoiceAmount = reader.IsDBNull(7) ? 0m : reader.GetDecimal(7);
+                var minInvoiceAmount = reader.IsDBNull(8) ? 0m : reader.GetDecimal(8);
                 var onlineOrders = reader.IsDBNull(9) ? 0 : reader.GetInt32(9);
 
                 return new ErpSalesMetrics
@@ -626,7 +633,14 @@ namespace SalesMetrics.Services.Erp.Clients
                     OnlineOrders = onlineOrders,
                     InStoreOrders = totalInvoices - onlineOrders,
                     TotalOrderAmount = totalRevenue,
-                    AverageOrderValue = totalInvoices > 0 ? totalRevenue / totalInvoices : 0m,
+                    AverageOrderValue = avgInvoiceAmount,
+                    AmountDue = amountDue,
+                    PropertyCount = propertyCount,
+                    PropertyNameCount = propertyCount, // Same as PropertyCount for CompUFloor
+                    PaidInvoices = paidInvoices,
+                    OverdueInvoices = overdueInvoices,
+                    MaxInvoiceAmount = maxInvoiceAmount,
+                    MinInvoiceAmount = minInvoiceAmount,
                     StartDate = startDate,
                     EndDate = endDate,
                     LocationCode = context.LocationCode

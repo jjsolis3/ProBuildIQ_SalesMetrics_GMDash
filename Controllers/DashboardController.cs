@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Authorization;
 using SalesMetrics.Models.EFCore;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions;
 using SalesMetrics.Services.Helpers;
+using SalesMetrics.Services.Erp;
 using static Microsoft.EntityFrameworkCore.DbLoggerCategory;
 
 namespace SalesMetrics.Controllers
@@ -16,15 +17,27 @@ namespace SalesMetrics.Controllers
     public class DashboardController : Controller
     {
         private readonly IConfiguration _configuration;
+        private readonly ErpClientFactory _erpFactory;
 
-        public DashboardController(IConfiguration configuration)
+        public DashboardController(IConfiguration configuration, ErpClientFactory erpFactory)
         {
             _configuration = configuration;
+            _erpFactory = erpFactory;
         }
+
+        /// <summary>
+        /// Helper to create ErpContext from current session location
+        /// </summary>
+        private ErpContext GetErpContext()
+        {
+            var locationCode = HttpContext.Session.GetString("OfficeLocation") ?? "LAX";
+            return new ErpContext { LocationCode = locationCode };
+        }
+
         //private bool IsSalesPerson(int roleId) => roleId == 2;
 
         [Authorize]
-        public IActionResult Index(DateTime? startDate, DateTime? endDate, int weekOffset = 0, int? rangeType = 0, int? filterSalesmanId = null, int whsId = 0)
+        public async Task<IActionResult> Index(DateTime? startDate, DateTime? endDate, int weekOffset = 0, int? rangeType = 0, int? filterSalesmanId = null, int whsId = 0)
         {
             int locationId = LocationHelper.GetCurrentLocationId(HttpContext);
             string officeLocation = LocationHelper.GetCurrentOfficeCode(HttpContext);
@@ -81,11 +94,95 @@ namespace SalesMetrics.Controllers
                 selectedUserId = users_Id; // Fallback for new users with no SalesmanID
             }
 
-            // Fetch Sales Data from the CUF ERP Database
-            var salesData = GetSalesData(connectionString, effectiveSalesmanId, officeLocation, startDate, endDate, roleId, whsId);
-            var (weeklyOrders, startOfWeek, endOfWeek) = GetWeeklyOrdersDataWithRange(weekOffset, roleId, effectiveSalesmanId, whsId);
-            var transactionSummary = GetTransactionSummary(connectionString, startDate, endDate, roleId, effectiveSalesmanId, whsId);
-            var overdueInvoices = GetOverdueInvoices(connectionString, roleId, effectiveSalesmanId, whsId);
+            // Fetch Sales Data from ERP using abstraction layer
+            var context = GetErpContext();
+            var client = _erpFactory.GetClient(context);
+
+            // Get sales metrics
+            var salesMetrics = await client.GetSalesMetricsAsync(
+                startDate ?? DateTime.Today.AddDays(-30),
+                endDate ?? DateTime.Today,
+                context,
+                effectiveSalesmanId > 0 ? effectiveSalesmanId : null);
+
+            // Map ErpSalesMetrics to Dictionary<string, object> for backward compatibility
+            var salesData = new Dictionary<string, object>
+            {
+                ["TotalSales"] = salesMetrics.TotalRevenue,
+                ["AmountDue"] = salesMetrics.AmountDue,
+                ["PropertyCount"] = salesMetrics.PropertyCount,
+                ["PropertyNameCount"] = salesMetrics.PropertyNameCount,
+                ["TotalInvoices"] = salesMetrics.TotalInvoices,
+                ["PaidInvoices"] = salesMetrics.PaidInvoices,
+                ["OverdueInvoices"] = salesMetrics.OverdueInvoices,
+                ["AvgInvoiceAmount"] = salesMetrics.AverageOrderValue,
+                ["MaxInvoiceAmount"] = salesMetrics.MaxInvoiceAmount,
+                ["MinInvoiceAmount"] = salesMetrics.MinInvoiceAmount
+            };
+
+            // Get weekly orders with range
+            int daysToSunday = (int)DateTime.Today.DayOfWeek;
+            DateTime startOfWeek = DateTime.Today.AddDays(-daysToSunday).Date.AddDays(weekOffset * 7);
+            DateTime endOfWeek = startOfWeek.AddDays(6);
+
+            var dailyOrderCounts = await client.GetDailyOrderCountsAsync(startOfWeek, endOfWeek, context);
+
+            // Map ErpDailyOrderCount to DailyOrderCount for backward compatibility
+            var weeklyOrders = dailyOrderCounts.Select(d => new DailyOrderCount
+            {
+                WeekdayName = d.WeekdayName,
+                OrdersCount = d.OrdersCount,
+                TotalOrderAmount = d.TotalOrderAmount
+            }).ToList();
+
+            // Get AR aging summary
+            var arSummary = await client.GetARAgingSummaryAsync(context);
+
+            // Map ErpARAgingSummary to TransactionSummary for backward compatibility
+            var transactionSummary = new TransactionSummary
+            {
+                PendingInvoices = arSummary.PendingInvoices,
+                PendingInvoicesAmount = (double)arSummary.PendingInvoicesAmount,
+                DueUnder30 = arSummary.DueUnder30,
+                DueUnder30Amount = (double)arSummary.DueUnder30Amount,
+                Due30to60 = arSummary.Due30to60,
+                Due30to60Amount = (double)arSummary.Due30to60Amount,
+                Due60to90 = arSummary.Due60to90,
+                Due60to90Amount = (double)arSummary.Due60to90Amount,
+                Due90to120 = arSummary.Due90to120,
+                Due90to120Amount = (double)arSummary.Due90to120Amount,
+                DueOver120 = arSummary.DueOver120,
+                DueOver120Amount = (double)arSummary.DueOver120Amount,
+                TopDelinquentCustomers = arSummary.TopDelinquentCustomers.Select(c => new CustomerOutstanding
+                {
+                    CustomerName = c.CustomerName,
+                    CustomerNumber = c.CustomerNumber,
+                    CustomerId = c.CustomerId,
+                    BalanceDue = c.BalanceDue,
+                    OutstandingAmount = c.OutstandingAmount
+                }).ToList()
+            };
+
+            // Get overdue invoices
+            var erpOverdueInvoices = await client.GetOverdueInvoicesAsync(
+                context,
+                effectiveSalesmanId > 0 ? effectiveSalesmanId : null);
+
+            // Map ErpOverdueInvoice to OverdueInvoice for backward compatibility
+            var overdueInvoices = erpOverdueInvoices.Select(oi => new OverdueInvoice
+            {
+                Invoice = int.Parse(oi.InvoiceNumber),
+                CustomerId = oi.CustomerId,
+                CustomerName = oi.CustomerName,
+                MgmtCo = oi.ManagementCompany,
+                OutstandingAmount = oi.OutstandingAmount,
+                DueDate = oi.DueDate,
+                DaysPastDue = oi.DaysPastDue,
+                InvoiceAging = oi.InvoiceAging,
+                SalespersonId = oi.SalesmanId ?? 0,
+                Salesperson = oi.SalesmanName
+            }).ToList();
+
             var todayTasks = GetTodayTasks(selectedUserId, locationId);
             var inactiveCustomers = GetInactiveCustomers(connectionString, roleId, effectiveSalesmanId, whsId);
 
@@ -104,7 +201,7 @@ namespace SalesMetrics.Controllers
             }
 
             ViewBag.SelectedWhsId = whsId;
-            ViewBag.WhsList = GetWarehouseID(connectionString);
+            ViewBag.WhsList = await GetWarehouseIDAsync();
 
             ViewBag.TodayTasks = todayTasks;
             ViewBag.Username = fullName.Split(' ')[0];
@@ -135,32 +232,24 @@ namespace SalesMetrics.Controllers
             return View();
         }
 
-        private List<Warehouses> GetWarehouseID(string connectionString)
+        private async Task<List<Warehouses>> GetWarehouseIDAsync()
         {
-            var whsList = new List<Warehouses>();
+            // Use ERP abstraction layer
+            var context = GetErpContext();
+            var client = _erpFactory.GetClient(context);
 
-            using (var conn = new SqlConnection(connectionString))
-            {
-                var sql = @"
-                    SELECT WHS_WAREHOUSE_NUMBER as [WhsId],
-	                    WHS_WAREHOUSE_NAME as [WhsName]
-                    FROM WAREHOUSE_MASTER
-                    WHERE WHS_WAREHOUSE_NUMBER < 10
-                ";
+            var erpWarehouses = await client.GetWarehousesAsync(context);
 
-                var cmd = new SqlCommand(sql, conn);
-
-                conn.Open();
-                using var reader = cmd.ExecuteReader();
-                while (reader.Read())
+            // Map ErpWarehouse to Warehouses for backward compatibility
+            // Filter to warehouse numbers < 10 (original logic)
+            var whsList = erpWarehouses
+                .Where(w => w.WarehouseNumber < 10)
+                .Select(w => new Warehouses
                 {
-                    whsList.Add(new Warehouses
-                    {
-                        WhsID = reader.GetInt32(0),
-                        WhsName = reader.GetString(1)
-                    });
-                }
-            }
+                    WhsID = w.WarehouseNumber,
+                    WhsName = w.WarehouseName
+                })
+                .ToList();
 
             return whsList;
         }
@@ -245,89 +334,8 @@ namespace SalesMetrics.Controllers
             }
         }
 
-        private Dictionary<string, object> GetSalesData(string connectionString, int salesmanID, string officeLocation, DateTime? startDate, DateTime? endDate, int roleId = 0, int whsId = 0)
-        {
-            var data = new Dictionary<string, object>();
-
-            // Get the correct ERP Database connection string based on office location
-            //string connectionString = _configuration.GetConnectionString(officeLocation);
-            if (string.IsNullOrEmpty(connectionString))
-            {
-                throw new InvalidOperationException($"Connection string for '{officeLocation}' is not found in appsettings.json.");
-            }
-
-            using (SqlConnection conn = new SqlConnection(connectionString))
-            {
-                conn.Open();
-
-                var query = @"
-                    SELECT 
-                        SUM(AR.ARO_INVOICE_AMOUNT) AS TotalSales,
-                        SUM(AR.ARO_INVOICE_BALANCE_DUE) AS AmountDue,
-                        COUNT(DISTINCT I.IHF_CUSTOMER_NUMBER) AS PropertyCount,
-                        COUNT(DISTINCT I.IHF_SHIP_TO_NAME) AS PropertyNameCount,
-                        COUNT(I.IHF_INVOICE_NUMBER) AS TotalInvoices,
-                        SUM(CASE WHEN AR.ARO_INVOICE_BALANCE_DUE = 0 THEN 1 ELSE 0 END) AS PaidInvoices,
-                        SUM(CASE WHEN AR.ARO_DUE_DATE < GETDATE() AND AR.ARO_INVOICE_BALANCE_DUE > 0 THEN 1 ELSE 0 END) AS OverdueInvoices,
-                        AVG(AR.ARO_INVOICE_AMOUNT) AS AvgInvoiceAmount,
-                        MAX(AR.ARO_INVOICE_AMOUNT) AS MaxInvoiceAmount,
-                        MIN(AR.ARO_INVOICE_AMOUNT) AS MinInvoiceAmount
-                    FROM AR_OPEN_ITEM AS AR
-                        LEFT JOIN INVOICE_HEADER AS I ON AR.ARO_INVOICE_NUMBER = I.IHF_INVOICE_NUMBER
-                        LEFT JOIN SALESMAN_MASTER AS SM ON I.IHF_SMNMAS_ORDER = SM.SMN_SMNMAS_ID
-                    WHERE  I.IHF_INVOICE_DATE >= @StartDate
-                        AND I.IHF_INVOICE_DATE <= @EndDate
-                        AND I.IHF_CANCELED_DATE IS NULL
-                ";
-
-                if (whsId > 0)
-                {
-                    query += $" AND I.IHF_WHSMAS_ID = @WhsId";
-                }
-
-                if (salesmanID > 0)
-                {
-                    query += " AND SM.SMN_SMNMAS_ID = @SalesmanID";
-                }
-
-                SqlCommand cmd = new SqlCommand(query, conn);
-
-                cmd.Parameters.AddWithValue("@StartDate", startDate ?? DateTime.Today.AddDays(-30));
-                cmd.Parameters.AddWithValue("@EndDate", endDate ?? DateTime.Today);
-
-                if (whsId > 0)
-                {
-                    cmd.Parameters.AddWithValue("@WhsId", whsId);
-                }
-
-                if (salesmanID > 0)
-                {
-                    cmd.Parameters.AddWithValue("@SalesmanID", salesmanID);
-                }
-
-                using (SqlDataReader reader = cmd.ExecuteReader())
-                {
-                    if (reader.Read())
-                    {
-                        data["TotalSales"] = reader["TotalSales"] != DBNull.Value ? Convert.ToDecimal(reader["TotalSales"]) : 0;
-                        data["AmountDue"] = reader["AmountDue"] != DBNull.Value ? Convert.ToDecimal(reader["AmountDue"]) : 0;
-                        data["PropertyCount"] = reader["PropertyCount"] != DBNull.Value ? Convert.ToInt32(reader["PropertyCount"]) : 0;
-                        data["PropertyNameCount"] = reader["PropertyNameCount"] != DBNull.Value ? Convert.ToInt32(reader["PropertyNameCount"]) : 0;
-                        data["TotalInvoices"] = reader["TotalInvoices"] != DBNull.Value ? Convert.ToInt32(reader["TotalInvoices"]) : 0;
-                        data["PaidInvoices"] = reader["PaidInvoices"] != DBNull.Value ? Convert.ToInt32(reader["PaidInvoices"]) : 0;
-                        data["OverdueInvoices"] = reader["OverdueInvoices"] != DBNull.Value ? Convert.ToInt32(reader["OverdueInvoices"]) : 0;
-                        data["AvgInvoiceAmount"] = reader["AvgInvoiceAmount"] != DBNull.Value ? Convert.ToDecimal(reader["AvgInvoiceAmount"]) : 0;
-                        data["MaxInvoiceAmount"] = reader["MaxInvoiceAmount"] != DBNull.Value ? Convert.ToDecimal(reader["MaxInvoiceAmount"]) : 0;
-                        data["MinInvoiceAmount"] = reader["MinInvoiceAmount"] != DBNull.Value ? Convert.ToDecimal(reader["MinInvoiceAmount"]) : 0;
-                    }
-                }
-            }
-
-            return data;
-        }
-
         [HttpGet]
-        public IActionResult GetKpiTiles(DateTime startDate, DateTime endDate, int? filterSalesmanId = null, int whsId = 0)
+        public async Task<IActionResult> GetKpiTiles(DateTime startDate, DateTime endDate, int? filterSalesmanId = null, int whsId = 0)
         {
             int roleId = Convert.ToInt32(HttpContext.Session.GetString("RoleId"));
             int effectiveSalesmanId = 0;
@@ -337,154 +345,38 @@ namespace SalesMetrics.Controllers
             else if (roleId == 1 || roleId == 3 || roleId == 4)
                 effectiveSalesmanId = filterSalesmanId ?? 0;
 
-            string officeLocation = LocationHelper.GetCurrentOfficeCode(HttpContext);
-            var connectionString = _configuration.GetConnectionString(officeLocation);
+            // Use ERP abstraction layer
+            var context = GetErpContext();
+            var client = _erpFactory.GetClient(context);
 
-            var salesData = GetSalesData(connectionString, effectiveSalesmanId, officeLocation, startDate, endDate, roleId, whsId);
+            var salesMetrics = await client.GetSalesMetricsAsync(
+                startDate,
+                endDate,
+                context,
+                effectiveSalesmanId > 0 ? effectiveSalesmanId : null);
+
+            // Map to Dictionary for backward compatibility
+            var salesData = new Dictionary<string, object>
+            {
+                ["TotalSales"] = salesMetrics.TotalRevenue,
+                ["AmountDue"] = salesMetrics.AmountDue,
+                ["PropertyCount"] = salesMetrics.PropertyCount,
+                ["PropertyNameCount"] = salesMetrics.PropertyNameCount,
+                ["TotalInvoices"] = salesMetrics.TotalInvoices,
+                ["PaidInvoices"] = salesMetrics.PaidInvoices,
+                ["OverdueInvoices"] = salesMetrics.OverdueInvoices,
+                ["AvgInvoiceAmount"] = salesMetrics.AverageOrderValue,
+                ["MaxInvoiceAmount"] = salesMetrics.MaxInvoiceAmount,
+                ["MinInvoiceAmount"] = salesMetrics.MinInvoiceAmount
+            };
+
             ViewBag.SalesData = salesData;
 
             return PartialView("_KpiTilesPartial");
         }
 
-        // GET WEEKLY ORDERS LOGIC
-        //private (List<DailyOrderCount> Orders, DateTime Start, DateTime End) GetWeeklyOrdersDataWithRange(int weekOffset = 0, int roleId = 0, int salesmanId = 0)
-        //{
-        //    var orders = new List<DailyOrderCount>();
-        //    string officeLocation = LocationHelper.GetCurrentOfficeCode(HttpContext);
-        //    var connectionString = _configuration.GetConnectionString(officeLocation);
-
-        //    var userId = HttpContext.Session.GetString("UserId") ?? User.FindFirstValue("UserId");
-        //    var users_Id = HttpContext.Session.GetString("Users_Id") ?? User.FindFirstValue("Users_Id");
-        //    if (string.IsNullOrEmpty(users_Id)) return (new List<DailyOrderCount>(), DateTime.Today, DateTime.Today);
-
-        //    int daysToSunday = (int)DateTime.Today.DayOfWeek;
-        //    DateTime sunday = DateTime.Today.AddDays(-daysToSunday).Date.AddDays(weekOffset * 7);
-        //    DateTime saturday = sunday.AddDays(6);
-
-        //    using (var conn = new SqlConnection(connectionString))
-        //    {
-        //        var query = @"
-        //            SELECT 
-        //                DATENAME(WEEKDAY, SH.SOH_DELIVERY_DATE) AS WeekdayName,
-        //                COUNT(DISTINCT SH.SOH_NUMBER) AS OrdersCount
-        //            FROM SALES_HEADER AS SH
-        //            WHERE 
-        //                SH.SOH_DELIVERY_DATE >= @StartDate
-        //                AND SH.SOH_DELIVERY_DATE <= @EndDate
-        //        ";
-
-        //        if (salesmanId > 0)
-        //        {
-        //            query += " AND SH.SOH_SMNMAS_ID = @SalesmanID";
-        //        }
-
-        //        query += @"
-        //            GROUP BY 
-        //                DATENAME(WEEKDAY, SH.SOH_DELIVERY_DATE),
-        //                DATEPART(WEEKDAY, SH.SOH_DELIVERY_DATE)
-        //            ORDER BY DATEPART(WEEKDAY, SH.SOH_DELIVERY_DATE);
-        //        ";
-
-        //        var cmd = new SqlCommand(query, conn);
-
-        //        if (salesmanId > 0)
-        //        {
-        //            cmd.Parameters.AddWithValue("@SalesmanID", salesmanId);
-        //        }
-
-        //        cmd.Parameters.AddWithValue("@StartDate", sunday);
-        //        cmd.Parameters.AddWithValue("@EndDate", saturday);
-
-
-        //        conn.Open();
-        //        using (var reader = cmd.ExecuteReader())
-        //        {
-        //            while (reader.Read())
-        //            {
-        //                orders.Add(new DailyOrderCount
-        //                {
-        //                    WeekdayName = reader.GetString(0),
-        //                    OrdersCount = reader.GetInt32(1)
-        //                });
-        //            }
-        //        }
-        //    }
-
-        //    return (orders, sunday, saturday);
-        //}
-        private (List<DailyOrderCount> Orders, DateTime Start, DateTime End) GetWeeklyOrdersDataWithRange(int weekOffset = 0, int roleId = 0, int salesmanId = 0, int whsId = 0)
-        {
-            var orders = new List<DailyOrderCount>();
-            string officeLocation = LocationHelper.GetCurrentOfficeCode(HttpContext);
-            var connectionString = _configuration.GetConnectionString(officeLocation);
-
-            int daysToSunday = (int)DateTime.Today.DayOfWeek;
-            DateTime sunday = DateTime.Today.AddDays(-daysToSunday).Date.AddDays(weekOffset * 7);
-            DateTime saturday = sunday.AddDays(6);
-
-            using (var conn = new SqlConnection(connectionString))
-            {
-                var query = @"
-                SELECT 
-                    DATENAME(WEEKDAY, SH.SOH_DELIVERY_DATE) AS WeekdayName,
-                    COUNT(DISTINCT SH.SOH_NUMBER) AS OrdersCount,
-                    SUM(CASE
-                        WHEN SH.SOH_TOTAL_AMOUNT = 0 AND AR.ARO_INVOICE_AMOUNT IS NOT NULL THEN AR.ARO_INVOICE_AMOUNT
-                        WHEN SH.SOH_TOTAL_AMOUNT = 0 AND AR.ARO_INVOICE_AMOUNT IS NULL THEN 0
-                        ELSE SH.SOH_TOTAL_AMOUNT
-                    END) AS TotalOrderAmount
-                FROM SALES_HEADER AS SH
-                LEFT JOIN AR_OPEN_ITEM AR ON SH.SOH_NUMBER = AR.ARO_SALES_ORDER_NUMBER
-                WHERE 
-                    SH.SOH_DELIVERY_DATE BETWEEN @StartDate AND @EndDate
-                    AND SH.SOH_CURRENT_STATUS <> 4
-                    AND SH.SOH_CANCELED_DATE IS NULL";
-
-                if (whsId > 0)
-                {
-                    query += $" AND SH.SOH_WHSMAS_ID = @WhsId";
-                }
-
-                if (salesmanId > 0)
-                {
-                    query += " AND SH.SOH_SMNMAS_ID = @SalesmanID";
-                }
-
-                query += @"
-                    GROUP BY 
-                        DATENAME(WEEKDAY, SH.SOH_DELIVERY_DATE),
-                        DATEPART(WEEKDAY, SH.SOH_DELIVERY_DATE)
-                    ORDER BY DATEPART(WEEKDAY, SH.SOH_DELIVERY_DATE);";
-
-                var cmd = new SqlCommand(query, conn);
-                cmd.Parameters.AddWithValue("@StartDate", sunday);
-                cmd.Parameters.AddWithValue("@EndDate", saturday);
-
-                if (whsId > 0)
-                    cmd.Parameters.AddWithValue("@WhsId", whsId);
-                if (salesmanId > 0)
-                    cmd.Parameters.AddWithValue("@SalesmanID", salesmanId);
-
-                conn.Open();
-                using (var reader = cmd.ExecuteReader())
-                {
-                    while (reader.Read())
-                    {
-                        orders.Add(new DailyOrderCount
-                        {
-                            WeekdayName = reader.GetString(0),
-                            OrdersCount = reader.GetInt32(1),
-                            TotalOrderAmount = reader.IsDBNull(2) ? 0 : Convert.ToDecimal(reader.GetDouble(2))
-                        });
-                    }
-                }
-            }
-
-            return (orders, sunday, saturday);
-        }
-
         [HttpGet]
-        public JsonResult GetWeeklyOrders(int weekOffset = 0, int? filterSalesmanId = null, int whsId = 0)
+        public async Task<JsonResult> GetWeeklyOrders(int weekOffset = 0, int? filterSalesmanId = null, int whsId = 0)
         {
             int roleId = Convert.ToInt32(HttpContext.Session.GetString("RoleId"));
             int effectiveSalesmanId = 0;
@@ -498,308 +390,28 @@ namespace SalesMetrics.Controllers
                 effectiveSalesmanId = filterSalesmanId ?? 0;
             }
 
-            var (orders, _, _) = GetWeeklyOrdersDataWithRange(weekOffset, roleId, effectiveSalesmanId, whsId);
+            // Use ERP abstraction layer
+            var context = GetErpContext();
+            var client = _erpFactory.GetClient(context);
+
+            // Calculate week range
+            int daysToSunday = (int)DateTime.Today.DayOfWeek;
+            DateTime startOfWeek = DateTime.Today.AddDays(-daysToSunday).Date.AddDays(weekOffset * 7);
+            DateTime endOfWeek = startOfWeek.AddDays(6);
+
+            var dailyOrderCounts = await client.GetDailyOrderCountsAsync(startOfWeek, endOfWeek, context);
+
+            // Map to DailyOrderCount for backward compatibility
+            var orders = dailyOrderCounts.Select(d => new DailyOrderCount
+            {
+                WeekdayName = d.WeekdayName,
+                OrdersCount = d.OrdersCount,
+                TotalOrderAmount = d.TotalOrderAmount
+            }).ToList();
+
             return Json(orders);
         }
 
-
-        private TransactionSummary GetTransactionSummary(string connectionString, DateTime? startDate, DateTime? endDate, int roleId = 0, int salesmanId = 0, int whsId = 0)
-        {
-            var summary = new TransactionSummary { TopDelinquentCustomers = new List<CustomerOutstanding>() };
-
-            using (var conn = new SqlConnection(connectionString))
-            {
-                // Query A and B
-                var query = @"
-                    -- A. Pending Invoices Count
-                    SELECT 
-                        COUNT(*) AS PendingInvoices, 
-                        SUM(A.ARO_INVOICE_BALANCE_DUE) AS PendingInvoicesAmount
-
-                    FROM AR_OPEN_ITEM AS A
-	                    LEFT JOIN INVOICE_HEADER as I on A.ARO_INVOICE_NUMBER = I.IHF_INVOICE_NUMBER
-                    WHERE ARO_INVOICE_BALANCE_DUE > 0 
-	                    AND ARO_DATE_PAID_IN_FULL IS NULL";
-                if (whsId > 0)
-                {
-                    query += $" AND ARO_WHSMAS_ID = @WhsId";
-                }
-
-                if (salesmanId > 0)
-                {
-                    query += " AND I.IHF_SMNMAS_ORDER = @SalesmanID";
-                }
-
-                query += @"
-                    -- B. Aging Buckets 30-60
-                    SELECT 
-                        COUNT(*) AS Due30to60,
-                        SUM(A.ARO_INVOICE_BALANCE_DUE) AS Due30to60Amount
-                    FROM AR_OPEN_ITEM AS A
-                        LEFT JOIN INVOICE_HEADER as I ON A.ARO_INVOICE_NUMBER = I.IHF_INVOICE_NUMBER
-                    WHERE 
-                        A.ARO_INVOICE_BALANCE_DUE > 0 
-                        AND A.ARO_DATE_PAID_IN_FULL IS NULL 
-                        AND DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) BETWEEN 30 AND 59";
-
-                if (whsId > 0)
-                {
-                    query += $" AND ARO_WHSMAS_ID = @WhsId";
-                }
-
-                if (salesmanId > 0)
-                {
-                    query += " AND I.IHF_SMNMAS_ORDER = @SalesmanID";
-                }
-
-                query += @"
-                    -- C. Aging Buckets 60-90
-                    SELECT 
-                        COUNT(*) AS Due60to90,
-                        SUM(A.ARO_INVOICE_BALANCE_DUE) AS Due60to90Amount
-                    FROM AR_OPEN_ITEM AS A
-                        LEFT JOIN INVOICE_HEADER as I ON A.ARO_INVOICE_NUMBER = I.IHF_INVOICE_NUMBER
-                    WHERE 
-                        A.ARO_INVOICE_BALANCE_DUE > 0 
-                        AND A.ARO_DATE_PAID_IN_FULL IS NULL 
-                        AND DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) BETWEEN 60 AND 89";
-
-                if (whsId > 0)
-                {
-                    query += $" AND ARO_WHSMAS_ID = @WhsId";
-                }
-
-                if (salesmanId > 0)
-                {
-                    query += " AND I.IHF_SMNMAS_ORDER = @SalesmanID";
-                }
-
-                query += @"
-                    -- D. Aging Buckets 90-120
-                    SELECT 
-                        COUNT(*) AS Due90to120,
-                        SUM(A.ARO_INVOICE_BALANCE_DUE) AS Due90to120Amount
-                    FROM AR_OPEN_ITEM AS A
-                        LEFT JOIN INVOICE_HEADER as I ON A.ARO_INVOICE_NUMBER = I.IHF_INVOICE_NUMBER
-                    WHERE 
-                        A.ARO_INVOICE_BALANCE_DUE > 0 
-                        AND A.ARO_DATE_PAID_IN_FULL IS NULL 
-                        AND DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) BETWEEN 90 AND 120";
-
-                if (whsId > 0)
-                {
-                    query += $" AND ARO_WHSMAS_ID = @WhsId";
-                }
-
-                if (salesmanId > 0)
-                {
-                    query += " AND I.IHF_SMNMAS_ORDER = @SalesmanID";
-                }
-
-                query += @"
-                    -- E. Aging Buckets Over 120
-                    SELECT 
-                        COUNT(*) AS DueOver120,
-                        SUM(A.ARO_INVOICE_BALANCE_DUE) AS DueOver120Amount
-                    FROM AR_OPEN_ITEM AS A
-                        LEFT JOIN INVOICE_HEADER as I ON A.ARO_INVOICE_NUMBER = I.IHF_INVOICE_NUMBER
-                    WHERE 
-                        A.ARO_INVOICE_BALANCE_DUE > 0 
-                        AND A.ARO_DATE_PAID_IN_FULL IS NULL 
-                        AND DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) > 120";
-
-                if (whsId > 0)
-                {
-                    query += $" AND ARO_WHSMAS_ID = @WhsId";
-                }
-
-                if (salesmanId > 0)
-                {
-                    query += " AND I.IHF_SMNMAS_ORDER = @SalesmanID";
-                }
-
-                using (var cmd = new SqlCommand(query, conn))
-                {
-                    if (whsId > 0)
-                        cmd.Parameters.AddWithValue("@WhsId", whsId);
-
-                    if (salesmanId > 0)
-                    {
-                        cmd.Parameters.AddWithValue("@SalesmanID", salesmanId);
-                    }
-
-                    conn.Open();
-                    using var reader = cmd.ExecuteReader();
-                    // Read 1st result (PendingInvoices)
-                    if (reader.Read())
-                    summary.PendingInvoices = reader["PendingInvoices"] != DBNull.Value ? Convert.ToInt32(reader["PendingInvoices"]) : 0;
-                    summary.PendingInvoicesAmount = reader["PendingInvoicesAmount"] != DBNull.Value ? Convert.ToDouble(reader["PendingInvoicesAmount"]) : 0;
-
-                    // Read 2nd result (Due30to60)
-                    if (reader.NextResult() && reader.Read())
-                    {
-                        summary.Due30to60 = reader["Due30to60"] != DBNull.Value ? Convert.ToInt32(reader["Due30to60"]) : 0;
-                        summary.Due30to60Amount = reader["Due30to60Amount"] != DBNull.Value ? Convert.ToDouble(reader["Due30to60Amount"]) : 0;
-                    }
-
-                    // Read 3rd result (Due60to90)
-                    if (reader.NextResult() && reader.Read())
-                    {
-                        summary.Due60to90 = reader["Due60to90"] != DBNull.Value ? Convert.ToInt32(reader["Due60to90"]) : 0;
-                        summary.Due60to90Amount = reader["Due60to90Amount"] != DBNull.Value ? Convert.ToDouble(reader["Due60to90Amount"]) : 0;
-                    }
-
-                    // Read 4th result (Due90to120)
-                    if (reader.NextResult() && reader.Read())
-                    {
-                        summary.Due90to120 = reader["Due90to120"] != DBNull.Value ? Convert.ToInt32(reader["Due90to120"]) : 0;
-                        summary.Due90to120Amount = reader["Due90to120Amount"] != DBNull.Value ? Convert.ToDouble(reader["Due90to120Amount"]) : 0;
-                    }
-
-                    // Read 5th result (DueOver120)
-                    if (reader.NextResult() && reader.Read())
-                    {
-                        summary.DueOver120 = reader["DueOver120"] != DBNull.Value ? Convert.ToInt32(reader["DueOver120"]) : 0;
-                        summary.DueOver120Amount = reader["DueOver120Amount"] != DBNull.Value ? Convert.ToDouble(reader["DueOver120Amount"]) : 0;
-                    }
-                }
-
-                // Query C - Top 5 Delinquents
-                var queryDel = @"
-                    SELECT TOP 5 
-                        I.IHF_BILLTO_NAME AS CustomerName,
-                        I.IHF_CUSTOMER_NUMBER as CustomerNumber,
-	                    I.IHF_CUMMAS_ID as CustomerId,
-                        CAST(SUM(A.ARO_INVOICE_BALANCE_DUE) AS DECIMAL(18, 2)) AS BalanceDue,
-	                    CAST(SUM(CASE WHEN DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) > 60 THEN A.ARO_INVOICE_BALANCE_DUE ELSE 0 END) AS DECIMAL(18, 2)) AS OutstandingAmount
-                    FROM AR_OPEN_ITEM as A
-	                    JOIN INVOICE_HEADER as I ON A.ARO_INVOICE_NUMBER = I.IHF_INVOICE_NUMBER
-                    WHERE A.ARO_INVOICE_BALANCE_DUE > 0
-	                    AND A.ARO_DATE_PAID_IN_FULL IS NULL";
-
-                if (whsId > 0)
-                {
-                    query += $" AND ARO_WHSMAS_ID = @WhsId";
-                }
-
-                if (salesmanId > 0)
-                {
-                    queryDel += " AND I.IHF_SMNMAS_ORDER = @SalesmanID";
-                }
-
-                queryDel += @"
-                    GROUP BY I.IHF_CUMMAS_ID, I.IHF_CUSTOMER_NUMBER, I.IHF_BILLTO_NAME
-                    ORDER By OutstandingAmount DESC;";
-
-                using (var cmd = new SqlCommand(queryDel, conn))
-                {
-                    if (whsId > 0)
-                        cmd.Parameters.AddWithValue("@WhsId", whsId);
-
-                    if (salesmanId > 0)
-                        cmd.Parameters.AddWithValue("SalesmanID", salesmanId);
-
-                    using var reader = cmd.ExecuteReader();
-                    while (reader.Read())
-                    {
-                        summary.TopDelinquentCustomers.Add(new CustomerOutstanding
-                        {
-                            CustomerName = reader.GetString(0),
-                            CustomerNumber = Convert.ToInt32(reader.GetString(1)),
-                            CustomerId = reader.GetInt32(2),
-                            BalanceDue = reader.GetDecimal(3),
-                            OutstandingAmount = reader.GetDecimal(4)
-                        });
-                    }
-                }
-            }
-            return summary;
-        }
-
-        private List<OverdueInvoice> GetOverdueInvoices(string connectionString, int roleId = 0, int salesmanId = 0, int whsId = 0)
-        {
-            var overdueList = new List<OverdueInvoice>();
-            var userId = Convert.ToInt32(User.FindFirstValue("UserId"));
-
-            using (var conn = new SqlConnection(connectionString))
-            {
-                var sql = @"
-                    SELECT 
-	                    I.IHF_INVOICE_NUMBER AS Invoice,
-                        C.CUM_CUMMAS_ID AS CustomerId,
-                        I.IHF_BILLTO_NAME AS CustomerName,
-	                    P.IPC_DESCRIPTION as MgmtCo,
-	                    CAST(A.ARO_INVOICE_BALANCE_DUE AS DECIMAL(18, 2)) AS OutstandingAmount,
-	                    CAST(A.ARO_DUE_DATE as DATE) as DueDate,
-	                    CASE 
-		                    WHEN DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) < 30 THEN 'Under 30 Days'
-		                    WHEN DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) BETWEEN 30 AND 59 THEN '30 to 60 Days'
-		                    WHEN DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) BETWEEN 60 AND 89 THEN '60 to 90 Days'
-                            WHEN DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) BETWEEN 90 AND 119 THEN '90 to 120 Days'
-		                    WHEN DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) >= 120 THEN 'Over 120 Days'
-		                    ELSE '' END as Status,
-	                    DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) as Days,
-                        SM.SMN_SMNMAS_ID as SalespersonId,
-                        SM.SMN_SALESMAN_NAME as Salesperson
-                    FROM AR_OPEN_ITEM A
-	                    LEFT JOIN INVOICE_HEADER I ON A.ARO_INVOICE_NUMBER = I.IHF_INVOICE_NUMBER
-                        LEFT JOIN CUSTOMER_MASTER C on A.ARO_CUSTOMER_NUMBER = C.CUM_CUSTOMER_NUMBER
-	                    LEFT JOIN SALESMAN_MASTER AS SM ON I.IHF_SMNMAS_ORDER = SM.SMN_SMNMAS_ID
-	                    LEFT JOIN PRICE_CODES as P on I.IHF_PRICE_CODE = P.IPC_PRICE_CODE
-
-                    WHERE A.ARO_INVOICE_BALANCE_DUE > 0
-	                    AND DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) > 30
-	                    AND A.ARO_DATE_PAID_IN_FULL IS NULL
-                        AND I.IHF_INVOICE_NUMBER IS NOT NULL
-                    ";
-
-                if (connectionString == "LAX")
-                {
-                    sql += " AND I.IHF_SMNMAS_ORDER<> 24";
-                }
-
-                if (whsId > 0)
-                {
-                    sql += $" AND ARO_WHSMAS_ID = @WhsId";
-                }
-
-                if (salesmanId > 0)
-                {
-                    sql += " AND I.IHF_SMNMAS_ORDER = @SalesmanID";
-                }
-
-                sql += " ORDER BY OutstandingAmount DESC";
-
-                var cmd = new SqlCommand(sql, conn);
-
-                if (whsId > 0)
-                    cmd.Parameters.AddWithValue("@WhsId", whsId);
-                
-                if (salesmanId > 0)
-                    cmd.Parameters.AddWithValue("@SalesmanID", salesmanId);
-
-                conn.Open();
-                using var reader = cmd.ExecuteReader();
-                while (reader.Read())
-                {
-                    overdueList.Add(new OverdueInvoice
-                    {
-                        Invoice = reader.GetInt32(0),
-                        CustomerId = reader.GetInt32(1),
-                        CustomerName = reader.GetString(2),
-                        MgmtCo = reader.GetString(3),
-                        OutstandingAmount = reader.GetDecimal(4),
-                        DueDate = reader.GetDateTime(5),
-                        InvoiceAging = reader.GetString(6),
-                        DaysPastDue = reader.GetInt32(7),
-                        SalespersonId = reader.GetInt32(8),
-                        Salesperson = reader.GetString(9)
-                    });
-                }
-            }
-
-            return overdueList;
-        }
 
         [HttpGet]
         public IActionResult GetOrderDetails(int invoiceNumber)

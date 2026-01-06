@@ -12,6 +12,16 @@ namespace SalesMetrics.Services.Erp.Models
         public decimal AverageOrderValue { get; set; }
         public int TotalInvoices { get; set; }
         public decimal TotalRevenue { get; set; }
+
+        // Additional fields for DashboardController compatibility
+        public decimal AmountDue { get; set; }
+        public int PropertyCount { get; set; }
+        public int PropertyNameCount { get; set; }
+        public int PaidInvoices { get; set; }
+        public int OverdueInvoices { get; set; }
+        public decimal MaxInvoiceAmount { get; set; }
+        public decimal MinInvoiceAmount { get; set; }
+
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
         public string? LocationCode { get; set; }

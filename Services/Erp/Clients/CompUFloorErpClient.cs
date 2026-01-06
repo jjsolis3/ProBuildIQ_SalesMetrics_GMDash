@@ -323,21 +323,231 @@ namespace SalesMetrics.Services.Erp.Clients
             throw new NotImplementedException("GetPropertyARBalanceAsync will be implemented in next phase");
         }
 
-        public Task<ErpARAgingSummary> GetARAgingSummaryAsync(
+        public async Task<ErpARAgingSummary> GetARAgingSummaryAsync(
             ErpContext context,
             CancellationToken cancellationToken = default)
         {
-            // TODO: Implement
-            throw new NotImplementedException("GetARAgingSummaryAsync will be implemented in next phase");
+            var connectionString = GetConnectionString(context);
+
+            var sql = @"
+                -- Pending Invoices Count
+                SELECT
+                    COUNT(*) AS PendingInvoices,
+                    ISNULL(SUM(A.ARO_INVOICE_BALANCE_DUE), 0) AS PendingInvoicesAmount
+                FROM AR_OPEN_ITEM AS A
+                    LEFT JOIN INVOICE_HEADER as I on A.ARO_INVOICE_NUMBER = I.IHF_INVOICE_NUMBER
+                WHERE ARO_INVOICE_BALANCE_DUE > 0
+                    AND ARO_DATE_PAID_IN_FULL IS NULL;
+
+                -- 30-60 Days
+                SELECT
+                    COUNT(*) AS Due30to60,
+                    ISNULL(SUM(A.ARO_INVOICE_BALANCE_DUE), 0) AS Due30to60Amount
+                FROM AR_OPEN_ITEM AS A
+                    LEFT JOIN INVOICE_HEADER as I ON A.ARO_INVOICE_NUMBER = I.IHF_INVOICE_NUMBER
+                WHERE A.ARO_INVOICE_BALANCE_DUE > 0
+                    AND A.ARO_DATE_PAID_IN_FULL IS NULL
+                    AND DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) BETWEEN 30 AND 59;
+
+                -- 60-90 Days
+                SELECT
+                    COUNT(*) AS Due60to90,
+                    ISNULL(SUM(A.ARO_INVOICE_BALANCE_DUE), 0) AS Due60to90Amount
+                FROM AR_OPEN_ITEM AS A
+                    LEFT JOIN INVOICE_HEADER as I ON A.ARO_INVOICE_NUMBER = I.IHF_INVOICE_NUMBER
+                WHERE A.ARO_INVOICE_BALANCE_DUE > 0
+                    AND A.ARO_DATE_PAID_IN_FULL IS NULL
+                    AND DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) BETWEEN 60 AND 89;
+
+                -- 90-120 Days
+                SELECT
+                    COUNT(*) AS Due90to120,
+                    ISNULL(SUM(A.ARO_INVOICE_BALANCE_DUE), 0) AS Due90to120Amount
+                FROM AR_OPEN_ITEM AS A
+                    LEFT JOIN INVOICE_HEADER as I ON A.ARO_INVOICE_NUMBER = I.IHF_INVOICE_NUMBER
+                WHERE A.ARO_INVOICE_BALANCE_DUE > 0
+                    AND A.ARO_DATE_PAID_IN_FULL IS NULL
+                    AND DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) BETWEEN 90 AND 119;
+
+                -- Over 120 Days
+                SELECT
+                    COUNT(*) AS DueOver120,
+                    ISNULL(SUM(A.ARO_INVOICE_BALANCE_DUE), 0) AS DueOver120Amount
+                FROM AR_OPEN_ITEM AS A
+                    LEFT JOIN INVOICE_HEADER as I ON A.ARO_INVOICE_NUMBER = I.IHF_INVOICE_NUMBER
+                WHERE A.ARO_INVOICE_BALANCE_DUE > 0
+                    AND A.ARO_DATE_PAID_IN_FULL IS NULL
+                    AND DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) >= 120;
+
+                -- Under 30 Days
+                SELECT
+                    COUNT(*) AS DueUnder30,
+                    ISNULL(SUM(A.ARO_INVOICE_BALANCE_DUE), 0) AS DueUnder30Amount
+                FROM AR_OPEN_ITEM AS A
+                    LEFT JOIN INVOICE_HEADER as I ON A.ARO_INVOICE_NUMBER = I.IHF_INVOICE_NUMBER
+                WHERE A.ARO_INVOICE_BALANCE_DUE > 0
+                    AND A.ARO_DATE_PAID_IN_FULL IS NULL
+                    AND DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) < 30;
+
+                -- Top Delinquent Customers
+                SELECT TOP 10
+                    C.CUM_CUSTOMER_NAME as CustomerName,
+                    C.CUM_CUSTOMER_NUMBER as CustomerNumber,
+                    C.CUM_CUMMAS_ID as CustomerId,
+                    SUM(A.ARO_INVOICE_BALANCE_DUE) as OutstandingAmount
+                FROM AR_OPEN_ITEM A
+                    LEFT JOIN CUSTOMER_MASTER C ON A.ARO_CUSTOMER_NUMBER = C.CUM_CUSTOMER_NUMBER
+                WHERE A.ARO_INVOICE_BALANCE_DUE > 0
+                    AND A.ARO_DATE_PAID_IN_FULL IS NULL
+                GROUP BY C.CUM_CUSTOMER_NAME, C.CUM_CUSTOMER_NUMBER, C.CUM_CUMMAS_ID
+                ORDER BY OutstandingAmount DESC";
+
+            await using var connection = new SqlConnection(connectionString);
+            await connection.OpenAsync(cancellationToken);
+
+            await using var command = new SqlCommand(sql, connection);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+            var summary = new ErpARAgingSummary();
+
+            // Read pending invoices
+            if (await reader.ReadAsync())
+            {
+                summary.PendingInvoices = reader.GetInt32(0);
+                summary.PendingInvoicesAmount = reader.GetDecimal(1);
+            }
+
+            // Read 30-60 days
+            await reader.NextResultAsync(cancellationToken);
+            if (await reader.ReadAsync())
+            {
+                summary.Due30to60 = reader.GetInt32(0);
+                summary.Due30to60Amount = reader.GetDecimal(1);
+            }
+
+            // Read 60-90 days
+            await reader.NextResultAsync(cancellationToken);
+            if (await reader.ReadAsync())
+            {
+                summary.Due60to90 = reader.GetInt32(0);
+                summary.Due60to90Amount = reader.GetDecimal(1);
+            }
+
+            // Read 90-120 days
+            await reader.NextResultAsync(cancellationToken);
+            if (await reader.ReadAsync())
+            {
+                summary.Due90to120 = reader.GetInt32(0);
+                summary.Due90to120Amount = reader.GetDecimal(1);
+            }
+
+            // Read over 120 days
+            await reader.NextResultAsync(cancellationToken);
+            if (await reader.ReadAsync())
+            {
+                summary.DueOver120 = reader.GetInt32(0);
+                summary.DueOver120Amount = reader.GetDecimal(1);
+            }
+
+            // Read under 30 days
+            await reader.NextResultAsync(cancellationToken);
+            if (await reader.ReadAsync())
+            {
+                summary.DueUnder30 = reader.GetInt32(0);
+                summary.DueUnder30Amount = reader.GetDecimal(1);
+            }
+
+            // Read top delinquent customers
+            await reader.NextResultAsync(cancellationToken);
+            while (await reader.ReadAsync())
+            {
+                summary.TopDelinquentCustomers.Add(new ErpCustomerOutstanding
+                {
+                    CustomerName = reader.GetString(0),
+                    CustomerNumber = reader.GetInt32(1),
+                    CustomerId = reader.GetInt32(2),
+                    OutstandingAmount = reader.GetDecimal(3),
+                    BalanceDue = reader.GetDecimal(3)
+                });
+            }
+
+            return summary;
         }
 
-        public Task<List<ErpOverdueInvoice>> GetOverdueInvoicesAsync(
+        public async Task<List<ErpOverdueInvoice>> GetOverdueInvoicesAsync(
             ErpContext context,
             int? salesmanId = null,
             CancellationToken cancellationToken = default)
         {
-            // TODO: Implement
-            throw new NotImplementedException("GetOverdueInvoicesAsync will be implemented in next phase");
+            var connectionString = GetConnectionString(context);
+
+            var sql = @"
+                SELECT
+                    I.IHF_INVOICE_NUMBER AS InvoiceNumber,
+                    C.CUM_CUMMAS_ID AS CustomerId,
+                    I.IHF_BILLTO_NAME AS CustomerName,
+                    P.IPC_DESCRIPTION as ManagementCompany,
+                    CAST(A.ARO_INVOICE_BALANCE_DUE AS DECIMAL(18, 2)) AS OutstandingAmount,
+                    CAST(A.ARO_DUE_DATE as DATE) as DueDate,
+                    DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) as DaysPastDue,
+                    CASE
+                        WHEN DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) < 30 THEN 'Under 30 Days'
+                        WHEN DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) BETWEEN 30 AND 59 THEN '30 to 60 Days'
+                        WHEN DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) BETWEEN 60 AND 89 THEN '60 to 90 Days'
+                        WHEN DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) BETWEEN 90 AND 119 THEN '90 to 120 Days'
+                        WHEN DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) >= 120 THEN 'Over 120 Days'
+                        ELSE ''
+                    END as InvoiceAging,
+                    SM.SMN_SMNMAS_ID as SalesmanId,
+                    SM.SMN_SALESMAN_NAME as SalesmanName
+                FROM AR_OPEN_ITEM A
+                    LEFT JOIN INVOICE_HEADER I ON A.ARO_INVOICE_NUMBER = I.IHF_INVOICE_NUMBER
+                    LEFT JOIN CUSTOMER_MASTER C on A.ARO_CUSTOMER_NUMBER = C.CUM_CUSTOMER_NUMBER
+                    LEFT JOIN SALESMAN_MASTER AS SM ON I.IHF_SMNMAS_ORDER = SM.SMN_SMNMAS_ID
+                    LEFT JOIN PRICE_CODES as P on I.IHF_PRICE_CODE = P.IPC_PRICE_CODE
+                WHERE A.ARO_INVOICE_BALANCE_DUE > 0
+                    AND DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) > 30
+                    AND A.ARO_DATE_PAID_IN_FULL IS NULL
+                    AND I.IHF_INVOICE_NUMBER IS NOT NULL";
+
+            if (salesmanId.HasValue && salesmanId.Value > 0)
+            {
+                sql += " AND I.IHF_SMNMAS_ORDER = @SalesmanId";
+            }
+
+            sql += " ORDER BY DaysPastDue DESC";
+
+            await using var connection = new SqlConnection(connectionString);
+            await connection.OpenAsync(cancellationToken);
+
+            await using var command = new SqlCommand(sql, connection);
+
+            if (salesmanId.HasValue && salesmanId.Value > 0)
+            {
+                command.Parameters.AddWithValue("@SalesmanId", salesmanId.Value);
+            }
+
+            var results = new List<ErpOverdueInvoice>();
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+            while (await reader.ReadAsync())
+            {
+                results.Add(new ErpOverdueInvoice
+                {
+                    InvoiceNumber = reader.GetInt32(0).ToString(),
+                    CustomerId = reader.GetInt32(1),
+                    CustomerName = reader.IsDBNull(2) ? "" : reader.GetString(2),
+                    ManagementCompany = reader.IsDBNull(3) ? null : reader.GetString(3),
+                    OutstandingAmount = reader.GetDecimal(4),
+                    DueDate = reader.GetDateTime(5),
+                    DaysPastDue = reader.GetInt32(6),
+                    InvoiceAging = reader.GetString(7),
+                    SalesmanId = reader.IsDBNull(8) ? null : reader.GetInt32(8),
+                    SalesmanName = reader.IsDBNull(9) ? null : reader.GetString(9)
+                });
+            }
+
+            return results;
         }
 
         public Task<List<ErpMonthlyInvoiceSummary>> GetMonthlyInvoiceSummariesAsync(
@@ -354,25 +564,134 @@ namespace SalesMetrics.Services.Erp.Clients
         // SALES METRICS
         // ============================================================
 
-        public Task<ErpSalesMetrics> GetSalesMetricsAsync(
+        public async Task<ErpSalesMetrics> GetSalesMetricsAsync(
             DateTime startDate,
             DateTime endDate,
             ErpContext context,
             int? salesmanId = null,
             CancellationToken cancellationToken = default)
         {
-            // TODO: Implement - critical for dashboard
-            throw new NotImplementedException("GetSalesMetricsAsync will be implemented in next phase");
+            var connectionString = GetConnectionString(context);
+            var warehouseIds = GetWarehouseIds(context);
+
+            var sql = @"
+                SELECT
+                    SUM(AR.ARO_INVOICE_AMOUNT) AS TotalRevenue,
+                    SUM(AR.ARO_INVOICE_BALANCE_DUE) AS AmountDue,
+                    COUNT(DISTINCT I.IHF_CUSTOMER_NUMBER) AS PropertyCount,
+                    COUNT(I.IHF_INVOICE_NUMBER) AS TotalInvoices,
+                    SUM(CASE WHEN AR.ARO_INVOICE_BALANCE_DUE = 0 THEN 1 ELSE 0 END) AS PaidInvoices,
+                    SUM(CASE WHEN AR.ARO_DUE_DATE < GETDATE() AND AR.ARO_INVOICE_BALANCE_DUE > 0 THEN 1 ELSE 0 END) AS OverdueInvoices,
+                    AVG(AR.ARO_INVOICE_AMOUNT) AS AvgInvoiceAmount,
+                    MAX(AR.ARO_INVOICE_AMOUNT) AS MaxInvoiceAmount,
+                    MIN(AR.ARO_INVOICE_AMOUNT) AS MinInvoiceAmount,
+                    COUNT(DISTINCT CASE WHEN I.IHF_OPERATOR = 'Online' THEN I.IHF_INVOICE_NUMBER END) AS OnlineOrders
+                FROM AR_OPEN_ITEM AS AR
+                    LEFT JOIN INVOICE_HEADER AS I ON AR.ARO_INVOICE_NUMBER = I.IHF_INVOICE_NUMBER
+                    LEFT JOIN SALESMAN_MASTER AS SM ON I.IHF_SMNMAS_ORDER = SM.SMN_SMNMAS_ID
+                WHERE I.IHF_INVOICE_DATE >= @StartDate
+                    AND I.IHF_INVOICE_DATE <= @EndDate
+                    AND I.IHF_CANCELED_DATE IS NULL";
+
+            if (salesmanId.HasValue && salesmanId.Value > 0)
+            {
+                sql += " AND SM.SMN_SMNMAS_ID = @SalesmanId";
+            }
+
+            await using var connection = new SqlConnection(connectionString);
+            await connection.OpenAsync(cancellationToken);
+
+            await using var command = new SqlCommand(sql, connection);
+            command.Parameters.AddWithValue("@StartDate", startDate);
+            command.Parameters.AddWithValue("@EndDate", endDate);
+
+            if (salesmanId.HasValue && salesmanId.Value > 0)
+            {
+                command.Parameters.AddWithValue("@SalesmanId", salesmanId.Value);
+            }
+
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+            if (await reader.ReadAsync())
+            {
+                var totalRevenue = reader.IsDBNull(0) ? 0m : reader.GetDecimal(0);
+                var totalInvoices = reader.IsDBNull(3) ? 0 : reader.GetInt32(3);
+                var onlineOrders = reader.IsDBNull(9) ? 0 : reader.GetInt32(9);
+
+                return new ErpSalesMetrics
+                {
+                    TotalRevenue = totalRevenue,
+                    TotalInvoices = totalInvoices,
+                    TotalOrders = totalInvoices,
+                    OnlineOrders = onlineOrders,
+                    InStoreOrders = totalInvoices - onlineOrders,
+                    TotalOrderAmount = totalRevenue,
+                    AverageOrderValue = totalInvoices > 0 ? totalRevenue / totalInvoices : 0m,
+                    StartDate = startDate,
+                    EndDate = endDate,
+                    LocationCode = context.LocationCode
+                };
+            }
+
+            return new ErpSalesMetrics
+            {
+                StartDate = startDate,
+                EndDate = endDate,
+                LocationCode = context.LocationCode
+            };
         }
 
-        public Task<List<ErpDailyOrderCount>> GetDailyOrderCountsAsync(
+        public async Task<List<ErpDailyOrderCount>> GetDailyOrderCountsAsync(
             DateTime startDate,
             DateTime endDate,
             ErpContext context,
             CancellationToken cancellationToken = default)
         {
-            // TODO: Implement
-            throw new NotImplementedException("GetDailyOrderCountsAsync will be implemented in next phase");
+            var connectionString = GetConnectionString(context);
+
+            var sql = @"
+                SELECT
+                    CAST(SH.SOH_DELIVERY_DATE AS DATE) AS OrderDate,
+                    DATENAME(WEEKDAY, SH.SOH_DELIVERY_DATE) AS WeekdayName,
+                    COUNT(DISTINCT SH.SOH_NUMBER) AS OrdersCount,
+                    SUM(CASE
+                        WHEN SH.SOH_TOTAL_AMOUNT = 0 AND AR.ARO_INVOICE_AMOUNT IS NOT NULL THEN AR.ARO_INVOICE_AMOUNT
+                        WHEN SH.SOH_TOTAL_AMOUNT = 0 AND AR.ARO_INVOICE_AMOUNT IS NULL THEN 0
+                        ELSE SH.SOH_TOTAL_AMOUNT
+                    END) AS TotalOrderAmount
+                FROM SALES_HEADER AS SH
+                LEFT JOIN AR_OPEN_ITEM AR ON SH.SOH_NUMBER = AR.ARO_SALES_ORDER_NUMBER
+                WHERE SH.SOH_DELIVERY_DATE BETWEEN @StartDate AND @EndDate
+                    AND SH.SOH_CURRENT_STATUS <> 4
+                    AND SH.SOH_CANCELED_DATE IS NULL
+                GROUP BY
+                    CAST(SH.SOH_DELIVERY_DATE AS DATE),
+                    DATENAME(WEEKDAY, SH.SOH_DELIVERY_DATE),
+                    DATEPART(WEEKDAY, SH.SOH_DELIVERY_DATE)
+                ORDER BY CAST(SH.SOH_DELIVERY_DATE AS DATE)";
+
+            await using var connection = new SqlConnection(connectionString);
+            await connection.OpenAsync(cancellationToken);
+
+            await using var command = new SqlCommand(sql, connection);
+            command.Parameters.AddWithValue("@StartDate", startDate);
+            command.Parameters.AddWithValue("@EndDate", endDate);
+
+            var results = new List<ErpDailyOrderCount>();
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+            while (await reader.ReadAsync())
+            {
+                results.Add(new ErpDailyOrderCount
+                {
+                    Date = reader.GetDateTime(0),
+                    WeekdayName = reader.GetString(1),
+                    OrdersCount = reader.GetInt32(2),
+                    TotalOrderAmount = reader.IsDBNull(3) ? 0m : reader.GetDecimal(3)
+                });
+            }
+
+            return results;
         }
 
         public Task<List<ErpSalesmanMetrics>> GetSalesmanMetricsAsync(

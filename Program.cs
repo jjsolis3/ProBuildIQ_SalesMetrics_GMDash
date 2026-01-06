@@ -161,7 +161,10 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 // Enable Response Compression
-app.UseResponseCompression();
+if (!app.Environment.IsDevelopment())
+{
+    app.UseResponseCompression();
+}
 
 app.UseStaticFiles();
 app.UseRouting();

@@ -242,15 +242,18 @@ namespace SalesMetrics.Controllers
 
             // Map ErpWarehouse to Warehouses for backward compatibility
             // Filter to warehouse numbers < 10 (original logic)
-            var whsList = erpWarehouses
-                .Where(w => int.TryParse(w.WarehouseNumber, out var num) && num < 10)
-                .Select(w => new Warehouses
+            var whsList = new List<Warehouses>();
+            foreach (var w in erpWarehouses)
+            {
+                if (int.TryParse(w.WarehouseNumber, out var num) && num < 10)
                 {
-                    WhsID = w.WarehouseNumber,
-                    WhsName = w.WarehouseName
-                })
-                .ToList();
-
+                    whsList.Add(new Warehouses
+                    {
+                        WhsID = num,  // Use the already-parsed value
+                        WhsName = w.WarehouseName
+                    });
+                }
+            }
             return whsList;
         }
 

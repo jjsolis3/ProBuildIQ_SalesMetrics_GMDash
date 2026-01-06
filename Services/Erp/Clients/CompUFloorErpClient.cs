@@ -461,10 +461,13 @@ namespace SalesMetrics.Services.Erp.Clients
             await reader.NextResultAsync(cancellationToken);
             while (await reader.ReadAsync())
             {
+                var customerNumberStr = reader.IsDBNull(1) ? "0" : reader.GetString(1);
+                int.TryParse(customerNumberStr, out var customerNumber);
+
                 summary.TopDelinquentCustomers.Add(new ErpCustomerOutstanding
                 {
                     CustomerName = reader.GetString(0),
-                    CustomerNumber = reader.GetInt32(1),
+                    CustomerNumber = customerNumber,
                     CustomerId = reader.GetInt32(2),
                     OutstandingAmount = Convert.ToDecimal(reader.GetDouble(3)),
                     BalanceDue = Convert.ToDecimal(reader.GetDouble(3))

@@ -414,7 +414,7 @@ namespace SalesMetrics.Services.Erp.Clients
             if (await reader.ReadAsync())
             {
                 summary.PendingInvoices = reader.GetInt32(0);
-                summary.PendingInvoicesAmount = reader.GetDecimal(1);
+                summary.PendingInvoicesAmount = Convert.ToDecimal(reader.GetDouble(1));
             }
 
             // Read 30-60 days
@@ -422,7 +422,7 @@ namespace SalesMetrics.Services.Erp.Clients
             if (await reader.ReadAsync())
             {
                 summary.Due30to60 = reader.GetInt32(0);
-                summary.Due30to60Amount = reader.GetDecimal(1);
+                summary.Due30to60Amount = Convert.ToDecimal(reader.GetDouble(1));
             }
 
             // Read 60-90 days
@@ -430,7 +430,7 @@ namespace SalesMetrics.Services.Erp.Clients
             if (await reader.ReadAsync())
             {
                 summary.Due60to90 = reader.GetInt32(0);
-                summary.Due60to90Amount = reader.GetDecimal(1);
+                summary.Due60to90Amount = Convert.ToDecimal(reader.GetDouble(1));
             }
 
             // Read 90-120 days
@@ -438,7 +438,7 @@ namespace SalesMetrics.Services.Erp.Clients
             if (await reader.ReadAsync())
             {
                 summary.Due90to120 = reader.GetInt32(0);
-                summary.Due90to120Amount = reader.GetDecimal(1);
+                summary.Due90to120Amount = Convert.ToDecimal(reader.GetDouble(1));
             }
 
             // Read over 120 days
@@ -446,7 +446,7 @@ namespace SalesMetrics.Services.Erp.Clients
             if (await reader.ReadAsync())
             {
                 summary.DueOver120 = reader.GetInt32(0);
-                summary.DueOver120Amount = reader.GetDecimal(1);
+                summary.DueOver120Amount = Convert.ToDecimal(reader.GetDouble(1));
             }
 
             // Read under 30 days
@@ -454,7 +454,7 @@ namespace SalesMetrics.Services.Erp.Clients
             if (await reader.ReadAsync())
             {
                 summary.DueUnder30 = reader.GetInt32(0);
-                summary.DueUnder30Amount = reader.GetDecimal(1);
+                summary.DueUnder30Amount = Convert.ToDecimal(reader.GetDouble(1));
             }
 
             // Read top delinquent customers
@@ -466,8 +466,8 @@ namespace SalesMetrics.Services.Erp.Clients
                     CustomerName = reader.GetString(0),
                     CustomerNumber = reader.GetInt32(1),
                     CustomerId = reader.GetInt32(2),
-                    OutstandingAmount = reader.GetDecimal(3),
-                    BalanceDue = reader.GetDecimal(3)
+                    OutstandingAmount = Convert.ToDecimal(reader.GetDouble(3)),
+                    BalanceDue = Convert.ToDecimal(reader.GetDouble(3))
                 });
             }
 
@@ -614,15 +614,15 @@ namespace SalesMetrics.Services.Erp.Clients
 
             if (await reader.ReadAsync())
             {
-                var totalRevenue = reader.IsDBNull(0) ? 0m : reader.GetDecimal(0);
-                var amountDue = reader.IsDBNull(1) ? 0m : reader.GetDecimal(1);
+                var totalRevenue = reader.IsDBNull(0) ? 0m : Convert.ToDecimal(reader.GetDouble(0));
+                var amountDue = reader.IsDBNull(1) ? 0m : Convert.ToDecimal(reader.GetDouble(1));
                 var propertyCount = reader.IsDBNull(2) ? 0 : reader.GetInt32(2);
                 var totalInvoices = reader.IsDBNull(3) ? 0 : reader.GetInt32(3);
                 var paidInvoices = reader.IsDBNull(4) ? 0 : reader.GetInt32(4);
                 var overdueInvoices = reader.IsDBNull(5) ? 0 : reader.GetInt32(5);
-                var avgInvoiceAmount = reader.IsDBNull(6) ? 0m : reader.GetDecimal(6);
-                var maxInvoiceAmount = reader.IsDBNull(7) ? 0m : reader.GetDecimal(7);
-                var minInvoiceAmount = reader.IsDBNull(8) ? 0m : reader.GetDecimal(8);
+                var avgInvoiceAmount = reader.IsDBNull(6) ? 0m : Convert.ToDecimal(reader.GetDouble(6));
+                var maxInvoiceAmount = reader.IsDBNull(7) ? 0m : Convert.ToDecimal(reader.GetDouble(7));
+                var minInvoiceAmount = reader.IsDBNull(8) ? 0m : Convert.ToDecimal(reader.GetDouble(8));
                 var onlineOrders = reader.IsDBNull(9) ? 0 : reader.GetInt32(9);
 
                 return new ErpSalesMetrics
@@ -701,7 +701,7 @@ namespace SalesMetrics.Services.Erp.Clients
                     Date = reader.GetDateTime(0),
                     WeekdayName = reader.GetString(1),
                     OrdersCount = reader.GetInt32(2),
-                    TotalOrderAmount = reader.IsDBNull(3) ? 0m : reader.GetDecimal(3)
+                    TotalOrderAmount = reader.IsDBNull(3) ? 0m : Convert.ToDecimal(reader.GetDouble(3))
                 });
             }
 

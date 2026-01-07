@@ -203,6 +203,7 @@ namespace SalesMetrics.Services.Erp.Clients
                     C.CUM_AR_BALANCE as ARBalance,
                     C.CUM_CREDIT_HOLD_FLAG as CreditHoldFlag,
                     C.CUM_PRICE_CODE as PriceCode,
+                    C.CUM_ESTABLISHED_DATE as EstablishedDate,
                     C.CUM_ATTENTION_TO as AttentionTo,
                     C.CUM_SMNMAS_ID as SalesmanId,
                     S.SMN_SALESMAN_NAME as SalesmanName,

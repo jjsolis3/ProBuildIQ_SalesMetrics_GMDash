@@ -208,116 +208,63 @@ namespace SalesMetrics.Services.Signing
 
         public async Task<IReadOnlyList<WorkOrderViewModel>> GetOrdersForPropertyAsync(int propertyId, string status = "pending")
         {
-            // TODO: Refactor to use ERP abstraction layer
-            // Currently uses direct SQL due to complex joins with Apartments, Buildings, ApartmentType tables
-            // These tables might be CompUFloor-specific and need investigation for Kudu equivalents
-            var officeLocation = _http.HttpContext?.Session.GetString("OfficeLocation") ?? "LAX";
-            var connStr = _config.GetConnectionString(officeLocation);
-            var results = new List<WorkOrderViewModel>();
+            // Use ERP abstraction layer
+            var context = GetErpContext();
+            var client = _erpFactory.GetClient(context);
 
-            using var conn = new SqlConnection(connStr);
-            await conn.OpenAsync();
+            // Get future orders (pending status = delivery date in future)
+            var startDate = DateTime.Today;
+            var orders = await client.GetOrdersForPropertyAsync(
+                propertyId,
+                context,
+                startDate: startDate,
+                endDate: null,
+                skip: 0,
+                take: 50);
 
-            var sql = @"
-                SELECT TOP 50
-                    SOH_NUMBER AS OrderID,
-                    CUS.CUM_CUMMAS_ID as PropertyID,
-                    CUS.CUM_CUSTOMER_NUMBER as PropertyNumber,
-                    CUS.CUM_CUSTOMER_NAME AS PropertyName,
-                    CUS.CUM_CITY AS City,
-                    CONVERT(VARCHAR, S.SOH_DELIVERY_DATE, 101) AS DeliveryDate,
-                    B.BuildingNumber + ' - ' + A.ApartmentNumber AS UnitNumber,
-                    APT.Description AS UnitType,
-                    ISNULL(AR.ARO_DATE_PAID_IN_FULL, '') AS PaidInFullDate
-                FROM SALES_HEADER S
-                    LEFT JOIN CUSTOMER_MASTER CUS ON CUS.CUM_CUMMAS_ID = S.SOH_CUMMAS_ID
-                    LEFT JOIN Apartments A ON S.SOH_APARTMENT_ID = A.Id
-                    LEFT JOIN Buildings B ON A.Building_id = B.Id
-                    LEFT JOIN ApartmentType APT ON A.ApartmentType_Id = APT.ID
-                    LEFT JOIN AR_OPEN_ITEM AR on S.SOH_NUMBER = AR.ARO_SALES_ORDER_NUMBER
-                WHERE CUS.CUM_CUMMAS_ID = @propertyId
-                  AND S.SOH_CANCELED_DATE IS NULL
-                  AND S.SOH_CANCELED_DATE IS NULL
-                  AND S.SOH_DELIVERY_DATE >= GETDATE()
-                  AND S.SOH_INVOICE_TYPE = 0
-                  AND S.SOH_WHSMAS_ID = 1
-                  AND S.SOH_TOTAL_AMOUNT > 0
-            ";
-
-            using var cmd = new SqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("@propertyId", propertyId);
-
-            using var reader = await cmd.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
+            // Map ErpOrder to WorkOrderViewModel
+            var results = orders.Items.Select(o => new WorkOrderViewModel
             {
-                results.Add(new WorkOrderViewModel
-                {
-                    OrderID = reader["OrderID"].ToString(),
-                    PropertyId = Convert.ToInt32(reader["PropertyID"]),
-                    PropertyNumber = Convert.ToInt32(reader["PropertyNumber"]),
-                    PropertyName = reader["PropertyName"].ToString(),
-                    City = reader["City"].ToString(),
-                    DeliveryDate = reader["DeliveryDate"].ToString(),
-                    UnitNumber = reader["UnitNumber"].ToString(),
-                    UnitType = reader["UnitType"].ToString(),
-                    PaidInFullDate = reader["PaidInFullDate"].ToString()
-                });
-            }
+                OrderID = o.OrderNumber,
+                PropertyId = o.CustomerId,
+                PropertyNumber = int.TryParse(o.CustomerNumber, out var pn) ? pn : 0,
+                PropertyName = o.CustomerName ?? string.Empty,
+                City = o.ShipCity ?? string.Empty,
+                DeliveryDate = o.DeliveryDate?.ToString("MM/dd/yyyy") ?? string.Empty,
+                UnitNumber = o.Building ?? string.Empty,
+                UnitType = o.ManagementCompany ?? string.Empty,
+                PaidInFullDate = string.Empty // Set in ErpOrderDetails if needed
+            }).ToList();
 
             return results;
         }
 
         // Helper method to get order by ID from ERP
-        // TODO: Refactor to use ERP abstraction layer
-        // Currently uses direct SQL due to complex joins with Apartments, Buildings, ApartmentType tables
         private async Task<WorkOrderViewModel?> GetOrderByIdAsync(string orderId)
         {
-            var officeLocation = _http.HttpContext?.Session.GetString("OfficeLocation") ?? "LAX";
-            var connStr = _config.GetConnectionString(officeLocation);
+            // Use ERP abstraction layer
+            var context = GetErpContext();
+            var client = _erpFactory.GetClient(context);
 
-            using var conn = new SqlConnection(connStr);
-            await conn.OpenAsync();
+            if (!int.TryParse(orderId, out var orderIdInt))
+                return null;
 
-            var sql = @"
-                SELECT TOP 1
-                    SOH_NUMBER AS OrderID,
-                    CUS.CUM_CUMMAS_ID as PropertyID,
-                    CUS.CUM_CUSTOMER_NUMBER as PropertyNumber,
-                    CUS.CUM_CUSTOMER_NAME AS PropertyName,
-                    CUS.CUM_CITY AS City,
-                    CONVERT(VARCHAR, S.SOH_DELIVERY_DATE, 101) AS DeliveryDate,
-                    B.BuildingNumber + ' - ' + A.ApartmentNumber AS UnitNumber,
-                    APT.Description AS UnitType,
-                    ISNULL(AR.ARO_DATE_PAID_IN_FULL, '') AS PaidInFullDate
-                FROM SALES_HEADER S
-                    LEFT JOIN CUSTOMER_MASTER CUS ON CUS.CUM_CUMMAS_ID = S.SOH_CUMMAS_ID
-                    LEFT JOIN Apartments A ON S.SOH_APARTMENT_ID = A.Id
-                    LEFT JOIN Buildings B ON A.Building_id = B.Id
-                    LEFT JOIN ApartmentType APT ON A.ApartmentType_Id = APT.ID
-                    LEFT JOIN AR_OPEN_ITEM AR on S.SOH_NUMBER = AR.ARO_SALES_ORDER_NUMBER
-                WHERE S.SOH_NUMBER = @orderId";
+            var order = await client.GetOrderDetailAsync(orderIdInt, context);
+            if (order == null) return null;
 
-            using var cmd = new SqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("@orderId", orderId);
-
-            using var reader = await cmd.ExecuteReaderAsync();
-            if (await reader.ReadAsync())
+            // Map ErpOrderDetails to WorkOrderViewModel
+            return new WorkOrderViewModel
             {
-                return new WorkOrderViewModel
-                {
-                    OrderID = reader["OrderID"].ToString(),
-                    PropertyId = Convert.ToInt32(reader["PropertyID"]),
-                    PropertyNumber = Convert.ToInt32(reader["PropertyNumber"]),
-                    PropertyName = reader["PropertyName"].ToString(),
-                    City = reader["City"].ToString(),
-                    DeliveryDate = reader["DeliveryDate"].ToString(),
-                    UnitNumber = reader["UnitNumber"].ToString(),
-                    UnitType = reader["UnitType"].ToString(),
-                    PaidInFullDate = reader["PaidInFullDate"].ToString()
-                };
-            }
-
-            return null;
+                OrderID = order.OrderNumber,
+                PropertyId = order.CustomerId,
+                PropertyNumber = int.TryParse(order.CustomerNumber, out var pn) ? pn : 0,
+                PropertyName = order.CustomerName ?? string.Empty,
+                City = order.ShipCity ?? string.Empty,
+                DeliveryDate = order.DeliveryDate?.ToString("MM/dd/yyyy") ?? string.Empty,
+                UnitNumber = order.Building ?? string.Empty,
+                UnitType = order.ManagementCompany ?? string.Empty,
+                PaidInFullDate = order.PaidInFullDate?.ToString("MM/dd/yyyy") ?? string.Empty
+            };
         }
     }
 }

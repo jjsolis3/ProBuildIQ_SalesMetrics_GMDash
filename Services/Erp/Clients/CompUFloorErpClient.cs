@@ -241,8 +241,7 @@ namespace SalesMetrics.Services.Erp.Clients
             await using var connection = new SqlConnection(connectionString);
             var results = await connection.QueryAsync<ErpProperty>(
                 sql,
-                new { SalesmanId = salesmanId },
-                cancellationToken: cancellationToken);
+                new { SalesmanId = salesmanId });
             return results.ToList();
         }
 
@@ -275,43 +274,137 @@ namespace SalesMetrics.Services.Erp.Clients
                     S.SOH_NUMBER as OrderNumber,
                     S.SOH_CUMMAS_ID as CustomerId,
                     C.CUM_CUSTOMER_NAME as CustomerName,
+                    C.CUM_CUSTOMER_NUMBER as CustomerNumber,
                     S.SOH_ORDER_DATE as OrderDate,
                     S.SOH_DELIVERY_DATE as DeliveryDate,
                     S.SOH_TOTAL_AMOUNT as TotalAmount,
                     S.SOH_WHSMAS_ID as WarehouseId,
                     S.SOH_OPERATOR as Operator,
+                    S.SOH_ORDERED_BY as OrderedBy,
                     CASE WHEN S.SOH_OPERATOR = 'Online' THEN 1 ELSE 0 END as IsOnlineOrder,
                     S.SOH_CANCELED_DATE as CanceledDate,
-                    CASE WHEN S.SOH_CANCELED_DATE IS NOT NULL THEN 1 ELSE 0 END as IsCanceled
+                    CASE WHEN S.SOH_CANCELED_DATE IS NOT NULL THEN 1 ELSE 0 END as IsCanceled,
+                    B.BuildingNumber + ' - ' + A.ApartmentNumber AS Building,
+                    A.ApartmentNumber AS AptNumber,
+                    APT.Description AS ManagementCompany,
+                    C.CUM_CITY as ShipCity,
+                    ISNULL(AR.ARO_DATE_PAID_IN_FULL, NULL) AS PaidInFullDate
                 FROM SALES_HEADER S
-                INNER JOIN CUSTOMER_MASTER C ON S.SOH_CUMMAS_ID = C.CUM_CUMMAS_ID
+                    INNER JOIN CUSTOMER_MASTER C ON S.SOH_CUMMAS_ID = C.CUM_CUMMAS_ID
+                    LEFT JOIN Apartments A ON S.SOH_APARTMENT_ID = A.Id
+                    LEFT JOIN Buildings B ON A.Building_id = B.Id
+                    LEFT JOIN ApartmentType APT ON A.ApartmentType_Id = APT.ID
+                    LEFT JOIN AR_OPEN_ITEM AR ON S.SOH_NUMBER = AR.ARO_SALES_ORDER_NUMBER
                 WHERE S.SOH_CUMMAS_ID = @CustomerId
-                    AND (@StartDate IS NULL OR S.SOH_ORDER_DATE >= @StartDate)
-                    AND (@EndDate IS NULL OR S.SOH_ORDER_DATE <= @EndDate)
-                ORDER BY S.SOH_ORDER_DATE DESC
+                    AND S.SOH_CANCELED_DATE IS NULL
+                    AND (@StartDate IS NULL OR S.SOH_DELIVERY_DATE >= @StartDate)
+                    AND (@EndDate IS NULL OR S.SOH_DELIVERY_DATE <= @EndDate)
+                ORDER BY S.SOH_DELIVERY_DATE DESC
                 OFFSET @Skip ROWS FETCH NEXT @Take ROWS ONLY";
 
             await using var connection = new SqlConnection(connectionString);
-            var results = await connection.QueryAsync<ErpOrder>(
+            var results = await connection.QueryAsync<dynamic>(
                 sql,
                 new { CustomerId = customerId, StartDate = startDate, EndDate = endDate, Skip = skip, Take = take });
 
+            // Map dynamic results to ErpOrder
+            var orders = results.Select(r => new ErpOrder
+            {
+                OrderId = r.OrderId,
+                OrderNumber = r.OrderNumber,
+                CustomerId = r.CustomerId,
+                CustomerName = r.CustomerName,
+                CustomerNumber = r.CustomerNumber,
+                OrderDate = r.OrderDate,
+                DeliveryDate = r.DeliveryDate,
+                TotalAmount = r.TotalAmount,
+                WarehouseId = r.WarehouseId,
+                Operator = r.Operator,
+                OrderedBy = r.OrderedBy,
+                IsOnlineOrder = r.IsOnlineOrder,
+                CanceledDate = r.CanceledDate,
+                IsCanceled = r.IsCanceled,
+                Building = r.Building,
+                AptNumber = r.AptNumber,
+                ManagementCompany = r.ManagementCompany,
+                ShipCity = r.ShipCity
+            }).ToList();
+
             return new PagedResult<ErpOrder>
             {
-                Items = results.ToList(),
-                TotalCount = results.Count(),
+                Items = orders,
+                TotalCount = orders.Count,
                 PageSize = take,
                 CurrentPage = (skip / take) + 1
             };
         }
 
-        public Task<ErpOrderDetails?> GetOrderDetailAsync(
+        public async Task<ErpOrderDetails?> GetOrderDetailAsync(
             int orderId,
             ErpContext context,
             CancellationToken cancellationToken = default)
         {
-            // TODO: Implement - get order with line items and notes
-            throw new NotImplementedException("GetOrderDetailAsync will be implemented in next phase");
+            var connectionString = GetConnectionString(context);
+
+            var sql = @"
+                SELECT TOP 1
+                    S.SOH_SALOHD_ID as OrderId,
+                    S.SOH_NUMBER as OrderNumber,
+                    S.SOH_CUMMAS_ID as CustomerId,
+                    C.CUM_CUSTOMER_NAME as CustomerName,
+                    C.CUM_CUSTOMER_NUMBER as CustomerNumber,
+                    S.SOH_ORDER_DATE as OrderDate,
+                    S.SOH_DELIVERY_DATE as DeliveryDate,
+                    S.SOH_TOTAL_AMOUNT as TotalAmount,
+                    S.SOH_WHSMAS_ID as WarehouseId,
+                    S.SOH_OPERATOR as Operator,
+                    S.SOH_ORDERED_BY as OrderedBy,
+                    CASE WHEN S.SOH_OPERATOR = 'Online' THEN 1 ELSE 0 END as IsOnlineOrder,
+                    S.SOH_CANCELED_DATE as CanceledDate,
+                    CASE WHEN S.SOH_CANCELED_DATE IS NOT NULL THEN 1 ELSE 0 END as IsCanceled,
+                    B.BuildingNumber + ' - ' + A.ApartmentNumber AS Building,
+                    A.ApartmentNumber AS AptNumber,
+                    APT.Description AS ManagementCompany,
+                    C.CUM_CITY as ShipCity,
+                    ISNULL(AR.ARO_DATE_PAID_IN_FULL, NULL) AS PaidInFullDate
+                FROM SALES_HEADER S
+                    INNER JOIN CUSTOMER_MASTER C ON S.SOH_CUMMAS_ID = C.CUM_CUMMAS_ID
+                    LEFT JOIN Apartments A ON S.SOH_APARTMENT_ID = A.Id
+                    LEFT JOIN Buildings B ON A.Building_id = B.Id
+                    LEFT JOIN ApartmentType APT ON A.ApartmentType_Id = APT.ID
+                    LEFT JOIN AR_OPEN_ITEM AR ON S.SOH_NUMBER = AR.ARO_SALES_ORDER_NUMBER
+                WHERE S.SOH_NUMBER = @OrderId";
+
+            await using var connection = new SqlConnection(connectionString);
+            var result = await connection.QueryFirstOrDefaultAsync<dynamic>(
+                sql,
+                new { OrderId = orderId });
+
+            if (result == null) return null;
+
+            // Map dynamic result to ErpOrderDetails
+            return new ErpOrderDetails
+            {
+                OrderId = result.OrderId,
+                OrderNumber = result.OrderNumber,
+                CustomerId = result.CustomerId,
+                CustomerName = result.CustomerName,
+                CustomerNumber = result.CustomerNumber,
+                OrderDate = result.OrderDate,
+                DeliveryDate = result.DeliveryDate,
+                TotalAmount = result.TotalAmount,
+                WarehouseId = result.WarehouseId,
+                Operator = result.Operator,
+                OrderedBy = result.OrderedBy,
+                IsOnlineOrder = result.IsOnlineOrder,
+                CanceledDate = result.CanceledDate,
+                IsCanceled = result.IsCanceled,
+                Building = result.Building,
+                AptNumber = result.AptNumber,
+                ManagementCompany = result.ManagementCompany,
+                ShipCity = result.ShipCity,
+                PaidInFullDate = result.PaidInFullDate
+            };
         }
 
         public Task<List<ErpOrder>> GetOrdersByDateRangeAsync(
@@ -850,8 +943,7 @@ namespace SalesMetrics.Services.Erp.Clients
             await using var connection = new SqlConnection(connectionString);
             var results = await connection.QueryAsync<ErpRTJEntry>(
                 sql,
-                new { StartDate = startDate, EndDate = endDate },
-                cancellationToken: cancellationToken);
+                new { StartDate = startDate, EndDate = endDate });
 
             // Set location for each entry
             var locationCode = context.LocationCode ?? "Unknown";

@@ -1,0 +1,116 @@
+@model SalesMetrics.Services.Erp.Models.ErpOrderDetails
+
+@if (Model == null)
+{
+    <div class="alert alert-warning">
+        <i class="bi bi-exclamation-triangle"></i> Order details could not be loaded.
+    </div>
+}
+else
+{
+    <div class="container-fluid">
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <h4>Order #@Model.OrderNumber</h4>
+                @if (!string.IsNullOrEmpty(Model.CustomerNumber))
+                {
+                    <p class="mb-1"><strong>Customer #:</strong> @Model.CustomerNumber</p>
+                }
+                @if (Model.OrderDate.HasValue)
+                {
+                    <p class="mb-1"><strong>Order Date:</strong> @Model.OrderDate.Value.ToString("MM/dd/yyyy")</p>
+                }
+                @if (Model.DeliveryDate.HasValue)
+                {
+                    <p class="mb-1"><strong>Delivery Date:</strong> @Model.DeliveryDate.Value.ToString("MM/dd/yyyy")</p>
+                }
+                @if (!string.IsNullOrEmpty(Model.OrderedBy))
+                {
+                    <p class="mb-1"><strong>Ordered By:</strong> @Model.OrderedBy</p>
+                }
+            </div>
+            <div class="col-md-6 text-end">
+                <h5 class="text-muted">Property</h5>
+                <p class="mb-1"><strong>@Model.CustomerName</strong></p>
+                @if (!string.IsNullOrEmpty(Model.Building))
+                {
+                    <p class="mb-1"><i class="bi bi-building"></i> @Model.Building</p>
+                }
+                @if (!string.IsNullOrEmpty(Model.ShipCity))
+                {
+                    <p class="mb-1"><i class="bi bi-geo-alt"></i> @Model.ShipCity</p>
+                }
+                @if (!string.IsNullOrEmpty(Model.ManagementCompany))
+                {
+                    <p class="mb-1"><strong>Mgmt:</strong> @Model.ManagementCompany</p>
+                }
+            </div>
+        </div>
+
+        @if (Model.LineItems != null && Model.LineItems.Any())
+        {
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Style</th>
+                            <th>Color</th>
+                            <th>Description</th>
+                            <th class="text-center">Qty</th>
+                            <th class="text-center">UOM</th>
+                            <th>Class</th>
+                            <th class="text-end">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model.LineItems)
+                        {
+                            <tr>
+                                <td>@item.ProductStyle</td>
+                                <td>@item.ProductColor</td>
+                                <td>@item.Description</td>
+                                <td class="text-center">@item.Quantity</td>
+                                <td class="text-center">@item.UOM</td>
+                                <td>@item.ProductClass</td>
+                                <td class="text-end">@(item.ProductTotal?.ToString("C") ?? "-")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        @if (Model.Notes != null && Model.Notes.Any())
+        {
+            <div class="mt-3">
+                <h6><i class="bi bi-sticky"></i> Notes:</h6>
+                @foreach (var note in Model.Notes)
+                {
+                    <div class="alert alert-info py-2 small">
+                        @if (note.LineNumber.HasValue)
+                        {
+                            <strong>Line @note.LineNumber:</strong>
+                        }
+                        @note.Comment
+                    </div>
+                }
+            </div>
+        }
+
+        <div class="row mt-3 pt-3 border-top">
+            <div class="col-md-6">
+                @if (Model.PaidInFullDate.HasValue)
+                {
+                    <p class="mb-1"><strong>Paid in Full:</strong> @Model.PaidInFullDate.Value.ToString("MM/dd/yyyy")</p>
+                }
+                else if (Model.BalanceAmount.HasValue && Model.BalanceAmount.Value > 0)
+                {
+                    <p class="mb-1 text-danger"><strong>Balance Due:</strong> @Model.BalanceAmount.Value.ToString("C")</p>
+                }
+            </div>
+            <div class="col-md-6 text-end">
+                <h4><strong>Total:</strong> @(Model.TotalAmount?.ToString("C") ?? "$0.00")</h4>
+            </div>
+        </div>
+    </div>
+}

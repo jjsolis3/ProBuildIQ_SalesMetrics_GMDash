@@ -365,6 +365,25 @@ else if (Model.ShowResults)
     </div>
 }
 
+<!-- Order Details Modal -->
+<div class="modal fade" id="orderDetailModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="bi bi-receipt"></i> Order Details</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="orderDetailContent">
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 @section Scripts {
     <!-- jQuery (required by DataTables) -->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
@@ -580,6 +599,50 @@ else if (Model.ShowResults)
             // Re-apply highlighting on every redraw (pagination, search, sort)
             resultsTable.on('draw.dt', function() {
                 applyRowHighlighting();
+            });
+
+            // Add click handler for OrderID column (column 3) to show order details
+            $('#resultsTable').on('click', 'tbody tr td:nth-child(4)', function() {
+                const row = resultsTable.row($(this).parents('tr'));
+                const rowData = row.data();
+
+                // OrderID is in column index 3 (4th column)
+                const orderIdValue = rowData[3]; // Column index, not display index
+
+                if (orderIdValue && orderIdValue !== '0') {
+                    // Parse the order ID
+                    const orderId = parseInt(orderIdValue);
+
+                    if (!isNaN(orderId)) {
+                        // Show modal with loading spinner
+                        $('#orderDetailModal').modal('show');
+                        $('#orderDetailContent').html(`
+                            <div class="text-center py-5">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                            </div>
+                        `);
+
+                        // Load order details via AJAX
+                        $.get('/Reports/GetOrderDetails', { orderId: orderId }, function(html) {
+                            $('#orderDetailContent').html(html);
+                        }).fail(function() {
+                            $('#orderDetailContent').html(`
+                                <div class="alert alert-danger">
+                                    <i class="bi bi-exclamation-triangle"></i> Failed to load order details.
+                                </div>
+                            `);
+                        });
+                    }
+                }
+            });
+
+            // Add hover effect to OrderID column to indicate it's clickable
+            $('#resultsTable').on('mouseenter', 'tbody tr td:nth-child(4)', function() {
+                $(this).css({'cursor': 'pointer', 'text-decoration': 'underline', 'color': '#667eea'});
+            }).on('mouseleave', 'tbody tr td:nth-child(4)', function() {
+                $(this).css({'cursor': 'default', 'text-decoration': 'none', 'color': ''});
             });
         });
     </script>

@@ -184,7 +184,6 @@ namespace SalesMetrics.Services.Erp.Clients
             CancellationToken cancellationToken = default)
         {
             var connectionString = GetConnectionString(context);
-            var warehouseIds = GetWarehouseIds(context);
 
             var sql = @"
                 SELECT
@@ -192,17 +191,43 @@ namespace SalesMetrics.Services.Erp.Clients
                     C.CUM_CUSTOMER_NUMBER as CustomerNumber,
                     C.CUM_CUSTOMER_NAME as CustomerName,
                     C.CUM_ADDRESS_1 as Address1,
+                    C.CUM_ADDRESS_2 as Address2,
+                    C.CUM_ADDRESS_3 as Address3,
                     C.CUM_CITY as City,
                     C.CUM_STATE as State,
                     C.CUM_ZIP as Zip,
+                    C.CUM_PHONE_NUMBER as PhoneNumber,
+                    C.CUM_EMAIL as Email,
                     C.CUM_CREDIT_LIMIT as CreditLimit,
                     C.CUM_AR_BALANCE as ARBalance,
                     C.CUM_CREDIT_HOLD_FLAG as CreditHoldFlag,
                     C.CUM_PRICE_CODE as PriceCode,
+                    C.CUM_ATTENTION_TO as AttentionTo,
                     C.CUM_SMNMAS_ID as SalesmanId,
-                    S.SMN_SALESMAN_NAME as SalesmanName
+                    S.SMN_SALESMAN_NAME as SalesmanName,
+                    C.CUM_PO_NUMBER_REQUIRED as PONumberRequired,
+                    P.IPC_DESCRIPTION as ManagementCompany,
+                    COALESCE(
+                        (SELECT TOP 1 SOH_WHSMAS_ID
+                         FROM SALES_HEADER
+                         WHERE SOH_CUMMAS_ID = C.CUM_CUMMAS_ID
+                           AND SOH_WHSMAS_ID IS NOT NULL
+                           AND SOH_WHSMAS_ID <> 1
+                         ORDER BY SOH_NUMBER DESC),
+                        (SELECT TOP 1 SOH_WHSMAS_ID
+                         FROM SALES_HEADER
+                         WHERE SOH_CUMMAS_ID = C.CUM_CUMMAS_ID
+                           AND SOH_WHSMAS_ID IS NOT NULL
+                         ORDER BY SOH_NUMBER DESC)
+                    ) as WarehouseId
                 FROM CUSTOMER_MASTER C
                 LEFT JOIN SALESMAN_MASTER S ON C.CUM_SMNMAS_ID = S.SMN_SMNMAS_ID
+                LEFT JOIN PRICE_CODES P ON C.CUM_PRICE_CODE = P.IPC_PRICE_CODE
+                WHERE C.CUM_CUSTOMER_NUMBER NOT IN (
+                    SELECT CAST(IM.INS_INSTALLER_NUMBER AS NVARCHAR(50))
+                    FROM INSTALLER_MASTER IM
+                    WHERE ISNUMERIC(IM.INS_INSTALLER_NUMBER) = 1
+                )
                 ORDER BY C.CUM_CUSTOMER_NAME";
 
             await using var connection = new SqlConnection(connectionString);

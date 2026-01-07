@@ -1,8 +1,10 @@
-﻿// GMDashController.cs (Optimized)
+﻿// GMDashController.cs (Optimized - Using ERP Abstraction Layer)
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using SalesMetrics.Models;
+using SalesMetrics.Services.Erp;
+using SalesMetrics.Services.Erp.Configuration;
 using SalesMetrics.Services.Helpers;
 using System;
 using System.Collections.Generic;
@@ -16,10 +18,23 @@ namespace SalesMetrics.Controllers
     public class GMDashController : Controller
     {
         private readonly IConfiguration _configuration;
+        private readonly ErpClientFactory _erpFactory;
 
-        public GMDashController(IConfiguration configuration)
+        public GMDashController(IConfiguration configuration, ErpClientFactory erpFactory)
         {
             _configuration = configuration;
+            _erpFactory = erpFactory;
+        }
+
+        /// <summary>
+        /// Helper method to create ErpContext from location code
+        /// </summary>
+        private ErpContext GetErpContext(string locationCode)
+        {
+            return new ErpContext
+            {
+                LocationCode = locationCode
+            };
         }
 
         [HttpGet]
@@ -125,91 +140,34 @@ namespace SalesMetrics.Controllers
             return View("Index", model);
         }
 
-        // CONTROLLER METHOD - GMController.cs or GMDashController.cs
+        /// <summary>
+        /// Get branch sales metrics using ERP abstraction layer
+        /// </summary>
         private async Task<GMBranchSalesMetricsViewModel> GetBranchSalesMetrics(string location, DateTime mtdStart, DateTime ytdStart, DateTime today)
         {
             var result = new GMBranchSalesMetricsViewModel { Location = location };
+            var context = GetErpContext(location);
+            var client = _erpFactory.GetClient(context);
 
-            using var conn = new SqlConnection(_configuration.GetConnectionString(location));
-            await conn.OpenAsync();
+            // Get MTD metrics
+            var mtdMetrics = await client.GetSalesMetricsAsync(mtdStart, today, context);
 
-            // ==========================================================================
-            // CORRECTED QUERY - Uses AR_OPEN_ITEM as the authoritative data source
-            // ==========================================================================
-            // KEY CHANGES:
-            // 1. AR_OPEN_ITEM is now the primary table (not SALES_HEADER)
-            // 2. Uses IHF_INVOICE_DATE for date filtering (consistent with KPI bubbles)
-            // 3. Uses ARO_INVOICE_AMOUNT for all monetary values (actual invoiced amounts)
-            // 4. Properly handles ARO_DATE_PAID_IN_FULL as a string column
-            // 5. LEFT JOINs to SALES_HEADER only for SOH_OPERATOR (online detection)
-            // ==========================================================================
-            var query = @"
-                SELECT
-                    -- Sales Totals (using ARO_INVOICE_DATE for consistency with KPI)
-                    SUM(CASE WHEN IHF.IHF_INVOICE_DATE BETWEEN @MTDStart AND @Today 
-                             THEN ARO.ARO_INVOICE_AMOUNT ELSE 0 END) AS MTDSales,
-                    SUM(CASE WHEN IHF.IHF_INVOICE_DATE BETWEEN @YTDStart AND @Today 
-                             THEN ARO.ARO_INVOICE_AMOUNT ELSE 0 END) AS YTDSales,
+            // Get YTD metrics
+            var ytdMetrics = await client.GetSalesMetricsAsync(ytdStart, today, context);
 
-                    -- Order Counts (using IHF_INVOICE_DATE for consistency)
-                    COUNT(CASE WHEN IHF.IHF_INVOICE_DATE BETWEEN @MTDStart AND @Today 
-                               THEN 1 ELSE NULL END) AS MTDOrders,
-                    COUNT(CASE WHEN IHF.IHF_INVOICE_DATE BETWEEN @YTDStart AND @Today 
-                               THEN 1 ELSE NULL END) AS YTDOrders,
+            // Map to GMBranchSalesMetricsViewModel
+            result.MTDSales = mtdMetrics.TotalRevenue;
+            result.YTDSales = ytdMetrics.TotalRevenue;
+            result.MTDOrders = mtdMetrics.TotalOrders;
+            result.YTDOrders = ytdMetrics.TotalOrders;
+            result.TotalOrders = ytdMetrics.TotalOrders;
+            result.OnlineOrders = ytdMetrics.OnlineOrders;
+            result.TotalOrderAmount = ytdMetrics.TotalOrderAmount;
+            result.OnlineOrderAmount = ytdMetrics.TotalOrderAmount - (ytdMetrics.TotalOrderAmount * ytdMetrics.InStoreOrders / (ytdMetrics.TotalOrders > 0 ? ytdMetrics.TotalOrders : 1));
 
-                    -- Total Orders in date range
-                    COUNT(*) AS TotalOrders,
-
-                    -- Online Orders (using SOH_OPERATOR from SALES_HEADER)
-                    SUM(CASE WHEN S.SOH_OPERATOR = 'Online' THEN 1 ELSE 0 END) AS OnlineOrders,
-
-                    -- Total Order Amount (from AR - the authoritative source)
-                    SUM(ARO.ARO_INVOICE_AMOUNT) AS TotalOrderAmount,
-
-                    -- Online Order Amount
-                    SUM(CASE WHEN S.SOH_OPERATOR = 'Online' 
-                             THEN ARO.ARO_INVOICE_AMOUNT ELSE 0 END) AS OnlineOrderAmount,
-
-                    -- Open Orders Count (properly handles ARO_DATE_PAID_IN_FULL as string)
-                    SUM(CASE WHEN (ARO.ARO_DATE_PAID_IN_FULL IS NULL OR ARO.ARO_DATE_PAID_IN_FULL = '') 
-                              AND ARO.ARO_INVOICE_BALANCE_DUE > 0 
-                             THEN 1 ELSE 0 END) AS OpenOrders,
-
-                    -- Open Order Amount (balance due on unpaid invoices)
-                    SUM(CASE WHEN (ARO.ARO_DATE_PAID_IN_FULL IS NULL OR ARO.ARO_DATE_PAID_IN_FULL = '') 
-                              AND ARO.ARO_INVOICE_BALANCE_DUE > 0 
-                             THEN ARO.ARO_INVOICE_BALANCE_DUE ELSE 0 END) AS OpenOrderAmount
-
-                FROM AR_OPEN_ITEM ARO WITH (NOLOCK)
-                INNER JOIN INVOICE_HEADER IHF WITH (NOLOCK) 
-                    ON ARO.ARO_INVOICE_NUMBER = IHF.IHF_INVOICE_NUMBER
-                LEFT JOIN SALES_HEADER S WITH (NOLOCK) 
-                    ON IHF.IHF_ORDER_NUMBER = S.SOH_NUMBER
-                WHERE IHF.IHF_INVOICE_DATE BETWEEN @YTDStart AND @Today
-                  AND IHF.IHF_WHSMAS_ID IN (1)
-                  AND (@Location <> 'LAX' OR ISNULL(S.SOH_SMNMAS_ID, 0) <> 24);
-            ";
-
-            using var cmd = new SqlCommand(query, conn);
-            cmd.Parameters.AddWithValue("@MTDStart", mtdStart);
-            cmd.Parameters.AddWithValue("@YTDStart", ytdStart);
-            cmd.Parameters.AddWithValue("@Today", today);
-            cmd.Parameters.AddWithValue("@Location", location);
-
-            using var reader = await cmd.ExecuteReaderAsync();
-            if (await reader.ReadAsync())
-            {
-                result.MTDSales = reader.IsDBNull(0) ? 0 : Convert.ToDecimal(reader.GetDouble(0));
-                result.YTDSales = reader.IsDBNull(1) ? 0 : Convert.ToDecimal(reader.GetDouble(1));
-                result.MTDOrders = reader.IsDBNull(2) ? 0 : reader.GetInt32(2);
-                result.YTDOrders = reader.IsDBNull(3) ? 0 : reader.GetInt32(3);
-                result.TotalOrders = reader.IsDBNull(4) ? 0 : reader.GetInt32(4);
-                result.OnlineOrders = reader.IsDBNull(5) ? 0 : reader.GetInt32(5);
-                result.TotalOrderAmount = reader.IsDBNull(6) ? 0 : Convert.ToDecimal(reader.GetDouble(6));
-                result.OnlineOrderAmount = reader.IsDBNull(7) ? 0 : Convert.ToDecimal(reader.GetDouble(7));
-                result.OpenOrders = reader.IsDBNull(8) ? 0 : reader.GetInt32(8);
-                result.OpenOrderAmount = reader.IsDBNull(9) ? 0 : Convert.ToDecimal(reader.GetDouble(9));
-            }
+            // Calculate open orders (unpaid invoices)
+            result.OpenOrders = ytdMetrics.TotalInvoices - ytdMetrics.PaidInvoices;
+            result.OpenOrderAmount = ytdMetrics.AmountDue;
 
             return result;
         }
@@ -229,38 +187,27 @@ namespace SalesMetrics.Controllers
         }
 
 
+        /// <summary>
+        /// Get AR aging data using ERP abstraction layer
+        /// </summary>
         private async Task<GMARDataViewModel> GetARDataAsync(string location)
         {
-            var result = new GMARDataViewModel { Location = location };
-            using var conn = new SqlConnection(_configuration.GetConnectionString(location));
-            await conn.OpenAsync();
+            var context = GetErpContext(location);
+            var client = _erpFactory.GetClient(context);
 
-            var cmd = new SqlCommand(@"
-                SELECT 
-                    SUM(CASE WHEN DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) < 30 
-                             THEN ARO_INVOICE_BALANCE_DUE ELSE 0 END) AS DueUnder30,
-                    SUM(CASE WHEN DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) BETWEEN 30 AND 59 
-                             THEN ARO_INVOICE_BALANCE_DUE ELSE 0 END) AS Due30to60,
-                    SUM(CASE WHEN DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) BETWEEN 60 AND 89 
-                             THEN ARO_INVOICE_BALANCE_DUE ELSE 0 END) AS Due60to90,
-                    SUM(CASE WHEN DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) BETWEEN 90 AND 120 
-                             THEN ARO_INVOICE_BALANCE_DUE ELSE 0 END) AS Due90to120,
-                    SUM(CASE WHEN DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) > 120 
-                             THEN ARO_INVOICE_BALANCE_DUE ELSE 0 END) AS DueOver120
-                FROM AR_OPEN_ITEM ARO WITH (NOLOCK)
-                WHERE ARO_INVOICE_BALANCE_DUE > 0
-                  AND (ARO_DATE_PAID_IN_FULL IS NULL OR ARO_DATE_PAID_IN_FULL = '');
-            ", conn);
+            // Get AR aging summary from ERP client
+            var arSummary = await client.GetARAgingSummaryAsync(context);
 
-            using var reader = await cmd.ExecuteReaderAsync();
-            if (await reader.ReadAsync())
+            // Map to GMARDataViewModel
+            var result = new GMARDataViewModel
             {
-                result.DueUnder30 = reader.IsDBNull(0) ? 0 : Convert.ToDecimal(reader.GetDouble(0));
-                result.Due30to60 = reader.IsDBNull(1) ? 0 : Convert.ToDecimal(reader.GetDouble(1));
-                result.Due60to90 = reader.IsDBNull(2) ? 0 : Convert.ToDecimal(reader.GetDouble(2));
-                result.Due90to120 = reader.IsDBNull(3) ? 0 : Convert.ToDecimal(reader.GetDouble(3));
-                result.DueOver120 = reader.IsDBNull(4) ? 0 : Convert.ToDecimal(reader.GetDouble(4));
-            }
+                Location = location,
+                DueUnder30 = arSummary.DueUnder30Amount,
+                Due30to60 = arSummary.Due30to60Amount,
+                Due60to90 = arSummary.Due60to90Amount,
+                Due90to120 = arSummary.Due90to120Amount,
+                DueOver120 = arSummary.DueOver120Amount
+            };
 
             return result;
         }

@@ -7,6 +7,8 @@ using System.Data;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
+using SalesMetrics.Services.Erp;
+using SalesMetrics.Services.Erp.Configuration;
 using SalesMetrics.Services.Helpers;
 
 using User = SalesMetrics.Models.User;
@@ -20,12 +22,24 @@ namespace SalesMetrics.Controllers
     public class PropertiesController : Controller
     {
         private readonly IConfiguration _configuration;
-
+        private readonly ErpClientFactory _erpFactory;
         private readonly IMemoryCache _cache;
 
-        public PropertiesController(IConfiguration configuration)
+        public PropertiesController(IConfiguration configuration, ErpClientFactory erpFactory)
         {
             _configuration = configuration;
+            _erpFactory = erpFactory;
+        }
+
+        /// <summary>
+        /// Helper method to create ErpContext from location code
+        /// </summary>
+        private ErpContext GetErpContext(string locationCode)
+        {
+            return new ErpContext
+            {
+                LocationCode = locationCode
+            };
         }
 
         public IActionResult Orders()

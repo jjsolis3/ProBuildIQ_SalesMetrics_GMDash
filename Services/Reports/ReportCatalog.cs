@@ -22,9 +22,8 @@ namespace SalesMetrics.Services.Reports
                     {
                         new() { Name = "FromDate", DisplayName = "From Date", Type = "date", IsRequired = true },
                         new() { Name = "ToDate", DisplayName = "To Date", Type = "date", IsRequired = true },
-                        new() { Name = "MinMargin", DisplayName = "Min Margin", Type = "number", IsRequired = true },
-                        new() { Name = "MaxMargin", DisplayName = "Max Margin", Type = "number", IsRequired = true },
-                        new() { Name = "TargetMargin", DisplayName = "Target Margin", Type = "number", IsRequired = false },
+                        new() { Name = "MinMargin", DisplayName = "Min Percentage Threshold", Type = "number", IsRequired = true },
+                        new() { Name = "TargetMargin", DisplayName = "Target Margin", Type = "number", IsRequired = true },
                         new() { Name = "MgmtName", DisplayName = "Management Name", Type = "text", IsRequired = false },
                         new() { Name = "FilterByMgmt", DisplayName = "Filter By Management", Type = "checkbox", IsRequired = false },
                         new() { Name = "WarehouseId", DisplayName = "Warehouse", Type = "number", IsRequired = true }

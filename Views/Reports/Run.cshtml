@@ -245,12 +245,20 @@
                     <input asp-for="Parameters.ToDate" class="form-control" type="date" />
                 </div>
                 <div class="col-md-2 mb-3">
-                    <label asp-for="Parameters.MinMargin" class="form-label">Min Margin</label>
-                    <input asp-for="Parameters.MinMargin" class="form-control" type="number" step="0.01" />
+                    <label asp-for="Parameters.MinMargin" class="form-label">Min Percentage Threshold</label>
+                    <div class="input-group">
+                        <input asp-for="Parameters.MinMargin" class="form-control" type="number" step="1" min="0" max="100"
+                               placeholder="16" id="minMarginInput" value="@((Model.Parameters.MinMargin ?? 0.15m) * 100)" />
+                        <span class="input-group-text">%</span>
+                    </div>
                 </div>
                 <div class="col-md-2 mb-3">
                     <label asp-for="Parameters.TargetMargin" class="form-label">Target Margin</label>
-                    <input asp-for="Parameters.TargetMargin" class="form-control" type="number" step="0.01" />
+                    <div class="input-group">
+                        <input asp-for="Parameters.TargetMargin" class="form-control" type="number" step="1" min="0" max="100"
+                               placeholder="3" id="targetMarginInput" value="@((Model.Parameters.TargetMargin ?? 0.03m) * 100)" />
+                        <span class="input-group-text">%</span>
+                    </div>
                 </div>
                 <div class="col-md-2 mb-3">
                     <label asp-for="Parameters.WarehouseId" class="form-label">Warehouse</label>
@@ -379,6 +387,20 @@ else if (Model.ShowResults)
 
     <script>
         $(document).ready(function() {
+            // Convert percentage inputs to decimals before form submission
+            $('#reportForm').on('submit', function(e) {
+                const minMarginInput = $('#minMarginInput');
+                const targetMarginInput = $('#targetMarginInput');
+
+                // Convert percentage to decimal (15 → 0.15)
+                if (minMarginInput.val()) {
+                    minMarginInput.val(parseFloat(minMarginInput.val()) / 100);
+                }
+                if (targetMarginInput.val()) {
+                    targetMarginInput.val(parseFloat(targetMarginInput.val()) / 100);
+                }
+            });
+
             // Apply conditional row highlighting based on commission gate and target margin
             function normalizeGateValue(value) {
                 if (value === undefined || value === null) {
@@ -468,7 +490,66 @@ else if (Model.ShowResults)
                     },
                 ],
                 columnDefs: [
-                    { targets: [0, 10, 11, 12, 15, 16, 17], visible: false }
+                    // Hide certain columns
+                    { targets: [0, 10, 11, 12, 15, 16, 17], visible: false },
+
+                    // Format OrderDate column (column 7) as MM/dd/yyyy
+                    {
+                        targets: 7,
+                        render: function(data, type, row) {
+                            if (type === 'display' && data) {
+                                // Parse and format date as MM/dd/yyyy
+                                const date = new Date(data);
+                                if (!isNaN(date.getTime())) {
+                                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                                    const day = String(date.getDate()).padStart(2, '0');
+                                    const year = date.getFullYear();
+                                    return `${month}/${day}/${year}`;
+                                }
+                            }
+                            return data;
+                        }
+                    },
+
+                    // Format OrderAmount column (column 9) as currency
+                    {
+                        targets: 9,
+                        render: function(data, type, row) {
+                            if (type === 'display' && data != null) {
+                                return '$' + parseFloat(data).toLocaleString('en-US', {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2
+                                });
+                            }
+                            return data;
+                        }
+                    },
+
+                    // Format ProjectedProfit column (column 13) as currency
+                    {
+                        targets: 13,
+                        render: function(data, type, row) {
+                            if (type === 'display' && data != null) {
+                                return '$' + parseFloat(data).toLocaleString('en-US', {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2
+                                });
+                            }
+                            return data;
+                        }
+                    },
+
+                    // Format ProjectedMargin column (column 14) as percentage with 2 decimals
+                    {
+                        targets: 14,
+                        render: function(data, type, row) {
+                            if (type === 'display' && data != null) {
+                                const percentage = (parseFloat(data) * 100).toFixed(2);
+                                return percentage + '%';
+                            }
+                            return data;
+                        }
+                    }
                 ],
                 lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
                 language: {

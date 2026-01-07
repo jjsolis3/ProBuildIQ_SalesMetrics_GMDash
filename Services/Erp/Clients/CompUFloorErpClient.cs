@@ -181,6 +181,7 @@ namespace SalesMetrics.Services.Erp.Clients
 
         public async Task<List<ErpProperty>> GetAllPropertiesAsync(
             ErpContext context,
+            int? salesmanId = null,
             CancellationToken cancellationToken = default)
         {
             var connectionString = GetConnectionString(context);
@@ -227,11 +228,21 @@ namespace SalesMetrics.Services.Erp.Clients
                     SELECT CAST(IM.INS_INSTALLER_NUMBER AS NVARCHAR(50))
                     FROM INSTALLER_MASTER IM
                     WHERE ISNUMERIC(IM.INS_INSTALLER_NUMBER) = 1
-                )
-                ORDER BY C.CUM_CUSTOMER_NAME";
+                )";
+
+            // Add salesman filter if provided (for role-based access)
+            if (salesmanId.HasValue)
+            {
+                sql += " AND C.CUM_SMNMAS_ID = @SalesmanId";
+            }
+
+            sql += " ORDER BY C.CUM_CUSTOMER_NAME";
 
             await using var connection = new SqlConnection(connectionString);
-            var results = await connection.QueryAsync<ErpProperty>(sql);
+            var results = await connection.QueryAsync<ErpProperty>(
+                sql,
+                new { SalesmanId = salesmanId },
+                cancellationToken: cancellationToken);
             return results.ToList();
         }
 

@@ -39,7 +39,7 @@ namespace SalesMetrics.Services.Erp
             throw new NotImplementedException("GetPropertyDetailsAsync not yet implemented in HttpErpDataClient");
         }
 
-        public Task<List<ErpProperty>> GetAllPropertiesAsync(ErpContext context, CancellationToken cancellationToken = default)
+        public Task<List<ErpProperty>> GetAllPropertiesAsync(ErpContext context, int? salesmanId = null, CancellationToken cancellationToken = default)
         {
             throw new NotImplementedException("GetAllPropertiesAsync not yet implemented in HttpErpDataClient");
         }

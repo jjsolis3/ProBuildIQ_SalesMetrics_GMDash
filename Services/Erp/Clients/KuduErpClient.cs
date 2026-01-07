@@ -170,6 +170,7 @@ namespace SalesMetrics.Services.Erp.Clients
 
         public Task<List<ErpProperty>> GetAllPropertiesAsync(
             ErpContext context,
+            int? salesmanId = null,
             CancellationToken cancellationToken = default)
         {
             // TODO: Implement when Kudu API is available

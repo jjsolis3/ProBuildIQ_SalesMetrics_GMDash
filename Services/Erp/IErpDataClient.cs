@@ -47,8 +47,12 @@ namespace SalesMetrics.Services.Erp
         /// <summary>
         /// Get all properties for a location
         /// </summary>
+        /// <param name="context">ERP context with location info</param>
+        /// <param name="salesmanId">Optional salesman ID filter (for role-based access)</param>
+        /// <param name="cancellationToken">Cancellation token</param>
         Task<List<ErpProperty>> GetAllPropertiesAsync(
             ErpContext context,
+            int? salesmanId = null,
             CancellationToken cancellationToken = default);
 
         /// <summary>

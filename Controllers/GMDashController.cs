@@ -705,6 +705,16 @@ namespace SalesMetrics.Controllers
 
             return PartialView("_RTJTablePartial", allEntries);
         }
+
+        [HttpGet]
+        public async Task<IActionResult> GetRTJDetails(string location, string range = "mtd")
+        {
+            var (startDate, endDate) = DateRangeHelper.GetRange(range);
+
+            var entries = await GetRecentRTJEntries(startDate, endDate, location);
+
+            return PartialView("_RTJDetailsPartial", entries);
+        }
         // END RTJ SECTION
     }
 

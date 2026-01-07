@@ -1,0 +1,27 @@
+@model List<SalesMetrics.Models.RTJEntry>
+
+<table class="table table-striped table-bordered table-nowrap" id="rtjDetailsTable">
+    <thead class="table-light text-center">
+        <tr>
+            <th>Date</th>
+            <th>Whs</th>
+            <th>Jrnl#</th>
+            <th>Adjustment Comments</th>
+            <th>Debit</th>
+            <th>Credit</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var item in Model)
+        {
+            <tr>
+                <td data-order="@item.Date">@item.Date.ToString("MM/dd/yyyy")</td>
+                <td class="text-center">@item.WarehouseNumber</td>
+                <td class="text-center">@item.JournalNumber</td>
+                <td>@item.AdjustmentComments</td>
+                <td>@item.Debit.ToString("C")</td>
+                <td>@item.Credit.ToString("C")</td>
+            </tr>
+        }
+    </tbody>
+</table>

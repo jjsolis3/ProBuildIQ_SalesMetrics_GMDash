@@ -123,5 +123,10 @@ namespace SalesMetrics.Services.Erp
         {
             throw new NotImplementedException("GetWarehousesAsync not yet implemented in HttpErpDataClient");
         }
+
+        public Task<List<ErpRTJEntry>> GetRTJEntriesAsync(DateTime startDate, DateTime endDate, ErpContext context, CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException("GetRTJEntriesAsync not yet implemented in HttpErpDataClient");
+        }
     }
 }

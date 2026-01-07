@@ -202,5 +202,18 @@ namespace SalesMetrics.Services.Erp
         Task<List<ErpWarehouse>> GetWarehousesAsync(
             ErpContext context,
             CancellationToken cancellationToken = default);
+
+        // ============================================================
+        // INVENTORY ADJUSTMENTS (RTJ)
+        // ============================================================
+
+        /// <summary>
+        /// Get Receive-Transfer-Journal (RTJ) inventory adjustment entries for a date range
+        /// </summary>
+        Task<List<ErpRTJEntry>> GetRTJEntriesAsync(
+            DateTime startDate,
+            DateTime endDate,
+            ErpContext context,
+            CancellationToken cancellationToken = default);
     }
 }

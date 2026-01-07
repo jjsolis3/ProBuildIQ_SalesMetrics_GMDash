@@ -805,5 +805,52 @@ namespace SalesMetrics.Services.Erp.Clients
             var results = await connection.QueryAsync<ErpWarehouse>(sql);
             return results.ToList();
         }
+
+        // ============================================================
+        // INVENTORY ADJUSTMENTS (RTJ)
+        // ============================================================
+
+        public async Task<List<ErpRTJEntry>> GetRTJEntriesAsync(
+            DateTime startDate,
+            DateTime endDate,
+            ErpContext context,
+            CancellationToken cancellationToken = default)
+        {
+            var connectionString = GetConnectionString(context);
+
+            var sql = @"
+                SELECT
+                    G.GLJ_REFERENCE_NUMBER as AdjustmentComments,
+                    G.GLJ_JOURNAL_NUMBER as JournalNumber,
+                    G.GLJ_CREDIT_AMOUNT as Credit,
+                    G.GLJ_DEBIT_AMOUNT as Debit,
+                    CAST(G.GLJ_TRANSACTION_DATE as DATE) as Date,
+                    G.GLJ_WAREHOUSE_NUMBER as WarehouseNumber
+                FROM GL_JOURNAL G
+                WHERE G.GLJ_ACCOUNT_NUMBER = 12970
+                    AND G.GLJ_TRANSACTION_DATE BETWEEN @StartDate AND @EndDate
+                    AND G.GLJ_WAREHOUSE_NUMBER IN (1, 2, 3, 6, 11, 86, 90)
+                    AND G.GLJ_REFERENCE_NUMBER LIKE '%RTJ%'
+                    AND G.GLJ_REFERENCE_NUMBER NOT LIKE '%1226%'
+                    AND G.GLJ_REFERENCE_NUMBER NOT LIKE '%12to 6%'
+                    AND G.GLJ_REFERENCE_NUMBER NOT LIKE '%12 to 6%'
+                ORDER BY G.GLJ_DEBIT_AMOUNT DESC, G.GLJ_CREDIT_AMOUNT ASC";
+
+            await using var connection = new SqlConnection(connectionString);
+            var results = await connection.QueryAsync<ErpRTJEntry>(
+                sql,
+                new { StartDate = startDate, EndDate = endDate },
+                cancellationToken: cancellationToken);
+
+            // Set location for each entry
+            var locationCode = context.LocationCode ?? "Unknown";
+            var entries = results.ToList();
+            foreach (var entry in entries)
+            {
+                entry.Location = locationCode;
+            }
+
+            return entries;
+        }
     }
 }

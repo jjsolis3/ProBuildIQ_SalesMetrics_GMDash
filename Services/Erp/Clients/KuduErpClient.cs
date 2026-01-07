@@ -360,5 +360,20 @@ namespace SalesMetrics.Services.Erp.Clients
             throw new NotImplementedException(
                 "GetWarehousesAsync for Kudu will be implemented once API documentation is available");
         }
+
+        // ============================================================
+        // INVENTORY ADJUSTMENTS (RTJ)
+        // ============================================================
+
+        public Task<List<ErpRTJEntry>> GetRTJEntriesAsync(
+            DateTime startDate,
+            DateTime endDate,
+            ErpContext context,
+            CancellationToken cancellationToken = default)
+        {
+            // TODO: Implement when Kudu API is available
+            throw new NotImplementedException(
+                "GetRTJEntriesAsync for Kudu will be implemented once API documentation is available");
+        }
     }
 }

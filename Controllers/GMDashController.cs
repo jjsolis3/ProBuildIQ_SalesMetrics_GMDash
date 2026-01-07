@@ -5,6 +5,7 @@ using Microsoft.Extensions.Configuration;
 using SalesMetrics.Models;
 using SalesMetrics.Services.Erp;
 using SalesMetrics.Services.Erp.Configuration;
+using SalesMetrics.Services.Erp.Models;
 using SalesMetrics.Services.Helpers;
 using System;
 using System.Collections.Generic;
@@ -642,53 +643,15 @@ namespace SalesMetrics.Controllers
         }
         // END INSTALLER SECTION
         // RTJ SECTION
-        private async Task<List<RTJEntry>> GetRecentRTJEntries(DateTime startDate, DateTime endDate, string location)
+        /// <summary>
+        /// Get RTJ entries using ERP abstraction layer
+        /// </summary>
+        private async Task<List<ErpRTJEntry>> GetRecentRTJEntries(DateTime startDate, DateTime endDate, string location)
         {
-            var result = new List<RTJEntry>();
-            using var conn = new SqlConnection(_configuration.GetConnectionString(location));
-            await conn.OpenAsync();
+            var context = GetErpContext(location);
+            var client = _erpFactory.GetClient(context);
 
-            var cmd = new SqlCommand(@"
-                SELECT 
-                    G.GLJ_REFERENCE_NUMBER as [AdjustmentComments], 
-                    G.GLJ_JOURNAL_NUMBER as [JournalNumber], 
-                    G.GLJ_CREDIT_AMOUNT as [Credit], 
-                    G.GLJ_DEBIT_AMOUNT as [Debit], 
-                    CAST(G.GLJ_TRANSACTION_DATE as DATE) as [Date],
-                    G.GLJ_WAREHOUSE_NUMBER as [WarehouseNumber]
-                FROM GL_JOURNAL G
-                WHERE G.GLJ_ACCOUNT_NUMBER = 12970 
-                    AND G.GLJ_TRANSACTION_DATE BETWEEN @StartDate AND @EndDate
-                    AND G.GLJ_WAREHOUSE_NUMBER IN (1, 2, 3, 6, 11, 86, 90)
-                    AND G.GLJ_REFERENCE_NUMBER LIKE '%RTJ%'
-                    AND G.GLJ_REFERENCE_NUMBER NOT LIKE '%1226%'
-	                AND G.GLJ_REFERENCE_NUMBER NOT LIKE '%12to 6%'
-	                AND G.GLJ_REFERENCE_NUMBER NOT LIKE '%12 to 6%'
-                ORDER BY G.GLJ_DEBIT_AMOUNT DESC, G.GLJ_CREDIT_AMOUNT ASC
-            ", conn);
-
-            cmd.Parameters.AddWithValue("@StartDate", startDate);
-            cmd.Parameters.AddWithValue("@EndDate", endDate);
-
-            using var reader = await cmd.ExecuteReaderAsync();
-            //Console.WriteLine($"{location}: Reader opened");
-
-
-            while (await reader.ReadAsync())
-            {
-                result.Add(new RTJEntry
-                {
-                    AdjustmentComments = reader["AdjustmentComments"].ToString(),
-                    JournalNumber = reader["JournalNumber"].ToString(),
-                    Credit = Convert.ToDecimal(reader["Credit"]),
-                    Debit = Convert.ToDecimal(reader["Debit"]),
-                    Date = Convert.ToDateTime(reader["Date"]),
-                    WarehouseNumber = Convert.ToInt32(reader["WarehouseNumber"]),
-                    Location = location // ✅ NEW
-                });
-            }
-            //Console.WriteLine($"{location}: Reader read complete. Total: {result.Count}");
-            return result;
+            return await client.GetRTJEntriesAsync(startDate, endDate, context);
         }
 
         [HttpGet]

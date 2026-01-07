@@ -49,6 +49,7 @@
 <input type="hidden" id="CurrentRoleId" value="@ViewBag.RoleId" />
 <input type="hidden" id="CurrentUserId" value="@ViewBag.UserId" />
 <input type="hidden" id="CurrentWhsId" value="@ViewBag.SelectedWhsId" />
+<input type="hidden" id="CurrentLocation" value="@(HttpContext.Session.GetString("OfficeLocation") ?? "LAX")" />
 
 
 <div class="row">
@@ -544,6 +545,7 @@
                             <th># Units</th>
                             <th>Last Order</th>
                             <th>Last Install</th>
+                            <th>Inactive Days</th>
                             <th>YTD (This)</th>
                             <th>YTD (Last)</th>
                             <th>Balance</th>
@@ -566,6 +568,7 @@
                                 <td>@cust.Units</td>
                                 <td data-order="@cust.LastOrderDate?.ToString("yyyy-MM-ddTHH:mm:ss")">@(cust.LastOrderDate?.ToString("d") ?? "N.A")</td>
                                 <td data-order="@cust.LastInstallDate?.ToString("yyyy-MM-ddTHH:mm:ss")">@(cust.LastInstallDate?.ToString("d") ?? "N/A")</td>
+                                <td data-order="@cust.DaysSinceLastInstall">@cust.DaysSinceLastInstall days</td>
                                 <td>@cust.YTDCurrent.ToString("C")</td>
                                 <td>@cust.YTDPrevious.ToString("C")</td>
                                 <td>@cust.Balance.ToString("C")</td>
@@ -851,6 +854,10 @@
     <script src="~/assets/libs/datatables.net-buttons-bs5/js/buttons.bootstrap5.min.js"></script>
     <script src="~/assets/libs/datatables.net-buttons/js/buttons.colVis.min.js"></script>
 
+    <!-- Required for Excel export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
+
     <!-- Datatable init js -->
     @* <script src="~/assets/js/pages/datatables-advanced.init.js"></script> *@
 
@@ -940,17 +947,39 @@
                 });
             });
 
+            // Get location info for export titles
+            const locationCode = $('#CurrentLocation').val();
+            const locationMap = {
+                'LAX': 'Los Angeles Branch',
+                'LSV': 'Las Vegas Branch',
+                'CHN': 'Chino Branch',
+                'PHX': 'Phoenix Branch',
+                'SND': 'San Diego Branch'
+            };
+            const locationName = locationMap[locationCode] || locationCode;
+
             // AR DATATABLE
             if (!$.fn.DataTable.isDataTable('#ar_table')) {
                 $('#ar_table').DataTable({
                     pageLength: 10,
                     responsive: true,
-                        scrollX: true,
+                    scrollX: true,
                     dom: `
                         <"top d-flex justify-content-between align-items-center mb-3" lBf>
                         rt
                         <"bottom d-flex justify-content-between align-items-center mt-3" ip>`,
-                    buttons: ['excel', 'pdf'],
+                    buttons: [
+                        {
+                            extend: 'excelHtml5',
+                            text: '<i class="fas fa-file-excel me-1"></i> Excel',
+                            className: 'btn btn-sm btn-success',
+                            title: 'AR - Invoices Past Due-Date\n' + locationName,
+                            filename: 'AR_Invoices_Past_Due_' + locationCode + '_' + new Date().toISOString().split('T')[0],
+                            exportOptions: {
+                                columns: ':visible'
+                            }
+                        }
+                    ],
                     lengthChange: true,
                     ordering: true
                 });
@@ -966,7 +995,18 @@
                         <"top d-flex justify-content-between align-items-center mb-3" lBf>
                         rt
                         <"bottom d-flex justify-content-between align-items-center mt-3" ip>`,
-                    buttons: ['excel', 'pdf'],
+                    buttons: [
+                        {
+                            extend: 'excelHtml5',
+                            text: '<i class="fas fa-file-excel me-1"></i> Excel',
+                            className: 'btn btn-sm btn-success',
+                            title: 'Inactive Customers - No Activity in 30 Day to 14 Months (480 Days)\n' + locationName,
+                            filename: 'Inactive_Customers_' + locationCode + '_' + new Date().toISOString().split('T')[0],
+                            exportOptions: {
+                                columns: ':visible'
+                            }
+                        }
+                    ],
                     lengthChange: true,
                     ordering: true
                 });

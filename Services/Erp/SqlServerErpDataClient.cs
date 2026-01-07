@@ -66,7 +66,7 @@ namespace SalesMetrics.Services.Erp
             throw new NotImplementedException("GetPropertyDetailsAsync not yet implemented in SqlServerErpDataClient");
         }
 
-        public Task<List<ErpProperty>> GetAllPropertiesAsync(ErpContext context, CancellationToken cancellationToken = default)
+        public Task<List<ErpProperty>> GetAllPropertiesAsync(ErpContext context, int? salesmanId = null, CancellationToken cancellationToken = default)
         {
             throw new NotImplementedException("GetAllPropertiesAsync not yet implemented in SqlServerErpDataClient");
         }
@@ -149,6 +149,11 @@ namespace SalesMetrics.Services.Erp
         public Task<List<ErpWarehouse>> GetWarehousesAsync(ErpContext context, CancellationToken cancellationToken = default)
         {
             throw new NotImplementedException("GetWarehousesAsync not yet implemented in SqlServerErpDataClient");
+        }
+
+        public Task<List<ErpRTJEntry>> GetRTJEntriesAsync(DateTime startDate, DateTime endDate, ErpContext context, CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException("GetRTJEntriesAsync not yet implemented in SqlServerErpDataClient");
         }
     }
 }

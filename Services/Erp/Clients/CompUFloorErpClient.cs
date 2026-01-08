@@ -272,7 +272,7 @@ namespace SalesMetrics.Services.Erp.Clients
             var sql = @"
                 SELECT
                     CAST(S.SOH_NUMBER AS INT) as OrderId,
-                    S.SOH_NUMBER as OrderNumber,
+                    CAST(S.SOH_NUMBER AS VARCHAR(50)) as OrderNumber,
                     S.SOH_CUMMAS_ID as CustomerId,
                     C.CUM_CUSTOMER_NAME as CustomerName,
                     C.CUM_CUSTOMER_NUMBER as CustomerNumber,
@@ -350,7 +350,7 @@ namespace SalesMetrics.Services.Erp.Clients
             var sql = @"
                 SELECT TOP 1
                     CAST(S.SOH_NUMBER AS INT) as OrderId,
-                    S.SOH_NUMBER as OrderNumber,
+                    CAST(S.SOH_NUMBER AS VARCHAR(50)) as OrderNumber,
                     S.SOH_CUMMAS_ID as CustomerId,
                     C.CUM_CUSTOMER_NAME as CustomerName,
                     C.CUM_CUSTOMER_NUMBER as CustomerNumber,

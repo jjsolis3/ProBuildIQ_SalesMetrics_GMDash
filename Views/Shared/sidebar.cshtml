@@ -6,10 +6,18 @@
     var usersId = int.Parse(Context.User.FindFirst("Users_ID")?.Value ?? "0");
 
     // Check feature permissions
+    var hasDashboardAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Dashboard") : false;
     var hasReportsAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Reports") : false;
+    var hasTasksAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Tasks") : false;
+    var hasOrdersAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Orders") : false;
+    var hasYardiAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Yardi") : false;
+    var hasSigningAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Signing") : false;
     var hasUsersAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Users") : false;
     var hasAnnouncementsAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Announcements") : false;
     var hasSettingsAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Settings") : false;
+
+    // Keep GM-specific features as role-based for now (can be converted to permissions later if needed)
+    var isGMOrAdmin = roleId == "1" || roleId == "4";
 }
 
 <style>
@@ -65,7 +73,7 @@
         <div id="sidebar-menu">
             <!-- Left Menu Start -->
             <ul class="left-menu list-unstyled" id="side-menu">
-                @if(roleId == "1" || roleId == "4")
+                @if(isGMOrAdmin)
                 {
                     <!-- GM DASHBOARD and RECAP ENTRY/LIST-->
                     <li class="menu-title">GENERAL MGR</li>
@@ -90,19 +98,22 @@
                 }
 
                 <!-- SALES DASHBOARD -->
-                <li class="menu-title">DASHBOARD</li>
-                <li class="ms-3">
-                    <a href="/Dashboard/Index">
-                        <i class="fas fa-chart-line"></i>
-                        <span>Dashboard</span>
-                    </a>
-                </li>
+                @if (hasDashboardAccess)
+                {
+                    <li class="menu-title">DASHBOARD</li>
+                    <li class="ms-3">
+                        <a href="/Dashboard/Index">
+                            <i class="fas fa-chart-line"></i>
+                            <span>Dashboard</span>
+                        </a>
+                    </li>
+                }
 
-                @if (roleId != "5" && roleId != "6")
+                @if (hasTasksAccess)
                 {
                     <!-- SALES TASK ACTIVITIES -->
                     <li class="menu-title">TASKS</li>
-                    @if (roleId == "1" || roleId == "3" || roleId == "4")
+                    @if (isGMOrAdmin || roleId == "3")
                     {
                         <li class="ms-3">
                             <a href="/Tasks/AdminTask">
@@ -125,7 +136,7 @@
                     </li>
                 }
 
-                @if (roleId != "2")
+                @if (isGMOrAdmin || roleId == "3")
                 {
                     <!-- SALESPERSON METRICS -->
                     <li class="menu-title">SALES REPS</li>
@@ -147,13 +158,16 @@
                 </li>
 
                 <!-- JOB SCHEDULE / ORDERS -->
-                <li class="menu-title">JOB SCHEDULE</li>
-                <li class="ms-3">
-                    <a href="/Orders/Orders">
-                        <i class="fa fa-truck"></i>
-                        <span>Work Orders</span>
-                    </a>
-                </li>
+                @if (hasOrdersAccess)
+                {
+                    <li class="menu-title">JOB SCHEDULE</li>
+                    <li class="ms-3">
+                        <a href="/Orders/Orders">
+                            <i class="fa fa-truck"></i>
+                            <span>Work Orders</span>
+                        </a>
+                    </li>
+                }
 
                 <!-- MANAGEMENT -->
                 <li class="menu-title">MANAGEMENT</li>
@@ -174,13 +188,16 @@
                 </li>
 
                 <!-- PROSPECTING (YARDI) -->
-                <li class="menu-title">PROSPECTING</li>
-                <li class="ms-3">
-                    <a href="/Yardi/YardiProperties">
-                        <i class="mdi mdi-briefcase-account "></i>
-                        <span>Yardi Properties</span>
-                    </a>
-                </li>
+                @if (hasYardiAccess)
+                {
+                    <li class="menu-title">PROSPECTING</li>
+                    <li class="ms-3">
+                        <a href="/Yardi/YardiProperties">
+                            <i class="mdi mdi-briefcase-account "></i>
+                            <span>Yardi Properties</span>
+                        </a>
+                    </li>
+                }
 
                 @* @if (roleId == "1")
                 {

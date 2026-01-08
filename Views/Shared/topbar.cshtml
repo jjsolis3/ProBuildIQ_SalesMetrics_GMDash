@@ -1,5 +1,7 @@
 ﻿@using SalesMetrics.Services.Helpers
 @using System.Security.Claims
+@using SalesMetrics.Services.Permissions
+@inject IPermissionService PermissionService
 
 @{
     var currentBranchCode = Context.Session.GetString("OfficeLocation") ?? "LAX";
@@ -10,6 +12,11 @@
 
     var hideLocationSwitcher = PageHelper.ShouldHideLocationSwitcher(currentController, currentAction);
 
+    // Check feature permissions for topbar
+    var usersId = int.Parse(Context.User.FindFirst("Users_ID")?.Value ?? "0");
+    var hasSigningAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Signing") : false;
+    var hasUsersAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Users") : false;
+    var hasSettingsAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Settings") : false;
 }
 
 <!-- Start topbar -->
@@ -72,7 +79,7 @@
                         < div class="dropdown-divider"></div>
 
                         <!-- FORMS ENTRY -->
-                    @if (!hideLocationSwitcher && (User.IsInRole("Admin") || User.FindFirst("RoleId")?.Value == "1"))
+                    @if (!hideLocationSwitcher && hasUsersAccess)
                     {
                         <div class="dropdown-submenu">
                             <a href="#" class="dropdown-item">
@@ -105,7 +112,7 @@
             </div>
 
             <!-- Current Branch Indicator -->
-        @if (!hideLocationSwitcher && (User.IsInRole("Admin") || User.IsInRole("General Manager") || User.IsInRole("Office Manager") || User.FindFirst("RoleId")?.Value == "1" || User.FindFirst("RoleId")?.Value == "4" || User.FindFirst("RoleId")?.Value == "5"))
+        @if (!hideLocationSwitcher && (hasUsersAccess || hasSettingsAccess))
         {
             <!-- Current Branch Indicator Switch Button -->
             <div class="d-none d-md-flex align-items-center ms-2">
@@ -190,9 +197,6 @@
                     var userFullName = User.FindFirst("FullName")?.Value ?? "User";
                     var userRole = User.FindFirst(ClaimTypes.Role)?.Value ?? "User";
                     var userLocation = Context.Session.GetString("OfficeLocation") ?? "LAX";
-                    var isAdmin = User.IsInRole("Admin") || User.FindFirst("RoleId")?.Value == "1";
-                    var isGM = User.IsInRole("GM") || User.FindFirst("RoleId")?.Value == "4";
-                    var isAdminOrGM = User.IsInRole("Admin") || User.IsInRole("GM") || User.FindFirst("RoleId")?.Value == "1" || User.FindFirst("RoleId")?.Value == "4";
                 }
                 <div class="dropdown d-inline-block">
                     <button type="button" class="btn btn-sm top-icon p-0" id="page-header-user-dropdown" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
@@ -251,28 +255,28 @@
                                         </a>
                                     </div>
 
-                                    @if (isAdmin)
-                                {
-                                    <!-- Documents & Signing Section -->
-                                    <div class="nav-menu-divider">
-                                        <span class="nav-menu-divider-text">Documents & Signing</span>
-                                    </div>
-                                    <div class="grid-nav-row">
-                                        <a href="/SignAdmin/Index" class="grid-nav-item" aria-label="View Envelopes">
-                                            <div class="grid-nav-icon"><i class="fa fa-envelope"></i></div>
-                                            <span class="grid-nav-content">My Envelopes</span>
-                                        </a>
-                                        <a href="/SignAdmin/Create" class="grid-nav-item" aria-label="Send Document">
-                                            <div class="grid-nav-icon"><i class="fa fa-paper-plane"></i></div>
-                                            <span class="grid-nav-content">Send Document</span>
-                                        </a>
-                                        <a href="/SignTemplates/Index" class="grid-nav-item" aria-label="Manage Templates">
-                                            <div class="grid-nav-icon"><i class="fa fa-file-alt"></i></div>
-                                            <span class="grid-nav-content">Templates</span>
-                                        </a>
-                                    </div>
-                                }
-                                    @if (isAdminOrGM)
+                                    @if (hasSigningAccess)
+                                    {
+                                        <!-- Documents & Signing Section -->
+                                        <div class="nav-menu-divider">
+                                            <span class="nav-menu-divider-text">Documents & Signing</span>
+                                        </div>
+                                        <div class="grid-nav-row">
+                                            <a href="/SignAdmin/Index" class="grid-nav-item" aria-label="View Envelopes">
+                                                <div class="grid-nav-icon"><i class="fa fa-envelope"></i></div>
+                                                <span class="grid-nav-content">My Envelopes</span>
+                                            </a>
+                                            <a href="/SignAdmin/Create" class="grid-nav-item" aria-label="Send Document">
+                                                <div class="grid-nav-icon"><i class="fa fa-paper-plane"></i></div>
+                                                <span class="grid-nav-content">Send Document</span>
+                                            </a>
+                                            <a href="/SignTemplates/Index" class="grid-nav-item" aria-label="Manage Templates">
+                                                <div class="grid-nav-icon"><i class="fa fa-file-alt"></i></div>
+                                                <span class="grid-nav-content">Templates</span>
+                                            </a>
+                                        </div>
+                                    }
+                                    @if (hasUsersAccess || hasSettingsAccess)
                                     {
 
                                         <!-- Office Location Section -->

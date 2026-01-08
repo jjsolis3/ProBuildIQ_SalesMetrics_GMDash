@@ -426,8 +426,8 @@ namespace SalesMetrics.Controllers
                 Value = f.FeatureId.ToString()
             }).ToList();
 
-            // Load user's current permissions
-            var userPermissionIds = await _permissionService.GetUserPermissionIdsAsync(user.UserId);
+            // Load user's current permissions (using Users_Id primary key)
+            var userPermissionIds = await _permissionService.GetUserPermissionIdsAsync(user.Users_Id);
             user.AssignedFeatureIds = userPermissionIds;
 
             return PartialView("_EditUserModal", user);
@@ -545,12 +545,12 @@ namespace SalesMetrics.Controllers
 
                 }
 
-                // Update user feature permissions using the PermissionService
-                var currentUserId = Convert.ToInt32(HttpContext.Session.GetString("UserId") ?? "0");
+                // Update user feature permissions using the PermissionService (using Users_Id primary key)
+                var currentUserId = Convert.ToInt32(HttpContext.Session.GetString("Users_ID") ?? HttpContext.Session.GetString("UserId") ?? "0");
                 if (model.AssignedFeatureIds != null && model.AssignedFeatureIds.Any())
                 {
                     await _permissionService.UpdateUserPermissionsAsync(
-                        model.UserId,
+                        model.Users_Id,
                         model.AssignedFeatureIds,
                         currentUserId
                     );
@@ -559,7 +559,7 @@ namespace SalesMetrics.Controllers
                 {
                     // If no features selected, clear all permissions
                     await _permissionService.UpdateUserPermissionsAsync(
-                        model.UserId,
+                        model.Users_Id,
                         new List<int>(),
                         currentUserId
                     );

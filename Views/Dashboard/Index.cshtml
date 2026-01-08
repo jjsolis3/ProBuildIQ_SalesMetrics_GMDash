@@ -49,7 +49,7 @@
 <input type="hidden" id="CurrentRoleId" value="@ViewBag.RoleId" />
 <input type="hidden" id="CurrentUserId" value="@ViewBag.UserId" />
 <input type="hidden" id="CurrentWhsId" value="@ViewBag.SelectedWhsId" />
-<input type="hidden" id="CurrentLocation" value="@(HttpContext.Session.GetString("OfficeLocation") ?? "LAX")" />
+<input type="hidden" id="CurrentLocation" value="@(Context.Session.GetString("OfficeLocation") ?? "LAX")" />
 
 
 <div class="row">

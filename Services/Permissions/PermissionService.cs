@@ -36,7 +36,7 @@ namespace SalesMetrics.Services.Permissions
                 }
 
                 var permission = await _context.UserFeaturePermissions
-                    .FirstOrDefaultAsync(p => p.UserId == userId && p.FeatureId == feature.FeatureId);
+                    .FirstOrDefaultAsync(p => p.Users_ID == userId && p.FeatureId == feature.FeatureId);
 
                 if (permission == null)
                 {
@@ -83,7 +83,7 @@ namespace SalesMetrics.Services.Permissions
 
                 return await _context.UserFeaturePermissions
                     .Include(p => p.Feature)
-                    .Where(p => p.UserId == userId
+                    .Where(p => p.Users_ID == userId
                         && p.HasAccess
                         && p.Feature != null
                         && p.Feature.IsActive
@@ -105,14 +105,14 @@ namespace SalesMetrics.Services.Permissions
             try
             {
                 var existingPermission = await _context.UserFeaturePermissions
-                    .FirstOrDefaultAsync(p => p.UserId == userId && p.FeatureId == featureId);
+                    .FirstOrDefaultAsync(p => p.Users_ID == userId && p.FeatureId == featureId);
 
                 if (existingPermission != null)
                 {
                     // Update existing permission
                     existingPermission.HasAccess = true;
                     existingPermission.GrantedDate = DateTime.Now;
-                    existingPermission.GrantedByUserId = grantedByUserId;
+                    existingPermission.GrantedByUsers_ID = grantedByUserId;
                     existingPermission.ExpiresDate = null;
                 }
                 else
@@ -120,11 +120,11 @@ namespace SalesMetrics.Services.Permissions
                     // Create new permission
                     var newPermission = new UserFeaturePermissionEntity
                     {
-                        UserId = userId,
+                        Users_ID = userId,
                         FeatureId = featureId,
                         HasAccess = true,
                         GrantedDate = DateTime.Now,
-                        GrantedByUserId = grantedByUserId
+                        GrantedByUsers_ID = grantedByUserId
                     };
                     _context.UserFeaturePermissions.Add(newPermission);
                 }
@@ -144,7 +144,7 @@ namespace SalesMetrics.Services.Permissions
             try
             {
                 var permission = await _context.UserFeaturePermissions
-                    .FirstOrDefaultAsync(p => p.UserId == userId && p.FeatureId == featureId);
+                    .FirstOrDefaultAsync(p => p.Users_ID == userId && p.FeatureId == featureId);
 
                 if (permission != null)
                 {
@@ -167,7 +167,7 @@ namespace SalesMetrics.Services.Permissions
             {
                 // Get all existing permissions for this user
                 var existingPermissions = await _context.UserFeaturePermissions
-                    .Where(p => p.UserId == userId)
+                    .Where(p => p.Users_ID == userId)
                     .ToListAsync();
 
                 // Remove permissions that are no longer selected
@@ -185,7 +185,7 @@ namespace SalesMetrics.Services.Permissions
                         // Update existing
                         existing.HasAccess = true;
                         existing.GrantedDate = DateTime.Now;
-                        existing.GrantedByUserId = grantedByUserId;
+                        existing.GrantedByUsers_ID = grantedByUserId;
                         existing.ExpiresDate = null;
                     }
                     else
@@ -193,11 +193,11 @@ namespace SalesMetrics.Services.Permissions
                         // Add new
                         var newPermission = new UserFeaturePermissionEntity
                         {
-                            UserId = userId,
+                            Users_ID = userId,
                             FeatureId = featureId,
                             HasAccess = true,
                             GrantedDate = DateTime.Now,
-                            GrantedByUserId = grantedByUserId
+                            GrantedByUsers_ID = grantedByUserId
                         };
                         _context.UserFeaturePermissions.Add(newPermission);
                     }
@@ -220,7 +220,7 @@ namespace SalesMetrics.Services.Permissions
                 var now = DateTime.Now;
 
                 return await _context.UserFeaturePermissions
-                    .Where(p => p.UserId == userId
+                    .Where(p => p.Users_ID == userId
                         && p.HasAccess
                         && (!p.ExpiresDate.HasValue || p.ExpiresDate.Value > now))
                     .Select(p => p.FeatureId)

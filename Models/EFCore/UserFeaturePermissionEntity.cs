@@ -14,10 +14,11 @@ namespace SalesMetrics.Models.EFCore
         public int PermissionId { get; set; }
 
         /// <summary>
-        /// User ID (from Users table)
+        /// User ID (from Users table) - Uses Users_ID primary key
         /// </summary>
         [Required]
-        public int UserId { get; set; }
+        [Column("Users_ID")]
+        public int Users_ID { get; set; }
 
         /// <summary>
         /// Feature ID (from Features table)
@@ -36,9 +37,10 @@ namespace SalesMetrics.Models.EFCore
         public DateTime GrantedDate { get; set; } = DateTime.Now;
 
         /// <summary>
-        /// Who granted this permission (UserID)
+        /// Who granted this permission (Users_ID)
         /// </summary>
-        public int? GrantedByUserId { get; set; }
+        [Column("GrantedByUsers_ID")]
+        public int? GrantedByUsers_ID { get; set; }
 
         /// <summary>
         /// Optional expiration date for temporary access
@@ -48,7 +50,7 @@ namespace SalesMetrics.Models.EFCore
         /// <summary>
         /// Navigation property to User
         /// </summary>
-        [ForeignKey(nameof(UserId))]
+        [ForeignKey(nameof(Users_ID))]
         public virtual UserEntity? User { get; set; }
 
         /// <summary>

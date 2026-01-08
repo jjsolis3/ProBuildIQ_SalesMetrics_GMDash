@@ -328,20 +328,20 @@ public partial class SalesMetricsDbContext : DbContext
         {
             entity.HasKey(e => e.PermissionId);
             entity.Property(e => e.PermissionId).HasColumnName("PermissionID");
-            entity.Property(e => e.UserId).HasColumnName("UserID");
+            entity.Property(e => e.Users_ID).HasColumnName("Users_ID");
             entity.Property(e => e.FeatureId).HasColumnName("FeatureID");
             entity.Property(e => e.HasAccess).HasDefaultValue(true);
             entity.Property(e => e.GrantedDate).HasColumnType("datetime").HasDefaultValueSql("(getdate())");
-            entity.Property(e => e.GrantedByUserId).HasColumnName("GrantedByUserID");
+            entity.Property(e => e.GrantedByUsers_ID).HasColumnName("GrantedByUsers_ID");
             entity.Property(e => e.ExpiresDate).HasColumnType("datetime");
 
-            // Create unique index on UserId + FeatureId combination
-            entity.HasIndex(e => new { e.UserId, e.FeatureId }).IsUnique();
+            // Create unique index on Users_ID + FeatureId combination
+            entity.HasIndex(e => new { e.Users_ID, e.FeatureId }).IsUnique();
 
             // Configure relationships
             entity.HasOne(d => d.User)
                 .WithMany()
-                .HasForeignKey(d => d.UserId)
+                .HasForeignKey(d => d.Users_ID)
                 .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("FK_UserFeaturePermissions_Users");
 

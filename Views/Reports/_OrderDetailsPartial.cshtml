@@ -8,109 +8,219 @@
 }
 else
 {
-    <div class="container-fluid">
-        <div class="row mb-3">
-            <div class="col-md-6">
-                <h4>Order #@Model.OrderNumber</h4>
-                @if (!string.IsNullOrEmpty(Model.CustomerNumber))
-                {
-                    <p class="mb-1"><strong>Customer #:</strong> @Model.CustomerNumber</p>
-                }
-                @if (Model.OrderDate.HasValue)
-                {
-                    <p class="mb-1"><strong>Order Date:</strong> @Model.OrderDate.Value.ToString("MM/dd/yyyy")</p>
-                }
-                @if (Model.DeliveryDate.HasValue)
-                {
-                    <p class="mb-1"><strong>Delivery Date:</strong> @Model.DeliveryDate.Value.ToString("MM/dd/yyyy")</p>
-                }
-                @if (!string.IsNullOrEmpty(Model.OrderedBy))
-                {
-                    <p class="mb-1"><strong>Ordered By:</strong> @Model.OrderedBy</p>
-                }
+    <div class="p-4">
+        <div class="card shadow">
+            <div class="card-header d-flex justify-content-between">
+                <div>
+                    <h3>Order #@Model.OrderNumber</h3>
+                    @if (Model.OrderDate.HasValue)
+                    {
+                        <p class="mb-1 text-sm">Ordered: @Model.OrderDate.Value.ToString("MM/dd/yyyy")</p>
+                    }
+                    @if (Model.DeliveryDate.HasValue)
+                    {
+                        <p class="mb-0 text-sm">Due: @Model.DeliveryDate.Value.ToString("MM/dd/yyyy")</p>
+                    }
+                </div>
+                <div class="text-end">
+                    <img src="~/assets/images/logo-dark.png" alt="SalesMetrics Logo" height="32">
+                    <p class="mb-1 text-sm">Seamless Flooring</p>
+                    <p class="mb-0 text-sm">info@seamless.com | (877) 373-3858</p>
+                </div>
             </div>
-            <div class="col-md-6 text-end">
-                <h5 class="text-muted">Property</h5>
-                <p class="mb-1"><strong>@Model.CustomerName</strong></p>
-                @if (!string.IsNullOrEmpty(Model.Building))
-                {
-                    <p class="mb-1"><i class="bi bi-building"></i> @Model.Building</p>
-                }
-                @if (!string.IsNullOrEmpty(Model.ShipCity))
-                {
-                    <p class="mb-1"><i class="bi bi-geo-alt"></i> @Model.ShipCity</p>
-                }
-                @if (!string.IsNullOrEmpty(Model.ManagementCompany))
-                {
-                    <p class="mb-1"><strong>Mgmt:</strong> @Model.ManagementCompany</p>
-                }
-            </div>
-        </div>
 
-        @if (Model.LineItems != null && Model.LineItems.Any())
-        {
-            <div class="table-responsive">
-                <table class="table table-sm table-bordered table-hover">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Style</th>
-                            <th>Color</th>
-                            <th>Description</th>
-                            <th class="text-center">Qty</th>
-                            <th class="text-center">UOM</th>
-                            <th>Class</th>
-                            <th class="text-end">Amount</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var item in Model.LineItems)
-                        {
+            <div class="card-body">
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div style="background-color: darkorange;">
+                            <h6 class="text-light" style="margin-left: 10px;">Issued For:</h6>
+                        </div>
+                        <table class="table table-borderless table-sm">
                             <tr>
-                                <td>@item.ProductStyle</td>
-                                <td>@item.ProductColor</td>
-                                <td>@item.Description</td>
-                                <td class="text-center">@item.Quantity</td>
-                                <td class="text-center">@item.UOM</td>
-                                <td>@item.ProductClass</td>
-                                <td class="text-end">@(item.ProductTotal?.ToString("C") ?? "-")</td>
+                                <td class="fw-bold">Property:</td>
+                                <td class="fs-6">@Model.CustomerName</td>
                             </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        }
+                            <tr>
+                                <td class="fw-bold">Customer #:</td>
+                                <td class="fs-6">@Model.CustomerNumber</td>
+                            </tr>
+                            @if (!string.IsNullOrEmpty(Model.ManagementCompany))
+                            {
+                                <tr>
+                                    <td class="fw-bold">Management:</td>
+                                    <td class="fs-6">@Model.ManagementCompany</td>
+                                </tr>
+                            }
+                            @if (!string.IsNullOrEmpty(Model.SalesmanName))
+                            {
+                                <tr>
+                                    <td class="fw-bold">Salesperson:</td>
+                                    <td class="fs-6">@Model.SalesmanName</td>
+                                </tr>
+                            }
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <div style="background-color: darkorange;">
+                            <h6 class="text-light" style="margin-left: 10px;">Details:</h6>
+                        </div>
+                        <table class="table table-borderless table-sm">
+                            @if (!string.IsNullOrEmpty(Model.CustomerPO))
+                            {
+                                <tr>
+                                    <td class="fw-bold">PO #:</td>
+                                    <td class="fs-6">@Model.CustomerPO</td>
+                                </tr>
+                            }
+                            @if (Model.BalanceAmount.HasValue && Model.BalanceAmount.Value > 0)
+                            {
+                                <tr>
+                                    <td class="fw-bold">Outstanding:</td>
+                                    <td class="fs-6">@Model.BalanceAmount.Value.ToString("C")</td>
+                                </tr>
+                            }
+                            @if (!string.IsNullOrEmpty(Model.ShipAddress))
+                            {
+                                <tr>
+                                    <td class="fw-bold">Address:</td>
+                                    <td class="fs-6">@Model.ShipAddress</td>
+                                </tr>
+                            }
+                            @if (!string.IsNullOrEmpty(Model.Building))
+                            {
+                                <tr>
+                                    <td class="fw-bold">Building/Apt:</td>
+                                    <td class="fs-6">@Model.Building @(!string.IsNullOrEmpty(Model.AptNumber) ? " #" + Model.AptNumber : "")</td>
+                                </tr>
+                            }
+                        </table>
+                    </div>
+                </div>
 
-        @if (Model.Notes != null && Model.Notes.Any())
-        {
-            <div class="mt-3">
-                <h6><i class="bi bi-sticky"></i> Notes:</h6>
-                @foreach (var note in Model.Notes)
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped border">
+                        <thead class="table-light">
+                            <tr>
+                                <th>#</th>
+                                <th>Style</th>
+                                <th>Color</th>
+                                <th>Description</th>
+                                <th>Qty</th>
+                                <th>UOM</th>
+                                <th>Class</th>
+                                <th class="text-end">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (Model.LineItems != null && Model.LineItems.Any())
+                            {
+                                int index = 1;
+                                foreach (var item in Model.LineItems)
+                                {
+                                    <tr>
+                                        <td>@index</td>
+                                        <td>@item.ProductStyle</td>
+                                        <td>@item.ProductColor</td>
+                                        <td>@item.Description</td>
+                                        <td>@item.Quantity</td>
+                                        <td>@item.UOM</td>
+                                        <td>@item.ProductClass</td>
+                                        <td class="text-end">@(item.ProductTotal?.ToString("C") ?? "-")</td>
+                                    </tr>
+                                    index++;
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                @if (Model.Notes != null && Model.Notes.Any())
                 {
-                    <div class="alert alert-info py-2 small">
-                        @if (note.LineNumber.HasValue)
+                    <div class="mt-3">
+                        <h6>Notes:</h6>
+                        <ul class="list-unstyled">
+                            @foreach (var note in Model.Notes)
+                            {
+                                <li>
+                                    <i class="bi bi-info-circle me-2 text-primary"></i>
+                                    @if (note.LineNumber.HasValue)
+                                    {
+                                        <strong>Line @note.LineNumber:</strong>
+                                    }
+                                    @note.Comment
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                }
+
+                <div class="mt-4 d-flex justify-content-between">
+                    <div>
+                        @if (!string.IsNullOrEmpty(Model.SalesmanName))
                         {
-                            <strong>Line @note.LineNumber:</strong>
+                            <p class="mb-0 text-muted fs-6">Sales by: @Model.SalesmanName</p>
                         }
-                        @note.Comment
+                        else
+                        {
+                            <p class="mb-0 text-muted fs-6">Sales by: Seamless Staff</p>
+                        }
+                    </div>
+                    <div>
+                        <table class="table table-borderless text-end">
+                            <tr>
+                                <td class="fw-bold"><h5>Total:</h5></td>
+                                <td><h5>@(Model.TotalAmount?.ToString("C") ?? "$0.00")</h5></td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+
+                @if (Model.PaidInFullDate.HasValue)
+                {
+                    <div class="text-center mt-3">
+                        <img src="~/assets/images/paid-stamp.png" alt="PAID" style="max-width: 150px; opacity: 0.7;">
                     </div>
                 }
             </div>
-        }
-
-        <div class="row mt-3 pt-3 border-top">
-            <div class="col-md-6">
-                @if (Model.PaidInFullDate.HasValue)
-                {
-                    <p class="mb-1"><strong>Paid in Full:</strong> @Model.PaidInFullDate.Value.ToString("MM/dd/yyyy")</p>
-                }
-                else if (Model.BalanceAmount.HasValue && Model.BalanceAmount.Value > 0)
-                {
-                    <p class="mb-1 text-danger"><strong>Balance Due:</strong> @Model.BalanceAmount.Value.ToString("C")</p>
-                }
-            </div>
-            <div class="col-md-6 text-end">
-                <h4><strong>Total:</strong> @(Model.TotalAmount?.ToString("C") ?? "$0.00")</h4>
-            </div>
+        </div>
+        <div class="no-print mt-4 text-end">
+            <button class="btn btn-outline-secondary" onclick="printOrderDetails()">🖨️ Print</button>
         </div>
     </div>
+
+    <script>
+        function printOrderDetails() {
+            const content = document.querySelector('#orderDetailContent').innerHTML;
+            const printWindow = window.open('', '_blank', 'width=900,height=1000');
+            printWindow.document.write(`
+                <html>
+                <head>
+                    <title>Print Order</title>
+                    <link href="/assets/css/bootstrap.min.css" rel="stylesheet" />
+                    <style>
+                        @@page {
+                            margin: 0;
+                        }
+                        body {
+                            font-family: Arial, sans-serif;
+                            margin: 30px 0 0;
+                            padding: 0;
+                        }
+                        .no-print {
+                            display: none;
+                        }
+                        .table th, .table td { vertical-align: middle; }
+                        .card { border: 1px solid #ddd; padding: 15px; margin: 0; }
+                        .card-header { border-bottom: 1px solid #ccc; margin-bottom: 15px; }
+                        .text-end { text-align: right; }
+                    </style>
+                </head>
+                <body onload="window.print(); window.close();">
+                    ${content}
+                </body>
+                </html>
+            `);
+            printWindow.document.close();
+        }
+    </script>
 }

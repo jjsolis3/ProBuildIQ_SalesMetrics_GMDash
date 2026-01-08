@@ -42,6 +42,8 @@ public partial class SalesMetricsDbContext : DbContext
     public DbSet<BroadcastMessageEntity> BroadcastMessages { get; set; } = default!;
     public DbSet<NotificationSettingsEntity> NotificationSettings { get; set; } = default!;
     public DbSet<SecuritySettingsEntity> SecuritySettings { get; set; } = default!;
+    public DbSet<FeatureEntity> Features { get; set; } = default!;
+    public DbSet<UserFeaturePermissionEntity> UserFeaturePermissions { get; set; } = default!;
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -304,6 +306,50 @@ public partial class SalesMetricsDbContext : DbContext
 
             // Create unique index on SettingKey
             entity.HasIndex(e => e.SettingKey).IsUnique();
+        });
+
+        // Feature Permissions Configuration
+        modelBuilder.Entity<FeatureEntity>(entity =>
+        {
+            entity.HasKey(e => e.FeatureId);
+            entity.Property(e => e.FeatureId).HasColumnName("FeatureID");
+            entity.Property(e => e.FeatureCode).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.FeatureName).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.Description).HasMaxLength(500);
+            entity.Property(e => e.Category).HasMaxLength(50);
+            entity.Property(e => e.IsActive).HasDefaultValue(true);
+            entity.Property(e => e.DisplayOrder).HasDefaultValue(0);
+
+            // Create unique index on FeatureCode
+            entity.HasIndex(e => e.FeatureCode).IsUnique();
+        });
+
+        modelBuilder.Entity<UserFeaturePermissionEntity>(entity =>
+        {
+            entity.HasKey(e => e.PermissionId);
+            entity.Property(e => e.PermissionId).HasColumnName("PermissionID");
+            entity.Property(e => e.UserId).HasColumnName("UserID");
+            entity.Property(e => e.FeatureId).HasColumnName("FeatureID");
+            entity.Property(e => e.HasAccess).HasDefaultValue(true);
+            entity.Property(e => e.GrantedDate).HasColumnType("datetime").HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.GrantedByUserId).HasColumnName("GrantedByUserID");
+            entity.Property(e => e.ExpiresDate).HasColumnType("datetime");
+
+            // Create unique index on UserId + FeatureId combination
+            entity.HasIndex(e => new { e.UserId, e.FeatureId }).IsUnique();
+
+            // Configure relationships
+            entity.HasOne(d => d.User)
+                .WithMany()
+                .HasForeignKey(d => d.UserId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_UserFeaturePermissions_Users");
+
+            entity.HasOne(d => d.Feature)
+                .WithMany(p => p.UserPermissions)
+                .HasForeignKey(d => d.FeatureId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_UserFeaturePermissions_Features");
         });
 
         OnModelCreatingPartial(modelBuilder);

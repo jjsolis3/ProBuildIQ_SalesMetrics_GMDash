@@ -103,6 +103,9 @@ builder.Services.AddScoped<IEnvelopeService, EnvelopeService>();
 builder.Services.AddScoped<SalesMetrics.Services.Announcements.IAnnouncementService, SalesMetrics.Services.Announcements.AnnouncementService>();
 builder.Services.AddScoped<SalesMetrics.Services.Settings.ISettingsService, SalesMetrics.Services.Settings.SettingsService>();
 
+// Feature Permissions Service
+builder.Services.AddScoped<SalesMetrics.Services.Permissions.IPermissionService, SalesMetrics.Services.Permissions.PermissionService>();
+
 // Google OAuth + Cookie Auth
 builder.Services.AddAuthentication(options =>
 {

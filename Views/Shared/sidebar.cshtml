@@ -1,5 +1,15 @@
-﻿@{
+﻿@using SalesMetrics.Services.Permissions
+@inject IPermissionService PermissionService
+
+@{
     var roleId = Context.Session.GetString("RoleId");
+    var usersId = int.Parse(Context.User.FindFirst("Users_ID")?.Value ?? "0");
+
+    // Check feature permissions
+    var hasReportsAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Reports") : false;
+    var hasUsersAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Users") : false;
+    var hasAnnouncementsAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Announcements") : false;
+    var hasSettingsAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Settings") : false;
 }
 
 <style>
@@ -199,7 +209,7 @@
                     }
                 } *@
 
-                @if (roleId == "1" || roleId == "4")
+                @if (hasReportsAccess)
                 {
                     <!-- Reporting & Analytics -->
                     <li class="menu-title">REPORTS</li>
@@ -209,7 +219,10 @@
                             <span>Reports</span>
                         </a>
                     </li>
+                }
 
+                @if (hasAnnouncementsAccess)
+                {
                     <!-- Communication -->
                     <li class="menu-title">COMMUNICATION</li>
                     <li class="ms-3">
@@ -220,28 +233,43 @@
                     </li>
                 }
 
-                @if (roleId == "1")
+                @if (hasUsersAccess || hasSettingsAccess)
                 {
                     <!-- Admin / Settings -->
                     <li class="menu-title">ADMIN / SETTINGS</li>
-                    <li class="ms-3">
-                        <a href="/Settings/Index">
-                            <i class="fas fa-cog"></i>
-                            <span>System Settings</span>
-                        </a>
-                    </li>
-                    <li class="ms-3">
-                        <a href="/Accounts/Index">
-                            <i class="fa fa-user-cog"></i>
-                            <span>Access Controls</span>
-                        </a>
-                    </li>
-                    <li class="ms-3">
-                        <a href="/Yardi/Upload">
-                            <i class="fa fa-upload"></i>
-                            <span>Yardi Upload</span>
-                        </a>
-                    </li>
+
+                    @if (hasSettingsAccess)
+                    {
+                        <li class="ms-3">
+                            <a href="/Settings/Index">
+                                <i class="fas fa-cog"></i>
+                                <span>System Settings</span>
+                            </a>
+                        </li>
+                    }
+
+                    @if (hasUsersAccess)
+                    {
+                        <li class="ms-3">
+                            <a href="/Accounts/Index">
+                                <i class="fa fa-user-cog"></i>
+                                <span>Access Controls</span>
+                            </a>
+                        </li>
+                    }
+                }
+
+                @if (roleId == "1")
+                {
+                    @if (hasUsersAccess || hasSettingsAccess)
+                    {
+                        <li class="ms-3">
+                            <a href="/Yardi/Upload">
+                                <i class="fa fa-upload"></i>
+                                <span>Yardi Upload</span>
+                            </a>
+                        </li>
+                    }
 
                     <!-- Web App Errors -->
                     <li class="menu-title">WEB APP ERRORS</li>

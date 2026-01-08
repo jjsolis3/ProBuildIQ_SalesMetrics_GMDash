@@ -70,6 +70,10 @@ namespace SalesMetrics.Models
         public string? SalesmanNumber { get; set; }
         public List<int> AssignedLocationIds { get; set; } = new();
         public List<SelectListItem> AllLocations { get; set; } = new();
+
+        // Feature Permissions
+        public List<int> AssignedFeatureIds { get; set; } = new();
+        public List<SelectListItem> AllFeatures { get; set; } = new();
     }
 
     public class FlaggedUserViewModel

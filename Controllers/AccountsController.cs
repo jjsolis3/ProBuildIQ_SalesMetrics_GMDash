@@ -7,6 +7,7 @@ using SalesMetrics.Models;
 using SalesMetrics.Models.EFCore;
 using SalesMetrics.Services;
 using SalesMetrics.Services.Helpers;
+using SalesMetrics.Services.Permissions;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -16,10 +17,12 @@ namespace SalesMetrics.Controllers
     public class AccountsController : Controller
     {
         private readonly IConfiguration _configuration;
+        private readonly IPermissionService _permissionService;
 
-        public AccountsController(IConfiguration configuration)
+        public AccountsController(IConfiguration configuration, IPermissionService permissionService)
         {
             _configuration = configuration;
+            _permissionService = permissionService;
         }
 
         // ACCOUNTS PAGE
@@ -359,7 +362,7 @@ namespace SalesMetrics.Controllers
         }
 
         [HttpGet]
-        public IActionResult GetEditUserModal(int id)
+        public async Task<IActionResult> GetEditUserModal(int id)
         {
             var connStr = _configuration.GetConnectionString("SalesMetrics");
             RegisterViewModel user = new();
@@ -387,13 +390,13 @@ namespace SalesMetrics.Controllers
                     };
                     ViewBag.IsActive = Convert.ToBoolean(reader["IsActive"]);
                 }
-                reader.Close();                
+                reader.Close();
 
                 // Fetch assigned locations
                 var assignedLocations = new List<int>();
                 var locationCmd = new SqlCommand(@"
-                    SELECT LocationID 
-                    FROM UserLocationAssignments 
+                    SELECT LocationID
+                    FROM UserLocationAssignments
                     WHERE UserID = @UserId AND IsActive = 'YES'
                 ", conn);
                 locationCmd.Parameters.AddWithValue("@UserId", user.UserId);
@@ -415,11 +418,23 @@ namespace SalesMetrics.Controllers
                 };
             }
 
+            // Load all available features for permission checkboxes
+            var allFeatures = await _permissionService.GetAllFeaturesAsync();
+            user.AllFeatures = allFeatures.Select(f => new SelectListItem
+            {
+                Text = f.FeatureName,
+                Value = f.FeatureId.ToString()
+            }).ToList();
+
+            // Load user's current permissions
+            var userPermissionIds = await _permissionService.GetUserPermissionIdsAsync(user.UserId);
+            user.AssignedFeatureIds = userPermissionIds;
+
             return PartialView("_EditUserModal", user);
         }
 
         [HttpPost]
-        public IActionResult UpdateUser(RegisterViewModel model, bool IsActive)
+        public async Task<IActionResult> UpdateUser(RegisterViewModel model, bool IsActive)
         {
             if (!ModelState.IsValid)
             {
@@ -528,6 +543,26 @@ namespace SalesMetrics.Controllers
                         }
                     }
 
+                }
+
+                // Update user feature permissions using the PermissionService
+                var currentUserId = Convert.ToInt32(HttpContext.Session.GetString("UserId") ?? "0");
+                if (model.AssignedFeatureIds != null && model.AssignedFeatureIds.Any())
+                {
+                    await _permissionService.UpdateUserPermissionsAsync(
+                        model.UserId,
+                        model.AssignedFeatureIds,
+                        currentUserId
+                    );
+                }
+                else
+                {
+                    // If no features selected, clear all permissions
+                    await _permissionService.UpdateUserPermissionsAsync(
+                        model.UserId,
+                        new List<int>(),
+                        currentUserId
+                    );
                 }
             }
             catch (Exception ex)

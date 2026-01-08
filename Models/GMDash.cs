@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Identity.Client;
+using SalesMetrics.Services.Erp.Models;
 
 namespace SalesMetrics.Models
 {
@@ -12,7 +13,7 @@ namespace SalesMetrics.Models
         public List<InventoryProductClassSummary> InventoryByClass { get; set; } = new();
         public List<InstallerCompletionMetric> InstallerCompletionMetrics { get; set; } = new();
         public List<GMARDataViewModel> ARBranchBreakdown { get; set; } = new();
-        public List<RTJEntry> RecentRTJs { get; set; } = new();
+        public List<ErpRTJEntry> RecentRTJs { get; set; } = new();
 
 
         public DateTime MTDStartDateRange { get; set; }

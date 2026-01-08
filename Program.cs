@@ -4,6 +4,8 @@ using Microsoft.Extensions.DependencyInjection;
 using SalesMetrics.Data;
 using Microsoft.EntityFrameworkCore;
 using SalesMetrics.Services.Erp;
+using SalesMetrics.Services.Erp.Configuration;
+using SalesMetrics.Services.Erp.Clients;
 using SalesMetrics.Services;
 using SalesMetrics.Services.Reports;
 using SalesMetrics.Services.Mvc;
@@ -40,7 +42,32 @@ builder.Services.AddSingleton<IReportCatalog, ReportCatalog>();
 builder.Services.AddSingleton<IReportRunner, ReportRunner>();
 builder.Services.AddSingleton<IReportAuthorizationService, ReportAuthorizationService>();
 builder.Services.AddSingleton<IReportExportService, ReportExportService>();
-builder.Services.AddSingleton<IErpDataClient, SqlServerErpDataClient>();
+
+// ============================================================
+// ERP ABSTRACTION LAYER - Multi-Provider Support
+// ============================================================
+
+// Configure ERP settings from appsettings.json
+builder.Services.Configure<ErpSettings>(builder.Configuration.GetSection("ErpSettings"));
+
+// Register ERP client implementations
+builder.Services.AddSingleton<CompUFloorErpClient>();
+builder.Services.AddSingleton<KuduErpClient>();
+builder.Services.AddHttpClient<KuduErpClient>(); // Add HTTP client for Kudu API
+
+// Register ERP client factory for provider selection
+builder.Services.AddSingleton<ErpClientFactory>();
+
+// Register default IErpDataClient (uses factory internally)
+// This is for backward compatibility - controllers can still inject IErpDataClient
+builder.Services.AddSingleton<IErpDataClient>(sp =>
+{
+    // Default to CompUFloor for now
+    return sp.GetRequiredService<CompUFloorErpClient>();
+});
+
+// Keep legacy clients for backward compatibility during migration
+builder.Services.AddSingleton<SqlServerErpDataClient>();
 builder.Services.AddSingleton<HttpErpDataClient>();
 
 // Add EF Core DbContext for SalesMetrics
@@ -134,7 +161,10 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 // Enable Response Compression
-app.UseResponseCompression();
+if (!app.Environment.IsDevelopment())
+{
+    app.UseResponseCompression();
+}
 
 app.UseStaticFiles();
 app.UseRouting();

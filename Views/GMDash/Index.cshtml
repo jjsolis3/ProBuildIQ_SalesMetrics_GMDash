@@ -535,9 +535,22 @@
     </div>
 </div>
 
-<!-- RTJ MODALS -->
-<div id="rtjModalContainer">
-    @await Html.PartialAsync("_RTJModalPartial", Model.RecentRTJs)
+<!-- RTJ MODAL (Single modal with dynamic content) -->
+<div class="modal fade" id="rtjModal" tabindex="-1"
+     data-bs-backdrop="static"
+     data-bs-keyboard="false"
+     aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-orange">
+                <h5 class="modal-title fw-bold">RTJ Details - <span id="rtjModalTitle"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-1" id="rtjModalBody">
+                <p class="text-muted">Loading RTJ details...</p>
+            </div>
+        </div>
+    </div>
 </div>
 
 
@@ -672,18 +685,26 @@
     </script>
 
     <script>
-        // ##### RTJ MODAL DATATABLE #####
-        $(document).ready(function ()
-        {
-            // When a modal opens, initialize DataTable inside it (once)
-            $('[id^=rtjModal_]').on('shown.bs.modal', function ()
-            {
-                const tableId = $(this).find("table").attr("id");
-                const table = $("#" + tableId);
+        // ##### RTJ MODAL - Load content dynamically #####
+        $(document).on('click', '[data-bs-target="#rtjModal"]', function () {
+            const location = $(this).data('location');
+            const selectedRange = $('#rtjRange').val() || 'mtd';
 
-                if (!$.fn.DataTable.isDataTable(table))
-                {
-                    table.DataTable({
+            // Save to global scope for reuse in DataTable export
+            window.currentRTJLocation = location;
+
+            // Update modal title
+            $('#rtjModalTitle').text(location);
+            $('#rtjModalBody').html('<p class="text-muted">Loading RTJ details...</p>');
+
+            // Fetch and inject modal content
+            $.get('/GMDash/GetRTJDetails', { location: location, range: selectedRange }, function (html) {
+                $('#rtjModalBody').html(html);
+
+                // Initialize DataTable after content loads
+                const $table = $('#rtjModalBody').find('table');
+                if ($table.length && !$.fn.DataTable.isDataTable($table)) {
+                    $table.DataTable({
                         order: [[0, 'desc']],
                         responsive: true,
                         paging: true,
@@ -700,23 +721,17 @@
                                 extend: 'excelHtml5',
                                 text: '<i class="bi bi-file-earmark-excel"></i> Export to Excel',
                                 className: 'btn btn-outline-success rounded-pill shadow-sm me-3',
-                                title: 'RTJ Adjustment Details',
-                                exportOptions: {
-                                    format: {
-                                        body: function (data, row, column, node)
-                                        {
-                                            if (column === 6)
-                                            {
-                                                const $select = $('<div>' + data + '</div>').find('select');
-                                                return $select.length ? $select.find('option:selected').text() : data;
-                                            }
-                                            return $('<div>').html(data).text();
-                                        }
-                                    }
+                                title: function () {
+                                    return 'RTJ Adjustment Details - ' + (window.currentRTJLocation || 'All Locations');
+                                },
+                                filename: function () {
+                                    const label = window.currentRTJLocation || 'AllLocations';
+                                    const date = new Date().toISOString().slice(0, 10);
+                                    return `RTJ_${label}_${date}`;
                                 }
                             }
-                        ] // <-- CLOSE buttons array
-                    }); // <-- CLOSE DataTable()
+                        ]
+                    });
                 }
             });
         });

@@ -7,6 +7,8 @@ using System.Data;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
+using SalesMetrics.Services.Erp;
+using SalesMetrics.Services.Erp.Configuration;
 using SalesMetrics.Services.Helpers;
 
 using User = SalesMetrics.Models.User;
@@ -20,12 +22,24 @@ namespace SalesMetrics.Controllers
     public class PropertiesController : Controller
     {
         private readonly IConfiguration _configuration;
-
+        private readonly ErpClientFactory _erpFactory;
         private readonly IMemoryCache _cache;
 
-        public PropertiesController(IConfiguration configuration)
+        public PropertiesController(IConfiguration configuration, ErpClientFactory erpFactory)
         {
             _configuration = configuration;
+            _erpFactory = erpFactory;
+        }
+
+        /// <summary>
+        /// Helper method to create ErpContext from location code
+        /// </summary>
+        private ErpContext GetErpContext(string locationCode)
+        {
+            return new ErpContext
+            {
+                LocationCode = locationCode
+            };
         }
 
         public IActionResult Orders()
@@ -33,9 +47,9 @@ namespace SalesMetrics.Controllers
             return View();
         }
 
-        public IActionResult Properties()
+        public async Task<IActionResult> Properties()
         {
-            // === STEP 1: GET SESSION DATA (same as original) ===
+            // === STEP 1: GET SESSION DATA ===
             var userId = HttpContext.Session.GetString("UserId");
             var users_Id = HttpContext.Session.GetString("Users_Id");
             var officeLocation = HttpContext.Session.GetString("OfficeLocation");
@@ -65,102 +79,39 @@ namespace SalesMetrics.Controllers
             ViewBag.RoleID = roleId;
             ViewBag.SalesmanID = salesmanId;
 
-            // === STEP 2: FETCH PROPERTIES FROM DATABASE (same as original) ===
-            var connectionString = _configuration.GetConnectionString(officeLocation);
-            var properties = new List<CustomerPropertyViewModel>();
+            // === STEP 2: FETCH PROPERTIES FROM ERP ===
+            var context = GetErpContext(officeLocation);
+            var client = _erpFactory.GetClient(context);
 
-            var baseSql = @"
-                SELECT
-	                C.[CUM_CUMMAS_ID],
-	                C.[CUM_CUSTOMER_NUMBER],
-                    C.[CUM_CUSTOMER_NAME],
-                    ISNULL(C.[CUM_ADDRESS_1], '') + ISNULL(C.[CUM_ADDRESS_2], '') + ISNULL(C.[CUM_ADDRESS_3], '') AS [ADDRESS],
-                    C.[CUM_CITY],
-                    C.[CUM_STATE],
-                    C.[CUM_ZIP],
-                    C.[CUM_PHONE_NUMBER],
-                    C.[CUM_EMAIL],
-                    C.[CUM_CREDIT_LIMIT],
-                    C.[CUM_ESTABLISHED_DATE],
-                    C.[CUM_AR_BALANCE],
-                    C.[CUM_PRICE_CODE],
-                    C.[CUM_ATTENTION_TO],
-                    C.[CUM_SMNMAS_ID],
-                    S.[SMN_SALESMAN_NAME],
-                    C.[Id],
-                    CAST(C.[CUM_CREDIT_HOLD_FLAG] as int) as [CUM_CREDIT_HOLD_FLAG],
-                    C.[CUM_PO_NUMBER_REQUIRED],
-	                P.[IPC_DESCRIPTION],
-	                COALESCE(
-                        (SELECT TOP 1 SOH_WHSMAS_ID
-                         FROM SALES_HEADER
-                         WHERE SOH_CUMMAS_ID = C.CUM_CUMMAS_ID
-                           AND SOH_WHSMAS_ID IS NOT NULL
-                           AND SOH_WHSMAS_ID <> 1
-                         ORDER BY SOH_NUMBER DESC),
-                        (SELECT TOP 1 SOH_WHSMAS_ID
-                         FROM SALES_HEADER
-                         WHERE SOH_CUMMAS_ID = C.CUM_CUMMAS_ID
-                           AND SOH_WHSMAS_ID IS NOT NULL
-                         ORDER BY SOH_NUMBER DESC)
-                    ) as [SOH_WHSMAS_ID]
+            // Get properties - if salesperson (roleId = 2), filter by their SalesmanId
+            var filterSalesmanId = (roleId == 2 && salesmanId.HasValue) ? salesmanId : null;
+            var erpProperties = await client.GetAllPropertiesAsync(context, filterSalesmanId);
 
-                FROM [CUSTOMER_MASTER] AS C
-	                LEFT JOIN PRICE_CODES AS P ON C.CUM_PRICE_CODE = P.IPC_PRICE_CODE
-                    LEFT JOIN SALESMAN_MASTER as S on C.CUM_SMNMAS_ID = S.SMN_SMNMAS_ID
-                WHERE C.[CUM_CUSTOMER_NUMBER] NOT IN (
-	                    SELECT CAST(IM.INS_INSTALLER_NUMBER AS NVARCHAR(50))
-	                    FROM [INSTALLER_MASTER] IM
-	                    WHERE ISNUMERIC(IM.INS_INSTALLER_NUMBER) = 1
-                    )
-                ";
-
-            // If user is a salesperson (roleId = 2), filter by their SalesmanId
-            if (roleId == 2 && !string.IsNullOrEmpty(salesmanId.ToString()))
+            // Map ErpProperty to CustomerPropertyViewModel
+            var properties = erpProperties.Select(p => new CustomerPropertyViewModel
             {
-                baseSql += " AND C.CUM_SMNMAS_ID = @SalesmanId";
-            }
-
-            using (SqlConnection conn = new SqlConnection(connectionString))
-            {
-                conn.Open();
-                var cmd = new SqlCommand(baseSql, conn);
-
-                if (roleId == 2 && !string.IsNullOrEmpty(salesmanId.ToString()))
-                {
-                    cmd.Parameters.AddWithValue("@SalesmanId", salesmanId);
-                }
-
-                using (var reader = cmd.ExecuteReader())
-                {
-                    while (reader.Read())
-                    {
-                        properties.Add(new CustomerPropertyViewModel
-                        {
-                            CustomerId = reader.GetInt32("CUM_CUMMAS_ID"),
-                            CustomerNumber = reader.GetString("CUM_CUSTOMER_NUMBER"),
-                            CustomerName = reader.GetString("CUM_CUSTOMER_NAME"),
-                            Address = reader.GetString("ADDRESS").Trim(),
-                            City = reader.GetString("CUM_CITY"),
-                            State = reader.GetString("CUM_STATE"),
-                            Zip = reader.GetString("CUM_ZIP"),
-                            PhoneNumber = reader.GetString("CUM_PHONE_NUMBER"),
-                            Email = reader.GetString("CUM_EMAIL"),
-                            CreditLimit = reader.IsDBNull("CUM_CREDIT_LIMIT") ? 0 : Convert.ToDecimal(reader["CUM_CREDIT_LIMIT"]),
-                            CreditHold = reader.GetInt32("CUM_CREDIT_HOLD_FLAG"),
-                            EstablishedDate = reader.IsDBNull(10) ? null : reader.GetDateTime(10),
-                            ARBalance = reader.IsDBNull("CUM_AR_BALANCE") ? 0 : Convert.ToDecimal(reader["CUM_AR_BALANCE"]),
-                            PriceCode = reader.IsDBNull("CUM_PRICE_CODE") ? 0 : reader.GetInt32("CUM_PRICE_CODE"),
-                            AttentionTo = reader.IsDBNull("CUM_ATTENTION_TO") ? "" : reader.GetString("CUM_ATTENTION_TO"),
-                            SalesmanID = reader.IsDBNull("CUM_SMNMAS_ID") ? 0 : reader.GetInt32("CUM_SMNMAS_ID"),
-                            Salesperson = reader.IsDBNull("SMN_SALESMAN_NAME") ? "" : reader.GetString("SMN_SALESMAN_NAME"),
-                            PONumberRequired = reader.GetBoolean("CUM_PO_NUMBER_REQUIRED"),
-                            MgmtCo = reader.IsDBNull("IPC_DESCRIPTION") ? "" : reader.GetString("IPC_DESCRIPTION"),
-                            WhsId = reader.IsDBNull("SOH_WHSMAS_ID") ? null : reader.GetInt32("SOH_WHSMAS_ID")
-                        });
-                    }
-                }
-            }
+                CustomerId = p.CustomerId,
+                CustomerNumber = p.CustomerNumber,
+                CustomerName = p.CustomerName,
+                Address = string.Join("", new[] { p.Address1, p.Address2, p.Address3 }
+                    .Where(a => !string.IsNullOrEmpty(a))).Trim(),
+                City = p.City ?? string.Empty,
+                State = p.State ?? string.Empty,
+                Zip = p.Zip ?? string.Empty,
+                PhoneNumber = p.PhoneNumber ?? string.Empty,
+                Email = p.Email ?? string.Empty,
+                CreditLimit = p.CreditLimit ?? 0,
+                CreditHold = p.CreditHoldFlag,
+                EstablishedDate = p.EstablishedDate,
+                ARBalance = p.ARBalance ?? 0,
+                PriceCode = p.PriceCode ?? 0,
+                AttentionTo = p.AttentionTo ?? string.Empty,
+                SalesmanID = p.SalesmanId ?? 0,
+                Salesperson = p.SalesmanName ?? string.Empty,
+                PONumberRequired = p.PONumberRequired,
+                MgmtCo = p.ManagementCompany ?? string.Empty,
+                WhsId = p.WarehouseId
+            }).ToList();
 
             // === STEP 3: BUILD DASHBOARD WITH KPIs AND RANKINGS ===
             var dashboard = BuildPropertyDashboard(properties);

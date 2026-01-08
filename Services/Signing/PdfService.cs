@@ -557,7 +557,8 @@ public sealed class PdfService : IPdfService
         // The configurator saves Y coordinate for the baseline position
         Console.WriteLine($"[COORDINATE DEBUG] Text '{text}' - Page: {page.Width:F1}x{page.Height:F1}pt, x={x}, y={y}");
 
-        gfx.DrawString(text, font, brush, new XPoint(x, y), XStringFormats.Default);
+        //gfx.DrawString(text, font, brush, new XPoint(x, y), XStringFormats.Default);
+        gfx.DrawString(text, font, brush, new XPoint(x, y), XStringFormats.TopLeft);
     }
 
     /// <summary>

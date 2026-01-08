@@ -1,4 +1,4 @@
-﻿@model List<SalesMetrics.Models.RTJEntry>
+﻿@model List<SalesMetrics.Services.Erp.Models.ErpRTJEntry>
 @if (ViewBag.RtjRangeLabel != null)
 {
     <p class="text-muted small rtj-range-label" style="display:none;">
@@ -41,7 +41,8 @@
                 <td>
                     <button class="btn btn-sm btn-outline-primary"
                             data-bs-toggle="modal"
-                            data-bs-target="#rtjModal_@group.Location">
+                            data-bs-target="#rtjModal"
+                            data-location="@group.Location">
                         View
                     </button>
                 </td>

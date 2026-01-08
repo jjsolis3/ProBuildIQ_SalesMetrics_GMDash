@@ -4,6 +4,8 @@ using System.Linq;
 using SalesMetrics.Models.Reports;
 using SalesMetrics.Services.Helpers;
 using SalesMetrics.Services.Reports;
+using SalesMetrics.Services.Erp;
+using SalesMetrics.Services.Erp.Configuration;
 
 namespace SalesMetrics.Controllers
 {
@@ -14,19 +16,22 @@ namespace SalesMetrics.Controllers
         private readonly IReportAuthorizationService _authorizationService;
         private readonly IReportExportService _exportService;
         private readonly ILogger<ReportsController> _logger;
+        private readonly ErpClientFactory _erpFactory;
 
         public ReportsController(
             IReportCatalog catalog,
             IReportRunner runner,
             IReportAuthorizationService authorizationService,
             IReportExportService exportService,
-            ILogger<ReportsController> logger)
+            ILogger<ReportsController> logger,
+            ErpClientFactory erpFactory)
         {
             _catalog = catalog;
             _runner = runner;
             _authorizationService = authorizationService;
             _exportService = exportService;
             _logger = logger;
+            _erpFactory = erpFactory;
         }
 
         [HttpGet]
@@ -237,6 +242,38 @@ namespace SalesMetrics.Controllers
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Get order details for drill-down from reports
+        /// Uses ERP abstraction layer to work with any ERP
+        /// </summary>
+        [HttpGet]
+        public async Task<IActionResult> GetOrderDetails(int orderId)
+        {
+            try
+            {
+                var officeLocation = HttpContext.Session.GetString("OfficeLocation") ?? "LAX";
+                var context = new ErpContext
+                {
+                    LocationCode = officeLocation
+                };
+
+                var client = _erpFactory.GetClient(context);
+                var order = await client.GetOrderDetailAsync(orderId, context);
+
+                if (order == null)
+                {
+                    return PartialView("_OrderDetailsPartial", null);
+                }
+
+                return PartialView("_OrderDetailsPartial", order);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to load order details for order {OrderId}", orderId);
+                return PartialView("_OrderDetailsPartial", null);
+            }
         }
     }
 }

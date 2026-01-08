@@ -15,6 +15,7 @@ using SalesMetrics.Models.EFCore;
 using SalesMetrics.Models.Signing;
 using SalesMetrics.Services.Mvc;
 using SalesMetrics.Services.Signing;
+using SalesMetrics.Services.Erp;
 
 namespace SalesMetrics.Services.Signing
 {
@@ -24,13 +25,29 @@ namespace SalesMetrics.Services.Signing
         private readonly IRazorViewToStringRenderer _renderer;
         private readonly IHttpContextAccessor _http;
         private readonly IConfiguration _config;
+        private readonly ErpClientFactory _erpFactory;
 
-        public ErpMergeService(SalesMetricsDbContext db, IRazorViewToStringRenderer renderer, IHttpContextAccessor http, IConfiguration config)
+        public ErpMergeService(
+            SalesMetricsDbContext db,
+            IRazorViewToStringRenderer renderer,
+            IHttpContextAccessor http,
+            IConfiguration config,
+            ErpClientFactory erpFactory)
         {
             _db = db;
             _renderer = renderer;
             _http = http;
             _config = config;
+            _erpFactory = erpFactory;
+        }
+
+        /// <summary>
+        /// Helper to create ErpContext from current session location
+        /// </summary>
+        private ErpContext GetErpContext()
+        {
+            var locationCode = _http.HttpContext?.Session.GetString("OfficeLocation") ?? "LAX";
+            return new ErpContext { LocationCode = locationCode };
         }
 
         public async Task<string> RenderHtmlAsync(string templateKey, long envelopeId, long? recipientId = null)
@@ -125,49 +142,27 @@ namespace SalesMetrics.Services.Signing
         {
             if (!propertyId.HasValue) return null;
 
-            // FIXED: Query CUSTOMER_MASTER table directly since PropertyID is CUM_CUMMAS_ID
-            // The property dropdown returns CUM_CUMMAS_ID, not YardiProperties.Property_ID
-            var officeLocation = _http.HttpContext?.Session.GetString("OfficeLocation") ?? "LAX";
-            var connStr = _config.GetConnectionString(officeLocation);
+            // Use ERP abstraction layer instead of direct SQL
+            var context = GetErpContext();
+            var client = _erpFactory.GetClient(context);
 
-            using var conn = new SqlConnection(connStr);
-            await conn.OpenAsync();
-
-            var sql = @"
-                SELECT CUM_CUSTOMER_NAME
-                FROM CUSTOMER_MASTER
-                WHERE CUM_CUMMAS_ID = @propertyId";
-
-            using var cmd = new SqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("@propertyId", propertyId.Value);
-
-            var result = await cmd.ExecuteScalarAsync();
-            return result?.ToString();
+            var property = await client.GetPropertyByIdAsync(propertyId.Value, context);
+            return property?.CustomerName;
         }
 
         public async Task<string?> GetPropertyAddressAsync(int? propertyId)
         {
             if (!propertyId.HasValue) return null;
 
-            // Get address from YardiProperties table (which uses Property_ID, not CUM_CUMMAS_ID)
-            // Note: PropertyID in SignEnvelope is actually CUM_CUMMAS_ID, not YardiProperties.Property_ID
-            // So we need to query CUSTOMER_MASTER for the address
-            var officeLocation = _http.HttpContext?.Session.GetString("OfficeLocation") ?? "LAX";
-            var connStr = _config.GetConnectionString(officeLocation);
+            // Use ERP abstraction layer instead of direct SQL
+            var context = GetErpContext();
+            var client = _erpFactory.GetClient(context);
 
-            using var conn = new SqlConnection(connStr);
-            await conn.OpenAsync();
+            var property = await client.GetPropertyByIdAsync(propertyId.Value, context);
+            if (property == null) return null;
 
-            var sql = @"
-                SELECT ISNULL(CUM_ADDRESS_1, '') + ' ' + ISNULL(CUM_CITY, '') + ', ' + ISNULL(CUM_STATE, '') + ' ' + ISNULL(CUM_ZIP, '')
-                FROM CUSTOMER_MASTER
-                WHERE CUM_CUMMAS_ID = @propertyId";
-
-            using var cmd = new SqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("@propertyId", propertyId.Value);
-
-            var result = await cmd.ExecuteScalarAsync();
-            var address = result?.ToString()?.Trim();
+            // Build address string
+            var address = $"{property.Address1} {property.City}, {property.State} {property.Zip}".Trim();
 
             // Return null if address is empty or just commas/spaces
             return string.IsNullOrWhiteSpace(address) || address == "," || address == ", " ? null : address;
@@ -183,39 +178,29 @@ namespace SalesMetrics.Services.Signing
 
         public async Task<IReadOnlyList<CustomerPropertyViewModel>> SearchPropertiesAsync(string term, int take = 20)
         {
-            var officeLocation = _http.HttpContext?.Session.GetString("OfficeLocation") ?? "LAX";
-            var connStr = _config.GetConnectionString(officeLocation);
+            // Use ERP abstraction layer instead of direct SQL
+            var context = GetErpContext();
+            var client = _erpFactory.GetClient(context);
+
+            var searchResults = await client.SearchPropertiesAsync(term, context, skip: 0, take: take);
+
+            // Map ERP DTOs to existing ViewModels
             var results = new List<CustomerPropertyViewModel>();
-
-            using var conn = new SqlConnection(connStr);
-            await conn.OpenAsync();
-
-            var sql = @"
-                SELECT TOP (@take)
-                    C.CUM_CUMMAS_ID as CustomerId,
-                    C.CUM_CUSTOMER_NUMBER as CustomerNumber,
-                    C.CUM_CUSTOMER_NAME as CustomerName,
-                    ISNULL(C.CUM_CITY, '') as City,
-                    ISNULL(C.CUM_STATE, '') as State
-                FROM CUSTOMER_MASTER C
-                WHERE C.CUM_CUSTOMER_NAME LIKE @term
-                ORDER BY C.CUM_CUSTOMER_NAME";
-
-            using var cmd = new SqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("@take", take);
-            cmd.Parameters.AddWithValue("@term", "%" + term + "%");
-
-            using var reader = await cmd.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
+            foreach (var prop in searchResults.Items)
             {
-                results.Add(new CustomerPropertyViewModel
+                // Get full property details to get city/state
+                var fullProperty = await client.GetPropertyByIdAsync(prop.Id, context);
+                if (fullProperty != null)
                 {
-                    CustomerId = reader.GetInt32(0),
-                    CustomerNumber = reader.GetString(1),
-                    CustomerName = reader.GetString(2),
-                    City = reader.GetString(3),
-                    State = reader.GetString(4)
-                });
+                    results.Add(new CustomerPropertyViewModel
+                    {
+                        CustomerId = fullProperty.CustomerId,
+                        CustomerNumber = fullProperty.CustomerNumber,
+                        CustomerName = fullProperty.CustomerName,
+                        City = fullProperty.City ?? "",
+                        State = fullProperty.State ?? ""
+                    });
+                }
             }
 
             return results;
@@ -223,58 +208,33 @@ namespace SalesMetrics.Services.Signing
 
         public async Task<IReadOnlyList<WorkOrderViewModel>> GetOrdersForPropertyAsync(int propertyId, string status = "pending")
         {
-            var officeLocation = _http.HttpContext?.Session.GetString("OfficeLocation") ?? "LAX";
-            var connStr = _config.GetConnectionString(officeLocation);
-            var results = new List<WorkOrderViewModel>();
+            // Use ERP abstraction layer
+            var context = GetErpContext();
+            var client = _erpFactory.GetClient(context);
 
-            using var conn = new SqlConnection(connStr);
-            await conn.OpenAsync();
+            // Get future orders (pending status = delivery date in future)
+            var startDate = DateTime.Today;
+            var orders = await client.GetOrdersForPropertyAsync(
+                propertyId,
+                context,
+                startDate: startDate,
+                endDate: null,
+                skip: 0,
+                take: 50);
 
-            var sql = @"
-                SELECT TOP 50
-                    SOH_NUMBER AS OrderID,
-                    CUS.CUM_CUMMAS_ID as PropertyID,
-                    CUS.CUM_CUSTOMER_NUMBER as PropertyNumber,
-                    CUS.CUM_CUSTOMER_NAME AS PropertyName,
-                    CUS.CUM_CITY AS City,
-                    CONVERT(VARCHAR, S.SOH_DELIVERY_DATE, 101) AS DeliveryDate,
-                    B.BuildingNumber + ' - ' + A.ApartmentNumber AS UnitNumber,
-                    APT.Description AS UnitType,
-                    ISNULL(AR.ARO_DATE_PAID_IN_FULL, '') AS PaidInFullDate
-                FROM SALES_HEADER S
-                    LEFT JOIN CUSTOMER_MASTER CUS ON CUS.CUM_CUMMAS_ID = S.SOH_CUMMAS_ID
-                    LEFT JOIN Apartments A ON S.SOH_APARTMENT_ID = A.Id
-                    LEFT JOIN Buildings B ON A.Building_id = B.Id
-                    LEFT JOIN ApartmentType APT ON A.ApartmentType_Id = APT.ID
-                    LEFT JOIN AR_OPEN_ITEM AR on S.SOH_NUMBER = AR.ARO_SALES_ORDER_NUMBER
-                WHERE CUS.CUM_CUMMAS_ID = @propertyId
-                  AND S.SOH_CANCELED_DATE IS NULL
-                  AND S.SOH_CANCELED_DATE IS NULL
-                  AND S.SOH_DELIVERY_DATE >= GETDATE()
-                  AND S.SOH_INVOICE_TYPE = 0
-                  AND S.SOH_WHSMAS_ID = 1
-                  AND S.SOH_TOTAL_AMOUNT > 0
-            ";
-
-            using var cmd = new SqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("@propertyId", propertyId);
-
-            using var reader = await cmd.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
+            // Map ErpOrder to WorkOrderViewModel
+            var results = orders.Items.Select(o => new WorkOrderViewModel
             {
-                results.Add(new WorkOrderViewModel
-                {
-                    OrderID = reader["OrderID"].ToString(),
-                    PropertyId = Convert.ToInt32(reader["PropertyID"]),
-                    PropertyNumber = Convert.ToInt32(reader["PropertyNumber"]),
-                    PropertyName = reader["PropertyName"].ToString(),
-                    City = reader["City"].ToString(),
-                    DeliveryDate = reader["DeliveryDate"].ToString(),
-                    UnitNumber = reader["UnitNumber"].ToString(),
-                    UnitType = reader["UnitType"].ToString(),
-                    PaidInFullDate = reader["PaidInFullDate"].ToString()
-                });
-            }
+                OrderID = o.OrderNumber,
+                PropertyId = o.CustomerId,
+                PropertyNumber = int.TryParse(o.CustomerNumber, out var pn) ? pn : 0,
+                PropertyName = o.CustomerName ?? string.Empty,
+                City = o.ShipCity ?? string.Empty,
+                DeliveryDate = o.DeliveryDate?.ToString("MM/dd/yyyy") ?? string.Empty,
+                UnitNumber = o.Building ?? string.Empty,
+                UnitType = o.ManagementCompany ?? string.Empty,
+                PaidInFullDate = string.Empty // Set in ErpOrderDetails if needed
+            }).ToList();
 
             return results;
         }
@@ -282,52 +242,29 @@ namespace SalesMetrics.Services.Signing
         // Helper method to get order by ID from ERP
         private async Task<WorkOrderViewModel?> GetOrderByIdAsync(string orderId)
         {
-            var officeLocation = _http.HttpContext?.Session.GetString("OfficeLocation") ?? "LAX";
-            var connStr = _config.GetConnectionString(officeLocation);
+            // Use ERP abstraction layer
+            var context = GetErpContext();
+            var client = _erpFactory.GetClient(context);
 
-            using var conn = new SqlConnection(connStr);
-            await conn.OpenAsync();
+            if (!int.TryParse(orderId, out var orderIdInt))
+                return null;
 
-            var sql = @"
-                SELECT TOP 1
-                    SOH_NUMBER AS OrderID,
-                    CUS.CUM_CUMMAS_ID as PropertyID,
-                    CUS.CUM_CUSTOMER_NUMBER as PropertyNumber,
-                    CUS.CUM_CUSTOMER_NAME AS PropertyName,
-                    CUS.CUM_CITY AS City,
-                    CONVERT(VARCHAR, S.SOH_DELIVERY_DATE, 101) AS DeliveryDate,
-                    B.BuildingNumber + ' - ' + A.ApartmentNumber AS UnitNumber,
-                    APT.Description AS UnitType,
-                    ISNULL(AR.ARO_DATE_PAID_IN_FULL, '') AS PaidInFullDate
-                FROM SALES_HEADER S
-                    LEFT JOIN CUSTOMER_MASTER CUS ON CUS.CUM_CUMMAS_ID = S.SOH_CUMMAS_ID
-                    LEFT JOIN Apartments A ON S.SOH_APARTMENT_ID = A.Id
-                    LEFT JOIN Buildings B ON A.Building_id = B.Id
-                    LEFT JOIN ApartmentType APT ON A.ApartmentType_Id = APT.ID
-                    LEFT JOIN AR_OPEN_ITEM AR on S.SOH_NUMBER = AR.ARO_SALES_ORDER_NUMBER
-                WHERE S.SOH_NUMBER = @orderId";
+            var order = await client.GetOrderDetailAsync(orderIdInt, context);
+            if (order == null) return null;
 
-            using var cmd = new SqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("@orderId", orderId);
-
-            using var reader = await cmd.ExecuteReaderAsync();
-            if (await reader.ReadAsync())
+            // Map ErpOrderDetails to WorkOrderViewModel
+            return new WorkOrderViewModel
             {
-                return new WorkOrderViewModel
-                {
-                    OrderID = reader["OrderID"].ToString(),
-                    PropertyId = Convert.ToInt32(reader["PropertyID"]),
-                    PropertyNumber = Convert.ToInt32(reader["PropertyNumber"]),
-                    PropertyName = reader["PropertyName"].ToString(),
-                    City = reader["City"].ToString(),
-                    DeliveryDate = reader["DeliveryDate"].ToString(),
-                    UnitNumber = reader["UnitNumber"].ToString(),
-                    UnitType = reader["UnitType"].ToString(),
-                    PaidInFullDate = reader["PaidInFullDate"].ToString()
-                };
-            }
-
-            return null;
+                OrderID = order.OrderNumber,
+                PropertyId = order.CustomerId,
+                PropertyNumber = int.TryParse(order.CustomerNumber, out var pn) ? pn : 0,
+                PropertyName = order.CustomerName ?? string.Empty,
+                City = order.ShipCity ?? string.Empty,
+                DeliveryDate = order.DeliveryDate?.ToString("MM/dd/yyyy") ?? string.Empty,
+                UnitNumber = order.Building ?? string.Empty,
+                UnitType = order.ManagementCompany ?? string.Empty,
+                PaidInFullDate = order.PaidInFullDate?.ToString("MM/dd/yyyy") ?? string.Empty
+            };
         }
     }
 }

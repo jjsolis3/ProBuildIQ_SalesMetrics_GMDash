@@ -27,9 +27,9 @@
                 </div>
                 <div class="col-md-12">
                     <label class="form-label">Message <span class="text-muted small">(Optional)</span></label>
-                    <textarea asp-for="MessageBody" id="messageBody" class="form-control" rows="3" placeholder="e.g., Envelope for [Property Name] Order#: [Order Number] Branch: [Branch]"></textarea>
+                    <textarea asp-for="MessageBody" id="messageBody" class="form-control" rows="3" placeholder="Enter your message here..."></textarea>
                     <div class="form-text">
-                        <small class="text-muted">Message will auto-populate when you select property and order</small>
+                        <small class="text-muted">Property, Order, and Branch details will be automatically appended when you make selections below</small>
                     </div>
                 </div>
 
@@ -258,15 +258,30 @@
           const orderDisplay = orderSelect.options[orderSelect.selectedIndex]?.text || '[Order Number]';
           const branch = document.querySelector('input[name="LocationCode"]')?.value || '[Branch]';
 
-          // Only auto-populate if message is empty or contains previous template
-          const currentMessage = messageBody.value.trim();
-          const isTemplateMessage = currentMessage === '' || currentMessage.includes('Envelope for');
+          // Don't update if property hasn't been selected yet
+          if (!propName || propName === 'Search by property name...') {
+            return;
+          }
 
-          if (isTemplateMessage && propName !== 'Search by property name...') {
-            messageBody.value = `Envelope for:  
-            Property: ${propName} 
-            Order#: ${orderDisplay} 
+          // Get current message, removing any previous envelope info
+          let currentMessage = messageBody.value.trim();
+
+          // Remove previous "Envelope for:" section if it exists
+          const envelopeRegex = /\n*Envelope for:\s*\n[\s\S]*?(?:Property:[\s\S]*?)?(?:Order#:[\s\S]*?)?(?:Branch:[\s\S]*)?$/;
+          currentMessage = currentMessage.replace(envelopeRegex, '').trim();
+
+          // Build the envelope info section
+          const envelopeInfo = `
+Envelope for:
+            Property: ${propName}
+            Order#: ${orderDisplay}
             Branch: ${branch}`;
+
+          // Append envelope info to user's message
+          if (currentMessage) {
+            messageBody.value = currentMessage + '\n' + envelopeInfo;
+          } else {
+            messageBody.value = envelopeInfo;
           }
         }
 

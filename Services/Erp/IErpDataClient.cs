@@ -131,6 +131,7 @@ namespace SalesMetrics.Services.Erp
         /// </summary>
         Task<ErpARAgingSummary> GetARAgingSummaryAsync(
             ErpContext context,
+            int? salesmanId = null,
             CancellationToken cancellationToken = default);
 
         /// <summary>
@@ -171,6 +172,7 @@ namespace SalesMetrics.Services.Erp
             DateTime startDate,
             DateTime endDate,
             ErpContext context,
+            int? salesmanId = null,
             CancellationToken cancellationToken = default);
 
         /// <summary>

@@ -438,12 +438,12 @@ namespace SalesMetrics.Controllers
                     }
                 }
 
-                return PartialView("_WorkOrderDetailsPartial", viewModel);
+                return PartialView("~/Views/Orders/_WorkOrderDetailsPartial.cshtml", viewModel);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to load order details for order {OrderId}", orderId);
-                return PartialView("_WorkOrderDetailsPartial", new WorkOrderDetailViewModel());
+                return PartialView("~/Views/Orders/_WorkOrderDetailsPartial.cshtml", new WorkOrderDetailViewModel());
             }
         }
     }

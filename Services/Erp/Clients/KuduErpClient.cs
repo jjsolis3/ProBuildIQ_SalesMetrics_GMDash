@@ -265,6 +265,7 @@ namespace SalesMetrics.Services.Erp.Clients
 
         public Task<ErpARAgingSummary> GetARAgingSummaryAsync(
             ErpContext context,
+            int? salesmanId = null,
             CancellationToken cancellationToken = default)
         {
             // TODO: Implement when Kudu API is available
@@ -313,6 +314,7 @@ namespace SalesMetrics.Services.Erp.Clients
             DateTime startDate,
             DateTime endDate,
             ErpContext context,
+            int? salesmanId = null,
             CancellationToken cancellationToken = default)
         {
             // TODO: Implement when Kudu API is available

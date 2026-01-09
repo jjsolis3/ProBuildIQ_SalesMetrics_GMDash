@@ -454,6 +454,7 @@ namespace SalesMetrics.Services.Erp.Clients
 
         public async Task<ErpARAgingSummary> GetARAgingSummaryAsync(
             ErpContext context,
+            int? salesmanId = null,
             CancellationToken cancellationToken = default)
         {
             var connectionString = GetConnectionString(context);
@@ -466,7 +467,8 @@ namespace SalesMetrics.Services.Erp.Clients
                 FROM AR_OPEN_ITEM AS A
                     LEFT JOIN INVOICE_HEADER as I on A.ARO_INVOICE_NUMBER = I.IHF_INVOICE_NUMBER
                 WHERE ARO_INVOICE_BALANCE_DUE > 0
-                    AND ARO_DATE_PAID_IN_FULL IS NULL;
+                    AND ARO_DATE_PAID_IN_FULL IS NULL
+                    AND (@SalesmanId IS NULL OR I.IHF_SMNMAS_ORDER = @SalesmanId);
 
                 -- 30-60 Days
                 SELECT
@@ -476,7 +478,8 @@ namespace SalesMetrics.Services.Erp.Clients
                     LEFT JOIN INVOICE_HEADER as I ON A.ARO_INVOICE_NUMBER = I.IHF_INVOICE_NUMBER
                 WHERE A.ARO_INVOICE_BALANCE_DUE > 0
                     AND A.ARO_DATE_PAID_IN_FULL IS NULL
-                    AND DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) BETWEEN 30 AND 59;
+                    AND DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) BETWEEN 30 AND 59
+                    AND (@SalesmanId IS NULL OR I.IHF_SMNMAS_ORDER = @SalesmanId);
 
                 -- 60-90 Days
                 SELECT
@@ -486,7 +489,8 @@ namespace SalesMetrics.Services.Erp.Clients
                     LEFT JOIN INVOICE_HEADER as I ON A.ARO_INVOICE_NUMBER = I.IHF_INVOICE_NUMBER
                 WHERE A.ARO_INVOICE_BALANCE_DUE > 0
                     AND A.ARO_DATE_PAID_IN_FULL IS NULL
-                    AND DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) BETWEEN 60 AND 89;
+                    AND DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) BETWEEN 60 AND 89
+                    AND (@SalesmanId IS NULL OR I.IHF_SMNMAS_ORDER = @SalesmanId);
 
                 -- 90-120 Days
                 SELECT
@@ -496,7 +500,8 @@ namespace SalesMetrics.Services.Erp.Clients
                     LEFT JOIN INVOICE_HEADER as I ON A.ARO_INVOICE_NUMBER = I.IHF_INVOICE_NUMBER
                 WHERE A.ARO_INVOICE_BALANCE_DUE > 0
                     AND A.ARO_DATE_PAID_IN_FULL IS NULL
-                    AND DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) BETWEEN 90 AND 119;
+                    AND DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) BETWEEN 90 AND 119
+                    AND (@SalesmanId IS NULL OR I.IHF_SMNMAS_ORDER = @SalesmanId);
 
                 -- Over 120 Days
                 SELECT
@@ -506,7 +511,8 @@ namespace SalesMetrics.Services.Erp.Clients
                     LEFT JOIN INVOICE_HEADER as I ON A.ARO_INVOICE_NUMBER = I.IHF_INVOICE_NUMBER
                 WHERE A.ARO_INVOICE_BALANCE_DUE > 0
                     AND A.ARO_DATE_PAID_IN_FULL IS NULL
-                    AND DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) >= 120;
+                    AND DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) >= 120
+                    AND (@SalesmanId IS NULL OR I.IHF_SMNMAS_ORDER = @SalesmanId);
 
                 -- Under 30 Days
                 SELECT
@@ -516,7 +522,8 @@ namespace SalesMetrics.Services.Erp.Clients
                     LEFT JOIN INVOICE_HEADER as I ON A.ARO_INVOICE_NUMBER = I.IHF_INVOICE_NUMBER
                 WHERE A.ARO_INVOICE_BALANCE_DUE > 0
                     AND A.ARO_DATE_PAID_IN_FULL IS NULL
-                    AND DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) < 30;
+                    AND DATEDIFF(DAY, ARO_DUE_DATE, GETDATE()) < 30
+                    AND (@SalesmanId IS NULL OR I.IHF_SMNMAS_ORDER = @SalesmanId);
 
                 -- Top Delinquent Customers
                 SELECT TOP 10
@@ -525,9 +532,11 @@ namespace SalesMetrics.Services.Erp.Clients
                     C.CUM_CUMMAS_ID as CustomerId,
                     SUM(A.ARO_INVOICE_BALANCE_DUE) as OutstandingAmount
                 FROM AR_OPEN_ITEM A
+                    LEFT JOIN INVOICE_HEADER I ON A.ARO_INVOICE_NUMBER = I.IHF_INVOICE_NUMBER
                     LEFT JOIN CUSTOMER_MASTER C ON A.ARO_CUSTOMER_NUMBER = C.CUM_CUSTOMER_NUMBER
                 WHERE A.ARO_INVOICE_BALANCE_DUE > 0
                     AND A.ARO_DATE_PAID_IN_FULL IS NULL
+                    AND (@SalesmanId IS NULL OR I.IHF_SMNMAS_ORDER = @SalesmanId)
                 GROUP BY C.CUM_CUSTOMER_NAME, C.CUM_CUSTOMER_NUMBER, C.CUM_CUMMAS_ID
                 ORDER BY OutstandingAmount DESC";
 
@@ -535,6 +544,7 @@ namespace SalesMetrics.Services.Erp.Clients
             await connection.OpenAsync(cancellationToken);
 
             await using var command = new SqlCommand(sql, connection);
+            command.Parameters.AddWithValue("@SalesmanId", (object?)salesmanId ?? DBNull.Value);
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
             var summary = new ErpARAgingSummary();
@@ -791,6 +801,7 @@ namespace SalesMetrics.Services.Erp.Clients
             DateTime startDate,
             DateTime endDate,
             ErpContext context,
+            int? salesmanId = null,
             CancellationToken cancellationToken = default)
         {
             var connectionString = GetConnectionString(context);
@@ -810,6 +821,7 @@ namespace SalesMetrics.Services.Erp.Clients
                 WHERE SH.SOH_DELIVERY_DATE BETWEEN @StartDate AND @EndDate
                     AND SH.SOH_CURRENT_STATUS <> 4
                     AND SH.SOH_CANCELED_DATE IS NULL
+                    AND (@SalesmanId IS NULL OR SH.SOH_SMNMAS_ID = @SalesmanId)
                 GROUP BY
                     CAST(SH.SOH_DELIVERY_DATE AS DATE),
                     DATENAME(WEEKDAY, SH.SOH_DELIVERY_DATE),
@@ -822,6 +834,7 @@ namespace SalesMetrics.Services.Erp.Clients
             await using var command = new SqlCommand(sql, connection);
             command.Parameters.AddWithValue("@StartDate", startDate);
             command.Parameters.AddWithValue("@EndDate", endDate);
+            command.Parameters.AddWithValue("@SalesmanId", (object?)salesmanId ?? DBNull.Value);
 
             var results = new List<ErpDailyOrderCount>();
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);

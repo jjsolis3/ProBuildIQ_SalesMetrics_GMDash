@@ -125,7 +125,11 @@ namespace SalesMetrics.Controllers
             DateTime startOfWeek = DateTime.Today.AddDays(-daysToSunday).Date.AddDays(weekOffset * 7);
             DateTime endOfWeek = startOfWeek.AddDays(6);
 
-            var dailyOrderCounts = await client.GetDailyOrderCountsAsync(startOfWeek, endOfWeek, context);
+            var dailyOrderCounts = await client.GetDailyOrderCountsAsync(
+                startOfWeek,
+                endOfWeek,
+                context,
+                effectiveSalesmanId > 0 ? effectiveSalesmanId : null);
 
             // Map ErpDailyOrderCount to DailyOrderCount for backward compatibility
             var weeklyOrders = dailyOrderCounts.Select(d => new DailyOrderCount
@@ -136,7 +140,9 @@ namespace SalesMetrics.Controllers
             }).ToList();
 
             // Get AR aging summary
-            var arSummary = await client.GetARAgingSummaryAsync(context);
+            var arSummary = await client.GetARAgingSummaryAsync(
+                context,
+                effectiveSalesmanId > 0 ? effectiveSalesmanId : null);
 
             // Map ErpARAgingSummary to TransactionSummary for backward compatibility
             var transactionSummary = new TransactionSummary
@@ -402,7 +408,11 @@ namespace SalesMetrics.Controllers
             DateTime startOfWeek = DateTime.Today.AddDays(-daysToSunday).Date.AddDays(weekOffset * 7);
             DateTime endOfWeek = startOfWeek.AddDays(6);
 
-            var dailyOrderCounts = await client.GetDailyOrderCountsAsync(startOfWeek, endOfWeek, context);
+            var dailyOrderCounts = await client.GetDailyOrderCountsAsync(
+                startOfWeek,
+                endOfWeek,
+                context,
+                effectiveSalesmanId > 0 ? effectiveSalesmanId : null);
 
             // Map to DailyOrderCount for backward compatibility
             var orders = dailyOrderCounts.Select(d => new DailyOrderCount

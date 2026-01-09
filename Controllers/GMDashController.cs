@@ -197,7 +197,7 @@ namespace SalesMetrics.Controllers
             var client = _erpFactory.GetClient(context);
 
             // Get AR aging summary from ERP client
-            var arSummary = await client.GetARAgingSummaryAsync(context);
+            var arSummary = await client.GetARAgingSummaryAsync(context, null);
 
             // Map to GMARDataViewModel
             var result = new GMARDataViewModel

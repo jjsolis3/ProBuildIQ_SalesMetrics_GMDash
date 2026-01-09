@@ -79,7 +79,7 @@ namespace SalesMetrics.Services.Erp
             throw new NotImplementedException("GetPropertyARBalanceAsync not yet implemented in HttpErpDataClient");
         }
 
-        public Task<ErpARAgingSummary> GetARAgingSummaryAsync(ErpContext context, CancellationToken cancellationToken = default)
+        public Task<ErpARAgingSummary> GetARAgingSummaryAsync(ErpContext context, int? salesmanId = null, CancellationToken cancellationToken = default)
         {
             throw new NotImplementedException("GetARAgingSummaryAsync not yet implemented in HttpErpDataClient");
         }
@@ -99,7 +99,7 @@ namespace SalesMetrics.Services.Erp
             throw new NotImplementedException("GetSalesMetricsAsync not yet implemented in HttpErpDataClient");
         }
 
-        public Task<List<ErpDailyOrderCount>> GetDailyOrderCountsAsync(DateTime startDate, DateTime endDate, ErpContext context, CancellationToken cancellationToken = default)
+        public Task<List<ErpDailyOrderCount>> GetDailyOrderCountsAsync(DateTime startDate, DateTime endDate, ErpContext context, int? salesmanId = null, CancellationToken cancellationToken = default)
         {
             throw new NotImplementedException("GetDailyOrderCountsAsync not yet implemented in HttpErpDataClient");
         }

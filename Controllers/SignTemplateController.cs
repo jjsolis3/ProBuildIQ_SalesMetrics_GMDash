@@ -47,7 +47,8 @@ public class SignTemplatesController : Controller
         // Upload base PDF for stamping
         if (pdfFile is not null && pdfFile.Length > 0)
         {
-            var dir = Path.Combine(_env.ContentRootPath, "Content", "Templates");
+            // Use wwwroot for persistent storage (works with single-file deployment)
+            var dir = Path.Combine(_env.WebRootPath, "Files", "Templates");
             Directory.CreateDirectory(dir);
 
             // Generate unique filename: templateKey_timestamp.pdf
@@ -108,7 +109,8 @@ public class SignTemplatesController : Controller
 
         if (pdfFile is not null && pdfFile.Length > 0)
         {
-            var dir = Path.Combine(_env.ContentRootPath, "Content", "Templates");
+            // Use wwwroot for persistent storage (works with single-file deployment)
+            var dir = Path.Combine(_env.WebRootPath, "Files", "Templates");
             Directory.CreateDirectory(dir);
 
             // Generate unique filename: templateKey_timestamp.pdf
@@ -173,7 +175,7 @@ public class SignTemplatesController : Controller
         // Delete associated PDF file if exists
         if (!string.IsNullOrWhiteSpace(template.PdfFilePath))
         {
-            var pdfPath = Path.Combine(_env.ContentRootPath, "Content", "Templates", template.PdfFilePath);
+            var pdfPath = Path.Combine(_env.WebRootPath, "Files", "Templates", template.PdfFilePath);
             if (System.IO.File.Exists(pdfPath))
             {
                 try
@@ -219,7 +221,7 @@ public class SignTemplatesController : Controller
             return NotFound("PDF file path is empty");
         }
 
-        var filePath = Path.Combine(_env.ContentRootPath, "Content", "Templates", template.PdfFilePath);
+        var filePath = Path.Combine(_env.WebRootPath, "Files", "Templates", template.PdfFilePath);
         Console.WriteLine($"[GetTemplatePdf] Full file path: {filePath}");
         Console.WriteLine($"[GetTemplatePdf] File exists: {System.IO.File.Exists(filePath)}");
 
@@ -227,7 +229,7 @@ public class SignTemplatesController : Controller
         {
             Console.WriteLine($"[GetTemplatePdf] File not found at path: {filePath}");
             // Try to list files in the directory to help diagnose
-            var directory = Path.Combine(_env.ContentRootPath, "Content", "Templates");
+            var directory = Path.Combine(_env.WebRootPath, "Files", "Templates");
             if (Directory.Exists(directory))
             {
                 var files = Directory.GetFiles(directory);
@@ -249,20 +251,43 @@ public class SignTemplatesController : Controller
 
     private List<string> GetRazorViewPaths()
     {
-        // enumerate /Views/SignTemplates/*.cshtml
-        var root = Path.Combine(_env.ContentRootPath, "Views", "SignTemplates");
-        if (!Directory.Exists(root)) return new();
+        // IMPORTANT: In single-file deployment, Views are compiled into the assembly
+        // and not accessible as physical files. We return a hardcoded list of known templates.
+        // When adding new templates, add them to this list.
 
-        // Exclude UI pages (Create, Edit, Index, Delete, etc.) - only include document templates
-        var excludedPrefixes = new[] { "Create", "Edit", "Index", "Delete", "Details" };
+        var templates = new List<string>
+        {
+            "/Views/SignTemplates/OccupiedRelease.cshtml",
+            "/Views/SignTemplates/TenantConsent.cshtml"
+        };
 
-        return Directory.GetFiles(root, "*.cshtml")
-            .Select(p => Path.GetFileName(p))
-            .Where(fileName => !excludedPrefixes.Any(prefix =>
-                fileName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
-            .Where(fileName => !fileName.EndsWith(".backup", StringComparison.OrdinalIgnoreCase))
-            .Select(fileName => "/Views/SignTemplates/" + fileName)
-            .OrderBy(x => x)
-            .ToList();
+        // In development, optionally scan filesystem for any additional templates
+        if (_env.IsDevelopment())
+        {
+            try
+            {
+                var root = Path.Combine(_env.ContentRootPath, "Views", "SignTemplates");
+                if (Directory.Exists(root))
+                {
+                    var excludedPrefixes = new[] { "Create", "Edit", "Index", "Delete", "Details" };
+                    var discoveredTemplates = Directory.GetFiles(root, "*.cshtml")
+                        .Select(p => Path.GetFileName(p))
+                        .Where(fileName => !excludedPrefixes.Any(prefix =>
+                            fileName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+                        .Where(fileName => !fileName.EndsWith(".backup", StringComparison.OrdinalIgnoreCase))
+                        .Select(fileName => "/Views/SignTemplates/" + fileName)
+                        .ToList();
+
+                    // Add any newly discovered templates not in hardcoded list
+                    templates = templates.Union(discoveredTemplates).OrderBy(x => x).ToList();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[GetRazorViewPaths] Error scanning filesystem: {ex.Message}");
+            }
+        }
+
+        return templates.OrderBy(x => x).ToList();
     }
 }

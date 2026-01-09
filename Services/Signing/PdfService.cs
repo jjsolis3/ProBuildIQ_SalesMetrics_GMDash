@@ -1,4 +1,5 @@
 // Services/Signing/PdfService.cs
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using PdfSharpCore.Drawing;
@@ -14,10 +15,11 @@ public sealed class PdfService : IPdfService
 {
     private readonly SalesMetricsDbContext _db;
     private readonly IErpMergeService _merge;
+    private readonly IWebHostEnvironment _env;
 
-    public PdfService(SalesMetricsDbContext db, IErpMergeService merge)
+    public PdfService(SalesMetricsDbContext db, IErpMergeService merge, IWebHostEnvironment env)
     {
-        _db = db; _merge = merge;
+        _db = db; _merge = merge; _env = env;
     }
 
     public async Task<(byte[] bytes, string storagePath, byte[] sha256)> RenderAndSealAsync(long envelopeId)
@@ -59,12 +61,12 @@ public sealed class PdfService : IPdfService
         if (!string.IsNullOrWhiteSpace(template.PdfFilePath))
         {
             // Use custom uploaded PDF
-            templatePath = Path.Combine("Content", "Templates", template.PdfFilePath);
+            templatePath = Path.Combine(_env.WebRootPath, "Files", "Templates", template.PdfFilePath);
         }
         else
         {
             // Fallback to default for backward compatibility
-            templatePath = Path.Combine("Content", "Templates", "SF_OccupiedReleaseForm_1.4.pdf");
+            templatePath = Path.Combine(_env.WebRootPath, "Files", "Templates", "SF_OccupiedReleaseForm_1.4.pdf");
         }
 
         if (!File.Exists(templatePath))
@@ -359,11 +361,11 @@ public sealed class PdfService : IPdfService
         string templatePath;
         if (!string.IsNullOrWhiteSpace(template.PdfFilePath))
         {
-            templatePath = Path.Combine("Content", "Templates", template.PdfFilePath);
+            templatePath = Path.Combine(_env.WebRootPath, "Files", "Templates", template.PdfFilePath);
         }
         else
         {
-            templatePath = Path.Combine("Content", "Templates", "SF_OccupiedReleaseForm_1.4.pdf");
+            templatePath = Path.Combine(_env.WebRootPath, "Files", "Templates", "SF_OccupiedReleaseForm_1.4.pdf");
         }
 
         if (!File.Exists(templatePath))

@@ -526,7 +526,7 @@ namespace SalesMetrics.Services.Erp.Clients
                     AND (@SalesmanId IS NULL OR I.IHF_SMNMAS_ORDER = @SalesmanId);
 
                 -- Top Delinquent Customers
-                SELECT TOP 10
+                SELECT TOP 5
                     C.CUM_CUSTOMER_NAME as CustomerName,
                     C.CUM_CUSTOMER_NUMBER as CustomerNumber,
                     C.CUM_CUMMAS_ID as CustomerId,

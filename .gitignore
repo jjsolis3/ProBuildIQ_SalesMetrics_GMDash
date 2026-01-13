@@ -365,3 +365,6 @@ FodyWeavers.xsd
 /Content/Templates/SF_Nevada_OccupiedReleaseForm 1.0.pdf
 /Content/Templates
 /wwwroot/Files/Sign/2026/01
+
+# Rotativa PDF tools (large executables - download separately)
+/Tools/Rotativa/

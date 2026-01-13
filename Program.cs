@@ -188,6 +188,9 @@ app.MapControllerRoute(
 app.MapHub<NotificationHub>("/notificationHub");
 
 // ✅ Initialize Rotativa for PDF rendering (moved to Tools folder to avoid wwwroot bloat)
-Rotativa.AspNetCore.RotativaConfiguration.Setup(app.Environment.ContentRootPath, "Tools/Rotativa");
+Rotativa.AspNetCore.RotativaConfiguration.Setup(
+    app.Environment.ContentRootPath,  // Root: C:\ProBuildIQ\ProBuildIQ SalesMetrics
+    "Tools/Rotativa"                   // Relative path from root
+);
 
 app.Run();

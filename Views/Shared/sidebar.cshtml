@@ -5,19 +5,28 @@
     var roleId = Context.Session.GetString("RoleId");
     var usersId = int.Parse(Context.User.FindFirst("Users_ID")?.Value ?? "0");
 
-    // Check feature permissions
+    // Check feature permissions for all sidebar sections
+    var hasGMDashboardAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "GMDashboard") : false;
+    var hasGMRecapAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "GMRecap") : false;
     var hasDashboardAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Dashboard") : false;
-    var hasReportsAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Reports") : false;
     var hasTasksAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Tasks") : false;
+    var hasSalesPulseAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "SalesPulse") : false;
+    var hasJournalAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Journal") : false;
     var hasOrdersAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Orders") : false;
+    var hasManagementAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Management") : false;
+    var hasPropertiesAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Properties") : false;
     var hasYardiAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Yardi") : false;
-    var hasSigningAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Signing") : false;
-    var hasUsersAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Users") : false;
+    var hasReportsAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Reports") : false;
     var hasAnnouncementsAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Announcements") : false;
+    var hasUsersAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Users") : false;
     var hasSettingsAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Settings") : false;
+    var hasYardiUploadAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "YardiUpload") : false;
+    var hasErrorLogsAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "ErrorLogs") : false;
+    var hasSigningAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Signing") : false;
 
-    // Keep GM-specific features as role-based for now (can be converted to permissions later if needed)
+    // Keep role-based flag for conditional display within sections
     var isGMOrAdmin = roleId == "1" || roleId == "4";
+    var isSalesManagerOrAbove = roleId == "1" || roleId == "3" || roleId == "4";
 }
 
 <style>
@@ -73,28 +82,34 @@
         <div id="sidebar-menu">
             <!-- Left Menu Start -->
             <ul class="left-menu list-unstyled" id="side-menu">
-                @if(isGMOrAdmin)
+                @if(hasGMDashboardAccess || hasGMRecapAccess)
                 {
                     <!-- GM DASHBOARD and RECAP ENTRY/LIST-->
                     <li class="menu-title">GENERAL MGR</li>
-                    <li class="ms-3">
-                        <a href="/GMDash/Index">
-                            <i class="fas fa-chart-bar"></i>
-                            <span>GM Dashboard</span>
-                        </a>
-                    </li>
-                    <li class="ms-3">
-                        <a href="/GMRecap/RecapEntry">
-                            <i class="fas fa-inbox"></i>
-                            <span>Enter Weekly Recap</span>
-                        </a>
-                    </li>
-                    <li class="ms-3">
-                        <a href="/GMRecap/RecapList">
-                            <i class="fas fa-list-ol"></i>
-                            <span>View Weekly Recap</span>
-                        </a>
-                    </li>
+                    @if (hasGMDashboardAccess)
+                    {
+                        <li class="ms-3">
+                            <a href="/GMDash/Index">
+                                <i class="fas fa-chart-bar"></i>
+                                <span>GM Dashboard</span>
+                            </a>
+                        </li>
+                    }
+                    @if (hasGMRecapAccess)
+                    {
+                        <li class="ms-3">
+                            <a href="/GMRecap/RecapEntry">
+                                <i class="fas fa-inbox"></i>
+                                <span>Enter Weekly Recap</span>
+                            </a>
+                        </li>
+                        <li class="ms-3">
+                            <a href="/GMRecap/RecapList">
+                                <i class="fas fa-list-ol"></i>
+                                <span>View Weekly Recap</span>
+                            </a>
+                        </li>
+                    }
                 }
 
                 <!-- SALES DASHBOARD -->
@@ -136,7 +151,7 @@
                     </li>
                 }
 
-                @if (isGMOrAdmin || roleId == "3")
+                @if (hasSalesPulseAccess)
                 {
                     <!-- SALESPERSON METRICS -->
                     <li class="menu-title">SALES REPS</li>
@@ -149,13 +164,16 @@
                 }
 
                 <!-- SALES JOURNAL -->
-                <li class="menu-title">JOURNAL</li>
-                <li class="ms-3">
-                    <a href="/Journal/Index">
-                        <i class="fa fa-book"></i>
-                        <span>My Journal</span>
-                    </a>
-                </li>
+                @if (hasJournalAccess)
+                {
+                    <li class="menu-title">JOURNAL</li>
+                    <li class="ms-3">
+                        <a href="/Journal/Index">
+                            <i class="fa fa-book"></i>
+                            <span>My Journal</span>
+                        </a>
+                    </li>
+                }
 
                 <!-- JOB SCHEDULE / ORDERS -->
                 @if (hasOrdersAccess)
@@ -170,22 +188,28 @@
                 }
 
                 <!-- MANAGEMENT -->
-                <li class="menu-title">MANAGEMENT</li>
-                <li class="ms-3">
-                    <a href="/Management/Management">
-                        <i class="fa fa-building"></i>
-                        <span>Management Co.</span>
-                    </a>
-                </li>
+                @if (hasManagementAccess)
+                {
+                    <li class="menu-title">MANAGEMENT</li>
+                    <li class="ms-3">
+                        <a href="/Management/Management">
+                            <i class="fa fa-building"></i>
+                            <span>Management Co.</span>
+                        </a>
+                    </li>
+                }
 
                 <!-- PROPERTIES -->
-                <li class="menu-title">PROPERTIES</li>
-                <li class="ms-3">
-                    <a href="/Properties/Properties">
-                        <i class="fa fa-building"></i>
-                        <span>Properties</span>
-                    </a>
-                </li>
+                @if (hasPropertiesAccess)
+                {
+                    <li class="menu-title">PROPERTIES</li>
+                    <li class="ms-3">
+                        <a href="/Properties/Properties">
+                            <i class="fa fa-building"></i>
+                            <span>Properties</span>
+                        </a>
+                    </li>
+                }
 
                 <!-- PROSPECTING (YARDI) -->
                 @if (hasYardiAccess)
@@ -276,18 +300,18 @@
                     }
                 }
 
-                @if (roleId == "1")
+                @if (hasYardiUploadAccess)
                 {
-                    @if (hasUsersAccess || hasSettingsAccess)
-                    {
-                        <li class="ms-3">
-                            <a href="/Yardi/Upload">
-                                <i class="fa fa-upload"></i>
-                                <span>Yardi Upload</span>
-                            </a>
-                        </li>
-                    }
+                    <li class="ms-3">
+                        <a href="/Yardi/Upload">
+                            <i class="fa fa-upload"></i>
+                            <span>Yardi Upload</span>
+                        </a>
+                    </li>
+                }
 
+                @if (hasErrorLogsAccess)
+                {
                     <!-- Web App Errors -->
                     <li class="menu-title">WEB APP ERRORS</li>
                     <li class="ms-3">

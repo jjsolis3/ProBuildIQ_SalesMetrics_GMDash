@@ -39,9 +39,20 @@ By moving it to `/Tools/`, we:
 
 The Rotativa path is configured in `Program.cs`:
 ```csharp
-var rotativaPath = Path.Combine(app.Environment.ContentRootPath, "Tools", "Rotativa");
-Rotativa.AspNetCore.RotativaConfiguration.Setup(rotativaPath);
+Rotativa.AspNetCore.RotativaConfiguration.Setup(app.Environment.ContentRootPath, "Tools/Rotativa");
 ```
+
+### Deployment
+
+The Tools folder is automatically copied during publish thanks to the configuration in `SalesMetrics.csproj`:
+```xml
+<Content Include="Tools\Rotativa\**\*.*">
+  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+  <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+</Content>
+```
+
+When you publish the application, the `Tools/Rotativa` folder and all its contents will be included in the publish output.
 
 ---
 

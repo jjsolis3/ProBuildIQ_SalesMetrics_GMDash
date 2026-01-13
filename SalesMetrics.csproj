@@ -101,6 +101,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Folder Include="Tools\Rotativa\" />
     <Folder Include="wwwroot\Files\Templates\" />
     <Folder Include="wwwroot\assets\images\icons\" />
     <Folder Include="wwwroot\assets\libs\block-ui\node_modules\jquery\dist\" />

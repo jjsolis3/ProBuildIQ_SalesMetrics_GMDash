@@ -367,4 +367,4 @@ FodyWeavers.xsd
 /wwwroot/Files/Sign/2026/01
 
 # Rotativa PDF tools (large executables - download separately)
-/Tools/Rotativa/
+#/Tools/Rotativa/

@@ -415,11 +415,71 @@ For questions or issues with this migration:
 
 ---
 
+## Report Permissions Consolidation
+
+**Additional Migration:** `ConsolidateReportPermissions.sql`
+
+The initial migration included individual report permissions (Margin Commission Report, Sales Metrics Report), but this was simplified to a two-tier system:
+
+### Two-Tier Report Access:
+
+1. **Reports** (Base Permission)
+   - Access to Reports section in sidebar
+   - Can view and run existing reports
+   - Can execute pre-built report queries
+   - **Granted to:** Any user who needs to run reports
+
+2. **ReportsCreate** (Advanced Permission)
+   - Includes all base Reports permissions PLUS
+   - Can create new report definitions
+   - Can write custom SQL queries for reports
+   - Can modify report templates
+   - **Granted to:** Admin and General Manager only (by default)
+
+### Benefits of This Approach:
+
+✅ **Simple for most users** - Just grant "Reports" permission to run reports
+✅ **No per-report permissions needed** - Don't need a permission for every report you create
+✅ **Controlled report creation** - Only trusted users can create custom queries
+✅ **Scalable** - Add 100 new reports without touching permissions
+✅ **Maintainable** - Clear separation between viewing and creating
+
+### Implementation in Code:
+
+```csharp
+// In Reports Controller/View
+var hasReportsAccess = await _permissionService.HasFeatureAccessAsync(userId, "Reports");
+var canCreateReports = await _permissionService.HasFeatureAccessAsync(userId, "ReportsCreate");
+
+// Show Reports section if user has base access
+if (!hasReportsAccess)
+    return Forbid();
+
+// Show "Create New Report" button only if user can create
+if (canCreateReports)
+{
+    // Show create report UI
+}
+```
+
+### Migration Instructions:
+
+Run migrations in this order:
+1. **First:** `UpdateFeaturePermissionsToMatchSidebar.sql` - Main feature reorganization
+2. **Second:** `ConsolidateReportPermissions.sql` - Report permissions consolidation
+
+The second migration will:
+- Consolidate individual report permissions into single "Reports" permission
+- Create new "ReportsCreate" permission
+- Migrate existing users automatically
+- Disable deprecated report permissions
+
 ## Summary
 
 This update provides:
 ✅ Feature permissions matching actual sidebar structure
 ✅ Granular control over individual features
+✅ Two-tier report access (View/Run vs Create)
 ✅ Improved user experience with Form Requests in User Menu
 ✅ Better organization by feature categories
 ✅ Easier permission management for administrators

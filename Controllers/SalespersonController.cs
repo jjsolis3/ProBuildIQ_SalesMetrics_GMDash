@@ -64,23 +64,23 @@ namespace SalesMetrics.Controllers
             var list = new List<SelectListItem>();
 
             string sqlQuery = @"
-                SELECT 
-                    DISTINCT SalesmanID, 
-                    FirstName + ' ' + LastName AS FullName 
-                    FROM Users 
+                SELECT
+                    DISTINCT SalesmanID,
+                    FirstName + ' ' + LastName AS FullName
+                    FROM Users
                     WHERE RoleID = 2";
 
-            if(roleId == 1 || roleId == 4)
+            if(roleId == 1 || roleId == 3 || roleId == 4)
                 sqlQuery += " AND Location = @locationId";
-            
+
             sqlQuery += @" ORDER BY FullName";
 
             using var conn = new SqlConnection(_config.GetConnectionString("SalesMetrics"));
             conn.Open();
-            
+
             var cmd = new SqlCommand(sqlQuery, conn);
 
-            if (roleId == 1 || roleId == 4)
+            if (roleId == 1 || roleId == 3 || roleId == 4)
                 cmd.Parameters.AddWithValue("@locationId", locationId);
 
             using var reader = cmd.ExecuteReader();

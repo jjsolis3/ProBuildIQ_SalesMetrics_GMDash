@@ -98,6 +98,28 @@ This update reorganizes the Feature Permissions system to align with the actual 
 
 ---
 
+## Important Notes
+
+### Location Switcher Visibility
+
+**Issue:** After the permission system update, the location switcher (branch selector) is now controlled by feature permissions instead of roles.
+
+**Requirements:** Users need either:
+- **Settings** permission, OR
+- **Users** permission (Access Controls)
+
+**Impact:** General Managers and other users with multiple location assignments may lose access to the location switcher if they don't have one of these permissions.
+
+**Solution:**
+- **For NEW installations:** The main migration now grants Settings to both Admin and General Manager roles
+- **For EXISTING installations (already ran the migration):** Run the hotfix migration: `GrantSettingsToGeneralManagers.sql`
+
+**Verification:** After running migrations, General Managers with multiple location assignments should see:
+1. Orange location button at top of screen (e.g., "Los Angeles Branch")
+2. Office Location section in the user profile menu dropdown
+
+---
+
 ## How to Apply the Migration
 
 ### Option 1: SQL Server Management Studio (SSMS)
@@ -464,15 +486,25 @@ if (canCreateReports)
 
 ### Migration Instructions:
 
+#### For NEW Installations:
 Run migrations in this order:
 1. **First:** `UpdateFeaturePermissionsToMatchSidebar.sql` - Main feature reorganization
 2. **Second:** `ConsolidateReportPermissions.sql` - Report permissions consolidation
 
-The second migration will:
+#### For EXISTING Installations (already ran UpdateFeaturePermissionsToMatchSidebar.sql):
+If General Managers lost access to the location switcher, run this hotfix:
+3. **Hotfix:** `GrantSettingsToGeneralManagers.sql` - Restores location switcher for GMs
+
+The ConsolidateReportPermissions migration will:
 - Consolidate individual report permissions into single "Reports" permission
 - Create new "ReportsCreate" permission
 - Migrate existing users automatically
 - Disable deprecated report permissions
+
+The GrantSettingsToGeneralManagers hotfix will:
+- Grant Settings permission to all General Managers
+- Restore location switcher visibility in topbar and user menu
+- Enable GMs to access System Settings
 
 ## Summary
 

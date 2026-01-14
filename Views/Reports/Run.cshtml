@@ -495,6 +495,9 @@ else if (Model.ShowResults)
                         extend: 'excelHtml5',
                         text: '<i class="bi bi-file-earmark-excel"></i> Excel',
                         className: 'btn btn-outline-success rounded-pill shadow-sm me-2',
+                        exportOptions: {
+                            columns: ':visible'
+                        },
                         title: '@(Model.Definition?.Name ?? "Report") - Results',
                         filename: '@(Model.Definition?.Name ?? "Report")_@DateTime.Now.ToString("yyyyMMdd")'
                     },
@@ -502,6 +505,9 @@ else if (Model.ShowResults)
                         extend: 'pdfHtml5',
                         text: '<i class="bi bi-file-earmark-pdf"></i> PDF',
                         className: 'btn btn-outline-danger rounded-pill shadow-sm',
+                        exportOptions: {
+                            columns: ':visible'
+                        },
                         title: '@(Model.Definition?.Name ?? "Report") - Results',
                         filename: '@(Model.Definition?.Name ?? "Report")_@DateTime.Now.ToString("yyyyMMdd")',
                         orientation: 'landscape',

@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using SalesMetrics.Domain.Signing;
 using SalesMetrics.Infrastructure.EF.Configurations.Signing;
 using SalesMetrics.Models.EFCore;
+using SalesMetrics.Data.Entities.QueryBuilder;
 
 namespace SalesMetrics.Data;
 
@@ -44,6 +45,20 @@ public partial class SalesMetricsDbContext : DbContext
     public DbSet<SecuritySettingsEntity> SecuritySettings { get; set; } = default!;
     public DbSet<FeatureEntity> Features { get; set; } = default!;
     public DbSet<UserFeaturePermissionEntity> UserFeaturePermissions { get; set; } = default!;
+
+    // Query Builder
+    public DbSet<ReportDefinitionEntity> ReportDefinitions { get; set; } = default!;
+    public DbSet<ReportColumnDefinitionEntity> ReportColumnDefinitions { get; set; } = default!;
+    public DbSet<QueryTableReferenceEntity> QueryTableReferences { get; set; } = default!;
+    public DbSet<QueryFilterEntity> QueryFilters { get; set; } = default!;
+    public DbSet<AllowedTableEntity> AllowedTables { get; set; } = default!;
+    public DbSet<AllowedColumnEntity> AllowedColumns { get; set; } = default!;
+    public DbSet<TableRelationshipEntity> TableRelationships { get; set; } = default!;
+    public DbSet<ReportExecutionLogEntity> ReportExecutionLogs { get; set; } = default!;
+    public DbSet<ReportTemplateEntity> ReportTemplates { get; set; } = default!;
+    public DbSet<ReportSharingEntity> ReportSharings { get; set; } = default!;
+    public DbSet<UserFavoriteReportEntity> UserFavoriteReports { get; set; } = default!;
+    public DbSet<DataSourceConfigurationEntity> DataSourceConfigurations { get; set; } = default!;
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {

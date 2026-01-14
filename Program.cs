@@ -44,6 +44,30 @@ builder.Services.AddSingleton<IReportAuthorizationService, ReportAuthorizationSe
 builder.Services.AddSingleton<IReportExportService, ReportExportService>();
 
 // ============================================================
+// QUERY BUILDER - Multi-Source Data Adapters
+// ============================================================
+
+// Register all data source adapters
+builder.Services.AddScoped<SalesMetrics.Services.Reports.QueryBuilder.DataSources.SqlDataSourceAdapter>();
+builder.Services.AddScoped<SalesMetrics.Services.Reports.QueryBuilder.DataSources.ApiDataSourceAdapter>();
+builder.Services.AddScoped<SalesMetrics.Services.Reports.QueryBuilder.DataSources.KuduDataSourceAdapter>();
+
+// Register adapters as IDataSourceAdapter for auto-discovery by registry
+builder.Services.AddScoped<SalesMetrics.Services.Reports.QueryBuilder.DataSources.IDataSourceAdapter, SalesMetrics.Services.Reports.QueryBuilder.DataSources.SqlDataSourceAdapter>();
+builder.Services.AddScoped<SalesMetrics.Services.Reports.QueryBuilder.DataSources.IDataSourceAdapter, SalesMetrics.Services.Reports.QueryBuilder.DataSources.ApiDataSourceAdapter>();
+builder.Services.AddScoped<SalesMetrics.Services.Reports.QueryBuilder.DataSources.IDataSourceAdapter, SalesMetrics.Services.Reports.QueryBuilder.DataSources.KuduDataSourceAdapter>();
+
+// Register data source registry (singleton - manages all adapters)
+builder.Services.AddSingleton<SalesMetrics.Services.Reports.QueryBuilder.DataSources.IDataSourceRegistry, SalesMetrics.Services.Reports.QueryBuilder.DataSources.DataSourceRegistry>();
+
+// Add HttpClient for API adapter (for future REST/GraphQL API integration)
+builder.Services.AddHttpClient("ErpApi", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(60);
+    // BaseUrl will be configured in appsettings.json when API is ready
+});
+
+// ============================================================
 // ERP ABSTRACTION LAYER - Multi-Provider Support
 // ============================================================
 

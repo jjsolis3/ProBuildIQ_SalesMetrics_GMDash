@@ -337,6 +337,27 @@ WHERE
     );
 PRINT 'YardiUpload granted to Admin';
 
+-- Grant Settings to Admin and General Manager (required for location switcher)
+INSERT INTO [dbo].[UserFeaturePermissions] ([Users_ID], [FeatureID], [HasAccess], [GrantedDate], [GrantedByUsers_ID])
+SELECT
+    u.Users_ID,
+    f.FeatureID,
+    1 AS HasAccess,
+    GETDATE() AS GrantedDate,
+    NULL AS GrantedByUsers_ID
+FROM
+    [dbo].[Users] u
+    CROSS JOIN [dbo].[Features] f
+WHERE
+    u.IsActive = 1
+    AND u.RoleID IN (@AdminRoleId, @GeneralManagerRoleId)
+    AND f.FeatureCode = 'Settings'
+    AND NOT EXISTS (
+        SELECT 1 FROM [dbo].[UserFeaturePermissions] ufp
+        WHERE ufp.Users_ID = u.Users_ID AND ufp.FeatureID = f.FeatureID
+    );
+PRINT 'Settings granted to Admin and GM (required for location switcher)';
+
 GO
 
 -- =============================================

@@ -1,3 +1,5 @@
+using SalesMetrics.Models.Reports.QueryBuilder;
+
 namespace SalesMetrics.Services.Reports.QueryBuilder.DataSources
 {
     /// <summary>

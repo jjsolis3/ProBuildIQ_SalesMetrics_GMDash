@@ -47,7 +47,7 @@ namespace SalesMetrics.Controllers
             // Get all reports the user can access
             var reports = await _context.ReportDefinitions
                 .Where(r => r.IsActive)
-                .OrderByDescending(r => r.LastModifiedDate)
+                .OrderByDescending(r => r.ModifiedDate ?? r.CreatedDate)
                 .ToListAsync();
 
             // TODO: Filter reports based on user's role and location
@@ -57,13 +57,13 @@ namespace SalesMetrics.Controllers
             {
                 Reports = reports.Select(r => new ReportSummaryDto
                 {
-                    ReportId = r.ReportId,
+                    ReportId = r.ReportDefinitionId,
                     Name = r.Name ?? "Untitled Report",
                     Description = r.Description ?? "",
                     DataSourceType = r.DataSourceType ?? "SQL",
-                    CreatedBy = r.CreatedByUserName ?? "Unknown",
+                    CreatedBy = "User " + r.CreatedByUserId, // TODO: Join with Users table to get name
                     CreatedDate = r.CreatedDate,
-                    LastModifiedDate = r.LastModifiedDate,
+                    LastModifiedDate = r.ModifiedDate ?? r.CreatedDate,
                     IsShared = !string.IsNullOrEmpty(r.AllowedRoles) || !string.IsNullOrEmpty(r.AllowedLocations)
                 }).ToList(),
                 CanCreateReports = await _permissionService.HasFeatureAccessAsync(userId, "QueryBuilder_CreateReports"),
@@ -110,7 +110,7 @@ namespace SalesMetrics.Controllers
             }
 
             var report = await _context.ReportDefinitions
-                .FirstOrDefaultAsync(r => r.ReportId == id);
+                .FirstOrDefaultAsync(r => r.ReportDefinitionId == id);
 
             if (report == null)
             {
@@ -136,7 +136,7 @@ namespace SalesMetrics.Controllers
             }
 
             var report = await _context.ReportDefinitions
-                .FirstOrDefaultAsync(r => r.ReportId == id);
+                .FirstOrDefaultAsync(r => r.ReportDefinitionId == id);
 
             if (report == null)
             {
@@ -145,9 +145,8 @@ namespace SalesMetrics.Controllers
 
             // Soft delete
             report.IsActive = false;
-            report.LastModifiedDate = DateTime.UtcNow;
-            report.LastModifiedByUserID = userId;
-            report.LastModifiedByUserName = User.Identity?.Name ?? "Unknown";
+            report.ModifiedDate = DateTime.UtcNow;
+            report.ModifiedByUserId = userId;
 
             await _context.SaveChangesAsync();
 

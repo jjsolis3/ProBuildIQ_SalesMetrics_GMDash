@@ -7,7 +7,9 @@
 USE SalesMetrics;
 GO
 
--- Clear existing placeholder data
+-- Clear existing data (delete child records first to avoid FK constraint errors)
+DELETE FROM dbo.TableRelationships;
+DELETE FROM dbo.AllowedColumns;
 DELETE FROM dbo.AllowedTables;
 GO
 
@@ -60,7 +62,6 @@ VALUES
 ('ITEM_TYPE', 'dbo', 'Item Types', 'Product type classifications', 'Inventory', 'SQL', 1),
 ('ITEM_VENDOR', 'dbo', 'Item Vendors', 'Vendor associations for products', 'Inventory', 'SQL', 1),
 ('WAREHOUSE_ITEM', 'dbo', 'Warehouse Inventory', 'Inventory quantities by warehouse location', 'Inventory', 'SQL', 1),
-('WAREHOUSE_MASTER', 'dbo', 'Warehouses', 'Warehouse location master data', 'Inventory', 'SQL', 1),
 ('STOCK_REGISTER', 'dbo', 'Stock Register', 'Complete inventory register with transaction history', 'Inventory', 'SQL', 1),
 ('STOCK_REQUIRED', 'dbo', 'Stock Requirements', 'Inventory requirements and reservations', 'Inventory', 'SQL', 1),
 ('INVENTORY_CLASSIFICATION', 'dbo', 'Inventory Classifications', 'Product classification codes', 'Inventory', 'SQL', 1),

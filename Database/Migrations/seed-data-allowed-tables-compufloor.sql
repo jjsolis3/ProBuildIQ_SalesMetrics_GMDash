@@ -8,13 +8,13 @@ USE SalesMetrics;
 GO
 
 -- Clear existing placeholder data
-DELETE FROM QueryBuilder.AllowedTables;
+DELETE FROM dbo.AllowedTables;
 GO
 
 -- =============================================
 -- CATEGORY: Sales Orders
 -- =============================================
-INSERT INTO QueryBuilder.AllowedTables (TableName, SchemaName, DisplayName, Description, Category, DataSourceType, IsActive)
+INSERT INTO dbo.AllowedTables (TableName, SchemaName, DisplayName, Description, Category, DataSourceType, IsActive)
 VALUES
 ('SALES_HEADER', 'dbo', 'Sales Orders', 'Main sales order header information including customer, dates, and totals', 'Sales Orders', 'SQL', 1),
 ('SALES_DETAIL', 'dbo', 'Sales Order Lines', 'Line item details for each sales order including products, quantities, and pricing', 'Sales Orders', 'SQL', 1),
@@ -32,7 +32,7 @@ VALUES
 -- =============================================
 -- CATEGORY: Customers
 -- =============================================
-INSERT INTO QueryBuilder.AllowedTables (TableName, SchemaName, DisplayName, Description, Category, DataSourceType, IsActive)
+INSERT INTO dbo.AllowedTables (TableName, SchemaName, DisplayName, Description, Category, DataSourceType, IsActive)
 VALUES
 ('CUSTOMER_MASTER', 'dbo', 'Customers', 'Master customer information including contact details and credit terms', 'Customers', 'SQL', 1),
 ('CUSTOMER_SHIP_LOCATION', 'dbo', 'Customer Ship-To Addresses', 'Shipping addresses for customers', 'Customers', 'SQL', 1),
@@ -41,7 +41,7 @@ VALUES
 -- =============================================
 -- CATEGORY: Invoicing
 -- =============================================
-INSERT INTO QueryBuilder.AllowedTables (TableName, SchemaName, DisplayName, Description, Category, DataSourceType, IsActive)
+INSERT INTO dbo.AllowedTables (TableName, SchemaName, DisplayName, Description, Category, DataSourceType, IsActive)
 VALUES
 ('INVOICE_HEADER', 'dbo', 'Invoice Headers', 'Main invoice header information', 'Invoicing', 'SQL', 1),
 ('INVOICE_DETAIL', 'dbo', 'Invoice Line Items', 'Detailed line items for each invoice', 'Invoicing', 'SQL', 1),
@@ -52,7 +52,7 @@ VALUES
 -- =============================================
 -- CATEGORY: Inventory
 -- =============================================
-INSERT INTO QueryBuilder.AllowedTables (TableName, SchemaName, DisplayName, Description, Category, DataSourceType, IsActive)
+INSERT INTO dbo.AllowedTables (TableName, SchemaName, DisplayName, Description, Category, DataSourceType, IsActive)
 VALUES
 ('ITEM_MASTER', 'dbo', 'Products/Items', 'Master product catalog with descriptions, costs, and specifications', 'Inventory', 'SQL', 1),
 ('ITEM_PRICE', 'dbo', 'Item Pricing', 'Pricing information for products including cost and sell prices', 'Inventory', 'SQL', 1),
@@ -70,7 +70,7 @@ VALUES
 -- =============================================
 -- CATEGORY: Purchase Orders
 -- =============================================
-INSERT INTO QueryBuilder.AllowedTables (TableName, SchemaName, DisplayName, Description, Category, DataSourceType, IsActive)
+INSERT INTO dbo.AllowedTables (TableName, SchemaName, DisplayName, Description, Category, DataSourceType, IsActive)
 VALUES
 ('PURCHASE_ORDER_HEADER', 'dbo', 'Purchase Orders', 'Purchase order header information', 'Purchase Orders', 'SQL', 1),
 ('PURCHASE_ORDER_DETAIL', 'dbo', 'Purchase Order Lines', 'Line item details for purchase orders', 'Purchase Orders', 'SQL', 1),
@@ -80,7 +80,7 @@ VALUES
 -- =============================================
 -- CATEGORY: Accounts Payable
 -- =============================================
-INSERT INTO QueryBuilder.AllowedTables (TableName, SchemaName, DisplayName, Description, Category, DataSourceType, IsActive)
+INSERT INTO dbo.AllowedTables (TableName, SchemaName, DisplayName, Description, Category, DataSourceType, IsActive)
 VALUES
 ('AP_OPEN_ITEM', 'dbo', 'AP Open Items', 'Outstanding accounts payable invoices', 'Accounts Payable', 'SQL', 1),
 ('AP_TRANSACTION', 'dbo', 'AP Transactions', 'All AP transaction history', 'Accounts Payable', 'SQL', 1),
@@ -91,7 +91,7 @@ VALUES
 -- =============================================
 -- CATEGORY: Accounts Receivable
 -- =============================================
-INSERT INTO QueryBuilder.AllowedTables (TableName, SchemaName, DisplayName, Description, Category, DataSourceType, IsActive)
+INSERT INTO dbo.AllowedTables (TableName, SchemaName, DisplayName, Description, Category, DataSourceType, IsActive)
 VALUES
 ('AR_OPEN_ITEM', 'dbo', 'AR Open Items', 'Outstanding accounts receivable invoices', 'Accounts Receivable', 'SQL', 1),
 ('AR_TRANSACTION_FILE', 'dbo', 'AR Transactions', 'All AR transaction history including payments', 'Accounts Receivable', 'SQL', 1),
@@ -100,7 +100,7 @@ VALUES
 -- =============================================
 -- CATEGORY: General Ledger
 -- =============================================
-INSERT INTO QueryBuilder.AllowedTables (TableName, SchemaName, DisplayName, Description, Category, DataSourceType, IsActive)
+INSERT INTO dbo.AllowedTables (TableName, SchemaName, DisplayName, Description, Category, DataSourceType, IsActive)
 VALUES
 ('CHART_OF_ACCOUNTS', 'dbo', 'Chart of Accounts', 'Complete chart of accounts with account numbers and descriptions', 'General Ledger', 'SQL', 1),
 ('GL_JOURNAL', 'dbo', 'GL Journal Entries', 'General ledger journal entry details', 'General Ledger', 'SQL', 1),
@@ -112,7 +112,7 @@ VALUES
 -- =============================================
 -- CATEGORY: Vendors
 -- =============================================
-INSERT INTO QueryBuilder.AllowedTables (TableName, SchemaName, DisplayName, Description, Category, DataSourceType, IsActive)
+INSERT INTO dbo.AllowedTables (TableName, SchemaName, DisplayName, Description, Category, DataSourceType, IsActive)
 VALUES
 ('VENDOR_MASTER', 'dbo', 'Vendors', 'Vendor master information including contact and payment terms', 'Vendors', 'SQL', 1),
 ('VENDOR_INVOICES', 'dbo', 'Vendor Invoices', 'Vendor invoice details', 'Vendors', 'SQL', 1),
@@ -121,7 +121,7 @@ VALUES
 -- =============================================
 -- CATEGORY: Salesperson
 -- =============================================
-INSERT INTO QueryBuilder.AllowedTables (TableName, SchemaName, DisplayName, Description, Category, DataSourceType, IsActive)
+INSERT INTO dbo.AllowedTables (TableName, SchemaName, DisplayName, Description, Category, DataSourceType, IsActive)
 VALUES
 ('SALESMAN_MASTER', 'dbo', 'Salespeople', 'Salesperson master data', 'Salesperson', 'SQL', 1),
 ('SALESMAN_COMMENTS', 'dbo', 'Salesperson Comments', 'Notes about salespeople', 'Salesperson', 'SQL', 1),
@@ -132,7 +132,7 @@ VALUES
 -- =============================================
 -- CATEGORY: Installers & Work Orders
 -- =============================================
-INSERT INTO QueryBuilder.AllowedTables (TableName, SchemaName, DisplayName, Description, Category, DataSourceType, IsActive)
+INSERT INTO dbo.AllowedTables (TableName, SchemaName, DisplayName, Description, Category, DataSourceType, IsActive)
 VALUES
 ('INSTALLER_MASTER', 'dbo', 'Installers', 'Installer contractor master data', 'Installers', 'SQL', 1),
 ('INSTALLER_LABOR', 'dbo', 'Installer Labor Rates', 'Labor rates and pricing for installers', 'Installers', 'SQL', 1),
@@ -143,7 +143,7 @@ VALUES
 -- =============================================
 -- CATEGORY: Company & Configuration
 -- =============================================
-INSERT INTO QueryBuilder.AllowedTables (TableName, SchemaName, DisplayName, Description, Category, DataSourceType, IsActive)
+INSERT INTO dbo.AllowedTables (TableName, SchemaName, DisplayName, Description, Category, DataSourceType, IsActive)
 VALUES
 ('COMPANY_INFORMATION', 'dbo', 'Company Information', 'Company master data and branch information', 'Company', 'SQL', 1),
 ('CONTROL_INFORMATION', 'dbo', 'Control Settings', 'System control parameters and settings', 'Company', 'SQL', 1),
@@ -152,7 +152,7 @@ VALUES
 -- =============================================
 -- CATEGORY: Quotes & Projects
 -- =============================================
-INSERT INTO QueryBuilder.AllowedTables (TableName, SchemaName, DisplayName, Description, Category, DataSourceType, IsActive)
+INSERT INTO dbo.AllowedTables (TableName, SchemaName, DisplayName, Description, Category, DataSourceType, IsActive)
 VALUES
 ('Quote', 'dbo', 'Quotes', 'Sales quotes and estimates', 'Quotes', 'SQL', 1),
 ('QuoteDetail', 'dbo', 'Quote Line Items', 'Line item details for quotes', 'Quotes', 'SQL', 1),
@@ -162,7 +162,7 @@ VALUES
 -- =============================================
 -- CATEGORY: Reporting & Analytics
 -- =============================================
-INSERT INTO QueryBuilder.AllowedTables (TableName, SchemaName, DisplayName, Description, Category, DataSourceType, IsActive)
+INSERT INTO dbo.AllowedTables (TableName, SchemaName, DisplayName, Description, Category, DataSourceType, IsActive)
 VALUES
 ('DAILY_SALES_SUMMARY', 'dbo', 'Daily Sales Summary', 'Daily sales summary and metrics', 'Reporting', 'SQL', 1),
 ('SalesHistoryData', 'dbo', 'Sales History', 'Historical sales data for reporting', 'Reporting', 'SQL', 1),

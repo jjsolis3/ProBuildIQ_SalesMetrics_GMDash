@@ -1,91 +1,503 @@
+@model SalesMetrics.Models.QueryBuilder.ReportBuilderCreateViewModel
 @{
     ViewData["Title"] = "Create Report - Query Builder";
 }
 
 <style>
-    .coming-soon-container {
-        min-height: 60vh;
+    /* Wizard Progress Bar */
+    .wizard-progress {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 3rem;
+        position: relative;
+    }
+
+    .wizard-progress::before {
+        content: '';
+        position: absolute;
+        top: 20px;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: #e9ecef;
+        z-index: 0;
+    }
+
+    .wizard-step {
+        flex: 1;
+        text-align: center;
+        position: relative;
+        z-index: 1;
+    }
+
+    .step-circle {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: #e9ecef;
+        color: #6c757d;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+        transition: all 0.3s ease;
+    }
+
+    .wizard-step.active .step-circle {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        color: white;
+        box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+    }
+
+    .wizard-step.completed .step-circle {
+        background: #28a745;
+        color: white;
+    }
+
+    .wizard-step.completed .step-circle::before {
+        content: '✓';
+    }
+
+    .step-label {
+        font-size: 0.875rem;
+        color: #6c757d;
+        font-weight: 500;
+    }
+
+    .wizard-step.active .step-label {
+        color: #28a745;
+        font-weight: 700;
+    }
+
+    /* Wizard Content */
+    .wizard-content {
+        background: white;
+        border-radius: 12px;
+        padding: 2rem;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        margin-bottom: 2rem;
+    }
+
+    .wizard-title {
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: #1a1a2e;
+        margin-bottom: 0.5rem;
+    }
+
+    .wizard-subtitle {
+        font-size: 1rem;
+        color: #6c757d;
+        margin-bottom: 2rem;
+    }
+
+    /* Table Selection */
+    .table-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .table-card {
+        border: 2px solid #e9ecef;
+        border-radius: 8px;
+        padding: 1.25rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        background: white;
+    }
+
+    .table-card:hover {
+        border-color: #28a745;
+        box-shadow: 0 4px 12px rgba(40, 167, 69, 0.15);
+        transform: translateY(-2px);
+    }
+
+    .table-card.selected {
+        border-color: #28a745;
+        background: linear-gradient(135deg, rgba(40, 167, 69, 0.05) 0%, rgba(32, 201, 151, 0.05) 100%);
+    }
+
+    .table-card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 0.75rem;
+    }
+
+    .table-icon {
+        width: 32px;
+        height: 32px;
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        border-radius: 6px;
         display: flex;
         align-items: center;
         justify-content: center;
+        color: white;
+        font-size: 1rem;
     }
 
-    .coming-soon-card {
-        background: white;
-        border-radius: 16px;
-        padding: 4rem 3rem;
-        text-align: center;
-        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
-        max-width: 600px;
+    .table-checkbox {
+        width: 20px;
+        height: 20px;
+        cursor: pointer;
     }
 
-    .coming-soon-icon {
-        font-size: 5rem;
-        color: #28a745;
-        margin-bottom: 2rem;
-    }
-
-    .coming-soon-card h1 {
-        font-size: 2.5rem;
+    .table-name {
+        font-size: 1rem;
         font-weight: 700;
         color: #1a1a2e;
-        margin-bottom: 1rem;
+        margin-bottom: 0.25rem;
     }
 
-    .coming-soon-card p {
-        font-size: 1.1rem;
+    .table-description {
+        font-size: 0.875rem;
         color: #6c757d;
-        margin-bottom: 2rem;
-        line-height: 1.6;
+        line-height: 1.5;
+        margin-bottom: 0.5rem;
     }
 
-    .feature-list {
-        text-align: left;
-        margin: 2rem auto;
-        max-width: 400px;
+    .table-meta {
+        display: flex;
+        gap: 0.75rem;
+        font-size: 0.75rem;
+        color: #6c757d;
     }
 
-    .feature-list li {
-        padding: 0.75rem 0;
-        border-bottom: 1px solid #e9ecef;
-        color: #495057;
+    .table-badge {
+        background: #e9ecef;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-weight: 600;
     }
 
-    .feature-list li:last-child {
-        border-bottom: none;
+    /* Search Box */
+    .table-search {
+        margin-bottom: 1.5rem;
     }
 
-    .feature-list i {
+    .search-input {
+        width: 100%;
+        padding: 0.75rem 1rem 0.75rem 3rem;
+        border: 2px solid #e9ecef;
+        border-radius: 8px;
+        font-size: 1rem;
+        transition: all 0.3s ease;
+    }
+
+    .search-input:focus {
+        border-color: #28a745;
+        box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.15);
+        outline: none;
+    }
+
+    .search-wrapper {
+        position: relative;
+    }
+
+    .search-icon {
+        position: absolute;
+        left: 1rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #6c757d;
+    }
+
+    /* Category Filters */
+    .category-filters {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1.5rem;
+        flex-wrap: wrap;
+    }
+
+    .category-btn {
+        padding: 0.5rem 1rem;
+        border: 2px solid #e9ecef;
+        border-radius: 6px;
+        background: white;
+        color: #6c757d;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .category-btn:hover {
+        border-color: #28a745;
         color: #28a745;
-        margin-right: 0.75rem;
+    }
+
+    .category-btn.active {
+        border-color: #28a745;
+        background: #28a745;
+        color: white;
+    }
+
+    /* Wizard Navigation */
+    .wizard-navigation {
+        display: flex;
+        justify-content: space-between;
+        padding: 1.5rem 0;
+    }
+
+    .btn-wizard {
+        padding: 0.75rem 2rem;
+        border-radius: 8px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+
+    .btn-next {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        border: none;
+        color: white;
+    }
+
+    .btn-next:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 16px rgba(40, 167, 69, 0.3);
+    }
+
+    .btn-next:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .btn-back {
+        background: #6c757d;
+        border: none;
+        color: white;
+    }
+
+    .btn-back:hover {
+        background: #5a6268;
+    }
+
+    .selected-count {
+        background: #28a745;
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        font-weight: 600;
+    }
+
+    .no-tables {
+        text-align: center;
+        padding: 3rem;
+        color: #6c757d;
     }
 </style>
 
-<div class="coming-soon-container">
-    <div class="coming-soon-card">
-        <div class="coming-soon-icon">
-            <i class="fa fa-tools"></i>
+<div class="container-fluid">
+    <!-- Wizard Progress -->
+    <div class="wizard-progress">
+        <div class="wizard-step @(Model.CurrentStep == 1 ? "active" : "") @(Model.CurrentStep > 1 ? "completed" : "")">
+            <div class="step-circle">1</div>
+            <div class="step-label">Select Tables</div>
         </div>
-        <h1>Coming Soon!</h1>
-        <p>The visual Query Builder wizard is currently under development. This powerful tool will let you create custom reports without writing SQL.</p>
-
-        <ul class="feature-list list-unstyled">
-            <li><i class="fa fa-check-circle"></i> Visual table and column selection</li>
-            <li><i class="fa fa-check-circle"></i> Drag-and-drop query building</li>
-            <li><i class="fa fa-check-circle"></i> Advanced filtering and sorting</li>
-            <li><i class="fa fa-check-circle"></i> Multi-source data integration</li>
-            <li><i class="fa fa-check-circle"></i> Custom calculations and aggregations</li>
-            <li><i class="fa fa-check-circle"></i> Real-time query preview</li>
-        </ul>
-
-        <div class="mt-4">
-            <a href="@Url.Action("Index")" class="btn btn-lg" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; border: none; padding: 0.75rem 2rem; border-radius: 8px; font-weight: 600;">
-                <i class="fa fa-arrow-left"></i> Back to Reports
-            </a>
+        <div class="wizard-step @(Model.CurrentStep == 2 ? "active" : "") @(Model.CurrentStep > 2 ? "completed" : "")">
+            <div class="step-circle">2</div>
+            <div class="step-label">Configure Columns</div>
         </div>
-
-        <div class="mt-4 text-muted">
-            <small><i class="fa fa-info-circle"></i> Phase 2 of the Query Builder will be implemented in an upcoming release.</small>
+        <div class="wizard-step @(Model.CurrentStep == 3 ? "active" : "") @(Model.CurrentStep > 3 ? "completed" : "")">
+            <div class="step-circle">3</div>
+            <div class="step-label">Add Filters</div>
+        </div>
+        <div class="wizard-step @(Model.CurrentStep == 4 ? "active" : "") @(Model.CurrentStep > 4 ? "completed" : "")">
+            <div class="step-circle">4</div>
+            <div class="step-label">Preview</div>
+        </div>
+        <div class="wizard-step @(Model.CurrentStep == 5 ? "active" : "")">
+            <div class="step-circle">5</div>
+            <div class="step-label">Save Report</div>
         </div>
     </div>
+
+    <!-- Step 1: Table Selection -->
+    @if (Model.CurrentStep == 1)
+    {
+        <div class="wizard-content">
+            <h2 class="wizard-title"><i class="fa fa-table"></i> Select Tables</h2>
+            <p class="wizard-subtitle">Choose one or more tables to include in your report</p>
+
+            <!-- Search -->
+            <div class="table-search">
+                <div class="search-wrapper">
+                    <i class="fa fa-search search-icon"></i>
+                    <input type="text"
+                           id="tableSearch"
+                           class="search-input"
+                           placeholder="Search tables by name or description..."
+                           autocomplete="off">
+                </div>
+            </div>
+
+            <!-- Category Filters -->
+            <div class="category-filters">
+                <button class="category-btn active" data-category="all">All Categories</button>
+                @foreach (var category in Model.AvailableTables.Select(t => t.Category).Distinct().OrderBy(c => c))
+                {
+                    <button class="category-btn" data-category="@category">@category</button>
+                }
+            </div>
+
+            <!-- Selected Count -->
+            <div class="mb-3">
+                <span class="selected-count">
+                    <span id="selectedCount">0</span> table(s) selected
+                </span>
+            </div>
+
+            <!-- Table Grid -->
+            @if (Model.AvailableTables.Any())
+            {
+                <div class="table-grid" id="tableGrid">
+                    @foreach (var table in Model.AvailableTables)
+                    {
+                        <div class="table-card"
+                             data-table-id="@table.TableId"
+                             data-table-name="@table.TableName"
+                             data-category="@table.Category"
+                             data-search="@(table.TableName.ToLower()) @(table.DisplayName.ToLower()) @(table.Description.ToLower())">
+                            <div class="table-card-header">
+                                <div class="table-icon">
+                                    <i class="fa fa-table"></i>
+                                </div>
+                                <input type="checkbox" class="table-checkbox" data-table-id="@table.TableId">
+                            </div>
+                            <div class="table-name">@table.DisplayName</div>
+                            <div class="table-description">
+                                @(string.IsNullOrEmpty(table.Description) ? "No description available" : table.Description)
+                            </div>
+                            <div class="table-meta">
+                                <span class="table-badge">@table.Category</span>
+                                <span class="table-badge">@table.DataSourceType</span>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="no-tables">
+                    <i class="fa fa-inbox fa-3x mb-3"></i>
+                    <h4>No Tables Available</h4>
+                    <p>No tables have been whitelisted for the Query Builder yet.</p>
+                    @if (Model.IsAdmin)
+                    {
+                        <p><a href="#">Configure table whitelist</a></p>
+                    }
+                </div>
+            }
+        </div>
+
+        <!-- Navigation -->
+        <div class="wizard-navigation">
+            <a href="@Url.Action("Index")" class="btn btn-back">
+                <i class="fa fa-arrow-left"></i> Cancel
+            </a>
+            <button type="button" id="btnNext" class="btn btn-next" disabled>
+                Next: Configure Columns <i class="fa fa-arrow-right"></i>
+            </button>
+        </div>
+    }
 </div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            let selectedTables = [];
+
+            // Table card click
+            $('.table-card').on('click', function(e) {
+                if ($(e.target).is('input[type="checkbox"]')) return;
+
+                const checkbox = $(this).find('.table-checkbox');
+                checkbox.prop('checked', !checkbox.prop('checked')).trigger('change');
+            });
+
+            // Checkbox change
+            $('.table-checkbox').on('change', function(e) {
+                e.stopPropagation();
+                const tableCard = $(this).closest('.table-card');
+                const tableId = $(this).data('table-id');
+                const tableName = tableCard.data('table-name');
+
+                if ($(this).is(':checked')) {
+                    tableCard.addClass('selected');
+                    selectedTables.push({ id: tableId, name: tableName });
+                } else {
+                    tableCard.removeClass('selected');
+                    selectedTables = selectedTables.filter(t => t.id !== tableId);
+                }
+
+                updateSelectedCount();
+            });
+
+            // Update selected count
+            function updateSelectedCount() {
+                $('#selectedCount').text(selectedTables.length);
+                $('#btnNext').prop('disabled', selectedTables.length === 0);
+            }
+
+            // Search functionality
+            $('#tableSearch').on('input', function() {
+                const query = $(this).val().toLowerCase();
+                filterTables();
+            });
+
+            // Category filter
+            $('.category-btn').on('click', function() {
+                $('.category-btn').removeClass('active');
+                $(this).addClass('active');
+                filterTables();
+            });
+
+            function filterTables() {
+                const query = $('#tableSearch').val().toLowerCase();
+                const category = $('.category-btn.active').data('category');
+
+                $('.table-card').each(function() {
+                    const searchText = $(this).data('search');
+                    const cardCategory = $(this).data('category');
+
+                    const matchesSearch = query === '' || searchText.indexOf(query) !== -1;
+                    const matchesCategory = category === 'all' || cardCategory === category;
+
+                    if (matchesSearch && matchesCategory) {
+                        $(this).show();
+                    } else {
+                        $(this).hide();
+                    }
+                });
+            }
+
+            // Next button
+            $('#btnNext').on('click', function() {
+                if (selectedTables.length === 0) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'No Tables Selected',
+                        text: 'Please select at least one table to continue.'
+                    });
+                    return;
+                }
+
+                // TODO: Navigate to Step 2 (will implement in next iteration)
+                Swal.fire({
+                    icon: 'info',
+                    title: 'Step 2: Coming Soon',
+                    html: `
+                        <p>You selected <strong>${selectedTables.length}</strong> table(s):</p>
+                        <ul class="text-start">
+                            ${selectedTables.map(t => `<li>${t.name}</li>`).join('')}
+                        </ul>
+                        <p class="mt-3">Step 2: Column Configuration will be implemented next!</p>
+                    `
+                });
+            });
+        });
+    </script>
+}

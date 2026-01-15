@@ -76,7 +76,7 @@ namespace SalesMetrics.Controllers
         }
 
         /// <summary>
-        /// Show create report wizard (Phase 2 implementation)
+        /// Show create report wizard - Step 1: Table Selection
         /// </summary>
         [HttpGet]
         public async Task<IActionResult> Create()
@@ -90,8 +90,36 @@ namespace SalesMetrics.Controllers
                 return Forbid();
             }
 
-            // TODO: Implement create report wizard
-            return View();
+            // Load available tables from whitelist
+            var allowedTables = await _context.AllowedTables
+                .Where(t => t.IsActive)
+                .OrderBy(t => t.Category)
+                .ThenBy(t => t.TableName)
+                .ToListAsync();
+
+            // Build view model for Step 1
+            var viewModel = new ReportBuilderCreateViewModel
+            {
+                CurrentStep = 1,
+                TotalSteps = 5,
+                AvailableTables = allowedTables.Select(t => new TableSelectionItem
+                {
+                    TableId = t.AllowedTableId,
+                    TableName = t.TableName ?? "",
+                    SchemaName = t.SchemaName ?? "dbo",
+                    DisplayName = t.DisplayName ?? t.TableName ?? "",
+                    Description = t.Description ?? "",
+                    Category = t.Category ?? "Uncategorized",
+                    DataSourceType = t.DataSourceType ?? "SQL",
+                    IsSelected = false
+                }).ToList(),
+                CanShare = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_SHARE"),
+                IsAdmin = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_ADMIN")
+            };
+
+            _logger.LogInformation("User {UserId} started creating a new report", userId);
+
+            return View(viewModel);
         }
 
         /// <summary>

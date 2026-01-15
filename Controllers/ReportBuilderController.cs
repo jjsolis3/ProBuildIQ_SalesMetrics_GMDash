@@ -123,6 +123,93 @@ namespace SalesMetrics.Controllers
         }
 
         /// <summary>
+        /// Process Step 1 (Table Selection) and advance to Step 2 (Column Configuration)
+        /// </summary>
+        [HttpPost]
+        public async Task<IActionResult> CreateStep1([FromBody] Step1SubmissionDto model)
+        {
+            var userId = GetCurrentUserId();
+
+            var canCreate = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_CREATE");
+            if (!canCreate)
+            {
+                return Json(new { success = false, message = "You don't have permission to create reports" });
+            }
+
+            if (model.SelectedTableIds == null || !model.SelectedTableIds.Any())
+            {
+                return Json(new { success = false, message = "Please select at least one table" });
+            }
+
+            _logger.LogInformation("User {UserId} selected {Count} tables for new report", userId, model.SelectedTableIds.Count);
+
+            // Fetch the selected tables from database
+            var selectedTables = await _context.AllowedTables
+                .Where(t => model.SelectedTableIds.Contains(t.AllowedTableId))
+                .ToListAsync();
+
+            // Fetch columns for all selected tables from INFORMATION_SCHEMA
+            var allColumns = new List<ColumnSelectionItem>();
+
+            foreach (var table in selectedTables)
+            {
+                var columns = await _context.Database
+                    .SqlQueryRaw<ColumnSchemaDto>(@"
+                        SELECT
+                            COLUMN_NAME as ColumnName,
+                            DATA_TYPE as DataType,
+                            IS_NULLABLE as IsNullable,
+                            ORDINAL_POSITION as OrdinalPosition
+                        FROM INFORMATION_SCHEMA.COLUMNS
+                        WHERE TABLE_SCHEMA = {0} AND TABLE_NAME = {1}
+                        ORDER BY ORDINAL_POSITION",
+                        table.SchemaName ?? "dbo",
+                        table.TableName)
+                    .ToListAsync();
+
+                foreach (var col in columns)
+                {
+                    allColumns.Add(new ColumnSelectionItem
+                    {
+                        ColumnId = $"{table.TableName}.{col.ColumnName}",
+                        TableName = table.TableName ?? "",
+                        TableDisplayName = table.DisplayName ?? table.TableName ?? "",
+                        ColumnName = col.ColumnName ?? "",
+                        DisplayName = col.ColumnName ?? "",
+                        DataType = col.DataType ?? "varchar",
+                        IsNullable = col.IsNullable == "YES",
+                        IsSelected = false,
+                        SortOrder = null,
+                        SortDirection = "ASC",
+                        AggregateFunction = null
+                    });
+                }
+            }
+
+            // Store wizard state in TempData for next step
+            TempData["WizardState"] = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                CurrentStep = 2,
+                SelectedTableIds = model.SelectedTableIds,
+                SelectedTables = selectedTables.Select(t => new
+                {
+                    t.AllowedTableId,
+                    t.TableName,
+                    t.DisplayName,
+                    t.Category
+                }).ToList()
+            });
+
+            return Json(new
+            {
+                success = true,
+                message = "Tables selected successfully",
+                nextStep = 2,
+                columns = allColumns
+            });
+        }
+
+        /// <summary>
         /// Show edit report wizard (Phase 2 implementation)
         /// </summary>
         [HttpGet]

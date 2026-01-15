@@ -60,12 +60,16 @@ namespace SalesMetrics.Models.QueryBuilder
     {
         public string ColumnId { get; set; } = string.Empty;
         public string TableName { get; set; } = string.Empty;
+        public string TableDisplayName { get; set; } = string.Empty;
         public string ColumnName { get; set; } = string.Empty;
         public string DataType { get; set; } = string.Empty;
         public string DisplayName { get; set; } = string.Empty;
+        public bool IsNullable { get; set; }
         public bool IsSelected { get; set; }
         public int DisplayOrder { get; set; }
-        public string AggregateFunction { get; set; } = "None"; // None, SUM, COUNT, AVG, MIN, MAX
+        public int? SortOrder { get; set; } // 1, 2, 3, etc. or null if not sorting
+        public string SortDirection { get; set; } = "ASC"; // ASC or DESC
+        public string? AggregateFunction { get; set; } = null; // null, SUM, COUNT, AVG, MIN, MAX
         public string FormatString { get; set; } = string.Empty;
     }
 
@@ -79,5 +83,24 @@ namespace SalesMetrics.Models.QueryBuilder
         public string Operator { get; set; } = "="; // =, !=, >, <, >=, <=, LIKE, IN, BETWEEN
         public string Value { get; set; } = string.Empty;
         public string LogicalOperator { get; set; } = "AND"; // AND, OR
+    }
+
+    /// <summary>
+    /// DTO for Step 1 submission (Table Selection)
+    /// </summary>
+    public class Step1SubmissionDto
+    {
+        public List<int> SelectedTableIds { get; set; } = new();
+    }
+
+    /// <summary>
+    /// DTO for column schema from INFORMATION_SCHEMA
+    /// </summary>
+    public class ColumnSchemaDto
+    {
+        public string? ColumnName { get; set; }
+        public string? DataType { get; set; }
+        public string? IsNullable { get; set; }
+        public int OrdinalPosition { get; set; }
     }
 }

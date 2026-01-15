@@ -328,66 +328,101 @@ namespace SalesMetrics.Controllers
         [HttpPost]
         public IActionResult CreateStep1_5([FromBody] Step1_5SubmissionDto model)
         {
-            var userId = GetCurrentUserId();
-
-            var canCreate = _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_CREATE").Result;
-            if (!canCreate)
-            {
-                return Json(new { success = false, message = "You don't have permission to create reports" });
-            }
-
-            if (model.Relationships == null || !model.Relationships.Any())
-            {
-                return Json(new { success = false, message = "Please define at least one relationship between your tables" });
-            }
-
-            _logger.LogInformation("User {UserId} configured {Count} table relationships", userId, model.Relationships.Count);
-
-            // Retrieve previously stored columns from TempData
-            var wizardStateJson = TempData["WizardState"]?.ToString();
-            if (string.IsNullOrEmpty(wizardStateJson))
-            {
-                return Json(new { success = false, message = "Session expired. Please start over." });
-            }
-
-            // Parse JSON properly using JsonDocument
-            List<ColumnSelectionItem> allColumns;
             try
             {
-                using var document = System.Text.Json.JsonDocument.Parse(wizardStateJson);
-                var root = document.RootElement;
+                _logger.LogInformation("CreateStep1_5 called");
 
-                if (root.TryGetProperty("AllColumns", out var columnsElement))
+                var userId = GetCurrentUserId();
+                _logger.LogInformation("User ID: {UserId}", userId);
+
+                var canCreate = _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_CREATE").Result;
+                if (!canCreate)
                 {
-                    var columnsJson = columnsElement.GetRawText();
-                    allColumns = System.Text.Json.JsonSerializer.Deserialize<List<ColumnSelectionItem>>(columnsJson) ?? new List<ColumnSelectionItem>();
+                    _logger.LogWarning("User {UserId} does not have permission", userId);
+                    return Json(new { success = false, message = "You don't have permission to create reports" });
                 }
-                else
+
+                if (model?.Relationships == null || !model.Relationships.Any())
                 {
-                    _logger.LogError("AllColumns property not found in wizard state");
-                    return Json(new { success = false, message = "Session data is invalid. Please start over." });
+                    _logger.LogWarning("No relationships provided in model");
+                    return Json(new { success = false, message = "Please define at least one relationship between your tables" });
                 }
+
+                _logger.LogInformation("User {UserId} configured {Count} table relationships", userId, model.Relationships.Count);
+
+                // Log each relationship
+                foreach (var rel in model.Relationships)
+                {
+                    _logger.LogInformation("Relationship: {LeftTable}.{LeftColumn} {JoinType} {RightTable}.{RightColumn}",
+                        rel.LeftTable, rel.LeftColumn, rel.JoinType, rel.RightTable, rel.RightColumn);
+                }
+
+                // Retrieve previously stored columns from TempData
+                var wizardStateJson = TempData["WizardState"]?.ToString();
+                _logger.LogInformation("WizardState JSON length: {Length}", wizardStateJson?.Length ?? 0);
+
+                if (string.IsNullOrEmpty(wizardStateJson))
+                {
+                    _logger.LogError("WizardState is empty or null");
+                    return Json(new { success = false, message = "Session expired. Please start over." });
+                }
+
+                // Parse JSON properly using JsonDocument
+                List<ColumnSelectionItem> allColumns;
+                try
+                {
+                    _logger.LogInformation("Parsing wizard state JSON");
+                    using var document = System.Text.Json.JsonDocument.Parse(wizardStateJson);
+                    var root = document.RootElement;
+
+                    if (root.TryGetProperty("AllColumns", out var columnsElement))
+                    {
+                        var columnsJson = columnsElement.GetRawText();
+                        _logger.LogInformation("AllColumns JSON length: {Length}", columnsJson.Length);
+
+                        var jsonOptions = new System.Text.Json.JsonSerializerOptions
+                        {
+                            PropertyNameCaseInsensitive = true
+                        };
+
+                        allColumns = System.Text.Json.JsonSerializer.Deserialize<List<ColumnSelectionItem>>(columnsJson, jsonOptions) ?? new List<ColumnSelectionItem>();
+                        _logger.LogInformation("Deserialized {Count} columns", allColumns.Count);
+                    }
+                    else
+                    {
+                        _logger.LogError("AllColumns property not found in wizard state");
+                        return Json(new { success = false, message = "Session data is invalid. Please start over." });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error deserializing wizard state: {Message}", ex.Message);
+                    return Json(new { success = false, message = $"Failed to retrieve session data: {ex.Message}" });
+                }
+
+                // Store wizard state for Step 2
+                _logger.LogInformation("Storing wizard state for Step 2");
+                TempData["WizardState_Step1_5"] = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    CurrentStep = 2,
+                    Relationships = model.Relationships
+                });
+
+                _logger.LogInformation("CreateStep1_5 completed successfully");
+
+                return Json(new
+                {
+                    success = true,
+                    message = "Relationships configured successfully",
+                    nextStep = 2,
+                    columns = allColumns
+                });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error deserializing wizard state");
-                return Json(new { success = false, message = "Failed to retrieve session data. Please start over." });
+                _logger.LogError(ex, "Unhandled exception in CreateStep1_5: {Message}", ex.Message);
+                return Json(new { success = false, message = $"Server error: {ex.Message}" });
             }
-
-            // Store wizard state for Step 2
-            TempData["WizardState_Step1_5"] = System.Text.Json.JsonSerializer.Serialize(new
-            {
-                CurrentStep = 2,
-                Relationships = model.Relationships
-            });
-
-            return Json(new
-            {
-                success = true,
-                message = "Relationships configured successfully",
-                nextStep = 2,
-                columns = allColumns
-            });
         }
 
         /// <summary>

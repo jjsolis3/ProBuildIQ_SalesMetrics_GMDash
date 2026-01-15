@@ -279,6 +279,43 @@ namespace SalesMetrics.Controllers
         }
 
         /// <summary>
+        /// Process Step 2 (Column Configuration) and advance to Step 3 (Filter Configuration)
+        /// </summary>
+        [HttpPost]
+        public IActionResult CreateStep2([FromBody] Step2SubmissionDto model)
+        {
+            var userId = GetCurrentUserId();
+
+            var canCreate = _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_CREATE").Result;
+            if (!canCreate)
+            {
+                return Json(new { success = false, message = "You don't have permission to create reports" });
+            }
+
+            if (model.SelectedColumns == null || !model.SelectedColumns.Any())
+            {
+                return Json(new { success = false, message = "Please select at least one column" });
+            }
+
+            _logger.LogInformation("User {UserId} selected {Count} columns for new report", userId, model.SelectedColumns.Count);
+
+            // Store wizard state in TempData for next step
+            TempData["WizardState_Step2"] = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                CurrentStep = 3,
+                SelectedColumns = model.SelectedColumns
+            });
+
+            return Json(new
+            {
+                success = true,
+                message = "Columns configured successfully",
+                nextStep = 3,
+                selectedColumns = model.SelectedColumns
+            });
+        }
+
+        /// <summary>
         /// Show edit report wizard (Phase 2 implementation)
         /// </summary>
         [HttpGet]

@@ -1,0 +1,456 @@
+@model SalesMetrics.Models.QueryBuilder.ReportBuilderIndexViewModel
+@{
+    ViewData["Title"] = "Query Builder";
+}
+
+<style>
+    .query-builder-header {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        border-radius: 16px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        color: white;
+        box-shadow: 0 10px 40px rgba(40, 167, 69, 0.15);
+    }
+
+    .query-builder-header h1 {
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .query-builder-header p {
+        font-size: 1.1rem;
+        opacity: 0.95;
+        margin-bottom: 0;
+    }
+
+    .action-bar {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .btn-create-report {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        border: none;
+        border-radius: 8px;
+        padding: 0.75rem 2rem;
+        font-weight: 600;
+        color: white;
+        transition: all 0.3s ease;
+        text-transform: uppercase;
+        font-size: 0.875rem;
+        letter-spacing: 0.5px;
+    }
+
+    .btn-create-report:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 16px rgba(40, 167, 69, 0.3);
+        color: white;
+    }
+
+    .search-box-inline {
+        flex: 1;
+        min-width: 300px;
+    }
+
+    .search-input-wrapper {
+        position: relative;
+    }
+
+    .search-input-wrapper .search-icon {
+        position: absolute;
+        left: 1rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #6c757d;
+        pointer-events: none;
+    }
+
+    .search-input-wrapper input {
+        padding-left: 3rem;
+        border: 2px solid #e9ecef;
+        border-radius: 8px;
+        font-size: 1rem;
+        transition: all 0.3s ease;
+        width: 100%;
+    }
+
+    .search-input-wrapper input:focus {
+        border-color: #28a745;
+        box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.15);
+    }
+
+    .report-card {
+        border: none;
+        border-radius: 12px;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        overflow: hidden;
+        height: 100%;
+        background: white;
+    }
+
+    .report-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
+    }
+
+    .report-card-header {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        padding: 1.5rem;
+        border-bottom: 2px solid #dee2e6;
+    }
+
+    .report-icon {
+        width: 48px;
+        height: 48px;
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 1.5rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 4px 8px rgba(40, 167, 69, 0.3);
+    }
+
+    .report-card-title {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #1a1a2e;
+        margin-bottom: 0.25rem;
+    }
+
+    .report-card-meta {
+        font-size: 0.85rem;
+        color: #6c757d;
+        margin-top: 0.5rem;
+    }
+
+    .report-card-body {
+        padding: 1.5rem;
+    }
+
+    .report-card-description {
+        color: #6c757d;
+        font-size: 0.95rem;
+        line-height: 1.6;
+        margin-bottom: 1rem;
+        min-height: 3rem;
+    }
+
+    .report-meta-badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+    }
+
+    .report-badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+
+    .badge-sql {
+        background: #e3f2fd;
+        color: #1976d2;
+    }
+
+    .badge-api {
+        background: #fff3e0;
+        color: #f57c00;
+    }
+
+    .badge-shared {
+        background: #f3e5f5;
+        color: #7b1fa2;
+    }
+
+    .report-actions {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .report-actions .btn {
+        flex: 1;
+        font-size: 0.875rem;
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        font-weight: 600;
+    }
+
+    .btn-run {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        border: none;
+        color: white;
+    }
+
+    .btn-run:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+        color: white;
+    }
+
+    .btn-edit {
+        background: #ffc107;
+        border: none;
+        color: white;
+    }
+
+    .btn-edit:hover {
+        background: #ffb300;
+        color: white;
+    }
+
+    .btn-delete {
+        background: #dc3545;
+        border: none;
+        color: white;
+    }
+
+    .btn-delete:hover {
+        background: #c82333;
+        color: white;
+    }
+
+    .no-reports {
+        text-align: center;
+        padding: 4rem 2rem;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    }
+
+    .no-reports-icon {
+        font-size: 4rem;
+        color: #dee2e6;
+        margin-bottom: 1rem;
+    }
+
+    .no-results {
+        text-align: center;
+        padding: 3rem 2rem;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        display: none;
+    }
+</style>
+
+<div class="query-builder-header">
+    <h1><i class="fa fa-table"></i> Query Builder</h1>
+    <p>Create and manage custom data reports with a powerful visual query builder</p>
+</div>
+
+<div class="action-bar">
+    <div class="search-box-inline">
+        <div class="search-input-wrapper">
+            <i class="fa fa-search search-icon"></i>
+            <input type="text"
+                   id="reportSearch"
+                   class="form-control"
+                   placeholder="Search custom reports..."
+                   autocomplete="off">
+        </div>
+    </div>
+
+    @if (Model.CanCreateReports)
+    {
+        <a href="@Url.Action("Create")" class="btn btn-create-report">
+            <i class="fa fa-plus"></i> Create New Report
+        </a>
+    }
+</div>
+
+@if (!Model.Reports.Any())
+{
+    <div class="no-reports">
+        <div class="no-reports-icon"><i class="fa fa-table"></i></div>
+        <h3>No Custom Reports Yet</h3>
+        <p class="text-muted mb-3">Get started by creating your first custom report using the Query Builder.</p>
+        @if (Model.CanCreateReports)
+        {
+            <a href="@Url.Action("Create")" class="btn btn-create-report">
+                <i class="fa fa-plus"></i> Create Your First Report
+            </a>
+        }
+    </div>
+}
+else
+{
+    <div id="reportGrid" class="row g-4">
+        @foreach (var report in Model.Reports)
+        {
+            <div class="col-md-6 col-lg-4 report-item"
+                 data-name="@report.Name.ToLower()"
+                 data-description="@report.Description.ToLower()">
+                <div class="report-card">
+                    <div class="report-card-header">
+                        <div class="report-icon">
+                            <i class="fa fa-chart-bar"></i>
+                        </div>
+                        <h5 class="report-card-title">@report.Name</h5>
+                        <div class="report-card-meta">
+                            <small>
+                                <i class="fa fa-user"></i> @report.CreatedBy
+                                <span class="mx-2">•</span>
+                                <i class="fa fa-calendar"></i> @report.LastModifiedDate.ToString("MMM dd, yyyy")
+                            </small>
+                        </div>
+                    </div>
+                    <div class="report-card-body">
+                        <p class="report-card-description">
+                            @(string.IsNullOrEmpty(report.Description) ? "No description provided." : report.Description)
+                        </p>
+
+                        <div class="report-meta-badges">
+                            <span class="report-badge @(report.DataSourceType == "SQL" ? "badge-sql" : "badge-api")">
+                                <i class="fa fa-database"></i> @report.DataSourceType
+                            </span>
+                            @if (report.IsShared)
+                            {
+                                <span class="report-badge badge-shared">
+                                    <i class="fa fa-share-alt"></i> Shared
+                                </span>
+                            }
+                        </div>
+
+                        <div class="report-actions">
+                            <a href="@Url.Action("Run", "Reports", new { id = report.ReportId })"
+                               class="btn btn-run"
+                               title="Run Report">
+                                <i class="fa fa-play"></i> Run
+                            </a>
+
+                            @if (Model.CanEditReports || Model.IsAdmin)
+                            {
+                                <a href="@Url.Action("Edit", new { id = report.ReportId })"
+                                   class="btn btn-edit"
+                                   title="Edit Report">
+                                    <i class="fa fa-edit"></i>
+                                </a>
+                            }
+
+                            @if (Model.CanDeleteReports || Model.IsAdmin)
+                            {
+                                <button type="button"
+                                        class="btn btn-delete btn-delete-report"
+                                        data-report-id="@report.ReportId"
+                                        data-report-name="@report.Name"
+                                        title="Delete Report">
+                                    <i class="fa fa-trash"></i>
+                                </button>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <div id="noResults" class="no-results">
+        <div class="no-results-icon"><i class="fa fa-search"></i></div>
+        <h4>No Reports Found</h4>
+        <p class="text-muted">Try adjusting your search terms</p>
+    </div>
+}
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Search functionality
+            const searchInput = document.getElementById('reportSearch');
+            const reportGrid = document.getElementById('reportGrid');
+            const noResults = document.getElementById('noResults');
+
+            if (searchInput) {
+                searchInput.addEventListener('input', function() {
+                    const query = this.value.toLowerCase().trim();
+                    const reportItems = document.querySelectorAll('.report-item');
+                    let visibleCount = 0;
+
+                    reportItems.forEach(function(item) {
+                        const name = item.getAttribute('data-name');
+                        const description = item.getAttribute('data-description');
+                        const matches = name.indexOf(query) !== -1 || description.indexOf(query) !== -1;
+
+                        if (matches) {
+                            item.style.display = 'block';
+                            visibleCount++;
+                        } else {
+                            item.style.display = 'none';
+                        }
+                    });
+
+                    if (visibleCount === 0 && query !== '') {
+                        if (noResults) noResults.style.display = 'block';
+                        if (reportGrid) reportGrid.style.display = 'none';
+                    } else {
+                        if (noResults) noResults.style.display = 'none';
+                        if (reportGrid) reportGrid.style.display = 'flex';
+                    }
+                });
+            }
+
+            // Delete report functionality
+            $('.btn-delete-report').on('click', function() {
+                const reportId = $(this).data('report-id');
+                const reportName = $(this).data('report-name');
+
+                Swal.fire({
+                    title: 'Delete Report?',
+                    text: `Are you sure you want to delete "${reportName}"? This action cannot be undone.`,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#dc3545',
+                    cancelButtonColor: '#6c757d',
+                    confirmButtonText: 'Yes, delete it',
+                    cancelButtonText: 'Cancel'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        $.ajax({
+                            url: '@Url.Action("Delete")',
+                            type: 'POST',
+                            data: { id: reportId },
+                            success: function(response) {
+                                if (response.success) {
+                                    Swal.fire({
+                                        toast: true,
+                                        position: 'top-end',
+                                        icon: 'success',
+                                        title: 'Report deleted successfully',
+                                        showConfirmButton: false,
+                                        timer: 3000,
+                                        timerProgressBar: true
+                                    });
+                                    // Reload page after short delay
+                                    setTimeout(() => location.reload(), 1000);
+                                } else {
+                                    Swal.fire('Error', response.message, 'error');
+                                }
+                            },
+                            error: function() {
+                                Swal.fire('Error', 'Failed to delete report', 'error');
+                            }
+                        });
+                    }
+                });
+            });
+        });
+    </script>
+}

@@ -143,19 +143,25 @@ namespace SalesMetrics.Controllers
 
             _logger.LogInformation("User {UserId} selected {Count} tables for new report", userId, model.SelectedTableIds.Count);
 
+            // Get user's office location to determine which CompUFloor database to query
+            var userLocation = HttpContext.Session.GetString("OfficeLocation") ?? "LAX";
+            var compuFloorDb = GetCompUFloorDatabaseName(userLocation);
+
+            _logger.LogInformation("User location: {Location}, CompUFloor database: {Database}", userLocation, compuFloorDb);
+
             // Fetch the selected tables from database
             var selectedTables = await _context.AllowedTables
                 .Where(t => model.SelectedTableIds.Contains(t.AllowedTableId))
                 .ToListAsync();
 
-            // Fetch columns for all selected tables from INFORMATION_SCHEMA
+            // Fetch columns for all selected tables from CompUFloor INFORMATION_SCHEMA
             var allColumns = new List<ColumnSelectionItem>();
 
             foreach (var table in selectedTables)
             {
                 try
                 {
-                    // Use direct SQL connection to query INFORMATION_SCHEMA
+                    // Use direct SQL connection to query CompUFloor INFORMATION_SCHEMA
                     var connection = _context.Database.GetDbConnection();
                     var wasOpen = connection.State == System.Data.ConnectionState.Open;
 
@@ -166,13 +172,14 @@ namespace SalesMetrics.Controllers
 
                     using (var command = connection.CreateCommand())
                     {
-                        command.CommandText = @"
+                        // Query CompUFloor database INFORMATION_SCHEMA using cross-database query
+                        command.CommandText = $@"
                             SELECT
                                 COLUMN_NAME,
                                 DATA_TYPE,
                                 IS_NULLABLE,
                                 ORDINAL_POSITION
-                            FROM INFORMATION_SCHEMA.COLUMNS
+                            FROM [{compuFloorDb}].INFORMATION_SCHEMA.COLUMNS
                             WHERE TABLE_SCHEMA = @schema
                             AND TABLE_NAME = @tableName
                             ORDER BY ORDINAL_POSITION";
@@ -187,8 +194,11 @@ namespace SalesMetrics.Controllers
                         tableParam.Value = table.TableName;
                         command.Parameters.Add(tableParam);
 
+                        _logger.LogInformation("Querying columns for table {Table} from database {Database}", table.TableName, compuFloorDb);
+
                         using (var reader = await command.ExecuteReaderAsync())
                         {
+                            int columnCount = 0;
                             while (await reader.ReadAsync())
                             {
                                 var columnName = reader["COLUMN_NAME"].ToString() ?? "";
@@ -209,7 +219,9 @@ namespace SalesMetrics.Controllers
                                     SortDirection = "ASC",
                                     AggregateFunction = null
                                 });
+                                columnCount++;
                             }
+                            _logger.LogInformation("Found {Count} columns for table {Table}", columnCount, table.TableName);
                         }
                     }
 
@@ -220,10 +232,12 @@ namespace SalesMetrics.Controllers
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error fetching columns for table {TableName}", table.TableName);
+                    _logger.LogError(ex, "Error fetching columns for table {TableName} from database {Database}", table.TableName, compuFloorDb);
                     return Json(new { success = false, message = $"Error fetching columns for table {table.TableName}: {ex.Message}" });
                 }
             }
+
+            _logger.LogInformation("Total columns fetched: {Count}", allColumns.Count);
 
             // Store wizard state in TempData for next step
             TempData["WizardState"] = System.Text.Json.JsonSerializer.Serialize(new
@@ -246,6 +260,22 @@ namespace SalesMetrics.Controllers
                 nextStep = 2,
                 columns = allColumns
             });
+        }
+
+        /// <summary>
+        /// Get CompUFloor database name based on office location
+        /// </summary>
+        private string GetCompUFloorDatabaseName(string location)
+        {
+            return location.ToUpper() switch
+            {
+                "LAX" => "CompUFloorLA",
+                "LSV" => "CompUFloorLV",
+                "CHN" => "CompUFloorChino",
+                "PHX" => "CompUFloorPHX",
+                "SND" => "CompUFloorSD",
+                _ => "CompUFloorLA" // Default to LA if unknown
+            };
         }
 
         /// <summary>

@@ -24,11 +24,11 @@
     var hasErrorLogsAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "ErrorLogs") : false;
     var hasSigningAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Signing") : false;
 
-    // Query Builder feature permissions
-    var hasQueryBuilderAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "QueryBuilder_Access") : false;
-    var canCreateReports = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "QueryBuilder_CreateReports") : false;
-    var canEditReports = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "QueryBuilder_EditReports") : false;
-    var isQueryBuilderAdmin = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "QueryBuilder_Admin") : false;
+    // Query Builder feature permissions (use FeatureCode from seed-data.sql)
+    var hasQueryBuilderAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "REPORT_BUILDER_ACCESS") : false;
+    var canCreateReports = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "REPORT_BUILDER_CREATE") : false;
+    var canEditReports = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "REPORT_BUILDER_EDIT") : false;
+    var isQueryBuilderAdmin = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "REPORT_BUILDER_ADMIN") : false;
 
     // Keep role-based flag for conditional display within sections
     var isGMOrAdmin = roleId == "1" || roleId == "4";

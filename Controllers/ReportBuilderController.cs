@@ -34,7 +34,7 @@ namespace SalesMetrics.Controllers
             var userId = GetCurrentUserId();
 
             // Check if user has Query Builder access
-            var hasAccess = await _permissionService.HasFeatureAccessAsync(userId, "QueryBuilder_Access");
+            var hasAccess = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_ACCESS");
             if (!hasAccess)
             {
                 _logger.LogWarning("User {UserId} attempted to access Query Builder without permission", userId);
@@ -66,10 +66,10 @@ namespace SalesMetrics.Controllers
                     LastModifiedDate = r.ModifiedDate ?? r.CreatedDate,
                     IsShared = !string.IsNullOrEmpty(r.AllowedRoles) || !string.IsNullOrEmpty(r.AllowedLocations)
                 }).ToList(),
-                CanCreateReports = await _permissionService.HasFeatureAccessAsync(userId, "QueryBuilder_CreateReports"),
-                CanEditReports = await _permissionService.HasFeatureAccessAsync(userId, "QueryBuilder_EditReports"),
-                CanDeleteReports = await _permissionService.HasFeatureAccessAsync(userId, "QueryBuilder_DeleteReports"),
-                IsAdmin = await _permissionService.HasFeatureAccessAsync(userId, "QueryBuilder_Admin")
+                CanCreateReports = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_CREATE"),
+                CanEditReports = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_EDIT"),
+                CanDeleteReports = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_DELETE"),
+                IsAdmin = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_ADMIN")
             };
 
             return View(viewModel);
@@ -83,7 +83,7 @@ namespace SalesMetrics.Controllers
         {
             var userId = GetCurrentUserId();
 
-            var canCreate = await _permissionService.HasFeatureAccessAsync(userId, "QueryBuilder_CreateReports");
+            var canCreate = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_CREATE");
             if (!canCreate)
             {
                 _logger.LogWarning("User {UserId} attempted to create report without permission", userId);
@@ -102,7 +102,7 @@ namespace SalesMetrics.Controllers
         {
             var userId = GetCurrentUserId();
 
-            var canEdit = await _permissionService.HasFeatureAccessAsync(userId, "QueryBuilder_EditReports");
+            var canEdit = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_EDIT");
             if (!canEdit)
             {
                 _logger.LogWarning("User {UserId} attempted to edit report without permission", userId);
@@ -129,7 +129,7 @@ namespace SalesMetrics.Controllers
         {
             var userId = GetCurrentUserId();
 
-            var canDelete = await _permissionService.HasFeatureAccessAsync(userId, "QueryBuilder_DeleteReports");
+            var canDelete = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_DELETE");
             if (!canDelete)
             {
                 return Json(new { success = false, message = "You don't have permission to delete reports" });

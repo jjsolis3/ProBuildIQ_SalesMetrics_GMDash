@@ -421,6 +421,7 @@
     <!-- Step 1: Table Selection -->
     @if (Model.CurrentStep == 1)
     {
+        <div id="step1Container">
         <div class="wizard-content">
             <h2 class="wizard-title"><i class="fa fa-table"></i> Select Tables</h2>
             <p class="wizard-subtitle">Choose one or more tables to include in your report</p>
@@ -504,6 +505,7 @@
             <button type="button" id="btnNext" class="btn btn-next" disabled>
                 Next: Configure Columns <i class="fa fa-arrow-right"></i>
             </button>
+        </div>
         </div>
     }
 
@@ -704,9 +706,9 @@
                 allColumns = columns;
 
                 // Hide Step 1, show Step 2
+                $('#step1Container').hide();
                 $('.wizard-step:nth-child(1)').addClass('completed');
                 $('.wizard-step:nth-child(2)').addClass('active');
-                $('[id^="step"]').parent().hide();
                 $('#step2Container').show();
 
                 console.log('Step 2 container shown');
@@ -828,9 +830,9 @@
                 // Back button
                 $('#btnBackToStep1').on('click', function() {
                     $('#step2Container').hide();
+                    $('#step1Container').show();
                     $('.wizard-step:nth-child(2)').removeClass('active');
-                    $('.wizard-step:nth-child(1)').removeClass('completed');
-                    $('[id^="step"]').parent().show();
+                    $('.wizard-step:nth-child(1)').removeClass('completed').addClass('active');
                 });
 
                 // Next button (Step 2)

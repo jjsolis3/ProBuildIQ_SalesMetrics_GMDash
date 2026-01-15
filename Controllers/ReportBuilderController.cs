@@ -153,36 +153,75 @@ namespace SalesMetrics.Controllers
 
             foreach (var table in selectedTables)
             {
-                var columns = await _context.Database
-                    .SqlQueryRaw<ColumnSchemaDto>(@"
-                        SELECT
-                            COLUMN_NAME as ColumnName,
-                            DATA_TYPE as DataType,
-                            IS_NULLABLE as IsNullable,
-                            ORDINAL_POSITION as OrdinalPosition
-                        FROM INFORMATION_SCHEMA.COLUMNS
-                        WHERE TABLE_SCHEMA = {0} AND TABLE_NAME = {1}
-                        ORDER BY ORDINAL_POSITION",
-                        table.SchemaName ?? "dbo",
-                        table.TableName)
-                    .ToListAsync();
-
-                foreach (var col in columns)
+                try
                 {
-                    allColumns.Add(new ColumnSelectionItem
+                    // Use direct SQL connection to query INFORMATION_SCHEMA
+                    var connection = _context.Database.GetDbConnection();
+                    var wasOpen = connection.State == System.Data.ConnectionState.Open;
+
+                    if (!wasOpen)
                     {
-                        ColumnId = $"{table.TableName}.{col.ColumnName}",
-                        TableName = table.TableName ?? "",
-                        TableDisplayName = table.DisplayName ?? table.TableName ?? "",
-                        ColumnName = col.ColumnName ?? "",
-                        DisplayName = col.ColumnName ?? "",
-                        DataType = col.DataType ?? "varchar",
-                        IsNullable = col.IsNullable == "YES",
-                        IsSelected = false,
-                        SortOrder = null,
-                        SortDirection = "ASC",
-                        AggregateFunction = null
-                    });
+                        await connection.OpenAsync();
+                    }
+
+                    using (var command = connection.CreateCommand())
+                    {
+                        command.CommandText = @"
+                            SELECT
+                                COLUMN_NAME,
+                                DATA_TYPE,
+                                IS_NULLABLE,
+                                ORDINAL_POSITION
+                            FROM INFORMATION_SCHEMA.COLUMNS
+                            WHERE TABLE_SCHEMA = @schema
+                            AND TABLE_NAME = @tableName
+                            ORDER BY ORDINAL_POSITION";
+
+                        var schemaParam = command.CreateParameter();
+                        schemaParam.ParameterName = "@schema";
+                        schemaParam.Value = table.SchemaName ?? "dbo";
+                        command.Parameters.Add(schemaParam);
+
+                        var tableParam = command.CreateParameter();
+                        tableParam.ParameterName = "@tableName";
+                        tableParam.Value = table.TableName;
+                        command.Parameters.Add(tableParam);
+
+                        using (var reader = await command.ExecuteReaderAsync())
+                        {
+                            while (await reader.ReadAsync())
+                            {
+                                var columnName = reader["COLUMN_NAME"].ToString() ?? "";
+                                var dataType = reader["DATA_TYPE"].ToString() ?? "varchar";
+                                var isNullable = reader["IS_NULLABLE"].ToString() == "YES";
+
+                                allColumns.Add(new ColumnSelectionItem
+                                {
+                                    ColumnId = $"{table.TableName}.{columnName}",
+                                    TableName = table.TableName ?? "",
+                                    TableDisplayName = table.DisplayName ?? table.TableName ?? "",
+                                    ColumnName = columnName,
+                                    DisplayName = columnName,
+                                    DataType = dataType,
+                                    IsNullable = isNullable,
+                                    IsSelected = false,
+                                    SortOrder = null,
+                                    SortDirection = "ASC",
+                                    AggregateFunction = null
+                                });
+                            }
+                        }
+                    }
+
+                    if (!wasOpen)
+                    {
+                        await connection.CloseAsync();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error fetching columns for table {TableName}", table.TableName);
+                    return Json(new { success = false, message = $"Error fetching columns for table {table.TableName}: {ex.Message}" });
                 }
             }
 

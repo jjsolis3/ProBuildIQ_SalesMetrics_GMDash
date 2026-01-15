@@ -24,6 +24,12 @@
     var hasErrorLogsAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "ErrorLogs") : false;
     var hasSigningAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Signing") : false;
 
+    // Query Builder feature permissions
+    var hasQueryBuilderAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "QueryBuilder_Access") : false;
+    var canCreateReports = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "QueryBuilder_CreateReports") : false;
+    var canEditReports = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "QueryBuilder_EditReports") : false;
+    var isQueryBuilderAdmin = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "QueryBuilder_Admin") : false;
+
     // Keep role-based flag for conditional display within sections
     var isGMOrAdmin = roleId == "1" || roleId == "4";
     var isSalesManagerOrAbove = roleId == "1" || roleId == "3" || roleId == "4";
@@ -250,16 +256,40 @@
                     }
                 } *@
 
-                @if (hasReportsAccess)
+                @if (hasReportsAccess || hasQueryBuilderAccess)
                 {
                     <!-- Reporting & Analytics -->
                     <li class="menu-title">REPORTS</li>
-                    <li class="ms-3">
-                        <a href="/Reports">
-                            <i class="fa fa-chart-line"></i>
-                            <span>Reports</span>
-                        </a>
-                    </li>
+
+                    @if (hasReportsAccess)
+                    {
+                        <li class="ms-3">
+                            <a href="/Reports">
+                                <i class="fa fa-chart-line"></i>
+                                <span>Reports</span>
+                            </a>
+                        </li>
+                    }
+
+                    @if (hasQueryBuilderAccess)
+                    {
+                        <li class="ms-3">
+                            <a href="/ReportBuilder">
+                                <i class="fa fa-table"></i>
+                                <span>Query Builder</span>
+                            </a>
+                        </li>
+                    }
+
+                    @if (canCreateReports)
+                    {
+                        <li class="ms-3">
+                            <a href="/ReportBuilder/Create">
+                                <i class="fa fa-plus-circle"></i>
+                                <span>Create Report</span>
+                            </a>
+                        </li>
+                    }
                 }
 
                 @if (hasAnnouncementsAccess)

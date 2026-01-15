@@ -350,10 +350,29 @@ namespace SalesMetrics.Controllers
                 return Json(new { success = false, message = "Session expired. Please start over." });
             }
 
-            var wizardState = System.Text.Json.JsonSerializer.Deserialize<dynamic>(wizardStateJson);
-            var allColumns = System.Text.Json.JsonSerializer.Deserialize<List<ColumnSelectionItem>>(
-                wizardState.GetProperty("AllColumns").GetRawText()
-            );
+            // Parse JSON properly using JsonDocument
+            List<ColumnSelectionItem> allColumns;
+            try
+            {
+                using var document = System.Text.Json.JsonDocument.Parse(wizardStateJson);
+                var root = document.RootElement;
+
+                if (root.TryGetProperty("AllColumns", out var columnsElement))
+                {
+                    var columnsJson = columnsElement.GetRawText();
+                    allColumns = System.Text.Json.JsonSerializer.Deserialize<List<ColumnSelectionItem>>(columnsJson) ?? new List<ColumnSelectionItem>();
+                }
+                else
+                {
+                    _logger.LogError("AllColumns property not found in wizard state");
+                    return Json(new { success = false, message = "Session data is invalid. Please start over." });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deserializing wizard state");
+                return Json(new { success = false, message = "Failed to retrieve session data. Please start over." });
+            }
 
             // Store wizard state for Step 2
             TempData["WizardState_Step1_5"] = System.Text.Json.JsonSerializer.Serialize(new

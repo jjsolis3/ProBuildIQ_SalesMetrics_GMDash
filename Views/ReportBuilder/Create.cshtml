@@ -641,6 +641,8 @@
                 });
 
                 // Submit to backend
+                console.log('Submitting tables:', selectedTables);
+
                 $.ajax({
                     url: '@Url.Action("CreateStep1", "ReportBuilder")',
                     type: 'POST',
@@ -649,10 +651,14 @@
                         selectedTableIds: selectedTables.map(t => t.id)
                     }),
                     success: function(response) {
+                        console.log('Server response:', response);
+
                         if (response.success) {
+                            console.log('Loading Step 2 with columns:', response.columns);
                             Swal.close();
                             loadStep2(response.columns);
                         } else {
+                            console.error('Server returned error:', response.message);
                             Swal.fire({
                                 icon: 'error',
                                 title: 'Error',
@@ -660,11 +666,18 @@
                             });
                         }
                     },
-                    error: function() {
+                    error: function(xhr, status, error) {
+                        console.error('AJAX error:', {
+                            status: xhr.status,
+                            statusText: xhr.statusText,
+                            responseText: xhr.responseText,
+                            error: error
+                        });
+
                         Swal.fire({
                             icon: 'error',
                             title: 'Error',
-                            text: 'Failed to submit table selection. Please try again.'
+                            html: `Failed to submit table selection.<br><br><small>Status: ${xhr.status} ${xhr.statusText}<br>Error: ${error}</small>`
                         });
                     }
                 });
@@ -677,6 +690,17 @@
             let selectedColumns = [];
 
             function loadStep2(columns) {
+                console.log('loadStep2 called with', columns.length, 'columns');
+
+                if (!columns || columns.length === 0) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'No Columns Found',
+                        text: 'No columns were found for the selected tables.'
+                    });
+                    return;
+                }
+
                 allColumns = columns;
 
                 // Hide Step 1, show Step 2
@@ -685,50 +709,70 @@
                 $('[id^="step"]').parent().hide();
                 $('#step2Container').show();
 
-                // Group columns by table
-                const groupedColumns = {};
-                columns.forEach(col => {
-                    if (!groupedColumns[col.tableName]) {
-                        groupedColumns[col.tableName] = {
-                            displayName: col.tableDisplayName,
-                            columns: []
-                        };
-                    }
-                    groupedColumns[col.tableName].columns.push(col);
-                });
+                console.log('Step 2 container shown');
 
-                // Render column groups
-                let html = '';
-                for (const [tableName, group] of Object.entries(groupedColumns)) {
-                    html += `
-                        <div class="column-table-group">
-                            <div class="table-group-header">
-                                <div>
-                                    <div class="table-group-title">${group.displayName}</div>
-                                    <div class="table-group-stats">
-                                        <span class="selected-in-table">0</span> of ${group.columns.length} columns selected
-                                    </div>
-                                </div>
-                                <span class="select-all-table" data-table="${tableName}">Select All</span>
-                            </div>
-                            <div class="column-list">
-                                ${group.columns.map(col => `
-                                    <div class="column-item" data-column-id="${col.columnId}">
-                                        <input type="checkbox" class="column-checkbox" data-column-id="${col.columnId}">
-                                        <div class="column-info">
-                                            <div class="column-name">${col.columnName}</div>
-                                            <div class="column-type">${col.dataType}${col.isNullable ? ' (nullable)' : ''}</div>
+                try {
+                    // Group columns by table
+                    const groupedColumns = {};
+                    columns.forEach(col => {
+                        console.log('Processing column:', col);
+                        if (!groupedColumns[col.tableName]) {
+                            groupedColumns[col.tableName] = {
+                                displayName: col.tableDisplayName,
+                                columns: []
+                            };
+                        }
+                        groupedColumns[col.tableName].columns.push(col);
+                    });
+
+                    console.log('Grouped columns:', groupedColumns);
+
+                    // Render column groups
+                    let html = '';
+                    for (const [tableName, group] of Object.entries(groupedColumns)) {
+                        console.log('Rendering table group:', tableName, group);
+                        html += `
+                            <div class="column-table-group">
+                                <div class="table-group-header">
+                                    <div>
+                                        <div class="table-group-title">${group.displayName}</div>
+                                        <div class="table-group-stats">
+                                            <span class="selected-in-table">0</span> of ${group.columns.length} columns selected
                                         </div>
                                     </div>
-                                `).join('')}
+                                    <span class="select-all-table" data-table="${tableName}">Select All</span>
+                                </div>
+                                <div class="column-list">
+                                    ${group.columns.map(col => `
+                                        <div class="column-item" data-column-id="${col.columnId}">
+                                            <input type="checkbox" class="column-checkbox" data-column-id="${col.columnId}">
+                                            <div class="column-info">
+                                                <div class="column-name">${col.columnName}</div>
+                                                <div class="column-type">${col.dataType}${col.isNullable ? ' (nullable)' : ''}</div>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
                             </div>
-                        </div>
-                    `;
-                }
-                $('#columnGroupsContainer').html(html);
+                        `;
+                    }
 
-                // Bind events
-                setupStep2Events();
+                    console.log('Setting HTML to container');
+                    $('#columnGroupsContainer').html(html);
+
+                    console.log('Binding Step 2 events');
+                    // Bind events
+                    setupStep2Events();
+
+                    console.log('Step 2 loaded successfully');
+                } catch (error) {
+                    console.error('Error in loadStep2:', error);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'JavaScript Error',
+                        html: `An error occurred while loading columns:<br><br><code>${error.message}</code>`
+                    });
+                }
             }
 
             function setupStep2Events() {

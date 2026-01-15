@@ -391,6 +391,69 @@
     .select-all-table:hover {
         color: #20a03a;
     }
+
+    /* Step 3: Filter Builder */
+    .filter-row {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 1rem;
+        background: white;
+        border: 2px solid #e9ecef;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+        transition: all 0.3s ease;
+    }
+
+    .filter-row:hover {
+        border-color: #28a745;
+        box-shadow: 0 2px 8px rgba(40, 167, 69, 0.1);
+    }
+
+    .filter-row select, .filter-row input {
+        flex: 1;
+        padding: 0.5rem;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        font-size: 0.875rem;
+    }
+
+    .filter-row .logical-operator {
+        flex: 0 0 80px;
+        font-weight: 600;
+        color: #6c757d;
+        text-align: center;
+    }
+
+    .filter-row .btn-remove-filter {
+        flex: 0 0 auto;
+        background: #dc3545;
+        color: white;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .filter-row .btn-remove-filter:hover {
+        background: #c82333;
+    }
+
+    .filter-empty-state {
+        text-align: center;
+        padding: 3rem;
+        color: #6c757d;
+        border: 2px dashed #dee2e6;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+    }
+
+    .filter-empty-state i {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        color: #adb5bd;
+    }
 </style>
 
 <div class="container-fluid">
@@ -547,6 +610,34 @@
             </button>
             <button type="button" id="btnNextStep2" class="btn btn-next" disabled>
                 Next: Add Filters <i class="fa fa-arrow-right"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Step 3: Filter Configuration -->
+    <div id="step3Container" style="display: none;">
+        <div class="wizard-content">
+            <h2 class="wizard-title"><i class="fa fa-filter"></i> Add Filters (Optional)</h2>
+            <p class="wizard-subtitle">Add conditions to filter your data. You can skip this step if no filtering is needed.</p>
+
+            <!-- Filters List -->
+            <div id="filtersContainer">
+                <!-- Filters will be added here dynamically -->
+            </div>
+
+            <!-- Add Filter Button -->
+            <button type="button" id="btnAddFilter" class="btn btn-success mb-3">
+                <i class="fa fa-plus"></i> Add Filter
+            </button>
+        </div>
+
+        <!-- Navigation -->
+        <div class="wizard-navigation">
+            <button type="button" id="btnBackToStep2" class="btn btn-back">
+                <i class="fa fa-arrow-left"></i> Back
+            </button>
+            <button type="button" id="btnNextStep3" class="btn btn-next">
+                Next: Preview <i class="fa fa-arrow-right"></i>
             </button>
         </div>
     </div>
@@ -835,7 +926,7 @@
                     $('.wizard-step:nth-child(1)').removeClass('completed').addClass('active');
                 });
 
-                // Next button (Step 2)
+                // Next button (Step 2) - Submit and proceed to Step 3
                 $('#btnNextStep2').on('click', function() {
                     if (selectedColumns.length === 0) {
                         Swal.fire({
@@ -846,12 +937,36 @@
                         return;
                     }
 
-                    // TODO: Proceed to Step 3
-                    Swal.fire({
-                        icon: 'info',
-                        title: 'Step 3: Coming Soon',
-                        html: `<p>You selected <strong>${selectedColumns.length}</strong> columns!</p>
-                               <p class="mt-3">Step 3: Filter Configuration will be implemented next!</p>`
+                    console.log('Submitting columns:', selectedColumns);
+
+                    // Submit to backend
+                    $.ajax({
+                        url: '@Url.Action("CreateStep2", "ReportBuilder")',
+                        type: 'POST',
+                        contentType: 'application/json',
+                        data: JSON.stringify({
+                            selectedColumns: selectedColumns
+                        }),
+                        success: function(response) {
+                            console.log('Step 2 response:', response);
+                            if (response.success) {
+                                loadStep3(response.selectedColumns);
+                            } else {
+                                Swal.fire({
+                                    icon: 'error',
+                                    title: 'Error',
+                                    text: response.message || 'Failed to save column configuration'
+                                });
+                            }
+                        },
+                        error: function(xhr, status, error) {
+                            console.error('AJAX error:', { status: xhr.status, error: error });
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Error',
+                                html: `Failed to submit columns.<br><small>Status: ${xhr.status}</small>`
+                            });
+                        }
                     });
                 });
             }
@@ -875,6 +990,195 @@
                     } else {
                         selectAllBtn.text('Select All');
                     }
+                });
+            }
+
+            // ===========================================
+            // Step 3: Filter Configuration
+            // ===========================================
+            let reportColumns = [];
+            let filters = [];
+            let filterIdCounter = 0;
+
+            function loadStep3(columns) {
+                console.log('loadStep3 called with', columns.length, 'columns');
+
+                reportColumns = columns;
+
+                // Hide Step 2, show Step 3
+                $('#step2Container').hide();
+                $('#step3Container').show();
+                $('.wizard-step:nth-child(2)').addClass('completed');
+                $('.wizard-step:nth-child(3)').addClass('active');
+
+                console.log('Step 3 container shown');
+
+                // Setup Step 3 events
+                setupStep3Events();
+
+                // Show empty state
+                showEmptyFilterState();
+            }
+
+            function setupStep3Events() {
+                // Add filter button
+                $('#btnAddFilter').off('click').on('click', function() {
+                    addFilter();
+                });
+
+                // Back button
+                $('#btnBackToStep2').off('click').on('click', function() {
+                    $('#step3Container').hide();
+                    $('#step2Container').show();
+                    $('.wizard-step:nth-child(3)').removeClass('active');
+                    $('.wizard-step:nth-child(2)').removeClass('completed').addClass('active');
+                });
+
+                // Next button (Step 3)
+                $('#btnNextStep3').off('click').on('click', function() {
+                    // Filters are optional, so we can proceed even with 0 filters
+                    console.log('Filters:', filters);
+
+                    // TODO: Proceed to Step 4 (Preview)
+                    Swal.fire({
+                        icon: 'info',
+                        title: 'Step 4: Coming Soon',
+                        html: `<p>You configured <strong>${filters.length}</strong> filter(s)!</p>
+                               <p class="mt-3">Step 4: Preview & Step 5: Save will be implemented next!</p>`
+                    });
+                });
+            }
+
+            function showEmptyFilterState() {
+                if (filters.length === 0) {
+                    $('#filtersContainer').html(`
+                        <div class="filter-empty-state">
+                            <i class="fa fa-filter"></i>
+                            <h4>No Filters Yet</h4>
+                            <p>Click "Add Filter" to add conditions to your query.<br>Filters are optional - you can skip this step if you want all data.</p>
+                        </div>
+                    `);
+                }
+            }
+
+            function addFilter() {
+                const filterId = filterIdCounter++;
+                const isFirstFilter = filters.length === 0;
+
+                const filter = {
+                    id: filterId,
+                    columnId: '',
+                    operator: '=',
+                    value: '',
+                    logicalOperator: 'AND'
+                };
+
+                filters.push(filter);
+
+                renderFilters();
+            }
+
+            function renderFilters() {
+                if (filters.length === 0) {
+                    showEmptyFilterState();
+                    return;
+                }
+
+                let html = '';
+                filters.forEach((filter, index) => {
+                    const isFirstFilter = index === 0;
+
+                    html += `
+                        <div class="filter-row" data-filter-id="${filter.id}">
+                            ${!isFirstFilter ? `
+                                <div class="logical-operator">
+                                    <select class="filter-logical" data-filter-id="${filter.id}">
+                                        <option value="AND" ${filter.logicalOperator === 'AND' ? 'selected' : ''}>AND</option>
+                                        <option value="OR" ${filter.logicalOperator === 'OR' ? 'selected' : ''}>OR</option>
+                                    </select>
+                                </div>
+                            ` : '<div style="flex: 0 0 80px;"></div>'}
+
+                            <select class="filter-column" data-filter-id="${filter.id}">
+                                <option value="">Select Column</option>
+                                ${reportColumns.map(col => `
+                                    <option value="${col.columnId}" ${filter.columnId === col.columnId ? 'selected' : ''}>
+                                        ${col.tableDisplayName}.${col.columnName}
+                                    </option>
+                                `).join('')}
+                            </select>
+
+                            <select class="filter-operator" data-filter-id="${filter.id}">
+                                <option value="=" ${filter.operator === '=' ? 'selected' : ''}>Equals (=)</option>
+                                <option value="!=" ${filter.operator === '!=' ? 'selected' : ''}>Not Equals (!=)</option>
+                                <option value=">" ${filter.operator === '>' ? 'selected' : ''}>Greater Than (>)</option>
+                                <option value="<" ${filter.operator === '<' ? 'selected' : ''}>Less Than (<)</option>
+                                <option value=">=" ${filter.operator === '>=' ? 'selected' : ''}>Greater or Equal (>=)</option>
+                                <option value="<=" ${filter.operator === '<=' ? 'selected' : ''}>Less or Equal (<=)</option>
+                                <option value="LIKE" ${filter.operator === 'LIKE' ? 'selected' : ''}>Contains (LIKE)</option>
+                                <option value="IN" ${filter.operator === 'IN' ? 'selected' : ''}>In List (IN)</option>
+                                <option value="IS NULL" ${filter.operator === 'IS NULL' ? 'selected' : ''}>Is NULL</option>
+                                <option value="IS NOT NULL" ${filter.operator === 'IS NOT NULL' ? 'selected' : ''}>Is NOT NULL</option>
+                            </select>
+
+                            <input type="text" class="filter-value" data-filter-id="${filter.id}"
+                                   value="${filter.value}"
+                                   placeholder="Enter value..."
+                                   ${(filter.operator === 'IS NULL' || filter.operator === 'IS NOT NULL') ? 'disabled' : ''}>
+
+                            <button type="button" class="btn-remove-filter" data-filter-id="${filter.id}">
+                                <i class="fa fa-trash"></i> Remove
+                            </button>
+                        </div>
+                    `;
+                });
+
+                $('#filtersContainer').html(html);
+
+                // Bind events
+                $('.filter-column').on('change', function() {
+                    const filterId = $(this).data('filter-id');
+                    const filter = filters.find(f => f.id === filterId);
+                    if (filter) {
+                        filter.columnId = $(this).val();
+                    }
+                });
+
+                $('.filter-operator').on('change', function() {
+                    const filterId = $(this).data('filter-id');
+                    const filter = filters.find(f => f.id === filterId);
+                    if (filter) {
+                        filter.operator = $(this).val();
+                        // Disable value input for IS NULL / IS NOT NULL
+                        if (filter.operator === 'IS NULL' || filter.operator === 'IS NOT NULL') {
+                            $(`.filter-value[data-filter-id="${filterId}"]`).prop('disabled', true).val('');
+                            filter.value = '';
+                        } else {
+                            $(`.filter-value[data-filter-id="${filterId}"]`).prop('disabled', false);
+                        }
+                    }
+                });
+
+                $('.filter-value').on('input', function() {
+                    const filterId = $(this).data('filter-id');
+                    const filter = filters.find(f => f.id === filterId);
+                    if (filter) {
+                        filter.value = $(this).val();
+                    }
+                });
+
+                $('.filter-logical').on('change', function() {
+                    const filterId = $(this).data('filter-id');
+                    const filter = filters.find(f => f.id === filterId);
+                    if (filter) {
+                        filter.logicalOperator = $(this).val();
+                    }
+                });
+
+                $('.btn-remove-filter').on('click', function() {
+                    const filterId = $(this).data('filter-id');
+                    filters = filters.filter(f => f.id !== filterId);
+                    renderFilters();
                 });
             }
         });

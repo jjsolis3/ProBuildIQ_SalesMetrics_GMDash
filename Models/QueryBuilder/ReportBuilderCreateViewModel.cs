@@ -94,6 +94,14 @@ namespace SalesMetrics.Models.QueryBuilder
     }
 
     /// <summary>
+    /// DTO for Step 2 submission (Column Configuration)
+    /// </summary>
+    public class Step2SubmissionDto
+    {
+        public List<ColumnSelectionItem> SelectedColumns { get; set; } = new();
+    }
+
+    /// <summary>
     /// DTO for column schema from INFORMATION_SCHEMA
     /// </summary>
     public class ColumnSchemaDto

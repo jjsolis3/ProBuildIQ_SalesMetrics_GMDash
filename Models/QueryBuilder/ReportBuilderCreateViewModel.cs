@@ -94,6 +94,27 @@ namespace SalesMetrics.Models.QueryBuilder
     }
 
     /// <summary>
+    /// DTO for Step 1.5 submission (Table Relationships)
+    /// </summary>
+    public class Step1_5SubmissionDto
+    {
+        public List<TableRelationship> Relationships { get; set; } = new();
+    }
+
+    /// <summary>
+    /// Represents a relationship/join between two tables
+    /// </summary>
+    public class TableRelationship
+    {
+        public string LeftTable { get; set; } = string.Empty;
+        public string LeftColumn { get; set; } = string.Empty;
+        public string RightTable { get; set; } = string.Empty;
+        public string RightColumn { get; set; } = string.Empty;
+        public string JoinType { get; set; } = "INNER"; // INNER, LEFT, RIGHT, FULL
+        public string? AdditionalCondition { get; set; } // Optional: e.g., "AND Status = 'Active'"
+    }
+
+    /// <summary>
     /// DTO for Step 2 submission (Column Configuration)
     /// </summary>
     public class Step2SubmissionDto
@@ -110,5 +131,24 @@ namespace SalesMetrics.Models.QueryBuilder
         public string? DataType { get; set; }
         public string? IsNullable { get; set; }
         public int OrdinalPosition { get; set; }
+    }
+
+    /// <summary>
+    /// Represents a table with its columns for relationship building
+    /// </summary>
+    public class TableWithColumns
+    {
+        public string TableName { get; set; } = string.Empty;
+        public string DisplayName { get; set; } = string.Empty;
+        public List<TableColumnInfo> Columns { get; set; } = new();
+    }
+
+    /// <summary>
+    /// Basic column information for relationship building
+    /// </summary>
+    public class TableColumnInfo
+    {
+        public string ColumnName { get; set; } = string.Empty;
+        public string DataType { get; set; } = string.Empty;
     }
 }

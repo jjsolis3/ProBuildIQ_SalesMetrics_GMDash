@@ -239,27 +239,71 @@ namespace SalesMetrics.Controllers
 
             _logger.LogInformation("Total columns fetched: {Count}", allColumns.Count);
 
-            // Store wizard state in TempData for next step
-            TempData["WizardState"] = System.Text.Json.JsonSerializer.Serialize(new
+            // Check if multiple tables selected - if yes, go to Step 1.5 (Relationships)
+            if (selectedTables.Count > 1)
             {
-                CurrentStep = 2,
-                SelectedTableIds = model.SelectedTableIds,
-                SelectedTables = selectedTables.Select(t => new
+                // Build list of tables with their columns for relationship configuration
+                var tablesWithColumns = selectedTables.Select(t => new TableWithColumns
                 {
-                    t.AllowedTableId,
-                    t.TableName,
-                    t.DisplayName,
-                    t.Category
-                }).ToList()
-            });
+                    TableName = t.TableName ?? "",
+                    DisplayName = t.DisplayName ?? t.TableName ?? "",
+                    Columns = allColumns
+                        .Where(c => c.TableName == t.TableName)
+                        .Select(c => new TableColumnInfo
+                        {
+                            ColumnName = c.ColumnName,
+                            DataType = c.DataType
+                        })
+                        .ToList()
+                }).ToList();
 
-            return Json(new
+                // Store wizard state for Step 1.5
+                TempData["WizardState"] = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    CurrentStep = 1.5,
+                    SelectedTableIds = model.SelectedTableIds,
+                    SelectedTables = selectedTables.Select(t => new
+                    {
+                        t.AllowedTableId,
+                        t.TableName,
+                        t.DisplayName,
+                        t.Category
+                    }).ToList(),
+                    AllColumns = allColumns
+                });
+
+                return Json(new
+                {
+                    success = true,
+                    message = "Tables selected successfully",
+                    nextStep = 1.5,
+                    tablesWithColumns = tablesWithColumns
+                });
+            }
+            else
             {
-                success = true,
-                message = "Tables selected successfully",
-                nextStep = 2,
-                columns = allColumns
-            });
+                // Single table selected - skip relationships, go straight to Step 2
+                TempData["WizardState"] = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    CurrentStep = 2,
+                    SelectedTableIds = model.SelectedTableIds,
+                    SelectedTables = selectedTables.Select(t => new
+                    {
+                        t.AllowedTableId,
+                        t.TableName,
+                        t.DisplayName,
+                        t.Category
+                    }).ToList()
+                });
+
+                return Json(new
+                {
+                    success = true,
+                    message = "Tables selected successfully",
+                    nextStep = 2,
+                    columns = allColumns
+                });
+            }
         }
 
         /// <summary>
@@ -276,6 +320,55 @@ namespace SalesMetrics.Controllers
                 "SND" => "CompUFloorSD",
                 _ => "CompUFloorLA" // Default to LA if unknown
             };
+        }
+
+        /// <summary>
+        /// Process Step 1.5 (Table Relationships) and advance to Step 2 (Column Configuration)
+        /// </summary>
+        [HttpPost]
+        public IActionResult CreateStep1_5([FromBody] Step1_5SubmissionDto model)
+        {
+            var userId = GetCurrentUserId();
+
+            var canCreate = _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_CREATE").Result;
+            if (!canCreate)
+            {
+                return Json(new { success = false, message = "You don't have permission to create reports" });
+            }
+
+            if (model.Relationships == null || !model.Relationships.Any())
+            {
+                return Json(new { success = false, message = "Please define at least one relationship between your tables" });
+            }
+
+            _logger.LogInformation("User {UserId} configured {Count} table relationships", userId, model.Relationships.Count);
+
+            // Retrieve previously stored columns from TempData
+            var wizardStateJson = TempData["WizardState"]?.ToString();
+            if (string.IsNullOrEmpty(wizardStateJson))
+            {
+                return Json(new { success = false, message = "Session expired. Please start over." });
+            }
+
+            var wizardState = System.Text.Json.JsonSerializer.Deserialize<dynamic>(wizardStateJson);
+            var allColumns = System.Text.Json.JsonSerializer.Deserialize<List<ColumnSelectionItem>>(
+                wizardState.GetProperty("AllColumns").GetRawText()
+            );
+
+            // Store wizard state for Step 2
+            TempData["WizardState_Step1_5"] = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                CurrentStep = 2,
+                Relationships = model.Relationships
+            });
+
+            return Json(new
+            {
+                success = true,
+                message = "Relationships configured successfully",
+                nextStep = 2,
+                columns = allColumns
+            });
         }
 
         /// <summary>

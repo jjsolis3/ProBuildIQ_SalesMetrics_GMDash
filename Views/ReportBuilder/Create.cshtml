@@ -289,6 +289,122 @@
         color: #6c757d;
     }
 
+    /* Step 1.5: Table Relationships */
+    .relationship-row {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        padding: 1.5rem;
+        background: white;
+        border: 2px solid #e9ecef;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+        position: relative;
+    }
+
+    .relationship-row:hover {
+        border-color: #28a745;
+        box-shadow: 0 2px 8px rgba(40, 167, 69, 0.1);
+    }
+
+    .relationship-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+
+    .relationship-title {
+        font-weight: 600;
+        color: #1a1a2e;
+        font-size: 0.95rem;
+    }
+
+    .relationship-fields {
+        display: grid;
+        grid-template-columns: 2fr 1fr 2fr;
+        gap: 1rem;
+        align-items: end;
+    }
+
+    .relationship-field {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .relationship-field label {
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: #6c757d;
+        margin-bottom: 0.5rem;
+    }
+
+    .relationship-field select,
+    .relationship-field input {
+        padding: 0.5rem;
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        font-size: 0.875rem;
+    }
+
+    .join-type-badge {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .join-type-INNER {
+        background: #d1ecf1;
+        color: #0c5460;
+    }
+
+    .join-type-LEFT {
+        background: #fff3cd;
+        color: #856404;
+    }
+
+    .join-type-RIGHT {
+        background: #f8d7da;
+        color: #721c24;
+    }
+
+    .join-type-FULL {
+        background: #e2e3e5;
+        color: #383d41;
+    }
+
+    .relationship-empty-state {
+        text-align: center;
+        padding: 3rem;
+        color: #6c757d;
+        border: 2px dashed #dee2e6;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+    }
+
+    .relationship-empty-state i {
+        font-size: 3rem;
+        color: #dee2e6;
+        margin-bottom: 1rem;
+    }
+
+    .btn-remove-relationship {
+        background: #dc3545;
+        color: white;
+        border: none;
+        padding: 0.375rem 0.75rem;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.875rem;
+    }
+
+    .btn-remove-relationship:hover {
+        background: #c82333;
+    }
+
     /* Step 2: Column Configuration */
     .column-table-group {
         margin-bottom: 2rem;
@@ -572,6 +688,47 @@
         </div>
     }
 
+    <!-- Step 1.5: Configure Relationships (only shown when 2+ tables selected) -->
+    <div id="step1_5Container" style="display: none;">
+        <div class="wizard-content">
+            <h2 class="wizard-title"><i class="fa fa-link"></i> Configure Table Relationships</h2>
+            <p class="wizard-subtitle">Define how your tables connect. Relationships are used to join data from multiple tables.</p>
+
+            <!-- Relationships Container -->
+            <div id="relationshipsContainer">
+                <!-- Relationships will be rendered here dynamically -->
+            </div>
+
+            <!-- Add Relationship Button -->
+            <button type="button" id="btnAddRelationship" class="btn btn-success mb-3">
+                <i class="fa fa-plus"></i> Add Relationship
+            </button>
+
+            <!-- Help Text -->
+            <div class="alert alert-info mt-3">
+                <i class="fa fa-info-circle"></i>
+                <strong>Tip:</strong> Most tables use business keys like <code>Customer_Number</code> or <code>Order_Number</code> to relate to each other.
+                Choose the appropriate join type based on your needs:
+                <ul class="mb-0 mt-2">
+                    <li><strong>INNER JOIN:</strong> Only returns rows that have matching values in both tables</li>
+                    <li><strong>LEFT JOIN:</strong> Returns all rows from the left table, even if no match exists</li>
+                    <li><strong>RIGHT JOIN:</strong> Returns all rows from the right table, even if no match exists</li>
+                    <li><strong>FULL OUTER JOIN:</strong> Returns all rows from both tables, matching where possible</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Navigation Buttons -->
+        <div class="wizard-navigation">
+            <button type="button" id="btnBackToStep1" class="btn btn-back">
+                <i class="fa fa-arrow-left"></i> Back
+            </button>
+            <button type="button" id="btnNextStep1_5" class="btn btn-next">
+                Next: Configure Columns <i class="fa fa-arrow-right"></i>
+            </button>
+        </div>
+    </div>
+
     <!-- Step 2: Column Configuration -->
     <div id="step2Container" style="display: none;">
         <div class="wizard-content">
@@ -747,9 +904,16 @@
                         console.log('Server response:', response);
 
                         if (response.success) {
-                            console.log('Loading Step 2 with columns:', response.columns);
                             Swal.close();
-                            loadStep2(response.columns);
+
+                            // Check if we should go to Step 1.5 (Relationships) or Step 2 (Columns)
+                            if (response.nextStep === 1.5) {
+                                console.log('Loading Step 1.5 (Relationships) with tables:', response.tablesWithColumns);
+                                loadStep1_5(response.tablesWithColumns);
+                            } else if (response.nextStep === 2) {
+                                console.log('Loading Step 2 (Columns) - single table selected');
+                                loadStep2(response.columns);
+                            }
                         } else {
                             console.error('Server returned error:', response.message);
                             Swal.fire({
@@ -775,6 +939,300 @@
                     }
                 });
             });
+
+            // ===========================================
+            // Step 1.5: Configure Relationships
+            // ===========================================
+            let tablesWithColumns = [];
+            let relationships = [];
+            let relationshipIdCounter = 0;
+
+            function loadStep1_5(tables) {
+                console.log('loadStep1_5 called with tables:', tables);
+                tablesWithColumns = tables;
+
+                // Hide Step 1, show Step 1.5
+                $('#step1Container').hide();
+                $('#step1_5Container').show();
+
+                // Update wizard progress
+                $('.wizard-step:nth-child(1)').addClass('completed');
+                $('.wizard-step:nth-child(2)').addClass('active');
+
+                console.log('Step 1.5 container shown');
+
+                // Auto-add first relationship
+                addRelationship();
+
+                // Setup Step 1.5 events
+                setupStep1_5Events();
+
+                console.log('Step 1.5 loaded successfully');
+            }
+
+            function setupStep1_5Events() {
+                // Add relationship button
+                $('#btnAddRelationship').off('click').on('click', function() {
+                    addRelationship();
+                });
+
+                // Back button
+                $('#btnBackToStep1').off('click').on('click', function() {
+                    $('#step1_5Container').hide();
+                    $('#step1Container').show();
+                    $('.wizard-step:nth-child(2)').removeClass('active');
+                });
+
+                // Next button - Submit relationships
+                $('#btnNextStep1_5').off('click').on('click', function() {
+                    submitRelationships();
+                });
+            }
+
+            function addRelationship() {
+                const relationshipId = relationshipIdCounter++;
+                const relationship = {
+                    id: relationshipId,
+                    leftTable: tablesWithColumns.length > 0 ? tablesWithColumns[0].tableName : '',
+                    leftColumn: '',
+                    rightTable: tablesWithColumns.length > 1 ? tablesWithColumns[1].tableName : '',
+                    rightColumn: '',
+                    joinType: 'INNER',
+                    additionalCondition: ''
+                };
+
+                relationships.push(relationship);
+                renderRelationships();
+            }
+
+            function removeRelationship(relationshipId) {
+                relationships = relationships.filter(r => r.id !== relationshipId);
+                renderRelationships();
+            }
+
+            function renderRelationships() {
+                const container = $('#relationshipsContainer');
+
+                if (relationships.length === 0) {
+                    container.html(`
+                        <div class="relationship-empty-state">
+                            <i class="fa fa-link"></i>
+                            <h5>No Relationships Yet</h5>
+                            <p>Click "Add Relationship" to define how your tables connect</p>
+                        </div>
+                    `);
+                    return;
+                }
+
+                let html = '';
+                relationships.forEach((rel, index) => {
+                    // Get columns for left table
+                    const leftTable = tablesWithColumns.find(t => t.tableName === rel.leftTable);
+                    const leftColumns = leftTable ? leftTable.columns : [];
+
+                    // Get columns for right table
+                    const rightTable = tablesWithColumns.find(t => t.tableName === rel.rightTable);
+                    const rightColumns = rightTable ? rightTable.columns : [];
+
+                    html += `
+                        <div class="relationship-row" data-relationship-id="${rel.id}">
+                            <div class="relationship-header">
+                                <span class="relationship-title">
+                                    <i class="fa fa-link"></i> Relationship ${index + 1}
+                                    <span class="join-type-badge join-type-${rel.joinType}">${rel.joinType} JOIN</span>
+                                </span>
+                                ${relationships.length > 1 ? `
+                                    <button type="button" class="btn-remove-relationship" data-relationship-id="${rel.id}">
+                                        <i class="fa fa-times"></i> Remove
+                                    </button>
+                                ` : ''}
+                            </div>
+
+                            <div class="relationship-fields">
+                                <!-- Left Table & Column -->
+                                <div class="relationship-field">
+                                    <label>From Table & Column</label>
+                                    <select class="left-table-select" data-relationship-id="${rel.id}">
+                                        ${tablesWithColumns.map(t => `
+                                            <option value="${t.tableName}" ${t.tableName === rel.leftTable ? 'selected' : ''}>
+                                                ${t.displayName}
+                                            </option>
+                                        `).join('')}
+                                    </select>
+                                    <select class="left-column-select mt-2" data-relationship-id="${rel.id}">
+                                        <option value="">Select column...</option>
+                                        ${leftColumns.map(c => `
+                                            <option value="${c.columnName}" ${c.columnName === rel.leftColumn ? 'selected' : ''}>
+                                                ${c.columnName} (${c.dataType})
+                                            </option>
+                                        `).join('')}
+                                    </select>
+                                </div>
+
+                                <!-- Join Type -->
+                                <div class="relationship-field">
+                                    <label>Join Type</label>
+                                    <select class="join-type-select" data-relationship-id="${rel.id}">
+                                        <option value="INNER" ${rel.joinType === 'INNER' ? 'selected' : ''}>INNER</option>
+                                        <option value="LEFT" ${rel.joinType === 'LEFT' ? 'selected' : ''}>LEFT</option>
+                                        <option value="RIGHT" ${rel.joinType === 'RIGHT' ? 'selected' : ''}>RIGHT</option>
+                                        <option value="FULL" ${rel.joinType === 'FULL' ? 'selected' : ''}>FULL OUTER</option>
+                                    </select>
+                                </div>
+
+                                <!-- Right Table & Column -->
+                                <div class="relationship-field">
+                                    <label>To Table & Column</label>
+                                    <select class="right-table-select" data-relationship-id="${rel.id}">
+                                        ${tablesWithColumns.map(t => `
+                                            <option value="${t.tableName}" ${t.tableName === rel.rightTable ? 'selected' : ''}>
+                                                ${t.displayName}
+                                            </option>
+                                        `).join('')}
+                                    </select>
+                                    <select class="right-column-select mt-2" data-relationship-id="${rel.id}">
+                                        <option value="">Select column...</option>
+                                        ${rightColumns.map(c => `
+                                            <option value="${c.columnName}" ${c.columnName === rel.rightColumn ? 'selected' : ''}>
+                                                ${c.columnName} (${c.dataType})
+                                            </option>
+                                        `).join('')}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                container.html(html);
+
+                // Bind events
+                $('.left-table-select').off('change').on('change', function() {
+                    const relId = parseInt($(this).data('relationship-id'));
+                    const rel = relationships.find(r => r.id === relId);
+                    if (rel) {
+                        rel.leftTable = $(this).val();
+                        rel.leftColumn = ''; // Reset column when table changes
+                        renderRelationships();
+                    }
+                });
+
+                $('.left-column-select').off('change').on('change', function() {
+                    const relId = parseInt($(this).data('relationship-id'));
+                    const rel = relationships.find(r => r.id === relId);
+                    if (rel) rel.leftColumn = $(this).val();
+                });
+
+                $('.join-type-select').off('change').on('change', function() {
+                    const relId = parseInt($(this).data('relationship-id'));
+                    const rel = relationships.find(r => r.id === relId);
+                    if (rel) {
+                        rel.joinType = $(this).val();
+                        renderRelationships(); // Re-render to update badge
+                    }
+                });
+
+                $('.right-table-select').off('change').on('change', function() {
+                    const relId = parseInt($(this).data('relationship-id'));
+                    const rel = relationships.find(r => r.id === relId);
+                    if (rel) {
+                        rel.rightTable = $(this).val();
+                        rel.rightColumn = ''; // Reset column when table changes
+                        renderRelationships();
+                    }
+                });
+
+                $('.right-column-select').off('change').on('change', function() {
+                    const relId = parseInt($(this).data('relationship-id'));
+                    const rel = relationships.find(r => r.id === relId);
+                    if (rel) rel.rightColumn = $(this).val();
+                });
+
+                $('.btn-remove-relationship').off('click').on('click', function() {
+                    const relId = parseInt($(this).data('relationship-id'));
+                    removeRelationship(relId);
+                });
+            }
+
+            function submitRelationships() {
+                // Validate relationships
+                if (relationships.length === 0) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'No Relationships Defined',
+                        text: 'Please add at least one relationship between your tables.'
+                    });
+                    return;
+                }
+
+                // Validate each relationship has all required fields
+                for (let i = 0; i < relationships.length; i++) {
+                    const rel = relationships[i];
+                    if (!rel.leftTable || !rel.leftColumn || !rel.rightTable || !rel.rightColumn) {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Incomplete Relationship',
+                            text: `Relationship ${i + 1} is missing required fields. Please select both tables and columns.`
+                        });
+                        return;
+                    }
+                }
+
+                // Show loading
+                Swal.fire({
+                    title: 'Saving relationships...',
+                    html: 'Please wait',
+                    allowOutsideClick: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+
+                // Prepare data for submission
+                const relationshipsData = relationships.map(r => ({
+                    leftTable: r.leftTable,
+                    leftColumn: r.leftColumn,
+                    rightTable: r.rightTable,
+                    rightColumn: r.rightColumn,
+                    joinType: r.joinType,
+                    additionalCondition: r.additionalCondition || null
+                }));
+
+                console.log('Submitting relationships:', relationshipsData);
+
+                // Submit to backend
+                $.ajax({
+                    url: '@Url.Action("CreateStep1_5", "ReportBuilder")',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        relationships: relationshipsData
+                    }),
+                    success: function(response) {
+                        console.log('Step 1.5 response:', response);
+
+                        if (response.success) {
+                            Swal.close();
+                            console.log('Loading Step 2 with columns:', response.columns);
+                            loadStep2(response.columns);
+                        } else {
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Error',
+                                text: response.message || 'Failed to save relationships'
+                            });
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('AJAX error:', xhr, status, error);
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            html: `Failed to save relationships.<br><br><small>Status: ${xhr.status} ${xhr.statusText}</small>`
+                        });
+                    }
+                });
+            }
 
             // ===========================================
             // Step 2: Column Configuration

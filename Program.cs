@@ -17,7 +17,9 @@ var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration.GetConnectionString("SalesMetrics");
 
 // Add services to the container
-builder.Services.AddControllersWithViews();
+builder.Services.AddControllersWithViews()
+    .AddSessionStateTempDataProvider(); // Store TempData in Session instead of cookies
+
 builder.Services.AddSignalR(); // Add SignalR
 
 // Add Memory Cache for performance optimization

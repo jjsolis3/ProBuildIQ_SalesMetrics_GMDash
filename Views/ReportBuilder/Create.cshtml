@@ -640,6 +640,37 @@
         gap: 1rem;
         margin-top: 1rem;
     }
+
+    /* Column Formatting Controls */
+    .column-format-controls {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        margin-top: 0.5rem;
+        padding: 0.5rem;
+        background: #f8f9fa;
+        border-radius: 4px;
+        font-size: 0.875rem;
+    }
+
+    .format-label {
+        font-weight: 600;
+        color: #495057;
+        margin-right: 0.25rem;
+    }
+
+    .format-select, .format-input {
+        padding: 0.25rem 0.5rem;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        font-size: 0.875rem;
+    }
+
+    .format-select:focus, .format-input:focus {
+        outline: none;
+        border-color: #28a745;
+        box-shadow: 0 0 0 2px rgba(40, 167, 69, 0.1);
+    }
 </style>
 
 <div class="container-fluid">
@@ -1645,6 +1676,17 @@ WHERE condition = 'value'
                                                 <div class="column-name">${col.columnName}</div>
                                                 <div class="column-type">${col.dataType}${col.isNullable ? ' (nullable)' : ''}</div>
                                             </div>
+                                            <div class="column-format-controls" style="display: none;">
+                                                <span class="format-label">Format:</span>
+                                                <select class="format-select format-type" data-column-id="${col.columnId}">
+                                                    <option value="text">Text</option>
+                                                    <option value="currency">Currency</option>
+                                                    <option value="number">Number</option>
+                                                    <option value="date">Date</option>
+                                                    <option value="percentage">Percentage</option>
+                                                </select>
+                                                <span class="format-options" data-column-id="${col.columnId}"></span>
+                                            </div>
                                         </div>
                                     `).join('')}
                                 </div>
@@ -1687,13 +1729,81 @@ WHERE condition = 'value'
                     if ($(this).is(':checked')) {
                         columnItem.addClass('selected');
                         const column = allColumns.find(c => c.columnId === columnId);
+
+                        // Initialize format properties if not present
+                        if (!column.formatType) {
+                            column.formatType = 'text';
+                            column.dateFormat = 'MM/dd/yyyy';
+                            column.decimalPlaces = 2;
+                        }
+
                         selectedColumns.push(column);
+
+                        // Show format controls
+                        columnItem.find('.column-format-controls').show();
                     } else {
                         columnItem.removeClass('selected');
                         selectedColumns = selectedColumns.filter(c => c.columnId !== columnId);
+
+                        // Hide format controls
+                        columnItem.find('.column-format-controls').hide();
                     }
 
                     updateColumnCounts();
+                });
+
+                // Format type change
+                $(document).on('change', '.format-type', function() {
+                    const columnId = $(this).data('column-id');
+                    const formatType = $(this).val();
+                    const optionsSpan = $(`.format-options[data-column-id="${columnId}"]`);
+                    const column = allColumns.find(c => c.columnId === columnId);
+
+                    if (column) {
+                        column.formatType = formatType;
+                    }
+
+                    // Show format-specific options
+                    let optionsHtml = '';
+                    if (formatType === 'date') {
+                        optionsHtml = `
+                            <select class="format-select date-format-pattern" data-column-id="${columnId}">
+                                <option value="MM/dd/yyyy">MM/dd/yyyy</option>
+                                <option value="yyyy-MM-dd">yyyy-MM-dd</option>
+                                <option value="MMM dd, yyyy">MMM dd, yyyy</option>
+                                <option value="MM/dd/yy">MM/dd/yy</option>
+                                <option value="dd/MM/yyyy">dd/MM/yyyy</option>
+                            </select>
+                        `;
+                    } else if (formatType === 'currency' || formatType === 'number' || formatType === 'percentage') {
+                        optionsHtml = `
+                            <span class="format-label">Decimals:</span>
+                            <input type="number" class="format-input decimal-places" data-column-id="${columnId}"
+                                   min="0" max="4" value="2" style="width: 60px;">
+                        `;
+                    }
+
+                    optionsSpan.html(optionsHtml);
+                });
+
+                // Date format pattern change
+                $(document).on('change', '.date-format-pattern', function() {
+                    const columnId = $(this).data('column-id');
+                    const pattern = $(this).val();
+                    const column = allColumns.find(c => c.columnId === columnId);
+                    if (column) {
+                        column.dateFormat = pattern;
+                    }
+                });
+
+                // Decimal places change
+                $(document).on('change', '.decimal-places', function() {
+                    const columnId = $(this).data('column-id');
+                    const decimals = parseInt($(this).val());
+                    const column = allColumns.find(c => c.columnId === columnId);
+                    if (column) {
+                        column.decimalPlaces = decimals;
+                    }
                 });
 
                 // Select all for table
@@ -2088,7 +2198,10 @@ WHERE condition = 'value'
                         displayName: col.displayName || col.DisplayName || col.columnName || col.ColumnName,
                         dataType: col.dataType || col.DataType,
                         aggregateFunction: col.aggregateFunction || col.AggregateFunction,
-                        displayOrder: index + 1
+                        displayOrder: index + 1,
+                        formatType: col.formatType || 'text',
+                        dateFormat: col.dateFormat || 'MM/dd/yyyy',
+                        decimalPlaces: col.decimalPlaces || 2
                     })),
                     filters: filters.map(f => ({
                         tableAlias: f.tableAlias || f.TableAlias || 'T1',
@@ -2147,6 +2260,9 @@ WHERE condition = 'value'
             }
 
             function displayPreviewTable(columnNames, data) {
+                // Get column format info from preview payload
+                const columnsMetadata = window.previewPayload?.columns || [];
+
                 let html = '<table class="table table-sm table-striped table-hover">';
 
                 // Header
@@ -2160,9 +2276,21 @@ WHERE condition = 'value'
                 html += '<tbody>';
                 data.forEach(row => {
                     html += '<tr>';
-                    columnNames.forEach(col => {
-                        const value = row[col];
-                        const displayValue = value === null || value === undefined ? '<em class="text-muted">NULL</em>' : value;
+                    columnNames.forEach((colName, colIndex) => {
+                        const value = row[colName];
+                        let displayValue;
+
+                        if (value === null || value === undefined) {
+                            displayValue = '<em class="text-muted">NULL</em>';
+                        } else {
+                            // Find format info for this column
+                            const colMetadata = columnsMetadata.find(c =>
+                                (c.displayName === colName) || (c.columnName === colName)
+                            );
+
+                            displayValue = formatValue(value, colMetadata);
+                        }
+
                         html += `<td>${displayValue}</td>`;
                     });
                     html += '</tr>';
@@ -2172,6 +2300,81 @@ WHERE condition = 'value'
                 html += '</table>';
 
                 $('#previewTableContainer').html(html);
+            }
+
+            // Helper function to format values based on column format type
+            function formatValue(value, columnMetadata) {
+                if (!columnMetadata || columnMetadata.formatType === 'text') {
+                    return value;
+                }
+
+                const formatType = columnMetadata.formatType;
+                const decimalPlaces = columnMetadata.decimalPlaces || 2;
+                const dateFormat = columnMetadata.dateFormat || 'MM/dd/yyyy';
+
+                try {
+                    switch (formatType) {
+                        case 'currency':
+                            const num = parseFloat(value);
+                            if (isNaN(num)) return value;
+                            return '$' + num.toLocaleString('en-US', {
+                                minimumFractionDigits: decimalPlaces,
+                                maximumFractionDigits: decimalPlaces
+                            });
+
+                        case 'number':
+                            const number = parseFloat(value);
+                            if (isNaN(number)) return value;
+                            return number.toLocaleString('en-US', {
+                                minimumFractionDigits: decimalPlaces,
+                                maximumFractionDigits: decimalPlaces
+                            });
+
+                        case 'percentage':
+                            const pct = parseFloat(value);
+                            if (isNaN(pct)) return value;
+                            return pct.toLocaleString('en-US', {
+                                minimumFractionDigits: decimalPlaces,
+                                maximumFractionDigits: decimalPlaces
+                            }) + '%';
+
+                        case 'date':
+                            // Parse date and format according to pattern
+                            const date = new Date(value);
+                            if (isNaN(date.getTime())) return value;
+
+                            return formatDate(date, dateFormat);
+
+                        default:
+                            return value;
+                    }
+                } catch (e) {
+                    console.error('Error formatting value:', e);
+                    return value;
+                }
+            }
+
+            // Helper function to format dates
+            function formatDate(date, pattern) {
+                const pad = (n) => n.toString().padStart(2, '0');
+                const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+                const replacements = {
+                    'yyyy': date.getFullYear(),
+                    'yy': date.getFullYear().toString().substr(-2),
+                    'MM': pad(date.getMonth() + 1),
+                    'MMM': monthNames[date.getMonth()],
+                    'dd': pad(date.getDate()),
+                    'HH': pad(date.getHours()),
+                    'mm': pad(date.getMinutes()),
+                    'ss': pad(date.getSeconds())
+                };
+
+                let result = pattern;
+                for (const [key, val] of Object.entries(replacements)) {
+                    result = result.replace(key, val);
+                }
+                return result;
             }
 
             function setupStep4Events() {

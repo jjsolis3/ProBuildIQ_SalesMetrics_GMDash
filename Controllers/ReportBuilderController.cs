@@ -466,7 +466,7 @@ namespace SalesMetrics.Controllers
         }
 
         /// <summary>
-        /// Show edit report wizard (Phase 2 implementation)
+        /// Edit an existing report
         /// </summary>
         [HttpGet]
         public async Task<IActionResult> Edit(int id)
@@ -481,15 +481,176 @@ namespace SalesMetrics.Controllers
             }
 
             var report = await _context.ReportDefinitions
-                .FirstOrDefaultAsync(r => r.ReportDefinitionId == id);
+                .FirstOrDefaultAsync(r => r.ReportDefinitionId == id && r.IsActive);
 
             if (report == null)
             {
+                _logger.LogWarning("Report {ReportId} not found or inactive", id);
                 return NotFound();
             }
 
-            // TODO: Implement edit report wizard
-            return View();
+            _logger.LogInformation("User {UserId} editing report {ReportId}: {ReportName}", userId, id, report.Name);
+
+            // Parse the query definition to determine mode and reconstruct state
+            var viewModel = new ReportEditViewModel
+            {
+                ReportId = report.ReportDefinitionId,
+                ReportName = report.Name ?? "",
+                ReportDescription = report.Description ?? "",
+                Category = report.Category ?? "Custom Reports",
+                QueryMode = "sql", // Default to SQL mode
+                CustomSql = report.GeneratedSql ?? "",
+                QueryDefinitionJson = report.QueryDefinitionJson ?? ""
+            };
+
+            // Try to parse QueryDefinitionJson to determine actual mode
+            if (!string.IsNullOrEmpty(report.QueryDefinitionJson))
+            {
+                try
+                {
+                    using var document = System.Text.Json.JsonDocument.Parse(report.QueryDefinitionJson);
+                    var root = document.RootElement;
+
+                    if (root.TryGetProperty("queryMode", out var modeElement))
+                    {
+                        viewModel.QueryMode = modeElement.GetString() ?? "sql";
+                    }
+
+                    if (root.TryGetProperty("customSql", out var sqlElement))
+                    {
+                        viewModel.CustomSql = sqlElement.GetString() ?? "";
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Could not parse QueryDefinitionJson for report {ReportId}", id);
+                }
+            }
+
+            return View(viewModel);
+        }
+
+        /// <summary>
+        /// Update an existing report (POST from Edit form)
+        /// </summary>
+        [HttpPost]
+        public async Task<IActionResult> Update([FromBody] UpdateReportDto model)
+        {
+            try
+            {
+                var userId = GetCurrentUserId();
+
+                var canEdit = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_EDIT");
+                if (!canEdit)
+                {
+                    return Json(new { success = false, message = "You don't have permission to edit reports" });
+                }
+
+                // Load existing report
+                var report = await _context.ReportDefinitions
+                    .FirstOrDefaultAsync(r => r.ReportDefinitionId == model.ReportId && r.IsActive);
+
+                if (report == null)
+                {
+                    return Json(new { success = false, message = "Report not found" });
+                }
+
+                _logger.LogInformation("User {UserId} updating report {ReportId}", userId, model.ReportId);
+
+                // Validate required fields
+                if (string.IsNullOrWhiteSpace(model.ReportName))
+                {
+                    return Json(new { success = false, message = "Report name is required" });
+                }
+
+                // Generate SQL and query definition based on mode
+                string generatedSql;
+                string queryDefJson;
+
+                if (model.QueryMode == "sql")
+                {
+                    // SQL Mode - validate and use custom SQL
+                    if (string.IsNullOrWhiteSpace(model.CustomSql))
+                    {
+                        return Json(new { success = false, message = "SQL query is required in SQL mode" });
+                    }
+
+                    var (isValid, errorMessage) = ValidateCustomSql(model.CustomSql);
+                    if (!isValid)
+                    {
+                        return Json(new { success = false, message = $"SQL validation failed: {errorMessage}" });
+                    }
+
+                    generatedSql = model.CustomSql.Trim();
+
+                    // Detect parameters
+                    var parameters = DetectParametersFromSql(generatedSql);
+
+                    queryDefJson = System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        queryMode = "sql",
+                        customSql = generatedSql,
+                        parameters = parameters
+                    });
+                }
+                else
+                {
+                    // Wizard Mode - generate SQL from selections
+                    var userLocation = HttpContext.Session.GetString("OfficeLocation") ?? "LAX";
+                    var compuFloorDb = GetCompUFloorDatabaseName(userLocation);
+
+                    // Create Step4SubmissionDto from the update model
+                    var step4Model = new Step4SubmissionDto
+                    {
+                        QueryMode = "wizard",
+                        Tables = model.Tables,
+                        Relationships = model.Relationships,
+                        Columns = model.Columns,
+                        Filters = model.Filters
+                    };
+
+                    generatedSql = GenerateSQL(step4Model, compuFloorDb);
+
+                    queryDefJson = System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        queryMode = "wizard",
+                        tables = model.Tables,
+                        relationships = model.Relationships,
+                        columns = model.Columns,
+                        filters = model.Filters
+                    });
+                }
+
+                // Update report properties
+                report.Name = model.ReportName;
+                report.Description = model.ReportDescription;
+                report.Category = model.Category ?? "Custom Reports";
+                report.QueryDefinitionJson = queryDefJson;
+                report.GeneratedSql = generatedSql;
+                report.ModifiedByUserId = userId;
+                report.ModifiedDate = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Report {ReportId} updated successfully", report.ReportDefinitionId);
+
+                return Json(new
+                {
+                    success = true,
+                    message = "Report updated successfully!",
+                    reportId = report.ReportDefinitionId,
+                    reportName = report.Name
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating report");
+                return Json(new
+                {
+                    success = false,
+                    message = "Error updating report: " + ex.Message
+                });
+            }
         }
 
         /// <summary>

@@ -373,14 +373,41 @@
                                                 </div>
                                             </div>
                                             <div class="card-body">
+                                                @* Show previous entries as read-only reference if they exist *@
+                                                @if (existingField != null && !string.IsNullOrWhiteSpace(existingField.FieldValue))
+                                                {
+                                                    var previousEntries = Model.Fields?.Where(f => f.FieldName == field.Name).OrderByDescending(f => f.CreatedDate).ToList();
+                                                    if (previousEntries != null && previousEntries.Any())
+                                                    {
+                                                        <div class="previous-entries mb-2">
+                                                            <small class="text-muted d-block mb-1"><i class="fas fa-history"></i> Previous Entries:</small>
+                                                            <div class="previous-entries-list" style="max-height: 100px; overflow-y: auto; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 8px; margin-bottom: 10px;">
+                                                                @foreach (var prevEntry in previousEntries.Take(3))
+                                                                {
+                                                                    <div class="previous-entry-item" style="font-size: 0.85em; padding: 4px 0; border-bottom: 1px solid #e9ecef;">
+                                                                        <i class="fas fa-check-circle text-success" style="font-size: 0.8em;"></i>
+                                                                        @prevEntry.FieldValue
+                                                                        <small class="text-muted">(@prevEntry.CreatedDate.ToString("MMM dd, h:mm tt"))</small>
+                                                                    </div>
+                                                                }
+                                                                @if (previousEntries.Count > 3)
+                                                                {
+                                                                    <small class="text-muted"><i>+@(previousEntries.Count - 3) more...</i></small>
+                                                                }
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                }
+
+                                                @* Empty textarea for NEW entry *@
                                                 <input type="hidden" name="Fields[@globalIndex].FieldName" value="@field.Name" />
                                                 <textarea name="Fields[@globalIndex].FieldValue"
                                                   class="form-control field-textarea"
                                                   rows="3"
                                                   data-field-name="@field.Name"
-                                                  placeholder="Enter @field.Name here...">@(existingField?.FieldValue ?? "")</textarea>
+                                                  placeholder="Enter new @field.Name entry here..."></textarea>
                                                 <div class="char-counter">
-                                                    <span class="current-chars">@(existingField?.FieldValue?.Length ?? 0)</span> characters
+                                                    <span class="current-chars">0</span> characters
                                                 </div>
                                             </div>
                                         </div>

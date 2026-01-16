@@ -670,7 +670,11 @@ namespace SalesMetrics.Controllers
             // SELECT clause - Quote column names and aliases to handle spaces and special characters
             sql.AppendLine("SELECT");
             var columnExpressions = model.Columns.Select(c =>
-                $"    {c.TableAlias}.[{c.ColumnName}] AS [{c.DisplayName}]");
+            {
+                // Use ColumnName as fallback if DisplayName is empty or whitespace
+                var aliasName = string.IsNullOrWhiteSpace(c.DisplayName) ? c.ColumnName : c.DisplayName;
+                return $"    {c.TableAlias}.[{c.ColumnName}] AS [{aliasName}]";
+            });
             sql.AppendLine(string.Join(",\n", columnExpressions));
 
             // FROM clause - Quote table names and aliases

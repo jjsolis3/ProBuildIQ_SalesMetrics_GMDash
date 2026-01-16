@@ -184,7 +184,6 @@ namespace SalesMetrics.Controllers
             model.LocationID = location != null ? int.Parse(location) : 0;
 
             var connStr = _configuration.GetConnectionString("SalesMetrics");
-            var skippedFields = new List<string>();
 
             using var conn = new SqlConnection(connStr);
             await conn.OpenAsync();
@@ -233,50 +232,18 @@ namespace SalesMetrics.Controllers
                 }
 
                 // Process each field in the submission
+                // CHANGED: Always insert new instances instead of updating existing ones
                 foreach (var field in model.Fields.Where(f => !string.IsNullOrWhiteSpace(f.FieldValue)))
                 {
-                    var checkFieldCmd = new SqlCommand(@"
-                SELECT FieldValue FROM GMWeeklyRecapField
-                WHERE RecapID = @RecapID AND FieldName = @FieldName
-            ", conn, tran);
-
-                    checkFieldCmd.Parameters.AddWithValue("@RecapID", entryId);
-                    checkFieldCmd.Parameters.AddWithValue("@FieldName", field.FieldName);
-
-                    var existingValueObj = await checkFieldCmd.ExecuteScalarAsync();
-                    if (existingValueObj != null)
-                    {
-                        var existingValue = existingValueObj.ToString();
-                        if (string.Equals(existingValue, field.FieldValue, StringComparison.OrdinalIgnoreCase))
-                        {
-                            // Value hasn't changed, skip this field
-                            skippedFields.Add(field.FieldName);
-                            continue;
-                        }
-
-                        // Update existing field with new value
-                        var updateFieldCmd = new SqlCommand(@"
-                    UPDATE GMWeeklyRecapField 
-                    SET FieldValue = @FieldValue, ModifiedDate = GETDATE()
-                    WHERE RecapID = @RecapID AND FieldName = @FieldName
-                ", conn, tran);
-                        updateFieldCmd.Parameters.AddWithValue("@RecapID", entryId);
-                        updateFieldCmd.Parameters.AddWithValue("@FieldName", field.FieldName);
-                        updateFieldCmd.Parameters.AddWithValue("@FieldValue", field.FieldValue);
-                        await updateFieldCmd.ExecuteNonQueryAsync();
-                    }
-                    else
-                    {
-                        // Insert new field entry
-                        var insertFieldCmd = new SqlCommand(@"
-                    INSERT INTO GMWeeklyRecapField (RecapID, FieldName, FieldValue, CreatedDate)
-                    VALUES (@RecapID, @FieldName, @FieldValue, GETDATE())
-                ", conn, tran);
-                        insertFieldCmd.Parameters.AddWithValue("@RecapID", entryId);
-                        insertFieldCmd.Parameters.AddWithValue("@FieldName", field.FieldName);
-                        insertFieldCmd.Parameters.AddWithValue("@FieldValue", field.FieldValue);
-                        await insertFieldCmd.ExecuteNonQueryAsync();
-                    }
+                    // Always insert a new field entry - allows multiple submissions for the same field
+                    var insertFieldCmd = new SqlCommand(@"
+                        INSERT INTO GMWeeklyRecapField (RecapID, FieldName, FieldValue, CreatedDate)
+                        VALUES (@RecapID, @FieldName, @FieldValue, GETDATE())
+                    ", conn, tran);
+                    insertFieldCmd.Parameters.AddWithValue("@RecapID", entryId);
+                    insertFieldCmd.Parameters.AddWithValue("@FieldName", field.FieldName);
+                    insertFieldCmd.Parameters.AddWithValue("@FieldValue", field.FieldValue);
+                    await insertFieldCmd.ExecuteNonQueryAsync();
                 }
 
                 await tran.CommitAsync();
@@ -285,14 +252,7 @@ namespace SalesMetrics.Controllers
                 _cache.Remove(RECAP_LIST_CACHE_KEY);
 
                 // Provide feedback to user
-                if (skippedFields.Any())
-                {
-                    TempData["PartialSubmittedWarning"] = $"These fields were already identical and skipped: {string.Join(", ", skippedFields)}.";
-                }
-                else
-                {
-                    TempData["RecapSubmitted"] = "true";
-                }
+                TempData["RecapSubmitted"] = "true";
 
                 return RedirectToAction("RecapEntry");
             }

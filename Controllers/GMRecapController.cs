@@ -108,11 +108,12 @@ namespace SalesMetrics.Controllers
                 {
                     model.RecapID = (int)recapId;
 
-                    // Load existing fields
+                    // Load existing fields with FieldID
                     var cmd = new SqlCommand(@"
-                SELECT FieldName, FieldValue, CreatedDate
-                FROM GMWeeklyRecapField 
+                SELECT FieldID, FieldName, FieldValue, CreatedDate
+                FROM GMWeeklyRecapField
                 WHERE RecapID = @RecapID
+                ORDER BY FieldName, CreatedDate DESC
             ", conn);
                     cmd.Parameters.AddWithValue("@RecapID", model.RecapID);
 
@@ -122,6 +123,7 @@ namespace SalesMetrics.Controllers
                     {
                         model.Fields.Add(new RecapField
                         {
+                            FieldID = reader.GetInt32("FieldID"),
                             FieldName = reader["FieldName"].ToString(),
                             FieldValue = reader["FieldValue"].ToString(),
                             CreatedDate = reader.IsDBNull("CreatedDate") ? DateTime.Now : reader.GetDateTime("CreatedDate")
@@ -337,15 +339,15 @@ namespace SalesMetrics.Controllers
             }
             reader.Close();
 
-            // OPTIMIZED: Load ALL fields in ONE query (fixes N+1 problem)
+            // OPTIMIZED: Load ALL fields in ONE query (fixes N+1 problem) with FieldID
             if (recapCards.Any())
             {
                 var recapIds = string.Join(",", recapCards.Select(r => r.RecapID));
                 var fieldsCmd = new SqlCommand($@"
-            SELECT RecapID, FieldName, FieldValue, CreatedDate
+            SELECT FieldID, RecapID, FieldName, FieldValue, CreatedDate
             FROM [dbo].[GMWeeklyRecapField]
             WHERE RecapID IN ({recapIds})
-            ORDER BY RecapID
+            ORDER BY RecapID, FieldName, CreatedDate DESC
         ", conn);
 
                 using var fieldReader = await fieldsCmd.ExecuteReaderAsync();
@@ -355,12 +357,14 @@ namespace SalesMetrics.Controllers
 
                 while (await fieldReader.ReadAsync())
                 {
-                    int recapId = fieldReader.GetInt32(0);
+                    int fieldId = fieldReader.GetInt32(0);
+                    int recapId = fieldReader.GetInt32(1);
                     var field = new RecapField
                     {
-                        FieldName = fieldReader.GetString(1),
-                        FieldValue = fieldReader.IsDBNull(2) ? "" : fieldReader.GetString(2),
-                        CreatedDate = fieldReader.IsDBNull(3) ? DateTime.MinValue : fieldReader.GetDateTime(3)
+                        FieldID = fieldId,
+                        FieldName = fieldReader.GetString(2),
+                        FieldValue = fieldReader.IsDBNull(3) ? "" : fieldReader.GetString(3),
+                        CreatedDate = fieldReader.IsDBNull(4) ? DateTime.MinValue : fieldReader.GetDateTime(4)
                     };
 
                     if (!fieldsByRecapId.ContainsKey(recapId))
@@ -420,11 +424,12 @@ namespace SalesMetrics.Controllers
             }
             reader.Close();
 
-            // Get fields
+            // Get fields with FieldID for individual entry tracking
             var fieldCmd = new SqlCommand(@"
-        SELECT FieldName, FieldValue, CreatedDate
-        FROM [dbo].[GMWeeklyRecapField] 
+        SELECT FieldID, FieldName, FieldValue, CreatedDate
+        FROM [dbo].[GMWeeklyRecapField]
         WHERE RecapID = @RecapID
+        ORDER BY FieldName, CreatedDate DESC
     ", conn);
             fieldCmd.Parameters.AddWithValue("@RecapID", recapId);
 
@@ -434,9 +439,10 @@ namespace SalesMetrics.Controllers
             {
                 entry.Fields.Add(new RecapField
                 {
-                    FieldName = fieldReader.GetString(0),
-                    FieldValue = fieldReader.IsDBNull(1) ? "" : fieldReader.GetString(1),
-                    CreatedDate = fieldReader.IsDBNull(2) ? DateTime.MinValue : fieldReader.GetDateTime(2)
+                    FieldID = fieldReader.GetInt32(0),
+                    FieldName = fieldReader.GetString(1),
+                    FieldValue = fieldReader.IsDBNull(2) ? "" : fieldReader.GetString(2),
+                    CreatedDate = fieldReader.IsDBNull(3) ? DateTime.MinValue : fieldReader.GetDateTime(3)
                 });
             }
 
@@ -494,12 +500,13 @@ namespace SalesMetrics.Controllers
                 }
                 reader.Close();
 
-                // Fetch fields
+                // Fetch fields with FieldID and CreatedDate for individual entry editing
                 recap.Fields = new List<RecapField>();
                 var fieldCmd = new SqlCommand(@"
-            SELECT FieldName, FieldValue 
-            FROM GMWeeklyRecapField 
-            WHERE RecapID = @RecapID", conn);
+            SELECT FieldID, FieldName, FieldValue, CreatedDate
+            FROM GMWeeklyRecapField
+            WHERE RecapID = @RecapID
+            ORDER BY FieldName, CreatedDate DESC", conn);
                 fieldCmd.Parameters.AddWithValue("@RecapID", recapId);
 
                 using var fieldReader = await fieldCmd.ExecuteReaderAsync();
@@ -507,8 +514,10 @@ namespace SalesMetrics.Controllers
                 {
                     recap.Fields.Add(new RecapField
                     {
-                        FieldName = fieldReader.GetString(0),
-                        FieldValue = fieldReader.IsDBNull(1) ? "" : fieldReader.GetString(1)
+                        FieldID = fieldReader.GetInt32(0),
+                        FieldName = fieldReader.GetString(1),
+                        FieldValue = fieldReader.IsDBNull(2) ? "" : fieldReader.GetString(2),
+                        CreatedDate = fieldReader.IsDBNull(3) ? DateTime.MinValue : fieldReader.GetDateTime(3)
                     });
                 }
 
@@ -575,14 +584,15 @@ namespace SalesMetrics.Controllers
                     updateRecapEntry.Parameters.AddWithValue("@ModifiedBy", currentUserClaim.Value ?? "Unknown");
                     await updateRecapEntry.ExecuteNonQueryAsync();
 
+                    // FIXED: Update specific field entries by FieldID (not FieldName)
+                    // This allows multiple entries for the same field to be edited individually
                     foreach (var field in model.Fields)
                     {
                         var updateFieldCmd = new SqlCommand(@"
-                    UPDATE GMWeeklyRecapField 
+                    UPDATE GMWeeklyRecapField
                     SET FieldValue = @FieldValue, ModifiedDate = GETDATE()
-                    WHERE RecapID = @RecapID AND FieldName = @FieldName", conn, tran);
-                        updateFieldCmd.Parameters.AddWithValue("@RecapID", model.RecapID);
-                        updateFieldCmd.Parameters.AddWithValue("@FieldName", field.FieldName);
+                    WHERE FieldID = @FieldID", conn, tran);
+                        updateFieldCmd.Parameters.AddWithValue("@FieldID", field.FieldID);
                         updateFieldCmd.Parameters.AddWithValue("@FieldValue", field.FieldValue ?? "");
 
                         await updateFieldCmd.ExecuteNonQueryAsync();

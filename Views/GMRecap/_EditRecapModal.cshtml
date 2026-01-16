@@ -317,45 +317,55 @@
                     <div class="fields-summary">
                         <div class="fields-summary-title">
                             <i class="fas fa-info-circle"></i>
-                            Editing @Model.Fields.Count Field@(Model.Fields.Count == 1 ? "" : "s")
+                            Editing @Model.Fields.Count Entry@(Model.Fields.Count == 1 ? "" : " Entries")
                         </div>
-                        <small>Make your changes below and click "Save Changes" to update your recap entry.</small>
-
-                        <!-- Progress Indicator -->
-                        <div class="progress-indicator">
-                            <div class="progress-fill" id="editProgressFill" style="width: 0%"></div>
-                        </div>
-                        <small class="text-muted">
-                            <span id="editCompletedFields">0</span> of @Model.Fields.Count fields have content
-                        </small>
+                        <small>Each entry can be edited individually. Changes are saved per entry based on timestamp.</small>
                     </div>
 
-                    <div class="row g-4">
-                        @for (int i = 0; i < Model.Fields.Count; i++)
-                        {
-                            var fieldIcon = GetFieldIcon(Model.Fields[i].FieldName);
+                    @{
+                        var groupedFields = Model.Fields.GroupBy(f => f.FieldName).ToList();
+                        int globalIndex = 0;
+                    }
 
-                            <div class="col-lg-6">
-                                <div class="card edit-field-card">
-                                    <div class="card-header edit-field-header">
-                                        <span class="field-icon @fieldIcon"></span>
-                                        <span>@Model.Fields[i].FieldName</span>
-                                    </div>
-                                    <div class="card-body edit-field-body">
-                                        <input type="hidden" name="Fields[@i].FieldName" value="@Model.Fields[i].FieldName" />
-                                        <textarea name="Fields[@i].FieldValue"
-                                              class="form-control edit-textarea"
-                                              rows="4"
-                                              data-field-name="@Model.Fields[i].FieldName"
-                                              placeholder="Enter details for @Model.Fields[i].FieldName...">@Model.Fields[i].FieldValue</textarea>
+                    @foreach (var fieldGroup in groupedFields)
+                    {
+                        var fieldIcon = GetFieldIcon(fieldGroup.Key);
+                        var entries = fieldGroup.OrderByDescending(f => f.CreatedDate).ToList();
+
+                        <div class="card edit-field-card mb-4">
+                            <div class="card-header edit-field-header">
+                                <span class="field-icon @fieldIcon"></span>
+                                <span>@fieldGroup.Key</span>
+                                <span class="badge bg-light text-dark ms-auto">@entries.Count @(entries.Count == 1 ? "entry" : "entries")</span>
+                            </div>
+                            <div class="card-body edit-field-body p-0">
+                                @foreach (var entry in entries)
+                                {
+                                    <div style="padding: 20px; border-bottom: 1px solid #e9ecef;">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <small class="text-muted">
+                                                <i class="fas fa-clock me-1"></i>
+                                                @entry.CreatedDate.ToString("MMM dd, yyyy 'at' h:mm tt")
+                                            </small>
+                                            <span class="badge bg-info">Entry #@(entries.IndexOf(entry) + 1)</span>
+                                        </div>
+
+                                        <input type="hidden" name="Fields[@globalIndex].FieldID" value="@entry.FieldID" />
+                                        <input type="hidden" name="Fields[@globalIndex].FieldName" value="@entry.FieldName" />
+                                        <textarea name="Fields[@globalIndex].FieldValue"
+                                                  class="form-control edit-textarea"
+                                                  rows="3"
+                                                  data-field-name="@entry.FieldName"
+                                                  placeholder="Enter details for @entry.FieldName...">@entry.FieldValue</textarea>
                                         <div class="char-counter">
-                                            <span class="current-chars">@(Model.Fields[i].FieldValue?.Length ?? 0)</span> characters
+                                            <span class="current-chars">@(entry.FieldValue?.Length ?? 0)</span> characters
                                         </div>
                                     </div>
-                                </div>
+                                    globalIndex++;
+                                }
                             </div>
-                        }
-                    </div>
+                        </div>
+                    }
                 </div>
 
                 <div class="modal-footer edit-modal-footer">
@@ -382,38 +392,16 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Initialize progress tracking for edit modal
+        // Character counter for all edit textareas
         const editTextareas = document.querySelectorAll('#editRecapModal .edit-textarea');
-        const editProgressFill = document.getElementById('editProgressFill');
-        const editCompletedFields = document.getElementById('editCompletedFields');
-        const totalEditFields = editTextareas.length;
 
-        function updateEditProgress() {
-            let completed = 0;
-            editTextareas.forEach(textarea => {
-                if (textarea.value.trim()) {
-                    completed++;
-                }
-            });
-
-            const percentage = totalEditFields > 0 ? Math.round((completed / totalEditFields) * 100) : 0;
-            if (editProgressFill) {
-                editProgressFill.style.width = percentage + '%';
-            }
-            if (editCompletedFields) {
-                editCompletedFields.textContent = completed;
-            }
-        }
-
-        // Add event listeners to all edit textareas
         editTextareas.forEach(textarea => {
-            // Character counter and progress updates
+            // Update character counter on input
             textarea.addEventListener('input', function() {
                 const charCounter = this.parentElement.querySelector('.current-chars');
                 if (charCounter) {
                     charCounter.textContent = this.value.length;
                 }
-                updateEditProgress();
             });
 
             // Initialize character counter
@@ -423,10 +411,7 @@
             }
         });
 
-        // Initialize progress
-        updateEditProgress();
-
-        // Add save confirmation
+        // Form validation
         document.getElementById('editRecapForm').addEventListener('submit', function(e) {
             const filledFields = Array.from(editTextareas).filter(t => t.value.trim()).length;
             if (filledFields === 0) {

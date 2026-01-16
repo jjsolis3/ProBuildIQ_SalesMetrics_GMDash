@@ -15,6 +15,7 @@
 
     public class RecapField
     {
+        public int FieldID { get; set; }  // Added to track individual field entries
         public string FieldName { get; set; }
         public string FieldValue { get; set; }
         public DateTime CreatedDate { get; set; }

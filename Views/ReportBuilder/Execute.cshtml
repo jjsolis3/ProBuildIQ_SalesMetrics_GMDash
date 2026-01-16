@@ -1,0 +1,285 @@
+@model SalesMetrics.Models.QueryBuilder.ReportExecutionViewModel
+@{
+    ViewData["Title"] = Model.ReportName;
+}
+
+<style>
+    .report-header {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        border-radius: 16px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        color: white;
+        box-shadow: 0 10px 40px rgba(40, 167, 69, 0.15);
+    }
+
+    .report-header h1 {
+        font-size: 2rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+    }
+
+    .report-header p {
+        opacity: 0.95;
+        margin-bottom: 0;
+    }
+
+    .stats-card {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        text-align: center;
+    }
+
+    .stats-icon {
+        font-size: 2rem;
+        color: #28a745;
+        margin-bottom: 0.5rem;
+    }
+
+    .stats-value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #1a1a2e;
+        margin-bottom: 0.25rem;
+    }
+
+    .stats-label {
+        font-size: 0.875rem;
+        color: #6c757d;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .sql-viewer {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    }
+
+    .sql-viewer-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+
+    .sql-viewer h5 {
+        margin: 0;
+        color: #1a1a2e;
+    }
+
+    .btn-copy-sql {
+        background: #17a2b8;
+        color: white;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        font-size: 0.875rem;
+    }
+
+    .btn-copy-sql:hover {
+        background: #138496;
+        color: white;
+    }
+
+    .sql-code {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 1rem;
+        font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+        font-size: 0.875rem;
+        max-height: 200px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+    }
+
+    .results-container {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    }
+
+    .results-container h5 {
+        margin-bottom: 1.5rem;
+        color: #1a1a2e;
+    }
+
+    .table-wrapper {
+        overflow-x: auto;
+        max-height: 600px;
+        overflow-y: auto;
+    }
+
+    .results-table {
+        width: 100%;
+        margin-bottom: 0;
+        font-size: 0.875rem;
+    }
+
+    .results-table thead th {
+        position: sticky;
+        top: 0;
+        background: #1a1a2e;
+        color: white;
+        font-weight: 600;
+        padding: 0.75rem;
+        border: none;
+        z-index: 10;
+    }
+
+    .results-table tbody td {
+        padding: 0.75rem;
+        border-bottom: 1px solid #dee2e6;
+    }
+
+    .results-table tbody tr:hover {
+        background: #f8f9fa;
+    }
+
+    .action-bar {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .btn-export {
+        background: #ffc107;
+        color: #1a1a2e;
+        border: none;
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        font-weight: 600;
+    }
+
+    .btn-export:hover {
+        background: #ffb300;
+        color: #1a1a2e;
+    }
+</style>
+
+<div class="report-header">
+    <h1><i class="fa fa-chart-bar"></i> @Model.ReportName</h1>
+    @if (!string.IsNullOrEmpty(Model.ReportDescription))
+    {
+        <p>@Model.ReportDescription</p>
+    }
+</div>
+
+<div class="action-bar">
+    <a href="@Url.Action("Index")" class="btn btn-secondary">
+        <i class="fa fa-arrow-left"></i> Back to Reports
+    </a>
+    <button type="button" class="btn btn-success" onclick="location.reload()">
+        <i class="fa fa-sync"></i> Refresh
+    </button>
+    <button type="button" class="btn btn-export" onclick="exportToExcel()">
+        <i class="fa fa-file-excel"></i> Export to Excel
+    </button>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="stats-card">
+            <div class="stats-icon"><i class="fa fa-table"></i></div>
+            <div class="stats-value">@Model.RowCount.ToString("N0")</div>
+            <div class="stats-label">Rows Returned</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="stats-card">
+            <div class="stats-icon"><i class="fa fa-clock"></i></div>
+            <div class="stats-value">@Model.ExecutionTimeMs ms</div>
+            <div class="stats-label">Execution Time</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="stats-card">
+            <div class="stats-icon"><i class="fa fa-columns"></i></div>
+            <div class="stats-value">@Model.ColumnNames.Count</div>
+            <div class="stats-label">Columns</div>
+        </div>
+    </div>
+</div>
+
+<div class="sql-viewer">
+    <div class="sql-viewer-header">
+        <h5><i class="fa fa-code"></i> SQL Query</h5>
+        <button type="button" class="btn-copy-sql" onclick="copySqlToClipboard()">
+            <i class="fa fa-copy"></i> Copy SQL
+        </button>
+    </div>
+    <div class="sql-code" id="sqlCode">@Model.GeneratedSql</div>
+</div>
+
+<div class="results-container">
+    <h5><i class="fa fa-table"></i> Results (@Model.RowCount.ToString("N0") rows)</h5>
+    <div class="table-wrapper">
+        <table class="table table-sm table-striped table-hover results-table">
+            <thead>
+                <tr>
+                    @foreach (var col in Model.ColumnNames)
+                    {
+                        <th>@col</th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in Model.ResultData)
+                {
+                    <tr>
+                        @foreach (var col in Model.ColumnNames)
+                        {
+                            var value = row.ContainsKey(col) ? row[col] : null;
+                            <td>
+                                @if (value == null)
+                                {
+                                    <em class="text-muted">NULL</em>
+                                }
+                                else
+                                {
+                                    @value
+                                }
+                            </td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function copySqlToClipboard() {
+            const sqlCode = document.getElementById('sqlCode').textContent;
+            navigator.clipboard.writeText(sqlCode).then(function() {
+                Swal.fire({
+                    toast: true,
+                    position: 'top-end',
+                    icon: 'success',
+                    title: 'SQL copied to clipboard',
+                    showConfirmButton: false,
+                    timer: 2000
+                });
+            }, function(err) {
+                Swal.fire('Error', 'Failed to copy SQL', 'error');
+            });
+        }
+
+        function exportToExcel() {
+            // TODO: Implement Excel export
+            Swal.fire({
+                icon: 'info',
+                title: 'Export to Excel',
+                text: 'Excel export feature coming soon!'
+            });
+        }
+    </script>
+}

@@ -240,4 +240,22 @@ namespace SalesMetrics.Models.QueryBuilder
         public string Value { get; set; } = string.Empty;
         public string LogicalOperator { get; set; } = "AND";
     }
+
+    /// <summary>
+    /// ViewModel for executing/displaying a saved report
+    /// </summary>
+    public class ReportExecutionViewModel
+    {
+        public int ReportId { get; set; }
+        public string ReportName { get; set; } = string.Empty;
+        public string ReportDescription { get; set; } = string.Empty;
+        public string Category { get; set; } = string.Empty;
+        public string GeneratedSql { get; set; } = string.Empty;
+        public List<string> ColumnNames { get; set; } = new();
+        public List<Dictionary<string, object>> ResultData { get; set; } = new();
+        public int RowCount { get; set; }
+        public long ExecutionTimeMs { get; set; }
+        public DateTime ExecutedDate { get; set; }
+        public string? QueryDefinitionJson { get; set; }
+    }
 }

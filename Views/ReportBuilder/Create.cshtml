@@ -955,9 +955,9 @@
                 $('#step1Container').hide();
                 $('#step1_5Container').show();
 
-                // Update wizard progress
-                $('.wizard-step:nth-child(1)').addClass('completed');
-                $('.wizard-step:nth-child(2)').addClass('active');
+                // Update wizard progress - keep Step 1 active during relationships
+                // Don't mark Step 2 as active yet since we're still configuring table relationships
+                $('.wizard-step:nth-child(1)').addClass('active');
 
                 console.log('Step 1.5 container shown');
 
@@ -980,7 +980,7 @@
                 $('#btnBackToStep1').off('click').on('click', function() {
                     $('#step1_5Container').hide();
                     $('#step1Container').show();
-                    $('.wizard-step:nth-child(2)').removeClass('active');
+                    // Keep Step 1 active
                 });
 
                 // Next button - Submit relationships
@@ -1254,8 +1254,9 @@
 
                 allColumns = columns;
 
-                // Hide Step 1, show Step 2
+                // Hide Step 1 and Step 1.5, show Step 2
                 $('#step1Container').hide();
+                $('#step1_5Container').hide();
                 $('.wizard-step:nth-child(1)').addClass('completed');
                 $('.wizard-step:nth-child(2)').addClass('active');
                 $('#step2Container').show();

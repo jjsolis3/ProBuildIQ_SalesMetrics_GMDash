@@ -511,8 +511,14 @@ namespace SalesMetrics.Controllers
                         col.ColumnName, col.DisplayName, string.IsNullOrWhiteSpace(col.DisplayName));
                 }
 
-                // Build SQL query
-                var sql = GenerateSQL(model);
+                // Get user's office location and determine CompUFloor database
+                var userLocation = HttpContext.Session.GetString("OfficeLocation") ?? "LAX";
+                var compuFloorDb = GetCompUFloorDatabaseName(userLocation);
+
+                _logger.LogInformation("User location: {Location}, CompUFloor database: {Database}", userLocation, compuFloorDb);
+
+                // Build SQL query with fully qualified table names
+                var sql = GenerateSQL(model, compuFloorDb);
 
                 _logger.LogInformation("Generated SQL: {SQL}", sql);
 
@@ -607,23 +613,28 @@ namespace SalesMetrics.Controllers
                 // Generate report ID
                 var reportId = $"CUSTOM_{Guid.NewGuid().ToString().Substring(0, 8).ToUpper()}";
 
+                // Get user's office location and determine CompUFloor database
+                var userLocation = HttpContext.Session.GetString("OfficeLocation") ?? "LAX";
+                var compuFloorDb = GetCompUFloorDatabaseName(userLocation);
+
                 // Build query definition JSON
                 var queryDefJson = System.Text.Json.JsonSerializer.Serialize(new
                 {
                     tables = model.Tables,
                     relationships = model.Relationships,
                     columns = model.Columns,
-                    filters = model.Filters
+                    filters = model.Filters,
+                    compuFloorDatabase = compuFloorDb // Store the database name for future reference
                 });
 
-                // Generate SQL
+                // Generate SQL with fully qualified table names
                 var generatedSql = GenerateSQL(new Step4SubmissionDto
                 {
                     Tables = model.Tables,
                     Relationships = model.Relationships,
                     Columns = model.Columns,
                     Filters = model.Filters
-                });
+                }, compuFloorDb);
 
                 // Create report definition
                 var reportDef = new ReportDefinitionEntity
@@ -670,7 +681,7 @@ namespace SalesMetrics.Controllers
         /// <summary>
         /// Helper method to generate SQL from query definition
         /// </summary>
-        private string GenerateSQL(Step4SubmissionDto model)
+        private string GenerateSQL(Step4SubmissionDto model, string compuFloorDatabase)
         {
             var sql = new System.Text.StringBuilder();
 
@@ -684,19 +695,19 @@ namespace SalesMetrics.Controllers
             });
             sql.AppendLine(string.Join(",\n", columnExpressions));
 
-            // FROM clause - Quote table names and aliases
+            // FROM clause - Use fully qualified table names to support cross-database queries
             var baseTable = model.Tables.FirstOrDefault(t => t.IsBaseTable == true);
             if (baseTable == null)
                 baseTable = model.Tables.First(); // Use first table as base if none marked
 
-            sql.AppendLine($"FROM [{baseTable.TableName}] AS {baseTable.Alias}");
+            sql.AppendLine($"FROM [{compuFloorDatabase}].[dbo].[{baseTable.TableName}] AS {baseTable.Alias}");
 
-            // JOIN clauses (from relationships) - Quote table and column names
+            // JOIN clauses (from relationships) - Use fully qualified table names
             if (model.Relationships != null && model.Relationships.Any())
             {
                 foreach (var rel in model.Relationships)
                 {
-                    sql.AppendLine($"{rel.JoinType} JOIN [{rel.ToTable}] AS {rel.ToAlias} ON {rel.FromAlias}.[{rel.FromColumn}] = {rel.ToAlias}.[{rel.ToColumn}]");
+                    sql.AppendLine($"{rel.JoinType} JOIN [{compuFloorDatabase}].[dbo].[{rel.ToTable}] AS {rel.ToAlias} ON {rel.FromAlias}.[{rel.FromColumn}] = {rel.ToAlias}.[{rel.ToColumn}]");
                 }
             }
 

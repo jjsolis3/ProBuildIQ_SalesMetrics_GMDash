@@ -1,0 +1,359 @@
+@model SalesMetrics.Models.QueryBuilder.ReportEditViewModel
+@{
+    ViewData["Title"] = "Edit Report - Query Builder";
+}
+
+<style>
+    .edit-container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 2rem;
+    }
+
+    .edit-header {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        color: white;
+        padding: 2rem;
+        border-radius: 12px;
+        margin-bottom: 2rem;
+        box-shadow: 0 4px 12px rgba(40, 167, 69, 0.2);
+    }
+
+    .edit-header h1 {
+        font-size: 2rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+    }
+
+    .edit-card {
+        background: white;
+        border-radius: 12px;
+        padding: 2rem;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        margin-bottom: 2rem;
+    }
+
+    .form-label {
+        font-weight: 600;
+        color: #1a1a2e;
+        margin-bottom: 0.5rem;
+    }
+
+    .form-control,
+    .form-select {
+        border: 2px solid #e9ecef;
+        border-radius: 8px;
+        padding: 0.75rem;
+        font-size: 1rem;
+        transition: all 0.3s ease;
+    }
+
+    .form-control:focus,
+    .form-select:focus {
+        border-color: #28a745;
+        box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.15);
+    }
+
+    .sql-editor {
+        font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+        font-size: 0.95rem;
+        min-height: 400px;
+        background: #f8f9fa;
+        border: 2px solid #e9ecef;
+        border-radius: 8px;
+        padding: 1rem;
+        line-height: 1.6;
+    }
+
+    .sql-editor:focus {
+        background: white;
+        border-color: #28a745;
+        box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.15);
+    }
+
+    .btn-group-actions {
+        display: flex;
+        gap: 1rem;
+        margin-top: 2rem;
+    }
+
+    .btn-lg {
+        padding: 0.75rem 2rem;
+        font-size: 1.1rem;
+        font-weight: 600;
+        border-radius: 8px;
+        transition: all 0.3s ease;
+    }
+
+    .btn-success {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        border: none;
+    }
+
+    .btn-success:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(40, 167, 69, 0.4);
+    }
+
+    .btn-info {
+        background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+        border: none;
+        color: white;
+    }
+
+    .btn-info:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(23, 162, 184, 0.4);
+    }
+
+    .btn-secondary {
+        background: #6c757d;
+        border: none;
+    }
+
+    .mode-badge {
+        display: inline-block;
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-size: 0.875rem;
+        font-weight: 600;
+        margin-left: 1rem;
+    }
+
+    .mode-badge.sql {
+        background: #17a2b8;
+        color: white;
+    }
+
+    .mode-badge.wizard {
+        background: #ffc107;
+        color: #1a1a2e;
+    }
+
+    .alert-info {
+        background: #d1ecf1;
+        border: 1px solid #bee5eb;
+        color: #0c5460;
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 1.5rem;
+    }
+</style>
+
+<div class="edit-container">
+    <div class="edit-header">
+        <h1>
+            <i class="fa fa-edit"></i> Edit Report
+            <span class="mode-badge @(Model.QueryMode == "sql" ? "sql" : "wizard")">
+                @(Model.QueryMode == "sql" ? "SQL Mode" : "Wizard Mode")
+            </span>
+        </h1>
+        <p>Modify your report definition and preview changes before saving</p>
+    </div>
+
+    @if (Model.QueryMode == "wizard")
+    {
+        <div class="alert-info">
+            <i class="fa fa-info-circle"></i>
+            <strong>Wizard Mode Report:</strong> This report was created using the visual wizard. To edit it, you can modify the SQL directly below or
+            <a href="@Url.Action("Create")" class="alert-link">create a new report</a> using the wizard.
+        </div>
+    }
+
+    <div class="edit-card">
+        <h3>Report Information</h3>
+        <hr />
+
+        <div class="row g-3 mb-3">
+            <div class="col-md-8">
+                <label class="form-label" for="reportName">Report Name <span class="text-danger">*</span></label>
+                <input type="text"
+                       id="reportName"
+                       class="form-control"
+                       value="@Model.ReportName"
+                       placeholder="Enter report name"
+                       required />
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label" for="category">Category</label>
+                <select id="category" class="form-select">
+                    <option value="Custom Reports" selected="@(Model.Category == "Custom Reports")">Custom Reports</option>
+                    <option value="Sales Reports" selected="@(Model.Category == "Sales Reports")">Sales Reports</option>
+                    <option value="Financial Reports" selected="@(Model.Category == "Financial Reports")">Financial Reports</option>
+                    <option value="Inventory Reports" selected="@(Model.Category == "Inventory Reports")">Inventory Reports</option>
+                    <option value="Customer Reports" selected="@(Model.Category == "Customer Reports")">Customer Reports</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label" for="reportDescription">Description</label>
+            <textarea id="reportDescription"
+                      class="form-control"
+                      rows="2"
+                      placeholder="Optional description">@Model.ReportDescription</textarea>
+        </div>
+    </div>
+
+    <div class="edit-card">
+        <h3>SQL Query</h3>
+        <hr />
+
+        <div class="mb-3">
+            <label class="form-label" for="sqlEditor">
+                SQL Query <span class="text-danger">*</span>
+                <small class="text-muted">(Only SELECT statements are allowed)</small>
+            </label>
+            <textarea id="sqlEditor"
+                      class="sql-editor form-control"
+                      placeholder="SELECT ...">@Model.CustomSql</textarea>
+        </div>
+    </div>
+
+    <div class="btn-group-actions">
+        <button type="button" id="btnPreview" class="btn btn-info btn-lg">
+            <i class="fa fa-eye"></i> Preview Changes
+        </button>
+        <button type="button" id="btnUpdate" class="btn btn-success btn-lg">
+            <i class="fa fa-save"></i> Update Report
+        </button>
+        <a href="@Url.Action("Index")" class="btn btn-secondary btn-lg">
+            <i class="fa fa-times"></i> Cancel
+        </a>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        const reportId = @Model.ReportId;
+        const queryMode = '@Model.QueryMode';
+
+        // Preview button
+        $('#btnPreview').on('click', function() {
+            const sql = $('#sqlEditor').val().trim();
+
+            if (!sql) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'SQL Required',
+                    text: 'Please enter a SQL query to preview'
+                });
+                return;
+            }
+
+            // Show preview in modal with SweetAlert2
+            Swal.fire({
+                title: 'Preview Query',
+                html: `
+                    <div class="text-start">
+                        <h6>SQL Query:</h6>
+                        <pre style="background: #f8f9fa; padding: 1rem; border-radius: 8px; max-height: 300px; overflow-y: auto;">${sql}</pre>
+                        <p class="text-muted mt-3">Click "Update Report" to save your changes.</p>
+                    </div>
+                `,
+                icon: 'info',
+                width: 700,
+                confirmButtonText: 'Close'
+            });
+        });
+
+        // Update button
+        $('#btnUpdate').on('click', function() {
+            const reportName = $('#reportName').val().trim();
+            const reportDescription = $('#reportDescription').val().trim();
+            const category = $('#category').val();
+            const sql = $('#sqlEditor').val().trim();
+
+            // Validation
+            if (!reportName) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Name Required',
+                    text: 'Please enter a report name'
+                });
+                return;
+            }
+
+            if (!sql) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'SQL Required',
+                    text: 'Please enter a SQL query'
+                });
+                return;
+            }
+
+            // Build update payload
+            const payload = {
+                reportId: reportId,
+                reportName: reportName,
+                reportDescription: reportDescription,
+                category: category,
+                queryMode: 'sql',
+                customSql: sql
+            };
+
+            console.log('Updating report:', payload);
+
+            // Show loading
+            Swal.fire({
+                title: 'Updating Report...',
+                text: 'Please wait',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+
+            // Call update API
+            $.ajax({
+                url: '@Url.Action("Update", "ReportBuilder")',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(payload),
+                success: function(response) {
+                    console.log('Update response:', response);
+
+                    if (response.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Report Updated!',
+                            text: response.message || 'Your report has been updated successfully',
+                            confirmButtonText: 'View Reports'
+                        }).then((result) => {
+                            // Redirect to report list
+                            window.location.href = '@Url.Action("Index", "ReportBuilder")';
+                        });
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Update Failed',
+                            text: response.message || 'Failed to update report'
+                        });
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Update error:', error);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'An error occurred while updating the report: ' + error
+                    });
+                }
+            });
+        });
+
+        // Auto-resize textarea
+        $('#sqlEditor').on('input', function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+        });
+
+        // Trigger resize on page load
+        $(document).ready(function() {
+            $('#sqlEditor').trigger('input');
+        });
+    </script>
+}

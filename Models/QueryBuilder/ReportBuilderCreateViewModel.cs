@@ -283,4 +283,39 @@ namespace SalesMetrics.Models.QueryBuilder
         public string Value { get; set; } = string.Empty;
         public string Text { get; set; } = string.Empty;
     }
+
+    /// <summary>
+    /// ViewModel for editing an existing report
+    /// </summary>
+    public class ReportEditViewModel
+    {
+        public int ReportId { get; set; }
+        public string ReportName { get; set; } = string.Empty;
+        public string ReportDescription { get; set; } = string.Empty;
+        public string Category { get; set; } = string.Empty;
+        public string QueryMode { get; set; } = "sql"; // "wizard" or "sql"
+        public string CustomSql { get; set; } = string.Empty;
+        public string QueryDefinitionJson { get; set; } = string.Empty; // Full JSON for reconstructing wizard state
+    }
+
+    /// <summary>
+    /// DTO for updating an existing report
+    /// </summary>
+    public class UpdateReportDto
+    {
+        public int ReportId { get; set; }
+        public string ReportName { get; set; } = string.Empty;
+        public string ReportDescription { get; set; } = string.Empty;
+        public string? Category { get; set; }
+        public string QueryMode { get; set; } = "sql"; // "wizard" or "sql"
+
+        // SQL Mode fields
+        public string? CustomSql { get; set; }
+
+        // Wizard Mode fields
+        public List<TableDto> Tables { get; set; } = new();
+        public List<RelationshipDto> Relationships { get; set; } = new();
+        public List<ColumnDto> Columns { get; set; } = new();
+        public List<FilterDto> Filters { get; set; } = new();
+    }
 }

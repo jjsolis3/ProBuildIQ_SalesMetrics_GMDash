@@ -257,5 +257,30 @@ namespace SalesMetrics.Models.QueryBuilder
         public long ExecutionTimeMs { get; set; }
         public DateTime ExecutedDate { get; set; }
         public string? QueryDefinitionJson { get; set; }
+        public List<ReportParameter> Parameters { get; set; } = new();
+        public bool HasParameters => Parameters.Any();
+    }
+
+    /// <summary>
+    /// Represents a parameter in a report
+    /// </summary>
+    public class ReportParameter
+    {
+        public string Name { get; set; } = string.Empty; // e.g., "WarehouseID"
+        public string DisplayName { get; set; } = string.Empty; // e.g., "Warehouse"
+        public string DataType { get; set; } = "text"; // text, number, date, dropdown
+        public string? DefaultValue { get; set; }
+        public bool IsRequired { get; set; } = true;
+        public string? PromptText { get; set; } // e.g., "Select a warehouse"
+        public List<ParameterOption>? Options { get; set; } // For dropdown type
+    }
+
+    /// <summary>
+    /// Represents an option for a dropdown parameter
+    /// </summary>
+    public class ParameterOption
+    {
+        public string Value { get; set; } = string.Empty;
+        public string Text { get; set; } = string.Empty;
     }
 }

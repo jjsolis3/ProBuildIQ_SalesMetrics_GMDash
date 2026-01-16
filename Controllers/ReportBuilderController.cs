@@ -771,8 +771,52 @@ namespace SalesMetrics.Controllers
             if (model.Filters != null && model.Filters.Any())
             {
                 sql.AppendLine("WHERE");
-                var conditions = model.Filters.Select(f => $"    {f.TableAlias}.[{f.ColumnName}] {f.Operator} '{f.Value}'");
-                sql.AppendLine(string.Join(" AND\n", conditions));
+                var conditions = model.Filters.Select((f, index) =>
+                {
+                    var condition = new System.Text.StringBuilder();
+
+                    // Add logical operator for non-first filters
+                    if (index > 0)
+                    {
+                        condition.Append($"    {f.LogicalOperator ?? "AND"} ");
+                    }
+                    else
+                    {
+                        condition.Append("    ");
+                    }
+
+                    // Build the condition based on operator
+                    if (f.Operator.Equals("IS NULL", StringComparison.OrdinalIgnoreCase) ||
+                        f.Operator.Equals("IS NOT NULL", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // IS NULL and IS NOT NULL don't need a value
+                        condition.Append($"{f.TableAlias}.[{f.ColumnName}] {f.Operator}");
+                    }
+                    else if (f.Operator.Equals("IN", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // IN operator needs parentheses
+                        condition.Append($"{f.TableAlias}.[{f.ColumnName}] {f.Operator} ({f.Value})");
+                    }
+                    else if (f.Operator.Equals("LIKE", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // LIKE operator - wrap value with wildcards if not already present
+                        var likeValue = f.Value;
+                        if (!likeValue.Contains("%"))
+                        {
+                            likeValue = $"%{likeValue}%";
+                        }
+                        condition.Append($"{f.TableAlias}.[{f.ColumnName}] {f.Operator} '{likeValue}'");
+                    }
+                    else
+                    {
+                        // Standard operators (=, !=, >, <, >=, <=)
+                        condition.Append($"{f.TableAlias}.[{f.ColumnName}] {f.Operator} '{f.Value}'");
+                    }
+
+                    return condition.ToString();
+                });
+
+                sql.AppendLine(string.Join("\n", conditions));
             }
 
             return sql.ToString();

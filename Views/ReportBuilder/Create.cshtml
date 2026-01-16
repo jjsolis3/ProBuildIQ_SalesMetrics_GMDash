@@ -2203,13 +2203,27 @@ WHERE condition = 'value'
                         dateFormat: col.dateFormat || 'MM/dd/yyyy',
                         decimalPlaces: col.decimalPlaces || 2
                     })),
-                    filters: filters.map(f => ({
-                        tableAlias: f.tableAlias || f.TableAlias || 'T1',
-                        columnName: f.columnName || f.ColumnName,
-                        operator: f.operator || f.Operator,
-                        value: f.value || f.Value,
-                        logicalOperator: f.logicalOperator || f.LogicalOperator || 'AND'
-                    }))
+                    filters: filters.map(f => {
+                        // Look up the column details from reportColumns using columnId
+                        const column = reportColumns.find(c => c.columnId === f.columnId);
+                        if (!column) {
+                            console.warn('Column not found for filter:', f);
+                            return null;
+                        }
+
+                        // Find the table alias
+                        const tableName = column.tableName || column.TableName;
+                        const tableIndex = tablesWithColumns.findIndex(t => (t.tableName || t.TableName) === tableName);
+                        const tableAlias = `T${tableIndex + 1}`;
+
+                        return {
+                            tableAlias: tableAlias,
+                            columnName: column.columnName || column.ColumnName,
+                            operator: f.operator || f.Operator,
+                            value: f.value || f.Value,
+                            logicalOperator: f.logicalOperator || f.LogicalOperator || 'AND'
+                        };
+                    }).filter(f => f !== null)
                 };
 
                 console.log('Step 4 payload:', payload);

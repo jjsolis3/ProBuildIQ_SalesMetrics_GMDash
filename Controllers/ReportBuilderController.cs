@@ -1068,7 +1068,7 @@ namespace SalesMetrics.Controllers
         /// <summary>
         /// Helper method to execute report with optional parameter values
         /// </summary>
-        private async Task<IActionResult> ExecuteReportWithParameters(Data.Entities.QueryBuilder.ReportDefinition report, Dictionary<string, string>? parameterValues)
+        private async Task<IActionResult> ExecuteReportWithParameters(Data.Entities.QueryBuilder.ReportDefinitionEntity report, Dictionary<string, string>? parameterValues)
         {
             var connStr = _configuration.GetConnectionString("SalesMetrics");
             using var conn = new System.Data.SqlClient.SqlConnection(connStr);

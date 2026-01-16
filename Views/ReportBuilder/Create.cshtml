@@ -1188,14 +1188,14 @@
                     }
                 });
 
-                // Prepare data for submission
+                // Prepare data for submission - use PascalCase to match C# model
                 const relationshipsData = relationships.map(r => ({
-                    leftTable: r.leftTable,
-                    leftColumn: r.leftColumn,
-                    rightTable: r.rightTable,
-                    rightColumn: r.rightColumn,
-                    joinType: r.joinType,
-                    additionalCondition: r.additionalCondition || null
+                    LeftTable: r.leftTable,
+                    LeftColumn: r.leftColumn,
+                    RightTable: r.rightTable,
+                    RightColumn: r.rightColumn,
+                    JoinType: r.joinType,
+                    AdditionalCondition: r.additionalCondition || null
                 }));
 
                 console.log('Submitting relationships:', relationshipsData);
@@ -1206,7 +1206,7 @@
                     type: 'POST',
                     contentType: 'application/json',
                     data: JSON.stringify({
-                        relationships: relationshipsData
+                        Relationships: relationshipsData
                     }),
                     success: function(response) {
                         console.log('Step 1.5 response:', response);

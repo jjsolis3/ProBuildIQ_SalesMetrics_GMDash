@@ -148,7 +148,7 @@ namespace SalesMetrics.Models.QueryBuilder
     /// </summary>
     public class TableColumnInfo
     {
-        public string ColumnName { get; set} = string.Empty;
+        public string ColumnName { get; set;  } = string.Empty;
         public string DataType { get; set; } = string.Empty;
     }
 

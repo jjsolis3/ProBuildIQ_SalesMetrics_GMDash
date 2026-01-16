@@ -852,6 +852,101 @@ namespace SalesMetrics.Controllers
         }
 
         /// <summary>
+        /// Execute a saved report and display results
+        /// </summary>
+        [HttpGet]
+        public async Task<IActionResult> Execute(int id)
+        {
+            try
+            {
+                var userId = GetCurrentUserId();
+
+                // Check if user has access
+                var hasAccess = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_ACCESS");
+                if (!hasAccess)
+                {
+                    _logger.LogWarning("User {UserId} attempted to execute report without permission", userId);
+                    return Forbid();
+                }
+
+                // Load report definition
+                var report = await _context.ReportDefinitions
+                    .FirstOrDefaultAsync(r => r.ReportDefinitionId == id && r.IsActive);
+
+                if (report == null)
+                {
+                    _logger.LogWarning("Report {ReportId} not found or inactive", id);
+                    return NotFound();
+                }
+
+                _logger.LogInformation("User {UserId} executing report {ReportId}: {ReportName}", userId, id, report.Name);
+
+                // Execute the SQL query
+                var connStr = _configuration.GetConnectionString("SalesMetrics");
+                using var conn = new System.Data.SqlClient.SqlConnection(connStr);
+                await conn.OpenAsync();
+
+                var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+                var cmd = new System.Data.SqlClient.SqlCommand(report.GeneratedSql, conn);
+                cmd.CommandTimeout = 60; // 60 seconds timeout for report execution
+
+                var resultData = new List<Dictionary<string, object>>();
+                var columnNames = new List<string>();
+                var columnTypes = new Dictionary<string, string>();
+
+                using var reader = await cmd.ExecuteReaderAsync();
+
+                // Get column names and types
+                for (int i = 0; i < reader.FieldCount; i++)
+                {
+                    var colName = reader.GetName(i);
+                    columnNames.Add(colName);
+                    columnTypes[colName] = reader.GetFieldType(i).Name;
+                }
+
+                // Read all rows
+                while (await reader.ReadAsync())
+                {
+                    var row = new Dictionary<string, object>();
+                    for (int i = 0; i < reader.FieldCount; i++)
+                    {
+                        row[reader.GetName(i)] = reader.IsDBNull(i) ? null : reader.GetValue(i);
+                    }
+                    resultData.Add(row);
+                }
+
+                stopwatch.Stop();
+
+                _logger.LogInformation("Report executed successfully. Rows: {RowCount}, Time: {Time}ms", resultData.Count, stopwatch.ElapsedMilliseconds);
+
+                // Build view model
+                var viewModel = new ReportExecutionViewModel
+                {
+                    ReportId = report.ReportDefinitionId,
+                    ReportName = report.Name ?? "Untitled Report",
+                    ReportDescription = report.Description ?? "",
+                    Category = report.Category ?? "Custom Reports",
+                    GeneratedSql = report.GeneratedSql ?? "",
+                    ColumnNames = columnNames,
+                    ResultData = resultData,
+                    RowCount = resultData.Count,
+                    ExecutionTimeMs = stopwatch.ElapsedMilliseconds,
+                    ExecutedDate = DateTime.Now,
+                    QueryDefinitionJson = report.QueryDefinitionJson
+                };
+
+                return View(viewModel);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error executing report {ReportId}", id);
+                TempData["ErrorMessage"] = $"Error executing report: {ex.Message}";
+                return RedirectToAction("Index");
+            }
+        }
+
+        /// <summary>
         /// Helper method to get current user ID from claims
         /// </summary>
         private int GetCurrentUserId()

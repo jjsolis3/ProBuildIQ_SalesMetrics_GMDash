@@ -570,10 +570,124 @@
         margin-bottom: 1rem;
         color: #adb5bd;
     }
+
+    /* Query Mode Toggle */
+    .query-mode-toggle {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin-bottom: 2rem;
+        gap: 1rem;
+    }
+
+    .mode-toggle-btn {
+        padding: 0.75rem 2rem;
+        border: 2px solid #e9ecef;
+        background: white;
+        color: #6c757d;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .mode-toggle-btn:hover {
+        border-color: #28a745;
+        color: #28a745;
+    }
+
+    .mode-toggle-btn.active {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        color: white;
+        border-color: #28a745;
+        box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+    }
+
+    /* SQL Editor */
+    .sql-editor-container {
+        background: white;
+        border-radius: 12px;
+        padding: 2rem;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        margin-bottom: 2rem;
+    }
+
+    .sql-editor {
+        width: 100%;
+        min-height: 400px;
+        font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+        font-size: 14px;
+        padding: 1rem;
+        border: 2px solid #e9ecef;
+        border-radius: 8px;
+        resize: vertical;
+    }
+
+    .sql-editor:focus {
+        outline: none;
+        border-color: #28a745;
+        box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.1);
+    }
+
+    .sql-editor-hint {
+        font-size: 0.875rem;
+        color: #6c757d;
+        margin-top: 0.5rem;
+    }
+
+    .sql-editor-actions {
+        display: flex;
+        gap: 1rem;
+        margin-top: 1rem;
+    }
 </style>
 
 <div class="container-fluid">
+    <!-- Query Mode Toggle -->
+    <div class="query-mode-toggle">
+        <button type="button" id="wizardModeBtn" class="mode-toggle-btn active">
+            <i class="fa fa-magic"></i> Wizard Mode
+        </button>
+        <button type="button" id="sqlModeBtn" class="mode-toggle-btn">
+            <i class="fa fa-code"></i> SQL Mode
+        </button>
+    </div>
+
+    <!-- SQL Editor Container (hidden by default) -->
+    <div id="sqlEditorContainer" style="display: none;">
+        <div class="sql-editor-container">
+            <h2 class="wizard-title"><i class="fa fa-code"></i> SQL Query Editor</h2>
+            <p class="wizard-subtitle">Write your custom SQL SELECT query below</p>
+
+            <textarea id="sqlQueryEditor" class="sql-editor" placeholder="SELECT
+    column1,
+    column2,
+    column3
+FROM [CompUFloorLA].[dbo].[TableName]
+WHERE condition = 'value'
+
+-- Only SELECT statements are allowed
+-- Use fully qualified table names: [DatabaseName].[schema].[TableName]"></textarea>
+
+            <div class="sql-editor-hint">
+                <i class="fa fa-info-circle"></i>
+                <strong>Security Note:</strong> Only SELECT queries are allowed. No DDL/DML operations (INSERT, UPDATE, DELETE, DROP, etc.).
+                Use fully qualified table names like <code>[CompUFloorLA].[dbo].[TableName]</code>
+            </div>
+
+            <div class="sql-editor-actions">
+                <button type="button" id="btnValidateSql" class="btn btn-info">
+                    <i class="fa fa-check-circle"></i> Validate SQL
+                </button>
+                <button type="button" id="btnPreviewSql" class="btn btn-success">
+                    <i class="fa fa-eye"></i> Preview Results
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Wizard Progress -->
+    <div id="wizardContainer">
     <div class="wizard-progress">
         <div class="wizard-step @(Model.CurrentStep == 1 ? "active" : "") @(Model.CurrentStep > 1 ? "completed" : "")">
             <div class="step-circle">1</div>
@@ -945,11 +1059,93 @@
             </div>
         </div>
     </div>
-</div>
+    </div> <!-- Close wizardContainer -->
+</div> <!-- Close container-fluid -->
 
 @section Scripts {
     <script>
         $(document).ready(function() {
+            // ============================================
+            // Query Mode Toggle
+            // ============================================
+            let queryMode = 'wizard'; // 'wizard' or 'sql'
+            let customSqlQuery = '';
+
+            // Mode toggle buttons
+            $('#wizardModeBtn').on('click', function() {
+                queryMode = 'wizard';
+                $('#wizardModeBtn').addClass('active');
+                $('#sqlModeBtn').removeClass('active');
+                $('#wizardContainer').show();
+                $('#sqlEditorContainer').hide();
+            });
+
+            $('#sqlModeBtn').on('click', function() {
+                queryMode = 'sql';
+                $('#sqlModeBtn').addClass('active');
+                $('#wizardModeBtn').removeClass('active');
+                $('#wizardContainer').hide();
+                $('#sqlEditorContainer').show();
+            });
+
+            // Validate SQL button
+            $('#btnValidateSql').on('click', function() {
+                const sql = $('#sqlQueryEditor').val().trim();
+                if (!sql) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Empty Query',
+                        text: 'Please enter a SQL query first'
+                    });
+                    return;
+                }
+
+                // Basic client-side validation
+                const upperSql = sql.toUpperCase();
+                if (!upperSql.startsWith('SELECT')) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Invalid Query',
+                        text: 'Query must start with SELECT'
+                    });
+                    return;
+                }
+
+                const blockedKeywords = ['INSERT', 'UPDATE', 'DELETE', 'DROP', 'CREATE', 'ALTER', 'TRUNCATE', 'EXEC'];
+                for (let keyword of blockedKeywords) {
+                    if (upperSql.includes(keyword)) {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Blocked Keyword',
+                            text: `Query contains blocked keyword: ${keyword}`
+                        });
+                        return;
+                    }
+                }
+
+                Swal.fire({
+                    icon: 'success',
+                    title: 'SQL Validated',
+                    text: 'Query passed basic validation. Click "Preview Results" to execute it.'
+                });
+            });
+
+            // Preview SQL button
+            $('#btnPreviewSql').on('click', function() {
+                const sql = $('#sqlQueryEditor').val().trim();
+                if (!sql) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Empty Query',
+                        text: 'Please enter a SQL query first'
+                    });
+                    return;
+                }
+
+                customSqlQuery = sql;
+                loadStep4SqlMode();
+            });
+
             let selectedTables = [];
 
             // Table card click
@@ -1786,6 +1982,78 @@
             // ============================================
             // Step 4: Preview Query Results
             // ============================================
+
+            // Load Step 4 in SQL Mode
+            function loadStep4SqlMode() {
+                console.log('Loading Step 4 (Preview) in SQL Mode');
+
+                // Show wizard container to display Step 4
+                $('#wizardContainer').show();
+                $('#sqlEditorContainer').hide();
+
+                // Hide all steps, show Step 4
+                $('#step1Container, #step1_5Container, #step2Container, #step3Container, #step5Container').hide();
+                $('#step4Container').show();
+                $('.wizard-step').removeClass('active');
+                $('.wizard-step:nth-child(4)').addClass('active');
+
+                // Build request payload for SQL mode
+                const payload = {
+                    queryMode: 'sql',
+                    customSql: customSqlQuery,
+                    tables: [],
+                    relationships: [],
+                    columns: [],
+                    filters: []
+                };
+
+                console.log('Step 4 SQL Mode payload:', payload);
+
+                // Call preview API
+                $.ajax({
+                    url: '@Url.Action("CreateStep4", "ReportBuilder")',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(payload),
+                    success: function(response) {
+                        console.log('Step 4 response:', response);
+
+                        if (response.success) {
+                            // Display generated SQL
+                            $('#generatedSqlDisplay').text(response.generatedSql);
+
+                            // Display stats
+                            $('#previewRowCount').text(response.rowCount);
+                            $('#executionTime').text(response.executionTimeMs + ' ms');
+                            $('#columnCount').text(response.columnNames.length);
+
+                            // Build and display preview table
+                            displayPreviewTable(response.columnNames, response.previewData);
+
+                            // Store data for Step 5
+                            window.previewPayload = payload;
+                        } else {
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Preview Error',
+                                html: `<p>${response.message}</p><pre class="text-start" style="max-height: 300px; overflow-y: auto;">${response.errorDetails || ''}</pre>`
+                            });
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Step 4 error:', error);
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error Loading Preview',
+                            text: 'Failed to execute query: ' + error
+                        });
+                    }
+                });
+
+                // Setup Step 4 event handlers
+                setupStep4Events();
+            }
+
             function loadStep4() {
                 console.log('Loading Step 4 (Preview)');
 
@@ -1797,6 +2065,8 @@
 
                 // Build request payload
                 const payload = {
+                    queryMode: 'wizard',
+                    customSql: null,
                     tables: tablesWithColumns.map((t, index) => ({
                         tableName: t.tableName || t.TableName,
                         alias: `T${index + 1}`,
@@ -1971,12 +2241,17 @@
                     return;
                 }
 
-                // Build save payload
+                // Build save payload (include queryMode and customSql from preview)
                 const payload = {
                     reportName: reportName,
                     reportDescription: reportDescription,
                     category: category,
-                    ...window.previewPayload  // Include tables, relationships, columns, filters from Step 4
+                    queryMode: window.previewPayload.queryMode || 'wizard',
+                    customSql: window.previewPayload.customSql || null,
+                    tables: window.previewPayload.tables || [],
+                    relationships: window.previewPayload.relationships || [],
+                    columns: window.previewPayload.columns || [],
+                    filters: window.previewPayload.filters || []
                 };
 
                 console.log('Save report payload:', payload);

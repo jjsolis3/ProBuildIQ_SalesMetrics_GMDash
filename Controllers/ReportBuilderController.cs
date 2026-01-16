@@ -501,26 +501,44 @@ namespace SalesMetrics.Controllers
         {
             try
             {
-                _logger.LogInformation("Step 4: Previewing query with {TableCount} tables, {ColumnCount} columns, {FilterCount} filters",
-                    model.Tables?.Count ?? 0, model.Columns?.Count ?? 0, model.Filters?.Count ?? 0);
+                _logger.LogInformation("Step 4: Previewing query in {Mode} mode", model.QueryMode);
 
-                // Log column DisplayNames for debugging
-                foreach (var col in model.Columns)
+                string sql;
+
+                if (model.QueryMode == "sql")
                 {
-                    _logger.LogInformation("Column: {ColumnName}, DisplayName: '{DisplayName}', IsEmpty: {IsEmpty}",
-                        col.ColumnName, col.DisplayName, string.IsNullOrWhiteSpace(col.DisplayName));
+                    // SQL Mode - use custom SQL
+                    if (string.IsNullOrWhiteSpace(model.CustomSql))
+                    {
+                        return Json(new { success = false, message = "Custom SQL query is required in SQL mode" });
+                    }
+
+                    // Validate SQL for security
+                    var (isValid, errorMessage) = ValidateCustomSql(model.CustomSql);
+                    if (!isValid)
+                    {
+                        return Json(new { success = false, message = $"SQL validation failed: {errorMessage}" });
+                    }
+
+                    sql = model.CustomSql.Trim();
+                    _logger.LogInformation("Using custom SQL: {SQL}", sql);
                 }
+                else
+                {
+                    // Wizard Mode - generate SQL from selections
+                    _logger.LogInformation("Generating SQL from {TableCount} tables, {ColumnCount} columns, {FilterCount} filters",
+                        model.Tables?.Count ?? 0, model.Columns?.Count ?? 0, model.Filters?.Count ?? 0);
 
-                // Get user's office location and determine CompUFloor database
-                var userLocation = HttpContext.Session.GetString("OfficeLocation") ?? "LAX";
-                var compuFloorDb = GetCompUFloorDatabaseName(userLocation);
+                    // Get user's office location and determine CompUFloor database
+                    var userLocation = HttpContext.Session.GetString("OfficeLocation") ?? "LAX";
+                    var compuFloorDb = GetCompUFloorDatabaseName(userLocation);
 
-                _logger.LogInformation("User location: {Location}, CompUFloor database: {Database}", userLocation, compuFloorDb);
+                    _logger.LogInformation("User location: {Location}, CompUFloor database: {Database}", userLocation, compuFloorDb);
 
-                // Build SQL query with fully qualified table names
-                var sql = GenerateSQL(model, compuFloorDb);
-
-                _logger.LogInformation("Generated SQL: {SQL}", sql);
+                    // Build SQL query with fully qualified table names
+                    sql = GenerateSQL(model, compuFloorDb);
+                    _logger.LogInformation("Generated SQL: {SQL}", sql);
+                }
 
                 // Execute query with limit
                 var connStr = _configuration.GetConnectionString("SalesMetrics");
@@ -592,7 +610,7 @@ namespace SalesMetrics.Controllers
             {
                 var userId = GetCurrentUserId();
 
-                _logger.LogInformation("Saving report '{ReportName}' for user {UserId}", model.ReportName, userId);
+                _logger.LogInformation("Saving report '{ReportName}' for user {UserId} in {Mode} mode", model.ReportName, userId, model.QueryMode);
 
                 // Validate
                 if (string.IsNullOrWhiteSpace(model.ReportName))
@@ -600,41 +618,72 @@ namespace SalesMetrics.Controllers
                     return Json(new { success = false, message = "Report name is required" });
                 }
 
-                if (model.Tables == null || !model.Tables.Any())
-                {
-                    return Json(new { success = false, message = "At least one table must be selected" });
-                }
+                string generatedSql;
+                string queryDefJson;
 
-                if (model.Columns == null || !model.Columns.Any())
+                if (model.QueryMode == "sql")
                 {
-                    return Json(new { success = false, message = "At least one column must be selected" });
+                    // SQL Mode - validate and use custom SQL
+                    if (string.IsNullOrWhiteSpace(model.CustomSql))
+                    {
+                        return Json(new { success = false, message = "Custom SQL is required in SQL mode" });
+                    }
+
+                    var (isValid, errorMessage) = ValidateCustomSql(model.CustomSql);
+                    if (!isValid)
+                    {
+                        return Json(new { success = false, message = $"SQL validation failed: {errorMessage}" });
+                    }
+
+                    generatedSql = model.CustomSql.Trim();
+
+                    // Store custom SQL in query definition
+                    queryDefJson = System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        queryMode = "sql",
+                        customSql = model.CustomSql
+                    });
+                }
+                else
+                {
+                    // Wizard Mode - validate selections
+                    if (model.Tables == null || !model.Tables.Any())
+                    {
+                        return Json(new { success = false, message = "At least one table must be selected" });
+                    }
+
+                    if (model.Columns == null || !model.Columns.Any())
+                    {
+                        return Json(new { success = false, message = "At least one column must be selected" });
+                    }
+
+                    // Get user's office location and determine CompUFloor database
+                    var userLocation = HttpContext.Session.GetString("OfficeLocation") ?? "LAX";
+                    var compuFloorDb = GetCompUFloorDatabaseName(userLocation);
+
+                    // Build query definition JSON
+                    queryDefJson = System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        queryMode = "wizard",
+                        tables = model.Tables,
+                        relationships = model.Relationships,
+                        columns = model.Columns,
+                        filters = model.Filters,
+                        compuFloorDatabase = compuFloorDb
+                    });
+
+                    // Generate SQL with fully qualified table names
+                    generatedSql = GenerateSQL(new Step4SubmissionDto
+                    {
+                        Tables = model.Tables,
+                        Relationships = model.Relationships,
+                        Columns = model.Columns,
+                        Filters = model.Filters
+                    }, compuFloorDb);
                 }
 
                 // Generate report ID
                 var reportId = $"CUSTOM_{Guid.NewGuid().ToString().Substring(0, 8).ToUpper()}";
-
-                // Get user's office location and determine CompUFloor database
-                var userLocation = HttpContext.Session.GetString("OfficeLocation") ?? "LAX";
-                var compuFloorDb = GetCompUFloorDatabaseName(userLocation);
-
-                // Build query definition JSON
-                var queryDefJson = System.Text.Json.JsonSerializer.Serialize(new
-                {
-                    tables = model.Tables,
-                    relationships = model.Relationships,
-                    columns = model.Columns,
-                    filters = model.Filters,
-                    compuFloorDatabase = compuFloorDb // Store the database name for future reference
-                });
-
-                // Generate SQL with fully qualified table names
-                var generatedSql = GenerateSQL(new Step4SubmissionDto
-                {
-                    Tables = model.Tables,
-                    Relationships = model.Relationships,
-                    Columns = model.Columns,
-                    Filters = model.Filters
-                }, compuFloorDb);
 
                 // Create report definition
                 var reportDef = new ReportDefinitionEntity
@@ -754,6 +803,52 @@ namespace SalesMetrics.Controllers
             _logger.LogInformation("User {UserId} deleted report {ReportId}", userId, id);
 
             return Json(new { success = true, message = "Report deleted successfully" });
+        }
+
+        /// <summary>
+        /// Validates SQL query for security (ensures SELECT only, no DDL/DML)
+        /// </summary>
+        private (bool isValid, string? errorMessage) ValidateCustomSql(string sql)
+        {
+            if (string.IsNullOrWhiteSpace(sql))
+            {
+                return (false, "SQL query cannot be empty");
+            }
+
+            // Remove comments and normalize whitespace
+            var normalized = System.Text.RegularExpressions.Regex.Replace(sql, @"--.*?$", "", System.Text.RegularExpressions.RegexOptions.Multiline);
+            normalized = System.Text.RegularExpressions.Regex.Replace(normalized, @"/\*.*?\*/", "", System.Text.RegularExpressions.RegexOptions.Singleline);
+            normalized = normalized.Trim().ToUpper();
+
+            // Must start with SELECT
+            if (!normalized.StartsWith("SELECT"))
+            {
+                return (false, "Query must be a SELECT statement");
+            }
+
+            // Blocked keywords (DDL/DML operations)
+            var blockedKeywords = new[]
+            {
+                "INSERT", "UPDATE", "DELETE", "DROP", "CREATE", "ALTER",
+                "TRUNCATE", "EXEC", "EXECUTE", "SP_", "XP_", "BACKUP",
+                "RESTORE", "GRANT", "REVOKE", "DENY"
+            };
+
+            foreach (var keyword in blockedKeywords)
+            {
+                if (normalized.Contains(keyword))
+                {
+                    return (false, $"Query contains blocked keyword: {keyword}");
+                }
+            }
+
+            // Check for semicolons (multiple statements)
+            if (sql.Trim().Count(c => c == ';') > 1)
+            {
+                return (false, "Multiple SQL statements are not allowed");
+            }
+
+            return (true, null);
         }
 
         /// <summary>

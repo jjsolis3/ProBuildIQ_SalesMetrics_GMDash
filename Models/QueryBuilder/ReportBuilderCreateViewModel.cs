@@ -157,6 +157,8 @@ namespace SalesMetrics.Models.QueryBuilder
     /// </summary>
     public class Step4SubmissionDto
     {
+        public string QueryMode { get; set; } = "wizard"; // "wizard" or "sql"
+        public string? CustomSql { get; set; } // Only used when QueryMode = "sql"
         public List<TableDto> Tables { get; set; } = new();
         public List<RelationshipDto> Relationships { get; set; } = new();
         public List<ColumnDto> Columns { get; set; } = new();
@@ -171,6 +173,8 @@ namespace SalesMetrics.Models.QueryBuilder
         public string ReportName { get; set; } = string.Empty;
         public string ReportDescription { get; set; } = string.Empty;
         public string? Category { get; set; }
+        public string QueryMode { get; set; } = "wizard"; // "wizard" or "sql"
+        public string? CustomSql { get; set; } // Only used when QueryMode = "sql"
         public List<TableDto> Tables { get; set; } = new();
         public List<RelationshipDto> Relationships { get; set; } = new();
         public List<ColumnDto> Columns { get; set; } = new();

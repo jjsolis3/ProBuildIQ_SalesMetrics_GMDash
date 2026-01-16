@@ -71,6 +71,11 @@ namespace SalesMetrics.Models.QueryBuilder
         public string SortDirection { get; set; } = "ASC"; // ASC or DESC
         public string? AggregateFunction { get; set; } = null; // null, SUM, COUNT, AVG, MIN, MAX
         public string FormatString { get; set; } = string.Empty;
+
+        // New formatting properties
+        public string FormatType { get; set; } = "text"; // text, currency, date, number, percentage
+        public string? DateFormat { get; set; } = "MM/dd/yyyy"; // Date format pattern
+        public int? DecimalPlaces { get; set; } = 2; // Decimal places for numbers/currency
     }
 
     /// <summary>
@@ -217,6 +222,11 @@ namespace SalesMetrics.Models.QueryBuilder
         public string DataType { get; set; } = string.Empty;
         public string? AggregateFunction { get; set; }
         public int DisplayOrder { get; set; }
+
+        // Formatting properties
+        public string FormatType { get; set; } = "text"; // text, currency, date, number, percentage
+        public string? DateFormat { get; set; } = "MM/dd/yyyy"; // Date format pattern
+        public int? DecimalPlaces { get; set; } = 2; // Decimal places for numbers/currency
     }
 
     /// <summary>

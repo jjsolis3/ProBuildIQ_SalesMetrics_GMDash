@@ -162,6 +162,52 @@
         background: #ffb300;
         color: #1a1a2e;
     }
+
+    .parameters-container {
+        background: white;
+        border-radius: 12px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    }
+
+    .parameters-container h5 {
+        color: #1a1a2e;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+    }
+
+    .parameter-field {
+        margin-bottom: 1rem;
+    }
+
+    .parameter-field label {
+        font-weight: 600;
+        color: #1a1a2e;
+        margin-bottom: 0.5rem;
+    }
+
+    .parameter-field input,
+    .parameter-field select {
+        border: 2px solid #e9ecef;
+        border-radius: 8px;
+        padding: 0.75rem;
+        font-size: 1rem;
+        transition: all 0.3s ease;
+    }
+
+    .parameter-field input:focus,
+    .parameter-field select:focus {
+        border-color: #28a745;
+        box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.15);
+    }
+
+    .btn-lg {
+        padding: 0.75rem 2rem;
+        font-size: 1.1rem;
+        font-weight: 600;
+        border-radius: 8px;
+    }
 </style>
 
 <div class="report-header">
@@ -171,6 +217,97 @@
         <p>@Model.ReportDescription</p>
     }
 </div>
+
+@* Show parameter entry form if report has parameters and no results yet *@
+@if (Model.HasParameters && Model.RowCount == 0)
+{
+    <div class="parameters-container">
+        <h5><i class="fa fa-sliders-h"></i> Report Parameters</h5>
+        <p class="text-muted mb-3">Enter parameter values to run this report</p>
+
+        <form method="post" action="@Url.Action("Execute", new { id = Model.ReportId })" id="parameterForm">
+            <div class="row g-3">
+                @foreach (var param in Model.Parameters)
+                {
+                    <div class="col-md-6">
+                        <div class="parameter-field">
+                            <label class="form-label">
+                                @param.DisplayName
+                                @if (param.IsRequired)
+                                {
+                                    <span class="text-danger">*</span>
+                                }
+                            </label>
+
+                            @if (!string.IsNullOrEmpty(param.PromptText))
+                            {
+                                <small class="form-text text-muted d-block mb-1">@param.PromptText</small>
+                            }
+
+                            @if (param.DataType == "date")
+                            {
+                                <input type="date"
+                                       class="form-control"
+                                       name="@param.Name"
+                                       value="@param.DefaultValue"
+                                       required="@param.IsRequired" />
+                            }
+                            else if (param.DataType == "number")
+                            {
+                                <input type="number"
+                                       class="form-control"
+                                       name="@param.Name"
+                                       value="@param.DefaultValue"
+                                       required="@param.IsRequired" />
+                            }
+                            else if (param.DataType == "dropdown" && param.Options != null && param.Options.Any())
+                            {
+                                <select class="form-control" name="@param.Name" required="@param.IsRequired">
+                                    <option value="">-- Select --</option>
+                                    @foreach (var option in param.Options)
+                                    {
+                                        <option value="@option.Value" selected="@(option.Value == param.DefaultValue)">@option.Text</option>
+                                    }
+                                </select>
+                            }
+                            else
+                            {
+                                <input type="text"
+                                       class="form-control"
+                                       name="@param.Name"
+                                       value="@param.DefaultValue"
+                                       required="@param.IsRequired"
+                                       placeholder="Enter @param.DisplayName" />
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="mt-4">
+                <button type="submit" class="btn btn-success btn-lg">
+                    <i class="fa fa-play"></i> Run Report
+                </button>
+                <a href="@Url.Action("Index")" class="btn btn-secondary btn-lg">
+                    <i class="fa fa-arrow-left"></i> Back to Reports
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <div class="sql-viewer mt-4">
+        <div class="sql-viewer-header">
+            <h5><i class="fa fa-code"></i> SQL Query</h5>
+            <button type="button" class="btn-copy-sql" onclick="copySqlToClipboard()">
+                <i class="fa fa-copy"></i> Copy SQL
+            </button>
+        </div>
+        <div class="sql-code" id="sqlCode">@Model.GeneratedSql</div>
+    </div>
+}
+else
+{
+    @* Show results if no parameters or parameters already submitted *@
 
 <div class="action-bar">
     <a href="@Url.Action("Index")" class="btn btn-secondary">
@@ -254,6 +391,7 @@
         </table>
     </div>
 </div>
+}
 
 @section Scripts {
     <script>

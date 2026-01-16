@@ -637,12 +637,19 @@ namespace SalesMetrics.Controllers
 
                     generatedSql = model.CustomSql.Trim();
 
-                    // Store custom SQL in query definition
+                    // Detect parameters in SQL
+                    var parameters = DetectParametersFromSql(model.CustomSql);
+
+                    // Store custom SQL and parameters in query definition
                     queryDefJson = System.Text.Json.JsonSerializer.Serialize(new
                     {
                         queryMode = "sql",
-                        customSql = model.CustomSql
+                        customSql = model.CustomSql,
+                        parameters = parameters
                     });
+
+                    _logger.LogInformation("Detected {ParamCount} parameters in SQL: {ParamNames}",
+                        parameters.Count, string.Join(", ", parameters.Select(p => p.Name)));
                 }
                 else
                 {
@@ -806,6 +813,84 @@ namespace SalesMetrics.Controllers
         }
 
         /// <summary>
+        /// Detects parameters in SQL query (looks for @ParameterName patterns)
+        /// </summary>
+        private List<ReportParameter> DetectParametersFromSql(string sql)
+        {
+            var parameters = new List<ReportParameter>();
+
+            // Regex to find @ParameterName patterns
+            var parameterPattern = new System.Text.RegularExpressions.Regex(@"@(\w+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            var matches = parameterPattern.Matches(sql);
+
+            var uniqueParams = new HashSet<string>();
+
+            foreach (System.Text.RegularExpressions.Match match in matches)
+            {
+                var paramName = match.Groups[1].Value;
+
+                // Skip if already added
+                if (uniqueParams.Contains(paramName))
+                    continue;
+
+                uniqueParams.Add(paramName);
+
+                // Create parameter with default settings
+                var parameter = new ReportParameter
+                {
+                    Name = paramName,
+                    DisplayName = FormatParameterDisplayName(paramName), // e.g., "WarehouseID" -> "Warehouse ID"
+                    DataType = GuessParameterDataType(paramName), // Guess based on name
+                    IsRequired = true,
+                    PromptText = $"Enter {FormatParameterDisplayName(paramName)}"
+                };
+
+                parameters.Add(parameter);
+            }
+
+            return parameters;
+        }
+
+        /// <summary>
+        /// Formats parameter name for display (e.g., "WarehouseID" -> "Warehouse ID")
+        /// </summary>
+        private string FormatParameterDisplayName(string paramName)
+        {
+            // Insert spaces before capital letters
+            var result = System.Text.RegularExpressions.Regex.Replace(paramName, "([A-Z])", " $1").Trim();
+
+            // Capitalize first letter
+            if (result.Length > 0)
+            {
+                result = char.ToUpper(result[0]) + result.Substring(1);
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Guesses parameter data type based on parameter name
+        /// </summary>
+        private string GuessParameterDataType(string paramName)
+        {
+            var lowerName = paramName.ToLower();
+
+            if (lowerName.Contains("date") || lowerName.Contains("from") || lowerName.Contains("to") ||
+                lowerName.Contains("start") || lowerName.Contains("end"))
+            {
+                return "date";
+            }
+
+            if (lowerName.Contains("id") || lowerName.Contains("number") || lowerName.Contains("count") ||
+                lowerName.Contains("amount") || lowerName.Contains("qty") || lowerName.Contains("quantity"))
+            {
+                return "number";
+            }
+
+            return "text";
+        }
+
+        /// <summary>
         /// Validates SQL query for security (ensures SELECT only, no DDL/DML)
         /// </summary>
         private (bool isValid, string? errorMessage) ValidateCustomSql(string sql)
@@ -852,7 +937,7 @@ namespace SalesMetrics.Controllers
         }
 
         /// <summary>
-        /// Execute a saved report and display results
+        /// Execute report (GET) - Shows parameter form if report has parameters
         /// </summary>
         [HttpGet]
         public async Task<IActionResult> Execute(int id)
@@ -879,64 +964,98 @@ namespace SalesMetrics.Controllers
                     return NotFound();
                 }
 
-                _logger.LogInformation("User {UserId} executing report {ReportId}: {ReportName}", userId, id, report.Name);
+                _logger.LogInformation("User {UserId} loading report {ReportId}: {ReportName}", userId, id, report.Name);
 
-                // Execute the SQL query
-                var connStr = _configuration.GetConnectionString("SalesMetrics");
-                using var conn = new System.Data.SqlClient.SqlConnection(connStr);
-                await conn.OpenAsync();
-
-                var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-
-                var cmd = new System.Data.SqlClient.SqlCommand(report.GeneratedSql, conn);
-                cmd.CommandTimeout = 60; // 60 seconds timeout for report execution
-
-                var resultData = new List<Dictionary<string, object>>();
-                var columnNames = new List<string>();
-                var columnTypes = new Dictionary<string, string>();
-
-                using var reader = await cmd.ExecuteReaderAsync();
-
-                // Get column names and types
-                for (int i = 0; i < reader.FieldCount; i++)
+                // Check if report has parameters
+                var parameters = new List<ReportParameter>();
+                if (!string.IsNullOrEmpty(report.QueryDefinitionJson))
                 {
-                    var colName = reader.GetName(i);
-                    columnNames.Add(colName);
-                    columnTypes[colName] = reader.GetFieldType(i).Name;
-                }
-
-                // Read all rows
-                while (await reader.ReadAsync())
-                {
-                    var row = new Dictionary<string, object>();
-                    for (int i = 0; i < reader.FieldCount; i++)
+                    try
                     {
-                        row[reader.GetName(i)] = reader.IsDBNull(i) ? null : reader.GetValue(i);
+                        using var document = System.Text.Json.JsonDocument.Parse(report.QueryDefinitionJson);
+                        var root = document.RootElement;
+
+                        if (root.TryGetProperty("parameters", out var paramsElement))
+                        {
+                            var jsonOptions = new System.Text.Json.JsonSerializerOptions
+                            {
+                                PropertyNameCaseInsensitive = true
+                            };
+                            parameters = System.Text.Json.JsonSerializer.Deserialize<List<ReportParameter>>(paramsElement.GetRawText(), jsonOptions) ?? new List<ReportParameter>();
+                            _logger.LogInformation("Report has {ParamCount} parameters", parameters.Count);
+                        }
                     }
-                    resultData.Add(row);
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Could not parse parameters from QueryDefinitionJson");
+                    }
                 }
 
-                stopwatch.Stop();
-
-                _logger.LogInformation("Report executed successfully. Rows: {RowCount}, Time: {Time}ms", resultData.Count, stopwatch.ElapsedMilliseconds);
-
-                // Build view model
-                var viewModel = new ReportExecutionViewModel
+                // If report has parameters, show parameter entry form
+                if (parameters.Any())
                 {
-                    ReportId = report.ReportDefinitionId,
-                    ReportName = report.Name ?? "Untitled Report",
-                    ReportDescription = report.Description ?? "",
-                    Category = report.Category ?? "Custom Reports",
-                    GeneratedSql = report.GeneratedSql ?? "",
-                    ColumnNames = columnNames,
-                    ResultData = resultData,
-                    RowCount = resultData.Count,
-                    ExecutionTimeMs = stopwatch.ElapsedMilliseconds,
-                    ExecutedDate = DateTime.Now,
-                    QueryDefinitionJson = report.QueryDefinitionJson
-                };
+                    var viewModel = new ReportExecutionViewModel
+                    {
+                        ReportId = report.ReportDefinitionId,
+                        ReportName = report.Name ?? "Untitled Report",
+                        ReportDescription = report.Description ?? "",
+                        Category = report.Category ?? "Custom Reports",
+                        GeneratedSql = report.GeneratedSql ?? "",
+                        Parameters = parameters,
+                        QueryDefinitionJson = report.QueryDefinitionJson,
+                        ColumnNames = new List<string>(),
+                        ResultData = new List<Dictionary<string, object>>(),
+                        RowCount = 0,
+                        ExecutionTimeMs = 0,
+                        ExecutedDate = DateTime.Now
+                    };
 
-                return View(viewModel);
+                    return View(viewModel);
+                }
+
+                // No parameters - execute directly
+                return await ExecuteReportWithParameters(report, null);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading report {ReportId}", id);
+                TempData["ErrorMessage"] = $"Error loading report: {ex.Message}";
+                return RedirectToAction("Index");
+            }
+        }
+
+        /// <summary>
+        /// Execute report (POST) - Executes report with provided parameter values
+        /// </summary>
+        [HttpPost]
+        public async Task<IActionResult> Execute(int id, [FromForm] Dictionary<string, string> parameterValues)
+        {
+            try
+            {
+                var userId = GetCurrentUserId();
+
+                // Check if user has access
+                var hasAccess = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_ACCESS");
+                if (!hasAccess)
+                {
+                    _logger.LogWarning("User {UserId} attempted to execute report without permission", userId);
+                    return Forbid();
+                }
+
+                // Load report definition
+                var report = await _context.ReportDefinitions
+                    .FirstOrDefaultAsync(r => r.ReportDefinitionId == id && r.IsActive);
+
+                if (report == null)
+                {
+                    _logger.LogWarning("Report {ReportId} not found or inactive", id);
+                    return NotFound();
+                }
+
+                _logger.LogInformation("User {UserId} executing report {ReportId}: {ReportName} with parameters", userId, id, report.Name);
+
+                // Execute with parameters
+                return await ExecuteReportWithParameters(report, parameterValues);
             }
             catch (Exception ex)
             {
@@ -944,6 +1063,90 @@ namespace SalesMetrics.Controllers
                 TempData["ErrorMessage"] = $"Error executing report: {ex.Message}";
                 return RedirectToAction("Index");
             }
+        }
+
+        /// <summary>
+        /// Helper method to execute report with optional parameter values
+        /// </summary>
+        private async Task<IActionResult> ExecuteReportWithParameters(Data.Entities.QueryBuilder.ReportDefinition report, Dictionary<string, string>? parameterValues)
+        {
+            var connStr = _configuration.GetConnectionString("SalesMetrics");
+            using var conn = new System.Data.SqlClient.SqlConnection(connStr);
+            await conn.OpenAsync();
+
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+            var cmd = new System.Data.SqlClient.SqlCommand(report.GeneratedSql, conn);
+            cmd.CommandTimeout = 60; // 60 seconds timeout for report execution
+
+            // Add parameters if provided
+            if (parameterValues != null && parameterValues.Any())
+            {
+                foreach (var param in parameterValues)
+                {
+                    var paramName = param.Key;
+                    var paramValue = param.Value;
+
+                    // Ensure parameter name starts with @
+                    if (!paramName.StartsWith("@"))
+                    {
+                        paramName = "@" + paramName;
+                    }
+
+                    _logger.LogInformation("Adding parameter {ParamName} = {ParamValue}", paramName, paramValue);
+
+                    // Add parameter to SQL command for safe substitution
+                    cmd.Parameters.AddWithValue(paramName, string.IsNullOrEmpty(paramValue) ? DBNull.Value : paramValue);
+                }
+            }
+
+            var resultData = new List<Dictionary<string, object>>();
+            var columnNames = new List<string>();
+            var columnTypes = new Dictionary<string, string>();
+
+            using var reader = await cmd.ExecuteReaderAsync();
+
+            // Get column names and types
+            for (int i = 0; i < reader.FieldCount; i++)
+            {
+                var colName = reader.GetName(i);
+                columnNames.Add(colName);
+                columnTypes[colName] = reader.GetFieldType(i).Name;
+            }
+
+            // Read all rows
+            while (await reader.ReadAsync())
+            {
+                var row = new Dictionary<string, object>();
+                for (int i = 0; i < reader.FieldCount; i++)
+                {
+                    row[reader.GetName(i)] = reader.IsDBNull(i) ? null : reader.GetValue(i);
+                }
+                resultData.Add(row);
+            }
+
+            stopwatch.Stop();
+
+            _logger.LogInformation("Report executed successfully. Rows: {RowCount}, Time: {Time}ms", resultData.Count, stopwatch.ElapsedMilliseconds);
+
+            // Build view model
+            var viewModel = new ReportExecutionViewModel
+            {
+                ReportId = report.ReportDefinitionId,
+                ReportName = report.Name ?? "Untitled Report",
+                ReportDescription = report.Description ?? "",
+                Category = report.Category ?? "Custom Reports",
+                GeneratedSql = report.GeneratedSql ?? "",
+                ColumnNames = columnNames,
+                ResultData = resultData,
+                RowCount = resultData.Count,
+                ExecutionTimeMs = stopwatch.ElapsedMilliseconds,
+                ExecutedDate = DateTime.Now,
+                QueryDefinitionJson = report.QueryDefinitionJson,
+                Parameters = new List<ReportParameter>()
+            };
+
+            return View(viewModel);
         }
 
         /// <summary>

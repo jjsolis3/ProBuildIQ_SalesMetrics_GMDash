@@ -1798,34 +1798,34 @@
                 // Build request payload
                 const payload = {
                     tables: tablesWithColumns.map((t, index) => ({
-                        tableName: t.TableName,
+                        tableName: t.tableName || t.TableName,
                         alias: `T${index + 1}`,
                         isBaseTable: index === 0
                     })),
                     relationships: relationships.map(r => ({
-                        fromTable: r.LeftTable,
-                        fromColumn: r.LeftColumn,
-                        fromAlias: `T${tablesWithColumns.findIndex(t => t.TableName === r.LeftTable) + 1}`,
-                        toTable: r.RightTable,
-                        toColumn: r.RightColumn,
-                        toAlias: `T${tablesWithColumns.findIndex(t => t.TableName === r.RightTable) + 1}`,
-                        joinType: r.JoinType
+                        fromTable: r.leftTable || r.LeftTable,
+                        fromColumn: r.leftColumn || r.LeftColumn,
+                        fromAlias: `T${tablesWithColumns.findIndex(t => (t.tableName || t.TableName) === (r.leftTable || r.LeftTable)) + 1}`,
+                        toTable: r.rightTable || r.RightTable,
+                        toColumn: r.rightColumn || r.RightColumn,
+                        toAlias: `T${tablesWithColumns.findIndex(t => (t.tableName || t.TableName) === (r.rightTable || r.RightTable)) + 1}`,
+                        joinType: r.joinType || r.JoinType
                     })),
                     columns: selectedColumns.map((col, index) => ({
-                        tableName: col.TableName,
-                        tableAlias: `T${tablesWithColumns.findIndex(t => t.TableName === col.TableName) + 1}`,
-                        columnName: col.ColumnName,
-                        displayName: col.DisplayName || col.ColumnName,
-                        dataType: col.DataType,
-                        aggregateFunction: col.AggregateFunction,
+                        tableName: col.tableName || col.TableName,
+                        tableAlias: `T${tablesWithColumns.findIndex(t => (t.tableName || t.TableName) === (col.tableName || col.TableName)) + 1}`,
+                        columnName: col.columnName || col.ColumnName,
+                        displayName: col.displayName || col.DisplayName || col.columnName || col.ColumnName,
+                        dataType: col.dataType || col.DataType,
+                        aggregateFunction: col.aggregateFunction || col.AggregateFunction,
                         displayOrder: index + 1
                     })),
                     filters: filters.map(f => ({
-                        tableAlias: f.TableAlias || 'T1',
-                        columnName: f.ColumnName,
-                        operator: f.Operator,
-                        value: f.Value,
-                        logicalOperator: f.LogicalOperator || 'AND'
+                        tableAlias: f.tableAlias || f.TableAlias || 'T1',
+                        columnName: f.columnName || f.ColumnName,
+                        operator: f.operator || f.Operator,
+                        value: f.value || f.Value,
+                        logicalOperator: f.logicalOperator || f.LogicalOperator || 'AND'
                     }))
                 };
 

@@ -504,6 +504,13 @@ namespace SalesMetrics.Controllers
                 _logger.LogInformation("Step 4: Previewing query with {TableCount} tables, {ColumnCount} columns, {FilterCount} filters",
                     model.Tables?.Count ?? 0, model.Columns?.Count ?? 0, model.Filters?.Count ?? 0);
 
+                // Log column DisplayNames for debugging
+                foreach (var col in model.Columns)
+                {
+                    _logger.LogInformation("Column: {ColumnName}, DisplayName: '{DisplayName}', IsEmpty: {IsEmpty}",
+                        col.ColumnName, col.DisplayName, string.IsNullOrWhiteSpace(col.DisplayName));
+                }
+
                 // Build SQL query
                 var sql = GenerateSQL(model);
 

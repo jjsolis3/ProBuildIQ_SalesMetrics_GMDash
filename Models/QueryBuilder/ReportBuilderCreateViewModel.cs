@@ -148,7 +148,82 @@ namespace SalesMetrics.Models.QueryBuilder
     /// </summary>
     public class TableColumnInfo
     {
-        public string ColumnName { get; set; } = string.Empty;
+        public string ColumnName { get; set} = string.Empty;
         public string DataType { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    /// DTO for Step 4 submission (Preview Query)
+    /// </summary>
+    public class Step4SubmissionDto
+    {
+        public List<TableDto> Tables { get; set; } = new();
+        public List<RelationshipDto> Relationships { get; set; } = new();
+        public List<ColumnDto> Columns { get; set; } = new();
+        public List<FilterDto> Filters { get; set; } = new();
+    }
+
+    /// <summary>
+    /// DTO for Save Report submission
+    /// </summary>
+    public class SaveReportDto
+    {
+        public string ReportName { get; set; } = string.Empty;
+        public string ReportDescription { get; set; } = string.Empty;
+        public string? Category { get; set; }
+        public List<TableDto> Tables { get; set; } = new();
+        public List<RelationshipDto> Relationships { get; set; } = new();
+        public List<ColumnDto> Columns { get; set; } = new();
+        public List<FilterDto> Filters { get; set; } = new();
+    }
+
+    /// <summary>
+    /// Table DTO for query building
+    /// </summary>
+    public class TableDto
+    {
+        public string TableName { get; set; } = string.Empty;
+        public string Alias { get; set; } = string.Empty;
+        public bool IsBaseTable { get; set; }
+    }
+
+    /// <summary>
+    /// Relationship/Join DTO for query building
+    /// </summary>
+    public class RelationshipDto
+    {
+        public string FromTable { get; set; } = string.Empty;
+        public string FromColumn { get; set; } = string.Empty;
+        public string FromAlias { get; set; } = string.Empty;
+        public string ToTable { get; set; } = string.Empty;
+        public string ToColumn { get; set; } = string.Empty;
+        public string ToAlias { get; set; } = string.Empty;
+        public string JoinType { get; set; } = "INNER";
+    }
+
+    /// <summary>
+    /// Column DTO for query building
+    /// </summary>
+    public class ColumnDto
+    {
+        public string TableName { get; set; } = string.Empty;
+        public string TableAlias { get; set; } = string.Empty;
+        public string ColumnName { get; set; } = string.Empty;
+        public string DisplayName { get; set; } = string.Empty;
+        public string DataType { get; set; } = string.Empty;
+        public string? AggregateFunction { get; set; }
+        public int DisplayOrder { get; set; }
+    }
+
+    /// <summary>
+    /// Filter DTO for query building
+    /// </summary>
+    public class FilterDto
+    {
+        public string TableAlias { get; set; } = string.Empty;
+        public string ColumnName { get; set; } = string.Empty;
+        public string Operator { get; set; } = "=";
+        public string Value { get; set; } = string.Empty;
+        public string LogicalOperator { get; set; } = "AND";
     }
 }

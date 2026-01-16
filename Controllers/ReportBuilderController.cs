@@ -14,15 +14,18 @@ namespace SalesMetrics.Controllers
         private readonly SalesMetricsDbContext _context;
         private readonly IPermissionService _permissionService;
         private readonly ILogger<ReportBuilderController> _logger;
+        private readonly IConfiguration _configuration;
 
         public ReportBuilderController(
             SalesMetricsDbContext context,
             IPermissionService permissionService,
-            ILogger<ReportBuilderController> logger)
+            ILogger<ReportBuilderController> logger,
+            IConfiguration configuration)
         {
             _context = context;
             _permissionService = permissionService;
             _logger = logger;
+            _configuration = configuration;
         }
 
         /// <summary>
@@ -487,6 +490,213 @@ namespace SalesMetrics.Controllers
 
             // TODO: Implement edit report wizard
             return View();
+        }
+
+        /// <summary>
+        /// Step 4: Preview Query Results
+        /// Executes the query and returns preview data
+        /// </summary>
+        [HttpPost]
+        public async Task<IActionResult> CreateStep4([FromBody] Step4SubmissionDto model)
+        {
+            try
+            {
+                _logger.LogInformation("Step 4: Previewing query with {TableCount} tables, {ColumnCount} columns, {FilterCount} filters",
+                    model.Tables?.Count ?? 0, model.Columns?.Count ?? 0, model.Filters?.Count ?? 0);
+
+                // Build SQL query
+                var sql = GenerateSQL(model);
+
+                _logger.LogInformation("Generated SQL: {SQL}", sql);
+
+                // Execute query with limit
+                var connStr = _configuration.GetConnectionString("SalesMetrics");
+                using var conn = new System.Data.SqlClient.SqlConnection(connStr);
+                await conn.OpenAsync();
+
+                var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+                var cmd = new System.Data.SqlClient.SqlCommand(sql, conn);
+                cmd.CommandTimeout = 30; // 30 seconds timeout
+
+                var previewData = new List<Dictionary<string, object>>();
+                var columnNames = new List<string>();
+
+                using var reader = await cmd.ExecuteReaderAsync();
+
+                // Get column names
+                for (int i = 0; i < reader.FieldCount; i++)
+                {
+                    columnNames.Add(reader.GetName(i));
+                }
+
+                // Read up to 100 rows for preview
+                int rowCount = 0;
+                while (await reader.ReadAsync() && rowCount < 100)
+                {
+                    var row = new Dictionary<string, object>();
+                    for (int i = 0; i < reader.FieldCount; i++)
+                    {
+                        row[reader.GetName(i)] = reader.IsDBNull(i) ? null : reader.GetValue(i);
+                    }
+                    previewData.Add(row);
+                    rowCount++;
+                }
+
+                stopwatch.Stop();
+
+                return Json(new
+                {
+                    success = true,
+                    previewData,
+                    columnNames,
+                    rowCount = previewData.Count,
+                    executionTimeMs = stopwatch.ElapsedMilliseconds,
+                    generatedSql = sql,
+                    hasMoreRows = rowCount == 100
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error previewing query in Step 4");
+                return Json(new
+                {
+                    success = false,
+                    message = "Error executing query: " + ex.Message,
+                    errorDetails = ex.ToString()
+                });
+            }
+        }
+
+        /// <summary>
+        /// Step 5: Save Report Definition
+        /// Persists the report to the database
+        /// </summary>
+        [HttpPost]
+        public async Task<IActionResult> SaveReport([FromBody] SaveReportDto model)
+        {
+            try
+            {
+                var userId = GetCurrentUserId();
+
+                _logger.LogInformation("Saving report '{ReportName}' for user {UserId}", model.ReportName, userId);
+
+                // Validate
+                if (string.IsNullOrWhiteSpace(model.ReportName))
+                {
+                    return Json(new { success = false, message = "Report name is required" });
+                }
+
+                if (model.Tables == null || !model.Tables.Any())
+                {
+                    return Json(new { success = false, message = "At least one table must be selected" });
+                }
+
+                if (model.Columns == null || !model.Columns.Any())
+                {
+                    return Json(new { success = false, message = "At least one column must be selected" });
+                }
+
+                // Generate report ID
+                var reportId = $"CUSTOM_{Guid.NewGuid().ToString().Substring(0, 8).ToUpper()}";
+
+                // Build query definition JSON
+                var queryDefJson = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    tables = model.Tables,
+                    relationships = model.Relationships,
+                    columns = model.Columns,
+                    filters = model.Filters
+                });
+
+                // Generate SQL
+                var generatedSql = GenerateSQL(new Step4SubmissionDto
+                {
+                    Tables = model.Tables,
+                    Relationships = model.Relationships,
+                    Columns = model.Columns,
+                    Filters = model.Filters
+                });
+
+                // Create report definition
+                var reportDef = new ReportDefinitionEntity
+                {
+                    ReportId = reportId,
+                    Name = model.ReportName,
+                    Description = model.ReportDescription,
+                    Category = model.Category ?? "Custom Reports",
+                    IsCustom = true,
+                    QueryDefinitionJson = queryDefJson,
+                    GeneratedSql = generatedSql,
+                    DataSourceType = "SQL",
+                    IsActive = true,
+                    Version = 1,
+                    CreatedByUserId = userId,
+                    CreatedDate = DateTime.UtcNow,
+                    IsScheduled = false
+                };
+
+                _context.ReportDefinitions.Add(reportDef);
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Report saved successfully with ID {ReportId}", reportDef.ReportDefinitionId);
+
+                return Json(new
+                {
+                    success = true,
+                    message = "Report saved successfully!",
+                    reportId = reportDef.ReportDefinitionId,
+                    reportName = reportDef.Name
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error saving report");
+                return Json(new
+                {
+                    success = false,
+                    message = "Error saving report: " + ex.Message
+                });
+            }
+        }
+
+        /// <summary>
+        /// Helper method to generate SQL from query definition
+        /// </summary>
+        private string GenerateSQL(Step4SubmissionDto model)
+        {
+            var sql = new System.Text.StringBuilder();
+
+            // SELECT clause
+            sql.AppendLine("SELECT");
+            var columnExpressions = model.Columns.Select(c => $"    {c.TableAlias}.{c.ColumnName} AS {c.DisplayName}");
+            sql.AppendLine(string.Join(",\n", columnExpressions));
+
+            // FROM clause
+            var baseTable = model.Tables.FirstOrDefault(t => t.IsBaseTable == true);
+            if (baseTable == null)
+                baseTable = model.Tables.First(); // Use first table as base if none marked
+
+            sql.AppendLine($"FROM {baseTable.TableName} AS {baseTable.Alias}");
+
+            // JOIN clauses (from relationships)
+            if (model.Relationships != null && model.Relationships.Any())
+            {
+                foreach (var rel in model.Relationships)
+                {
+                    sql.AppendLine($"{rel.JoinType} JOIN {rel.ToTable} AS {rel.ToAlias} ON {rel.FromAlias}.{rel.FromColumn} = {rel.ToAlias}.{rel.ToColumn}");
+                }
+            }
+
+            // WHERE clause (from filters)
+            if (model.Filters != null && model.Filters.Any())
+            {
+                sql.AppendLine("WHERE");
+                var conditions = model.Filters.Select(f => $"    {f.TableAlias}.{f.ColumnName} {f.Operator} '{f.Value}'");
+                sql.AppendLine(string.Join(" AND\n", conditions));
+            }
+
+            return sql.ToString();
         }
 
         /// <summary>

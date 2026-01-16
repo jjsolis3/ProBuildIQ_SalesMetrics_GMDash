@@ -667,32 +667,33 @@ namespace SalesMetrics.Controllers
         {
             var sql = new System.Text.StringBuilder();
 
-            // SELECT clause
+            // SELECT clause - Quote column names and aliases to handle spaces and special characters
             sql.AppendLine("SELECT");
-            var columnExpressions = model.Columns.Select(c => $"    {c.TableAlias}.{c.ColumnName} AS {c.DisplayName}");
+            var columnExpressions = model.Columns.Select(c =>
+                $"    {c.TableAlias}.[{c.ColumnName}] AS [{c.DisplayName}]");
             sql.AppendLine(string.Join(",\n", columnExpressions));
 
-            // FROM clause
+            // FROM clause - Quote table names and aliases
             var baseTable = model.Tables.FirstOrDefault(t => t.IsBaseTable == true);
             if (baseTable == null)
                 baseTable = model.Tables.First(); // Use first table as base if none marked
 
-            sql.AppendLine($"FROM {baseTable.TableName} AS {baseTable.Alias}");
+            sql.AppendLine($"FROM [{baseTable.TableName}] AS {baseTable.Alias}");
 
-            // JOIN clauses (from relationships)
+            // JOIN clauses (from relationships) - Quote table and column names
             if (model.Relationships != null && model.Relationships.Any())
             {
                 foreach (var rel in model.Relationships)
                 {
-                    sql.AppendLine($"{rel.JoinType} JOIN {rel.ToTable} AS {rel.ToAlias} ON {rel.FromAlias}.{rel.FromColumn} = {rel.ToAlias}.{rel.ToColumn}");
+                    sql.AppendLine($"{rel.JoinType} JOIN [{rel.ToTable}] AS {rel.ToAlias} ON {rel.FromAlias}.[{rel.FromColumn}] = {rel.ToAlias}.[{rel.ToColumn}]");
                 }
             }
 
-            // WHERE clause (from filters)
+            // WHERE clause (from filters) - Quote column names
             if (model.Filters != null && model.Filters.Any())
             {
                 sql.AppendLine("WHERE");
-                var conditions = model.Filters.Select(f => $"    {f.TableAlias}.{f.ColumnName} {f.Operator} '{f.Value}'");
+                var conditions = model.Filters.Select(f => $"    {f.TableAlias}.[{f.ColumnName}] {f.Operator} '{f.Value}'");
                 sql.AppendLine(string.Join(" AND\n", conditions));
             }
 

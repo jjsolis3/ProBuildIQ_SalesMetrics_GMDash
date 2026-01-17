@@ -5,6 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Caching.Memory;
 using SalesMetrics.Models;
 using SalesMetrics.Services;
+using SalesMetrics.Services.Helpers;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -302,8 +303,19 @@ namespace SalesMetrics.Controllers
         [HttpGet]
         public async Task<IActionResult> RecapList()
         {
+            // Get current user's role for filtering
+            var currentUserRoleIdClaim = HttpContext.User.FindFirst("RoleId")?.Value;
+            if (currentUserRoleIdClaim == null || !int.TryParse(currentUserRoleIdClaim, out int currentUserRoleId))
+            {
+                TempData["ErrorMessage"] = "Your session has expired. Please log in again.";
+                return RedirectToAction("Login", "Auth");
+            }
+
+            // Build cache key with role ID to ensure proper caching per role
+            var roleCacheKey = $"{RECAP_LIST_CACHE_KEY}_{currentUserRoleId}";
+
             // Try to get cached data first
-            if (_cache.TryGetValue(RECAP_LIST_CACHE_KEY, out List<GMRecapCardViewModel> cachedRecaps))
+            if (_cache.TryGetValue(roleCacheKey, out List<GMRecapCardViewModel> cachedRecaps))
             {
                 return View("RecapList", cachedRecaps);
             }
@@ -314,28 +326,34 @@ namespace SalesMetrics.Controllers
             using var conn = new SqlConnection(connStr);
             await conn.OpenAsync();
 
-            // OPTIMIZED: Get all recaps with GM names
+            // OPTIMIZED: Get all recaps with GM names and role information
+            // Using the new view for role-based filtering
             var recapCmd = new SqlCommand(@"
-        SELECT E.RecapID, E.WeekStartDate, E.GMUserID, E.LocationID,
-               U.FirstName + ' ' + U.LastName as GMName, E.CreatedDate
-        FROM [dbo].[GMWeeklyRecapEntry] E
-        LEFT JOIN [dbo].[Users] U ON E.GMUserID = U.Users_ID
-        ORDER BY E.WeekStartDate DESC
+        SELECT RecapID, WeekStartDate, GMUserID, LocationID,
+               GMName, GMRoleId, GMRoleName, CreatedDate
+        FROM [dbo].[vw_GMRecapWithRoleInfo]
+        ORDER BY WeekStartDate DESC, CreatedDate DESC
     ", conn);
 
             using var reader = await recapCmd.ExecuteReaderAsync();
             while (await reader.ReadAsync())
             {
-                recapCards.Add(new GMRecapCardViewModel
+                int entryRoleId = reader.GetInt32(5); // GMRoleId
+
+                // Apply role-based filtering using RoleHelper
+                if (RoleHelper.CanViewRecapFromRole(currentUserRoleId, entryRoleId))
                 {
-                    RecapID = reader.GetInt32(0),
-                    WeekStartDate = reader.GetDateTime(1),
-                    GMUserID = reader.GetInt32(2),
-                    LocationID = reader.GetInt32(3),
-                    GMName = reader.IsDBNull(4) ? "Unknown GM" : reader.GetString(4),
-                    CreatedDate = reader.GetDateTime(5),
-                    Fields = new List<RecapField>()
-                });
+                    recapCards.Add(new GMRecapCardViewModel
+                    {
+                        RecapID = reader.GetInt32(0),
+                        WeekStartDate = reader.GetDateTime(1),
+                        GMUserID = reader.GetInt32(2),
+                        LocationID = reader.GetInt32(3),
+                        GMName = reader.IsDBNull(4) ? "Unknown" : reader.GetString(4),
+                        CreatedDate = reader.GetDateTime(7),
+                        Fields = new List<RecapField>()
+                    });
+                }
             }
             reader.Close();
 
@@ -384,11 +402,11 @@ namespace SalesMetrics.Controllers
                 }
             }
 
-            // Cache the results for 5 minutes
+            // Cache the results for 5 minutes (with role-specific cache key)
             var cacheOptions = new MemoryCacheEntryOptions()
                 .SetAbsoluteExpiration(TimeSpan.FromMinutes(CACHE_DURATION_MINUTES));
 
-            _cache.Set(RECAP_LIST_CACHE_KEY, recapCards, cacheOptions);
+            _cache.Set(roleCacheKey, recapCards, cacheOptions);
 
             return View("RecapList", recapCards);
         }

@@ -577,12 +577,16 @@ namespace SalesMetrics.Controllers
             {
                 case "ADMIN":
                     return RedirectToAction("Index", "Dashboard");
+                case "PRESIDENT/OWNER":
+                    return RedirectToAction("Index", "GMDash");
+                case "REGIONAL MANAGER":
+                    return RedirectToAction("Index", "GMDash");
+                case "GENERAL MANAGER":
+                    return RedirectToAction("Index", "GMDash");
                 case "SALES ADMIN":
                     return RedirectToAction("Index", "Dashboard");
                 case "SALES":
                     return RedirectToAction("Index", "Dashboard");
-                case "GENERAL MANAGER":
-                    return RedirectToAction("Index", "GMDash");
                 case "OFFICE MANAGER":
                     return RedirectToAction("Index", "Dashboard");
                 case "OFFICE":

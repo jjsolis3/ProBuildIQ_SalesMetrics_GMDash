@@ -592,6 +592,9 @@ namespace SalesMetrics.Controllers
                 AssignedLocationIds = new List<int>() // Initialize empty list for new users
             };
 
+            // Set new users to active by default
+            ViewBag.IsActive = true;
+
             return PartialView("_CreateUserModal", model);
         }
 

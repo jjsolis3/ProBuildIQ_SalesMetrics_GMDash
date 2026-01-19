@@ -311,18 +311,21 @@ namespace SalesMetrics.Controllers
                     }
                 }
 
-                // 🔹 Get monthly invoices
+                // 🔹 Get monthly invoices (using DELIVERY_DATE for consistency with Management views)
                 using (var cmd = new SqlCommand(@"
-                    SELECT 
-                        FORMAT(I.IHF_INVOICE_DATE, 'yyyy-MM') AS InvoiceMonthKey,
-                        FORMAT(I.IHF_INVOICE_DATE, 'MMM') AS InvoiceMonth,
-                        RIGHT(YEAR(I.IHF_INVOICE_DATE), 2) AS InvoiceYear,
+                    SELECT
+                        FORMAT(I.IHF_DELIVERY_DATE, 'yyyy-MM') AS InvoiceMonthKey,
+                        FORMAT(I.IHF_DELIVERY_DATE, 'MMM') AS InvoiceMonth,
+                        RIGHT(YEAR(I.IHF_DELIVERY_DATE), 2) AS InvoiceYear,
                         ROUND(SUM(I.IHF_TOTAL_AMOUNT), 2) AS InvoiceAmount
                     FROM INVOICE_HEADER AS I
                         LEFT JOIN CUSTOMER_MASTER AS C ON I.IHF_CUSTOMER_NUMBER = C.CUM_CUSTOMER_NUMBER
+                        LEFT JOIN SALES_HEADER S ON I.IHF_ORDER_NUMBER = S.SOH_NUMBER
                     WHERE I.IHF_TOTAL_AMOUNT > 0
                         AND C.CUM_CUMMAS_ID = @id
-                    GROUP BY FORMAT(I.IHF_INVOICE_DATE, 'yyyy-MM'), FORMAT(I.IHF_INVOICE_DATE, 'MMM'), YEAR(I.IHF_INVOICE_DATE)
+                        AND (S.SOH_CANCELED_DATE IS NULL OR S.SOH_CANCELED_DATE IS NULL)
+                        AND I.IHF_DELIVERY_DATE IS NOT NULL
+                    GROUP BY FORMAT(I.IHF_DELIVERY_DATE, 'yyyy-MM'), FORMAT(I.IHF_DELIVERY_DATE, 'MMM'), YEAR(I.IHF_DELIVERY_DATE)
                     ORDER BY InvoiceMonthKey
                     ", conn))
                 {
@@ -342,21 +345,25 @@ namespace SalesMetrics.Controllers
                     }
                 }
 
-                // 🔹 Get individual invoices for TotalRevenue and KPI counts
+                // 🔹 Get individual invoices for all-time TotalRevenue and KPI counts
+                // Now using DELIVERY_DATE and filtering out canceled orders for consistency
                 using (var cmd = new SqlCommand(@"
-                    SELECT 
-                        IHF_INVOICE_DATE,
-                        IHF_TOTAL_AMOUNT,
-                        CASE 
-                            WHEN ARO_INVOICE_BALANCE_DUE = 0 THEN 1 ELSE 0
+                    SELECT
+                        I.IHF_DELIVERY_DATE,
+                        I.IHF_TOTAL_AMOUNT,
+                        CASE
+                            WHEN A.ARO_INVOICE_BALANCE_DUE = 0 OR A.ARO_INVOICE_BALANCE_DUE IS NULL THEN 1
+                            ELSE 0
                         END AS IsPaid
                     FROM INVOICE_HEADER I
                         LEFT JOIN AR_OPEN_ITEM A ON A.ARO_INVOICE_NUMBER = I.IHF_INVOICE_NUMBER
                         LEFT JOIN CUSTOMER_MASTER C ON I.IHF_CUSTOMER_NUMBER = C.CUM_CUSTOMER_NUMBER
-                    WHERE 
+                        LEFT JOIN SALES_HEADER S ON I.IHF_ORDER_NUMBER = S.SOH_NUMBER
+                    WHERE
                         C.CUM_CUMMAS_ID = @id
                         AND I.IHF_TOTAL_AMOUNT > 0
-                        --AND I.IHF_INVOICE_DATE >= DATEADD(YEAR, -1, GETDATE())
+                        AND (S.SOH_CANCELED_DATE IS NULL OR S.SOH_CANCELED_DATE IS NULL)
+                        AND I.IHF_DELIVERY_DATE IS NOT NULL
                 ", conn))
                 {
                     cmd.Parameters.AddWithValue("@id", id);
@@ -370,6 +377,71 @@ namespace SalesMetrics.Controllers
                             Amount = Convert.ToDecimal(reader[1]),
                             IsPaid = reader.GetInt32(2) == 1
                         });
+                    }
+                }
+
+                // 🔹 Get YTD comparison metrics (This Year vs Last Year)
+                // Matches the Management view logic for consistency
+                using (var cmd = new SqlCommand(@"
+                    SELECT
+                        -- This Year (YTD from Jan 1 to today)
+                        ISNULL(SUM(CASE
+                            WHEN YEAR(I.IHF_DELIVERY_DATE) = YEAR(GETDATE())
+                                AND I.IHF_DELIVERY_DATE <= GETDATE()
+                            THEN I.IHF_TOTAL_AMOUNT ELSE 0 END), 0) AS ThisYearRevenue,
+                        ISNULL(SUM(CASE
+                            WHEN YEAR(I.IHF_DELIVERY_DATE) = YEAR(GETDATE())
+                                AND I.IHF_DELIVERY_DATE <= GETDATE()
+                                AND (A.ARO_INVOICE_BALANCE_DUE = 0 OR A.ARO_INVOICE_BALANCE_DUE IS NULL)
+                            THEN 1 ELSE 0 END), 0) AS ThisYearCompletedOrders,
+                        ISNULL(SUM(CASE
+                            WHEN YEAR(I.IHF_DELIVERY_DATE) = YEAR(GETDATE())
+                                AND I.IHF_DELIVERY_DATE <= GETDATE()
+                                AND A.ARO_INVOICE_BALANCE_DUE > 0
+                            THEN 1 ELSE 0 END), 0) AS ThisYearPendingOrders,
+                        -- Last Year (YTD from Jan 1 to same date last year)
+                        ISNULL(SUM(CASE
+                            WHEN YEAR(I.IHF_DELIVERY_DATE) = YEAR(GETDATE()) - 1
+                                AND I.IHF_DELIVERY_DATE <= DATEADD(YEAR, -1, GETDATE())
+                            THEN I.IHF_TOTAL_AMOUNT ELSE 0 END), 0) AS LastYearRevenue,
+                        ISNULL(SUM(CASE
+                            WHEN YEAR(I.IHF_DELIVERY_DATE) = YEAR(GETDATE()) - 1
+                                AND I.IHF_DELIVERY_DATE <= DATEADD(YEAR, -1, GETDATE())
+                                AND (A.ARO_INVOICE_BALANCE_DUE = 0 OR A.ARO_INVOICE_BALANCE_DUE IS NULL)
+                            THEN 1 ELSE 0 END), 0) AS LastYearCompletedOrders,
+                        ISNULL(SUM(CASE
+                            WHEN YEAR(I.IHF_DELIVERY_DATE) = YEAR(GETDATE()) - 1
+                                AND I.IHF_DELIVERY_DATE <= DATEADD(YEAR, -1, GETDATE())
+                                AND A.ARO_INVOICE_BALANCE_DUE > 0
+                            THEN 1 ELSE 0 END), 0) AS LastYearPendingOrders
+                    FROM INVOICE_HEADER I
+                        LEFT JOIN AR_OPEN_ITEM A ON A.ARO_INVOICE_NUMBER = I.IHF_INVOICE_NUMBER
+                        LEFT JOIN CUSTOMER_MASTER C ON I.IHF_CUSTOMER_NUMBER = C.CUM_CUSTOMER_NUMBER
+                        LEFT JOIN SALES_HEADER S ON I.IHF_ORDER_NUMBER = S.SOH_NUMBER
+                    WHERE
+                        C.CUM_CUMMAS_ID = @id
+                        AND I.IHF_TOTAL_AMOUNT > 0
+                        AND (S.SOH_CANCELED_DATE IS NULL OR S.SOH_CANCELED_DATE IS NULL)
+                        AND I.IHF_DELIVERY_DATE IS NOT NULL
+                        AND (
+                            (YEAR(I.IHF_DELIVERY_DATE) = YEAR(GETDATE())
+                             AND I.IHF_DELIVERY_DATE <= GETDATE())
+                            OR
+                            (YEAR(I.IHF_DELIVERY_DATE) = YEAR(GETDATE()) - 1
+                             AND I.IHF_DELIVERY_DATE <= DATEADD(YEAR, -1, GETDATE()))
+                        )
+                ", conn))
+                {
+                    cmd.Parameters.AddWithValue("@id", id);
+                    using var reader = cmd.ExecuteReader();
+                    if (reader.Read())
+                    {
+                        vm.ThisYearRevenue = reader["ThisYearRevenue"] != DBNull.Value ? Convert.ToDecimal(reader["ThisYearRevenue"]) : 0;
+                        vm.ThisYearCompletedOrders = reader["ThisYearCompletedOrders"] != DBNull.Value ? Convert.ToInt32(reader["ThisYearCompletedOrders"]) : 0;
+                        vm.ThisYearPendingOrders = reader["ThisYearPendingOrders"] != DBNull.Value ? Convert.ToInt32(reader["ThisYearPendingOrders"]) : 0;
+                        vm.LastYearRevenue = reader["LastYearRevenue"] != DBNull.Value ? Convert.ToDecimal(reader["LastYearRevenue"]) : 0;
+                        vm.LastYearCompletedOrders = reader["LastYearCompletedOrders"] != DBNull.Value ? Convert.ToInt32(reader["LastYearCompletedOrders"]) : 0;
+                        vm.LastYearPendingOrders = reader["LastYearPendingOrders"] != DBNull.Value ? Convert.ToInt32(reader["LastYearPendingOrders"]) : 0;
                     }
                 }
 

@@ -578,7 +578,20 @@ namespace SalesMetrics.Controllers
         [HttpGet]
         public IActionResult GetCreateUserModal()
         {
-            var model = new RegisterViewModel();
+            var model = new RegisterViewModel
+            {
+                // Populate all possible locations for dropdown and checkboxes
+                AllLocations = new List<SelectListItem>
+                {
+                    new("LAX", "1"),
+                    new("LSV", "2"),
+                    new("CHN", "3"),
+                    new("PHX", "4"),
+                    new("SND", "5")
+                },
+                AssignedLocationIds = new List<int>() // Initialize empty list for new users
+            };
+
             return PartialView("_CreateUserModal", model);
         }
 

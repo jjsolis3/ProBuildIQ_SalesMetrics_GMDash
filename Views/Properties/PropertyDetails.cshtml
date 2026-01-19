@@ -32,24 +32,64 @@
             </div>
             <div class="card-body pt-1">
                 <div class="border-bottom pt-3">
-                    <h5 class="fs-15 mb-1 text-truncate">Last 12 Months</h5>
+                    <h5 class="fs-15 mb-1 text-truncate">Year-to-Date Comparison</h5>
+                    <p class="text-muted small mb-2">Comparing same period (Jan 1 - Today)</p>
                 </div>
                 <div class="row align-items-end">
-                    @*<div class="avatar-md mb-3 mt-n4">
-                             <img src="~/assets/images/users/avatar-6.png" alt="" class="img-fluid avatar-circle bg-light p-2 border-2 border-primary"> 
-                        </div>*@
-                    <div class="col-sm-4 text-center mt-3">    
-                        <h5 class="fs-5 mb-1">@Model.TotalRevenueLastYear.ToString("C")</h5>
-                        <p class="text-muted medium mb-0">Total Revenue</p>
+                    <!-- This Year YTD Column -->
+                    <div class="col-sm-6 mt-3">
+                        <div class="text-center mb-3">
+                            <span class="badge badge-soft-success fs-12">This Year (YTD)</span>
+                        </div>
+                        <div class="row">
+                            <div class="col-12 text-center mb-2">
+                                <h5 class="fs-5 mb-1 text-success">@Model.ThisYearRevenue.ToString("C")</h5>
+                                <p class="text-muted small mb-0">Total Revenue</p>
+                            </div>
+                            <div class="col-6 text-center">
+                                <h6 class="fs-6 mb-1">@Model.ThisYearCompletedOrders</h6>
+                                <p class="text-muted small mb-0">Completed</p>
+                            </div>
+                            <div class="col-6 text-center">
+                                <h6 class="fs-6 mb-1">@Model.ThisYearPendingOrders</h6>
+                                <p class="text-muted small mb-0">Pending</p>
+                            </div>
+                        </div>
                     </div>
 
-                    <div class="col-sm-4 text-center mt-2">
-                        <h5 class="fs-5 mb-1">@Model.CompletedOrdersLastYear</h5>
-                        <p class="text-muted small mb-0">Completed Orders</p>
+                    <!-- Last Year YTD Column -->
+                    <div class="col-sm-6 mt-3 border-start">
+                        <div class="text-center mb-3">
+                            <span class="badge badge-soft-secondary fs-12">Last Year (YTD)</span>
+                        </div>
+                        <div class="row">
+                            <div class="col-12 text-center mb-2">
+                                <h5 class="fs-5 mb-1 text-secondary">@Model.LastYearRevenue.ToString("C")</h5>
+                                <p class="text-muted small mb-0">Total Revenue</p>
+                            </div>
+                            <div class="col-6 text-center">
+                                <h6 class="fs-6 mb-1">@Model.LastYearCompletedOrders</h6>
+                                <p class="text-muted small mb-0">Completed</p>
+                            </div>
+                            <div class="col-6 text-center">
+                                <h6 class="fs-6 mb-1">@Model.LastYearPendingOrders</h6>
+                                <p class="text-muted small mb-0">Pending</p>
+                            </div>
+                        </div>
                     </div>
-                    <div class="col-sm-4 text-center mt-2">
-                        <h5 class="fs-5 mb-1">@Model.PendingOrdersLastYear</h5>
-                        <p class="text-muted medium mb-0">Pending Orders</p>
+
+                    <!-- Growth Indicator -->
+                    @{
+                        var revenueGrowth = Model.LastYearRevenue > 0
+                            ? ((Model.ThisYearRevenue - Model.LastYearRevenue) / Model.LastYearRevenue) * 100
+                            : (Model.ThisYearRevenue > 0 ? 100 : 0);
+                        var growthClass = revenueGrowth >= 0 ? "text-success" : "text-danger";
+                        var growthIcon = revenueGrowth >= 0 ? "mdi-arrow-up" : "mdi-arrow-down";
+                    }
+                    <div class="col-12 text-center mt-2">
+                        <span class="@growthClass fw-bold">
+                            <i class="mdi @growthIcon"></i> @revenueGrowth.ToString("F1")% YoY Growth
+                        </span>
                     </div>
                 </div>
             </div>
@@ -190,6 +230,7 @@
                             </div>
                             <div class="flex-grow-1 ms-3">
                                 <p class="text-muted fw-medium mb-2">Pending Projects</p>
+                                <small class="text-muted" style="font-size: 10px;">All-Time</small>
                                 <h4 class="mb-0">@Model.PendingOrders</h4>
                             </div>
                         </div>
@@ -209,6 +250,7 @@
                             </div>
                             <div class="flex-grow-1 ms-3">
                                 <p class="text-muted fw-medium mb-2">Completed Projects</p>
+                                <small class="text-muted" style="font-size: 10px;">All-Time</small>
                                 <h4 class="mb-0">@Model.CompletedOrders</h4>
                             </div>
                         </div>
@@ -228,6 +270,7 @@
                             </div>
                             <div class="flex-grow-1 ms-3">
                                 <p class="text-muted fw-medium mb-2">Total Revenue</p>
+                                <small class="text-muted" style="font-size: 10px;">All-Time</small>
                                 <h4 class="mb-0">@Model.TotalRevenue.ToString("C")</h4>
                             </div>
                         </div>

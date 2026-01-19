@@ -176,15 +176,27 @@ namespace SalesMetrics.Models
         public int ARInvoiceCount { get; set; }
         public int AROverdueInvoiceCount { get; set; }
 
-        // new metrics for the top card only
-        public decimal TotalRevenueLastYear => InvoicesLastYear.Sum(i => i.Amount);
-        public int CompletedOrdersLastYear => InvoicesLastYear.Count(i => i.IsPaid);
-        public int PendingOrdersLastYear => InvoicesLastYear.Count(i => !i.IsPaid);
+        // Year-to-Date (YTD) Comparison Metrics
+        // These are calculated from SQL queries using IHF_DELIVERY_DATE
+        public decimal ThisYearRevenue { get; set; }
+        public int ThisYearCompletedOrders { get; set; }
+        public int ThisYearPendingOrders { get; set; }
+        public decimal LastYearRevenue { get; set; }
+        public int LastYearCompletedOrders { get; set; }
+        public int LastYearPendingOrders { get; set; }
 
-        // existing KPI metrics
+        // All-Time Metrics (calculated from Invoices collection)
         public decimal TotalRevenue => Invoices.Sum(i => i.Amount);
         public int CompletedOrders => Invoices.Count(i => i.IsPaid);
         public int PendingOrders => Invoices.Count(i => !i.IsPaid);
+
+        // Legacy metrics - kept for backward compatibility
+        [Obsolete("Use ThisYearRevenue instead for YTD comparison")]
+        public decimal TotalRevenueLastYear => InvoicesLastYear.Sum(i => i.Amount);
+        [Obsolete("Use ThisYearCompletedOrders instead for YTD comparison")]
+        public int CompletedOrdersLastYear => InvoicesLastYear.Count(i => i.IsPaid);
+        [Obsolete("Use ThisYearPendingOrders instead for YTD comparison")]
+        public int PendingOrdersLastYear => InvoicesLastYear.Count(i => !i.IsPaid);
     }
 
     public class Invoice

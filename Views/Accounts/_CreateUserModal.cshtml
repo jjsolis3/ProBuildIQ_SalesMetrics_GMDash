@@ -41,9 +41,11 @@
                             @Html.LabelFor(m => m.RoleId)
                             @Html.DropDownListFor(m => m.RoleId, new SelectList(new[] {
                             new { Value = 1, Text = "ADMIN" },
-                            new { Value = 2, Text = "SALES" },
-                            new { Value = 3, Text = "SALES ADMIN" },
+                            new { Value = 8, Text = "PRESIDENT/OWNER" },
+                            new { Value = 9, Text = "REGIONAL MANAGER" },
                             new { Value = 4, Text = "GENERAL MANAGER" },
+                            new { Value = 3, Text = "SALES ADMIN" },
+                            new { Value = 2, Text = "SALES" },
                             new { Value = 5, Text = "OFFICE MANAGER" },
                             new { Value = 6, Text = "OFFICE" },
                             }, "Value", "Text"), "Select Role", new { @class = "form-select" })

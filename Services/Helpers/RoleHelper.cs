@@ -4,16 +4,16 @@ namespace SalesMetrics.Services.Helpers
 {
     public static class RoleHelper
     {
-        // Role ID Constants
+        // Role ID Constants (matching database)
         public const int ROLE_ADMIN = 1;              // Dev Admin
-        public const int ROLE_SALESPERSON = 2;
+        public const int ROLE_SALES = 2;              // Sales / Salesperson
+        public const int ROLE_SALESPERSON = 2;        // Alias for SALES
         public const int ROLE_SALES_ADMIN = 3;        // Sales Manager
-        public const int ROLE_GENERAL_MANAGER = 4;
-        public const int ROLE_SALES = 5;
-        public const int ROLE_OFFICE_MANAGER = 6;
-        public const int ROLE_OFFICE = 7;
-        public const int ROLE_PRESIDENT_OWNER = 8;    // President/Owner (new)
-        public const int ROLE_REGIONAL_MANAGER = 9;   // Regional Manager (new)
+        public const int ROLE_GENERAL_MANAGER = 4;    // General Manager
+        public const int ROLE_OFFICE_MANAGER = 5;     // Office Manager
+        public const int ROLE_OFFICE = 6;             // Office
+        public const int ROLE_PRESIDENT_OWNER = 7;    // President/Owner (new)
+        public const int ROLE_REGIONAL_MANAGER = 8;   // Regional Manager (new)
 
         // Role Name Constants
         public const string ROLE_NAME_ADMIN = "ADMIN";
@@ -34,8 +34,8 @@ namespace SalesMetrics.Services.Helpers
 
             // Admin, President/Owner, Regional Manager, and General Manager can switch locations
             return roleId == "1" ||  // Admin
-                   roleId == "8" ||  // President/Owner
-                   roleId == "9" ||  // Regional Manager
+                   roleId == "7" ||  // President/Owner
+                   roleId == "8" ||  // Regional Manager
                    roleId == "4" ||  // General Manager
                    user.IsInRole("Admin") ||
                    user.IsInRole("President/Owner") ||

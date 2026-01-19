@@ -287,8 +287,19 @@
                     All Management Companies
                     <span class="badge bg-secondary me-2">@Model.Companies.Count Total</span>
                 </h5>
-                <div>
-                    <button class="btn btn-outline-primary" onclick="$('#mgmtTable').DataTable().searchPanes.container().toggle()">
+                <div class="d-flex gap-2">
+                    <!-- View Mode Toggle -->
+                    <div class="btn-group" role="group" aria-label="View Mode">
+                        <a href="@Url.Action("Management", "Management", new { viewMode = "ytd" })"
+                           class="btn btn-sm @(ViewBag.ViewMode == "ytd" || string.IsNullOrEmpty(ViewBag.ViewMode) ? "btn-primary" : "btn-outline-primary")">
+                            <i class="bi bi-calendar-range"></i> YTD
+                        </a>
+                        <a href="@Url.Action("Management", "Management", new { viewMode = "fullyear" })"
+                           class="btn btn-sm @(ViewBag.ViewMode == "fullyear" ? "btn-primary" : "btn-outline-primary")">
+                            <i class="bi bi-calendar-check"></i> Full Year
+                        </a>
+                    </div>
+                    <button class="btn btn-sm btn-outline-primary" onclick="$('#mgmtTable').DataTable().searchPanes.container().toggle()">
                         <i class="bi bi-funnel"></i> Filters
                     </button>
                 </div>
@@ -305,10 +316,10 @@
                                 <th>Invoices</th>
                                 <th>Total Revenue</th>
                                 <th>AR Due</th>
-                                <th>This Yr Invoices</th>
-                                <th>This Yr Revenue</th>
-                                <th>Last Yr Invoices</th>
-                                <th>Last Yr Revenue</th>
+                                <th>@(ViewBag.ViewMode == "fullyear" ? "2026" : "2026 YTD") Invoices</th>
+                                <th>@(ViewBag.ViewMode == "fullyear" ? "2026" : "2026 YTD") Revenue</th>
+                                <th>@(ViewBag.ViewMode == "fullyear" ? "2025" : "2025 YTD") Invoices</th>
+                                <th>@(ViewBag.ViewMode == "fullyear" ? "2025" : "2025 YTD") Revenue</th>
                                 <th>% G/L</th>
                                 <th>Action</th>
                             </tr>
@@ -324,7 +335,7 @@
                                     </td>
                                     <!--<td><strong>@row.Name</strong></td>-->
                                     <td>
-                                        <a asp-controller="Management" asp-action="ManagementDetails" asp-route-id="@row.PriceCode">
+                                        <a asp-controller="Management" asp-action="ManagementDetails" asp-route-id="@row.PriceCode" asp-route-viewMode="@ViewBag.ViewMode">
                                             <strong>@row.Name</strong>
                                         </a>
                                     </td>
@@ -353,7 +364,7 @@
                                         </span>
                                     </td>
                                     <td>
-                                        <a class="btn btn-sm btn-primary" href="@Url.Action("ManagementDetails", "Management", new { id = row.PriceCode })">
+                                        <a class="btn btn-sm btn-primary" href="@Url.Action("ManagementDetails", "Management", new { id = row.PriceCode, viewMode = ViewBag.ViewMode })">
                                             <i class="bi bi-eye"></i> View
                                         </a>
                                     </td>

@@ -4,11 +4,24 @@
     Layout = "~/Views/Shared/_Layout.cshtml";
 }
 
-<div class="d-flex align-items-center mb-3">
-    <a class="btn btn-sm btn-light me-2" href="@Url.Action("Management", "Management")">
-        <i class="bi bi-arrow-left"></i> Back
-    </a>
-    <h3 class="mb-0">@Model.Name <small class="text-muted">(#@Model.PriceCode)</small></h3>
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <div class="d-flex align-items-center">
+        <a class="btn btn-sm btn-light me-2" href="@Url.Action("Management", "Management", new { viewMode = ViewBag.ViewMode })">
+            <i class="bi bi-arrow-left"></i> Back
+        </a>
+        <h3 class="mb-0">@Model.Name <small class="text-muted">(#@Model.PriceCode)</small></h3>
+    </div>
+    <!-- View Mode Toggle -->
+    <div class="btn-group" role="group" aria-label="View Mode">
+        <a href="@Url.Action("ManagementDetails", "Management", new { id = Model.PriceCode, viewMode = "ytd" })"
+           class="btn btn-sm @(ViewBag.ViewMode == "ytd" || string.IsNullOrEmpty(ViewBag.ViewMode) ? "btn-primary" : "btn-outline-primary")">
+            <i class="bi bi-calendar-range"></i> YTD Comparison
+        </a>
+        <a href="@Url.Action("ManagementDetails", "Management", new { id = Model.PriceCode, viewMode = "fullyear" })"
+           class="btn btn-sm @(ViewBag.ViewMode == "fullyear" ? "btn-primary" : "btn-outline-primary")">
+            <i class="bi bi-calendar-check"></i> Full Year
+        </a>
+    </div>
 </div>
 
 <!-- Enhanced KPI Cards with Gain/Loss Percentage -->
@@ -48,7 +61,7 @@
     <div class="col-md-2">
         <div class="card h-100">
             <div class="card-body">
-                <div class="text-muted small">This Year</div>
+                <div class="text-muted small">@(ViewBag.ViewMode == "fullyear" ? "2026" : "2026 YTD")</div>
                 <div class="h4 mb-0">@Model.ThisYearRevenue.ToString("C0")</div>
             </div>
         </div>
@@ -56,7 +69,7 @@
     <div class="col-md-2">
         <div class="card h-100">
             <div class="card-body">
-                <div class="text-muted small">Last Year</div>
+                <div class="text-muted small">@(ViewBag.ViewMode == "fullyear" ? "2025" : "2025 YTD")</div>
                 <div class="h4 mb-0">@Model.LastYearRevenue.ToString("C0")</div>
             </div>
         </div>
@@ -167,8 +180,8 @@
                     <th>City</th>
                     <th>Salesperson</th>
                     <th class="text-end">Invoices</th>
-                    <th class="text-end">This Year</th>
-                    <th class="text-end">Last Year</th>
+                    <th class="text-end">@(ViewBag.ViewMode == "fullyear" ? "2026" : "2026 YTD")</th>
+                    <th class="text-end">@(ViewBag.ViewMode == "fullyear" ? "2025" : "2025 YTD")</th>
                     <th class="text-end">% G/L</th>
                     <th class="text-end">AR Balance</th>
                     <th>Action</th>

@@ -31,6 +31,21 @@ namespace SalesMetrics.Controllers
             _cache = cache;
         }
 
+        /// <summary>
+        /// Helper method to clear all role-specific recap list caches
+        /// Called after create, update, or delete operations
+        /// </summary>
+        private void ClearAllRecapListCaches()
+        {
+            // Clear cache for all possible roles (1-8)
+            for (int roleId = 1; roleId <= 8; roleId++)
+            {
+                _cache.Remove($"{RECAP_LIST_CACHE_KEY}_{roleId}");
+            }
+            // Also clear the base key for backwards compatibility
+            _cache.Remove(RECAP_LIST_CACHE_KEY);
+        }
+
         [HttpGet]
         public async Task<IActionResult> RecapEntry()
         {
@@ -251,8 +266,8 @@ namespace SalesMetrics.Controllers
 
                 await tran.CommitAsync();
 
-                // Invalidate cache after successful submission
-                _cache.Remove(RECAP_LIST_CACHE_KEY);
+                // Invalidate all role-specific caches after successful submission
+                ClearAllRecapListCaches();
 
                 // Provide feedback to user
                 TempData["RecapSubmitted"] = "true";
@@ -618,8 +633,8 @@ namespace SalesMetrics.Controllers
 
                     await tran.CommitAsync();
 
-                    // Invalidate cache after successful update
-                    _cache.Remove(RECAP_LIST_CACHE_KEY);
+                    // Invalidate all role-specific caches after successful update
+                    ClearAllRecapListCaches();
 
                     TempData["SuccessMessage"] = "Your recap has been updated successfully.";
                     return RedirectToAction("RecapList");
@@ -695,8 +710,8 @@ namespace SalesMetrics.Controllers
 
                     await tran.CommitAsync();
 
-                    // Invalidate cache after successful deletion
-                    _cache.Remove(RECAP_LIST_CACHE_KEY);
+                    // Invalidate all role-specific caches after successful deletion
+                    ClearAllRecapListCaches();
 
                     TempData["SuccessMessage"] = "Your recap entry has been deleted successfully.";
                 }
@@ -852,8 +867,8 @@ namespace SalesMetrics.Controllers
 
                     await tran.CommitAsync();
 
-                    // Invalidate cache after saving draft (since it affects the recap list)
-                    _cache.Remove(RECAP_LIST_CACHE_KEY);
+                    // Invalidate all role-specific caches after saving draft
+                    ClearAllRecapListCaches();
 
                     return Json(new { success = true, message = "Draft saved successfully" });
                 }

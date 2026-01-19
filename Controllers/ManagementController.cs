@@ -16,8 +16,10 @@ namespace SalesMetrics.Controllers
         // GET: Management/Management
         // This displays the dashboard with all management companies, rankings, and aggregate KPIs
         // WHY: Management needs a high-level overview with key metrics and comparative rankings
-        public IActionResult Management()
+        // viewMode: "ytd" for year-to-date comparison, "fullyear" for full calendar year comparison
+        public IActionResult Management(string viewMode = "ytd")
         {
+            ViewBag.ViewMode = viewMode; // Pass to view for toggle state
             var userId = HttpContext.Session.GetString("UserId");
             var users_Id = HttpContext.Session.GetString("Users_Id");
             var officeLocation = HttpContext.Session.GetString("OfficeLocation");
@@ -43,11 +45,29 @@ namespace SalesMetrics.Controllers
             var managementList = new List<ManagementCompanyListItem>();
 
             // This SQL query aggregates data by Management Company (Price Code)
-            // It calculates total revenue, this year YTD, last year YTD for fair comparison
-            // WHY YTD comparison: Ensures apples-to-apples comparison for accurate performance metrics
-            var sql = @"
+            // It calculates total revenue based on selected view mode (YTD or Full Year)
+            // viewMode determines the date filtering logic
+            var dateFilter = viewMode == "fullyear"
+                ? @"AND (
+                        -- Current year: Full year to date
+                        YEAR(I.IHF_DELIVERY_DATE) = YEAR(GETDATE())
+                        OR
+                        -- Last year: Complete calendar year
+                        YEAR(I.IHF_DELIVERY_DATE) = YEAR(GETDATE()) - 1
+                    )"
+                : @"AND (
+                        -- Current year: From Jan 1 to today (YTD)
+                        (YEAR(I.IHF_DELIVERY_DATE) = YEAR(GETDATE())
+                         AND I.IHF_DELIVERY_DATE <= GETDATE())
+                        OR
+                        -- Last year: From Jan 1 to same date last year (YTD comparison)
+                        (YEAR(I.IHF_DELIVERY_DATE) = YEAR(GETDATE()) - 1
+                         AND I.IHF_DELIVERY_DATE <= DATEADD(YEAR, -1, GETDATE()))
+                    )";
+
+            var sql = $@"
                 WITH InvoiceData AS (
-                    SELECT 
+                    SELECT
                         P.IPC_PRICE_CODE,
                         P.IPC_DESCRIPTION,
                         C.CUM_CUMMAS_ID,
@@ -60,15 +80,7 @@ namespace SalesMetrics.Controllers
                         LEFT JOIN INVOICE_HEADER I ON C.CUM_CUSTOMER_NUMBER = I.IHF_CUSTOMER_NUMBER
                         LEFT JOIN SALES_HEADER S ON I.IHF_ORDER_NUMBER = S.SOH_NUMBER
                     WHERE S.SOH_CANCELED_DATE IS NULL
-                        AND (
-                            -- Current year: From Jan 1 to today (YTD)
-                            (YEAR(I.IHF_DELIVERY_DATE) = YEAR(GETDATE()) 
-                             AND I.IHF_DELIVERY_DATE <= GETDATE())
-                            OR
-                            -- Last year: From Jan 1 to same date last year (YTD comparison)
-                            (YEAR(I.IHF_DELIVERY_DATE) = YEAR(GETDATE()) - 1 
-                             AND I.IHF_DELIVERY_DATE <= DATEADD(YEAR, -1, GETDATE()))
-                        )
+                        {dateFilter}
                         AND C.CUM_CUSTOMER_NUMBER NOT IN (
                             SELECT CAST(IM.INS_INSTALLER_NUMBER AS NVARCHAR(50))
                             FROM INSTALLER_MASTER IM
@@ -155,8 +167,10 @@ namespace SalesMetrics.Controllers
         // GET: Management/ManagementDetails/{id}
         // This displays detailed information for a specific management company
         // The 'id' parameter is the Price Code (IPC_PRICE_CODE)
-        public IActionResult ManagementDetails(int id)
+        // viewMode: "ytd" for year-to-date comparison, "fullyear" for full calendar year comparison
+        public IActionResult ManagementDetails(int id, string viewMode = "ytd")
         {
+            ViewBag.ViewMode = viewMode; // Pass to view for toggle state
             var officeLocation = HttpContext.Session.GetString("OfficeLocation") ?? "LA";
             var connectionString = _configuration.GetConnectionString(officeLocation);
 
@@ -167,25 +181,51 @@ namespace SalesMetrics.Controllers
                 MonthlyInvoices = new List<MonthlyInvoiceSummary>()
             };
 
+            // Define date filter based on view mode
+            var detailsDateFilter = viewMode == "fullyear"
+                ? @"AND (
+                        -- Current year: Full year to date
+                        YEAR(I.IHF_DELIVERY_DATE) = YEAR(GETDATE())
+                        OR
+                        -- Last year: Complete calendar year
+                        YEAR(I.IHF_DELIVERY_DATE) = YEAR(GETDATE()) - 1
+                    )"
+                : @"AND (
+                        -- Current year: From Jan 1 to today (YTD)
+                        (YEAR(I.IHF_DELIVERY_DATE) = YEAR(GETDATE())
+                            AND I.IHF_DELIVERY_DATE <= GETDATE())
+                        OR
+                        -- Last year: From Jan 1 to same date last year (YTD comparison)
+                        (YEAR(I.IHF_DELIVERY_DATE) = YEAR(GETDATE()) - 1
+                            AND I.IHF_DELIVERY_DATE <= DATEADD(YEAR, -1, GETDATE()))
+                    )";
+
+            // Define year filter conditions for CASE statements
+            var thisYearCondition = viewMode == "fullyear"
+                ? "YEAR(I.IHF_DELIVERY_DATE) = YEAR(GETDATE())"
+                : "YEAR(I.IHF_DELIVERY_DATE) = YEAR(GETDATE()) AND I.IHF_DELIVERY_DATE <= GETDATE()";
+
+            var lastYearCondition = viewMode == "fullyear"
+                ? "YEAR(I.IHF_DELIVERY_DATE) = YEAR(GETDATE()) - 1"
+                : "YEAR(I.IHF_DELIVERY_DATE) = YEAR(GETDATE()) - 1 AND I.IHF_DELIVERY_DATE <= DATEADD(YEAR, -1, GETDATE())";
+
             using (SqlConnection conn = new SqlConnection(connectionString))
             {
                 conn.Open();
 
                 // First, get the management company basic info
                 // This query gets the name and aggregated totals for the KPI cards
-                using (var cmd = new SqlCommand(@"
-                    SELECT 
+                using (var cmd = new SqlCommand($@"
+                    SELECT
                         P.IPC_DESCRIPTION AS Name,
                         COUNT(DISTINCT C.CUM_CUMMAS_ID) AS PropertyCount,
                         COUNT(DISTINCT I.IHF_INVOICE_NUMBER) AS InvoiceCount,
                         ISNULL(SUM(I.IHF_TOTAL_AMOUNT), 0) AS TotalRevenue,
-                        ISNULL(SUM(CASE 
-                            WHEN YEAR(I.IHF_DELIVERY_DATE) = YEAR(GETDATE()) 
-                                AND I.IHF_DELIVERY_DATE <= GETDATE()
+                        ISNULL(SUM(CASE
+                            WHEN {thisYearCondition}
                             THEN I.IHF_TOTAL_AMOUNT ELSE 0 END), 0) AS ThisYearRevenue,
-                        ISNULL(SUM(CASE 
-                            WHEN YEAR(I.IHF_DELIVERY_DATE) = YEAR(GETDATE()) - 1 
-                                AND I.IHF_DELIVERY_DATE <= DATEADD(YEAR, -1, GETDATE())
+                        ISNULL(SUM(CASE
+                            WHEN {lastYearCondition}
                             THEN I.IHF_TOTAL_AMOUNT ELSE 0 END), 0) AS LastYearRevenue,
                         ISNULL((
                             SELECT SUM(ARO_INVOICE_BALANCE_DUE)
@@ -200,15 +240,7 @@ namespace SalesMetrics.Controllers
                         LEFT JOIN SALES_HEADER S ON I.IHF_ORDER_NUMBER = S.SOH_NUMBER
                     WHERE P.IPC_PRICE_CODE = @PriceCode
                         AND (S.SOH_CANCELED_DATE IS NULL OR S.SOH_CANCELED_DATE IS NULL)
-                        AND (
-                                -- Current year: From Jan 1 to today
-                                (YEAR(I.IHF_DELIVERY_DATE) = YEAR(GETDATE()) 
-                                    AND I.IHF_DELIVERY_DATE <= GETDATE())
-                                OR
-                                -- Last year: From Jan 1 to same date last year
-                                (YEAR(I.IHF_DELIVERY_DATE) = YEAR(GETDATE()) - 1 
-                                    AND I.IHF_DELIVERY_DATE <= DATEADD(YEAR, -1, GETDATE()))
-                            )
+                        {detailsDateFilter}
                         AND C.CUM_CUSTOMER_NUMBER NOT IN (
                             SELECT CAST(IM.INS_INSTALLER_NUMBER AS NVARCHAR(50))
                             FROM INSTALLER_MASTER IM
@@ -233,9 +265,9 @@ namespace SalesMetrics.Controllers
 
                 // Get monthly invoice data for the chart
                 // This query groups invoices by month to create the trend chart
-                // It gets data for the last 24 months to compare this year vs last year
-                using (var cmd = new SqlCommand(@"
-                    SELECT 
+                // Date filtering matches the selected view mode
+                using (var cmd = new SqlCommand($@"
+                    SELECT
                         YEAR(I.IHF_DELIVERY_DATE) AS InvoiceYear,
                         MONTH(I.IHF_DELIVERY_DATE) AS InvoiceMonth,
                         DATENAME(MONTH, I.IHF_DELIVERY_DATE) AS MonthName,
@@ -245,15 +277,7 @@ namespace SalesMetrics.Controllers
                         INNER JOIN SALES_HEADER S ON I.IHF_ORDER_NUMBER = S.SOH_NUMBER
                     WHERE C.CUM_PRICE_CODE = @PriceCode
                         AND S.SOH_CANCELED_DATE IS NULL
-                        AND (
-                            -- Current year: YTD up to today
-                            (YEAR(I.IHF_DELIVERY_DATE) = YEAR(GETDATE()) 
-                             AND I.IHF_DELIVERY_DATE <= GETDATE())
-                            OR
-                            -- Last year: Same YTD period
-                            (YEAR(I.IHF_DELIVERY_DATE) = YEAR(GETDATE()) - 1 
-                             AND I.IHF_DELIVERY_DATE <= DATEADD(YEAR, -1, GETDATE()))
-                        )
+                        {detailsDateFilter}
                     GROUP BY YEAR(I.IHF_DELIVERY_DATE), MONTH(I.IHF_DELIVERY_DATE), DATENAME(MONTH, I.IHF_DELIVERY_DATE)
                     ORDER BY YEAR(I.IHF_DELIVERY_DATE), MONTH(I.IHF_DELIVERY_DATE)
                 ", conn))
@@ -273,8 +297,8 @@ namespace SalesMetrics.Controllers
 
                 // Get the properties under this management company with enhanced metrics
                 // This query gets each property's performance including year-over-year comparison
-                using (var cmd = new SqlCommand(@"
-                    SELECT 
+                using (var cmd = new SqlCommand($@"
+                    SELECT
                         C.CUM_CUMMAS_ID AS PropertyId,
                         C.CUM_CUSTOMER_NUMBER AS CustomerNumber,
                         C.CUM_CUSTOMER_NAME AS CustomerName,
@@ -283,13 +307,11 @@ namespace SalesMetrics.Controllers
                         S.SMN_SALESMAN_NAME AS Salesperson,
                         ISNULL(C.CUM_AR_BALANCE, 0) AS ARBalance,
                         COUNT(DISTINCT I.IHF_INVOICE_NUMBER) AS InvoiceCount,
-                        ISNULL(SUM(CASE 
-                            WHEN YEAR(I.IHF_DELIVERY_DATE) = YEAR(GETDATE()) 
-                                AND I.IHF_DELIVERY_DATE <= GETDATE()
+                        ISNULL(SUM(CASE
+                            WHEN {thisYearCondition}
                             THEN I.IHF_TOTAL_AMOUNT ELSE 0 END), 0) AS ThisYearRevenue,
-                        ISNULL(SUM(CASE 
-                            WHEN YEAR(I.IHF_DELIVERY_DATE) = YEAR(GETDATE()) - 1 
-                                AND I.IHF_DELIVERY_DATE <= DATEADD(YEAR, -1, GETDATE())
+                        ISNULL(SUM(CASE
+                            WHEN {lastYearCondition}
                             THEN I.IHF_TOTAL_AMOUNT ELSE 0 END), 0) AS LastYearRevenue
                     FROM CUSTOMER_MASTER C
                         LEFT JOIN INVOICE_HEADER I ON C.CUM_CUSTOMER_NUMBER = I.IHF_CUSTOMER_NUMBER

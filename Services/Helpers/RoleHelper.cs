@@ -55,8 +55,7 @@ namespace SalesMetrics.Services.Helpers
                 ROLE_REGIONAL_MANAGER => 3,   // Regional Manager
                 ROLE_GENERAL_MANAGER => 4,    // General Manager
                 ROLE_SALES_ADMIN => 5,        // Sales Manager
-                ROLE_SALES => 6,              // Sales
-                ROLE_SALESPERSON => 6,        // Salesperson (same as Sales)
+                ROLE_SALES => 6,              // Sales / Salesperson (both use RoleId=2)
                 ROLE_OFFICE_MANAGER => 6,     // Office Manager
                 ROLE_OFFICE => 7,             // Office
                 _ => 99                       // Unknown role - lowest priority

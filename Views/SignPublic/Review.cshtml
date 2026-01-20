@@ -216,7 +216,6 @@
                 document.getElementById('nextPage').disabled = false;
             }
         }).catch(function(error) {
-            console.error('Error loading PDF:', error);
             document.getElementById('pdfContainer').innerHTML = '<div class="alert alert-warning m-3">Unable to load PDF preview. Please use the "View Full PDF" button above.</div>';
         });
 
@@ -355,7 +354,6 @@
           drawing = false;
           const dataUrl = sigCanvas.toDataURL('image/png');
           document.getElementById('SigData').value = dataUrl;
-          console.log('Signature captured, length:', dataUrl.length);
         }
 
         sigCanvas.addEventListener('mousedown', start);
@@ -372,7 +370,6 @@
           sigCtx.clearRect(0, 0, sigCanvas.width, sigCanvas.height);
           document.getElementById('SigData').value = '';
           hasInk = false;
-          console.log('Signature cleared');
         });
 
         // Form Submission Validation
@@ -381,12 +378,6 @@
           const name = document.getElementById('TypedFullName').value.trim();
           const sig = document.getElementById('SigData').value;
 
-          console.log('=== FORM SUBMISSION DEBUG ===');
-          console.log('Accept checked:', accept);
-          console.log('Name entered:', name);
-          console.log('Signature data length:', sig ? sig.length : 0);
-          console.log('Has drawn ink:', hasInk);
-
           // Check if manager needs to add tenant
           const skipTenantCheckbox = document.getElementById('SkipTenant');
           const isTenantSection = document.getElementById('TenantFullName');
@@ -394,9 +385,6 @@
             const skipTenant = skipTenantCheckbox && skipTenantCheckbox.checked;
             const tenantName = document.getElementById('TenantFullName').value.trim();
             const tenantEmail = document.getElementById('TenantEmail').value.trim();
-            console.log('Skip tenant:', skipTenant);
-            console.log('Tenant name:', tenantName);
-            console.log('Tenant email:', tenantEmail);
 
             if (!skipTenant && (!tenantName || !tenantEmail)) {
               e.preventDefault();
@@ -423,7 +411,6 @@
             return false;
           }
 
-          console.log('Form validation passed, submitting...');
           document.getElementById('submitBtn').disabled = true;
           document.getElementById('submitBtn').innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Submitting...';
         });

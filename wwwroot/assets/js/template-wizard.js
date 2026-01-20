@@ -378,8 +378,11 @@ var TemplateWizard = (function () {
             }
 
         }).catch(function (error) {
-            console.error('Error loading PDF:', error);
-            alert('Error loading PDF file. Please try again.');
+            if (typeof toastr !== 'undefined') {
+                toastr.error('Error loading PDF file. Please try again.');
+            } else {
+                alert('Error loading PDF file. Please try again.');
+            }
         });
     }
 
@@ -404,7 +407,6 @@ var TemplateWizard = (function () {
 
             // Store scale for field configurator coordinate conversion
             window.pdfScale = scale;
-            console.log(`PDF rendered at scale: ${scale.toFixed(2)} (100%), canvas size: ${canvas.width}x${canvas.height}`);
 
             // Update SVG overlay dimensions to match canvas
             const overlay = document.getElementById('fieldOverlay');

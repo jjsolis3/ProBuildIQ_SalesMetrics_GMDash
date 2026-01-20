@@ -319,9 +319,7 @@ var TemplateFieldSelector = (function () {
                 existingSpec = JSON.parse(hiddenInput.value);
 
             } catch (e) {
-
-                console.warn('Could not parse existing MergeSpec:', e);
-
+                // Failed to parse existing MergeSpec - will use empty spec
             }
 
         }

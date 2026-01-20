@@ -46,7 +46,7 @@ public partial class UserEntity
     public string? SessionToken { get; set; }
 
     public string? Salt { get; set; }
-    public int SalesmanId { get; set; }
+    public int? SalesmanId { get; set; }
     public string? SalesmanNumber { get; set; }
 
     public virtual RoleEntity Role { get; set; } = null!;

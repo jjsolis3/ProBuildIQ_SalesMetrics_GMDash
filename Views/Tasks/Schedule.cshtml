@@ -266,7 +266,7 @@
                         }, 1000); // wait for FullCalendar to rerender
                     }
                 } catch (error) {
-                    console.error("Failed to refresh calendar events:", error);
+                    // Calendar refresh failed - will show stale events
                 }
             });
         </script>

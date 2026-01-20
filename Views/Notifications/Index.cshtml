@@ -176,7 +176,11 @@
                                                         <i class="mdi mdi-clock-outline"></i> @timeAgo
                                                         @if (!notification.IsRead)
                                                         {
-                                                            <span class="badge bg-primary ms-2">New</span>
+                                                            <span class="badge bg-primary ms-2">UNREAD</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="badge bg-secondary ms-2">READ</span>
                                                         }
                                                     </small>
                                                 </div>
@@ -189,10 +193,13 @@
 
                         <!-- Announcements Tab -->
                         <div class="tab-pane" id="announcements-tab" role="tabpanel">
-                            <div class="mb-3">
-                                <h5>
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h5 class="mb-0">
                                     <i class="fas fa-bullhorn me-2"></i>Company Announcements
                                 </h5>
+                                <button class="btn btn-sm btn-primary" onclick="markAllAnnouncementsAsRead()">
+                                    <i class="fas fa-check-double me-1"></i> Mark All as Read
+                                </button>
                             </div>
 
                             @if (totalAnnouncementsCount == 0)
@@ -244,7 +251,11 @@
                                                                 <i class="mdi mdi-clock-outline"></i> @timeAgo
                                                                 @if (!announcement.IsRead)
                                                                 {
-                                                                    <span class="badge bg-primary ms-2">New</span>
+                                                                    <span class="badge bg-primary ms-2">UNREAD</span>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span class="badge bg-secondary ms-2">READ</span>
                                                                 }
                                                             </small>
                                                         </div>
@@ -371,6 +382,11 @@
                     }
 
                     updateUnreadCount();
+
+                    // Trigger bell dropdown refresh
+                    if (typeof window.loadNotifications === 'function') {
+                        window.loadNotifications();
+                    }
                 }
             },
             error: function (xhr, status, error) {
@@ -402,6 +418,11 @@
                     $('.btn-group button:first i').removeClass('fa-envelope-open').addClass('fa-envelope');
 
                     updateUnreadCount();
+
+                    // Trigger bell dropdown refresh
+                    if (typeof window.loadNotifications === 'function') {
+                        window.loadNotifications();
+                    }
 
                     if (typeof toastr !== 'undefined') {
                         toastr.success('All notifications marked as read');
@@ -513,6 +534,11 @@
 
                     updateUnreadCount();
 
+                    // Trigger bell dropdown refresh
+                    if (typeof window.loadNotifications === 'function') {
+                        window.loadNotifications();
+                    }
+
                     if (typeof toastr !== 'undefined') {
                         toastr.success(newStatus ? 'Announcement marked as read' : 'Announcement marked as unread');
                     }
@@ -572,5 +598,75 @@
                 }
             });
         }
+    }
+
+    // Mark all announcements as read
+    function markAllAnnouncementsAsRead() {
+        // Get all announcement notification IDs
+        var announcementIds = [];
+        $('#announcements-tab [id^="announcement-"]').each(function() {
+            var id = $(this).attr('id').replace('announcement-', '');
+            if (id) {
+                announcementIds.push(parseInt(id));
+            }
+        });
+
+        if (announcementIds.length === 0) {
+            if (typeof toastr !== 'undefined') {
+                toastr.info('No announcements to mark as read');
+            }
+            return;
+        }
+
+        // Mark each announcement as read
+        var completedCount = 0;
+        var totalCount = announcementIds.length;
+
+        announcementIds.forEach(function(announcementId) {
+            $.ajax({
+                url: '/Notifications/ToggleRead',
+                type: 'POST',
+                contentType: 'application/json',
+                headers: {
+                    'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                },
+                data: JSON.stringify({ NotificationId: announcementId, IsRead: true }),
+                success: function (response) {
+                    if (response.success) {
+                        const $announcement = $(`#announcement-${announcementId}`);
+                        const $card = $announcement.find('.card');
+                        const $title = $announcement.find('h5').first();
+                        const $icon = $announcement.find('.btn-group button:first i');
+
+                        // Mark as read
+                        $card.removeClass('bg-light');
+                        $title.removeClass('fw-bold');
+                        $announcement.find('.badge.bg-primary').removeClass('bg-primary').addClass('bg-secondary').text('READ');
+                        $icon.removeClass('fa-envelope-open').addClass('fa-envelope');
+                        $announcement.find('.btn-group button:first').attr('title', 'Mark as unread');
+
+                        completedCount++;
+
+                        // Show success message when all are done
+                        if (completedCount === totalCount) {
+                            updateUnreadCount();
+
+                            // Trigger bell dropdown refresh
+                            if (typeof window.loadNotifications === 'function') {
+                                window.loadNotifications();
+                            }
+
+                            if (typeof toastr !== 'undefined') {
+                                toastr.success('All announcements marked as read');
+                            }
+                        }
+                    }
+                },
+                error: function (xhr, status, error) {
+                    console.error('Error marking announcement as read:', error);
+                    completedCount++;
+                }
+            });
+        });
     }
 </script>

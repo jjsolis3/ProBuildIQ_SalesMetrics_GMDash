@@ -31,8 +31,9 @@
     var isQueryBuilderAdmin = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "REPORT_BUILDER_ADMIN") : false;
 
     // Keep role-based flag for conditional display within sections
-    var isGMOrAdmin = roleId == "1" || roleId == "4";
-    var isSalesManagerOrAbove = roleId == "1" || roleId == "3" || roleId == "4";
+    // Management roles: Admin(1), Sales Admin(3), GM(4), President/Owner(7), Regional Manager(8)
+    var isGMOrAdmin = roleId == "1" || roleId == "4" || roleId == "7" || roleId == "8";
+    var isSalesManagerOrAbove = roleId == "1" || roleId == "3" || roleId == "4" || roleId == "7" || roleId == "8";
 }
 
 <style>
@@ -134,7 +135,7 @@
                 {
                     <!-- SALES TASK ACTIVITIES -->
                     <li class="menu-title">TASKS</li>
-                    @if (isGMOrAdmin || roleId == "3")
+                    @if (isSalesManagerOrAbove)
                     {
                         <li class="ms-3">
                             <a href="/Tasks/AdminTask">

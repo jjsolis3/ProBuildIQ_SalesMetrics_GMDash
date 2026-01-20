@@ -67,9 +67,10 @@
         <!-- 🔥 Filter Row (Dropdown + Toggle) -->
         <div class="row mb-3 align-items-center">
 
-            @if (ViewBag.RoleId == 1 || ViewBag.RoleId == 3 || ViewBag.RoleId == 4)
+            @* Management roles: Admin(1), Sales Admin(3), GM(4), President/Owner(7), Regional Manager(8) *@
+            @if (ViewBag.RoleId == 1 || ViewBag.RoleId == 3 || ViewBag.RoleId == 4 || ViewBag.RoleId == 7 || ViewBag.RoleId == 8)
             {
-                <!-- Admin/SalesAdmin: User Filter -->
+                <!-- Management Roles: User Filter -->
                 <div class="col-auto">
                     <label for="userFilter" class="form-label fw-bold mb-1">Filter by Salesperson:</label>
                     <select id="userFilter" class="form-select fw-bold" style="min-width: 200px;">
@@ -95,9 +96,10 @@
     <div class="col-2">
         <!-- 🔥 Filter Whs Row (Dropdown) -->
         <div class="row mb-3 align-items-center">
-            @if (ViewBag.RoleId == 1 || ViewBag.RoleId == 3 || ViewBag.RoleId == 4)
+            @* Management roles: Admin(1), Sales Admin(3), GM(4), President/Owner(7), Regional Manager(8) *@
+            @if (ViewBag.RoleId == 1 || ViewBag.RoleId == 3 || ViewBag.RoleId == 4 || ViewBag.RoleId == 7 || ViewBag.RoleId == 8)
             {
-                <!-- Whs ID Toggle: Update by Whs -->
+                <!-- Management Roles: Warehouse Filter -->
                 <div class="col-auto">
                     <label for="whsIdFilter" class="form-label fw-bold mb-1">Filter by Warehouse:</label>
                     <select id="whsIdFilter" class="form-select fw-bold" style="min-width: 200px;">
@@ -609,7 +611,8 @@
                             <th>Mgmt Co</th>
                             <th>Amount</th>
                             <th>Due Date</th>
-                            @if (ViewBag.roleId == 1 || ViewBag.roleId == 3 || ViewBag.roleId == 4)
+                            @* Management roles see salesperson column *@
+                            @if (ViewBag.RoleId == 1 || ViewBag.RoleId == 3 || ViewBag.RoleId == 4 || ViewBag.RoleId == 7 || ViewBag.RoleId == 8)
                             {
                                 <th>Salesperson</th>
                             }
@@ -636,7 +639,8 @@
                                 <td>@invoice.MgmtCo</td>
                                 <td>@String.Format("{0:C}", invoice.OutstandingAmount)</td>
                                 <td data-order="@invoice.DueDate.ToString("yyyy-MM-ddTHH:mm:ss")">@invoice.DueDate.ToString("d")</td>
-                                @if (ViewBag.RoleId == 1 || ViewBag.RoleId == 3 || ViewBag.RoleId == 4)
+                                @* Management roles see salesperson column *@
+                                @if (ViewBag.RoleId == 1 || ViewBag.RoleId == 3 || ViewBag.RoleId == 4 || ViewBag.RoleId == 7 || ViewBag.RoleId == 8)
                                 {
                                     <td>@invoice.Salesperson</td>
                                 }

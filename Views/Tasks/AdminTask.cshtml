@@ -130,6 +130,51 @@
     </div>
 </div>
 
+@* Custom Filter Dropdowns *@
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-3">
+                <label for="typeFilter" class="form-label fw-bold">
+                    <i class="bi bi-tag"></i> Filter by Type
+                </label>
+                <select id="typeFilter" class="form-select">
+                    <option value="">All Types</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="statusFilter" class="form-label fw-bold">
+                    <i class="bi bi-check-circle"></i> Filter by Status
+                </label>
+                <select id="statusFilter" class="form-select">
+                    <option value="">All Statuses</option>
+                    <option value="Pending">Pending</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Cancelled">Cancelled</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="assignedToFilter" class="form-label fw-bold">
+                    <i class="bi bi-person"></i> Filter by Assigned To
+                </label>
+                <select id="assignedToFilter" class="form-select">
+                    <option value="">All Users</option>
+                    @foreach (var user in Model.Users)
+                    {
+                        <option value="@user.Users_ID">@user.FirstName @user.LastName</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button id="clearFilters" class="btn btn-outline-secondary w-100">
+                    <i class="bi bi-x-circle"></i> Clear Filters
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div style="overflow-x: auto; width: 100%;">
 @*<div class="table-responsive">*@
     @* SERVER-SIDE PAGINATION: Empty table - DataTables populates via AJAX *@
@@ -277,6 +322,10 @@
                     type: 'POST',
                     data: function(d) {
                         d.filter = currentFilter;  // Pass current filter to server
+                        // Add custom filter values
+                        d.typeFilter = $('#typeFilter').val();
+                        d.statusFilter = $('#statusFilter').val();
+                        d.assignedToFilter = $('#assignedToFilter').val();
                     },
                     error: function(xhr, error, code) {
                         console.error('DataTable error:', error);
@@ -286,11 +335,11 @@
                 columns: [
                     { data: 'taskId', title: 'ID', visible: false },
                     { data: 'title', title: 'Title' },
-                    { data: 'description', title: 'Description', visible: false },
-                    { data: 'dueDate', title: 'Due Date' },
-                    { data: 'assignedTo', title: 'Assigned To' },
-                    { data: 'property', title: 'Property' },
+                    { data: 'description', title: 'Description' },
                     { data: 'type', title: 'Type' },
+                    { data: 'property', title: 'Property' },
+                    { data: 'dueDate', title: 'Due Date' },
+                    { data: 'completedDate', title: 'Completed Date' },
                     {
                         data: 'status',
                         title: 'Status',
@@ -307,7 +356,9 @@
                             return data;
                         }
                     },
-                    { data: 'createdDate', title: 'Created', visible: false },
+                    { data: 'assignedTo', title: 'Assigned To' },
+                    { data: 'createdBy', title: 'Created By' },
+                    { data: 'createdDate', title: 'Created Date' },
                     {
                         data: null,
                         title: 'Actions',
@@ -342,7 +393,7 @@
                         }
                     }
                 ],
-                order: [[3, 'asc']],  // Sort by Due Date ascending
+                order: [[5, 'asc']],  // Sort by Due Date ascending (now column 5)
                 responsive: true,
                 scrollX: true,
                 pageLength: 25,  // Show 25 records per page
@@ -434,6 +485,33 @@
             // ⚠️ When columns change (like description being hidden), fix alignment
             $(window).on('resize', function () {
                 table.columns.adjust();
+            });
+
+            // Custom filter change handlers
+            $('#typeFilter, #statusFilter, #assignedToFilter').on('change', function() {
+                table.ajax.reload();
+            });
+
+            // Clear filters button
+            $('#clearFilters').on('click', function() {
+                $('#typeFilter').val('');
+                $('#statusFilter').val('');
+                $('#assignedToFilter').val('');
+                table.ajax.reload();
+            });
+
+            // Populate Type dropdown with unique values from server
+            $.ajax({
+                url: '@Url.Action("GetTaskTypes", "Tasks")',
+                method: 'GET',
+                success: function(types) {
+                    $('#typeFilter').append('<option value="">All Types</option>');
+                    types.forEach(function(type) {
+                        if (type) {
+                            $('#typeFilter').append('<option value="' + type + '">' + type + '</option>');
+                        }
+                    });
+                }
             });
 
         });

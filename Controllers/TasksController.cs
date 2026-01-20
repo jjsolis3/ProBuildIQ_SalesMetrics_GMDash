@@ -145,6 +145,11 @@ namespace SalesMetrics.Controllers
                 var sortColumn = Request.Form["order[0][column]"].FirstOrDefault();
                 var sortDirection = Request.Form["order[0][dir]"].FirstOrDefault();
 
+                // Get custom filter parameters
+                var typeFilter = Request.Form["typeFilter"].FirstOrDefault();
+                var statusFilter = Request.Form["statusFilter"].FirstOrDefault();
+                var assignedToFilter = Request.Form["assignedToFilter"].FirstOrDefault();
+
                 int pageSize = length != null ? Convert.ToInt32(length) : 10;
                 int skip = start != null ? Convert.ToInt32(start) : 0;
 
@@ -152,9 +157,10 @@ namespace SalesMetrics.Controllers
                 var users = GetCachedUsers(locationId, roleId);
                 var userLookup = users.ToDictionary(u => u.Users_ID, u => $"{u.FirstName} {u.LastName}");
 
-                // Get paginated tasks
+                // Get paginated tasks with custom filters
                 var (tasks, totalRecords, filteredRecords) = GetPaginatedTasksByLocation(
-                    locationId, filter, skip, pageSize, searchValue, sortColumn, sortDirection, userLookup);
+                    locationId, filter, skip, pageSize, searchValue, sortColumn, sortDirection, userLookup,
+                    typeFilter, statusFilter, assignedToFilter);
 
                 // Format data for DataTables
                 var data = tasks.Select(task => new
@@ -164,12 +170,14 @@ namespace SalesMetrics.Controllers
                     description = task.Description ?? "",
                     status = task.Status ?? "",
                     dueDate = task.DueDate?.ToString("MM/dd/yyyy hh:mm tt") ?? "",
+                    completedDate = task.CompletedDate?.ToString("MM/dd/yyyy hh:mm tt") ?? "",
                     assignedTo = task.AssignedTo.HasValue && userLookup.ContainsKey(task.AssignedTo.Value)
                         ? userLookup[task.AssignedTo.Value]
                         : "Unassigned",
                     assignedToId = task.AssignedTo ?? 0,
                     property = task.Property ?? "",
                     type = task.Type ?? "",
+                    createdBy = task.CreatedBy ?? "",
                     createdDate = task.CreatedDate?.ToString("MM/dd/yyyy hh:mm tt") ?? ""
                 }).ToList();
 
@@ -191,6 +199,52 @@ namespace SalesMetrics.Controllers
                     data = new List<object>(),
                     error = ex.Message
                 });
+            }
+        }
+
+        /// <summary>
+        /// Get distinct task types for filter dropdown
+        /// </summary>
+        [HttpGet]
+        public IActionResult GetTaskTypes()
+        {
+            try
+            {
+                int locationId = LocationHelper.GetCurrentLocationId(HttpContext);
+                string connectionString = _configuration.GetConnectionString("SalesMetrics");
+                var types = new List<string>();
+
+                using (SqlConnection conn = new SqlConnection(connectionString))
+                {
+                    conn.Open();
+                    string query = @"
+                        SELECT DISTINCT Type
+                        FROM Tasks
+                        WHERE Location = @LocationId
+                            AND Status != 'Deleted'
+                            AND Type IS NOT NULL
+                            AND Type != ''
+                        ORDER BY Type
+                    ";
+
+                    SqlCommand cmd = new SqlCommand(query, conn);
+                    cmd.Parameters.AddWithValue("@LocationId", locationId);
+
+                    using (SqlDataReader reader = cmd.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            types.Add(reader.GetString(0));
+                        }
+                    }
+                }
+
+                return Json(types);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error getting task types: {ex.Message}");
+                return Json(new List<string>());
             }
         }
 
@@ -728,7 +782,8 @@ namespace SalesMetrics.Controllers
         /// </summary>
         private (List<SalesTask> tasks, int totalRecords, int filteredRecords) GetPaginatedTasksByLocation(
             int locationId, string filter, int skip, int pageSize, string searchValue,
-            string sortColumn, string sortDirection, Dictionary<int, string> userLookup)
+            string sortColumn, string sortDirection, Dictionary<int, string> userLookup,
+            string typeFilter = null, string statusFilter = null, string assignedToFilter = null)
         {
             string connectionString = _configuration.GetConnectionString("SalesMetrics");
             var tasks = new List<SalesTask>();
@@ -741,8 +796,8 @@ namespace SalesMetrics.Controllers
                 {
                     conn.Open();
 
-                    // Build status filter
-                    string statusFilter = filter switch
+                    // Build status filter (from filter buttons: active/completed/all)
+                    string statusFilterClause = filter switch
                     {
                         "active" => "AND Status != 'Completed' AND Status != 'Cancelled'",
                         "completed" => "AND Status = 'Completed'",
@@ -760,6 +815,21 @@ namespace SalesMetrics.Controllers
                             Type LIKE @SearchValue OR
                             Status LIKE @SearchValue
                         )";
+                    }
+
+                    // Build custom dropdown filters
+                    string customFilters = "";
+                    if (!string.IsNullOrEmpty(typeFilter))
+                    {
+                        customFilters += " AND Type = @TypeFilter";
+                    }
+                    if (!string.IsNullOrEmpty(statusFilter))
+                    {
+                        customFilters += " AND Status = @StatusFilter";
+                    }
+                    if (!string.IsNullOrEmpty(assignedToFilter))
+                    {
+                        customFilters += " AND AssignedTo = @AssignedToFilter";
                     }
 
                     // Map column index to column name for sorting
@@ -783,21 +853,22 @@ namespace SalesMetrics.Controllers
                         FROM Tasks
                         WHERE Location = @LocationId
                             AND Status != 'Deleted'
-                            {statusFilter}
+                            {statusFilterClause}
                     ";
 
                     SqlCommand countCmd = new SqlCommand(countQuery, conn);
                     countCmd.Parameters.AddWithValue("@LocationId", locationId);
                     totalRecords = (int)countCmd.ExecuteScalar();
 
-                    // Get filtered count (with search filter)
+                    // Get filtered count (with search filter and custom filters)
                     string filteredCountQuery = $@"
                         SELECT COUNT(*)
                         FROM Tasks
                         WHERE Location = @LocationId
                             AND Status != 'Deleted'
-                            {statusFilter}
+                            {statusFilterClause}
                             {searchFilter}
+                            {customFilters}
                     ";
 
                     SqlCommand filteredCountCmd = new SqlCommand(filteredCountQuery, conn);
@@ -805,6 +876,18 @@ namespace SalesMetrics.Controllers
                     if (!string.IsNullOrEmpty(searchValue))
                     {
                         filteredCountCmd.Parameters.AddWithValue("@SearchValue", $"%{searchValue}%");
+                    }
+                    if (!string.IsNullOrEmpty(typeFilter))
+                    {
+                        filteredCountCmd.Parameters.AddWithValue("@TypeFilter", typeFilter);
+                    }
+                    if (!string.IsNullOrEmpty(statusFilter))
+                    {
+                        filteredCountCmd.Parameters.AddWithValue("@StatusFilter", statusFilter);
+                    }
+                    if (!string.IsNullOrEmpty(assignedToFilter))
+                    {
+                        filteredCountCmd.Parameters.AddWithValue("@AssignedToFilter", int.Parse(assignedToFilter));
                     }
                     filteredRecords = (int)filteredCountCmd.ExecuteScalar();
 
@@ -816,8 +899,9 @@ namespace SalesMetrics.Controllers
                         FROM Tasks WITH (INDEX(IX_Tasks_Location_Status))
                         WHERE Location = @LocationId
                             AND Status != 'Deleted'
-                            {statusFilter}
+                            {statusFilterClause}
                             {searchFilter}
+                            {customFilters}
                         ORDER BY {orderByColumn} {orderByDirection}
                         OFFSET @Skip ROWS
                         FETCH NEXT @PageSize ROWS ONLY
@@ -830,6 +914,18 @@ namespace SalesMetrics.Controllers
                     if (!string.IsNullOrEmpty(searchValue))
                     {
                         dataCmd.Parameters.AddWithValue("@SearchValue", $"%{searchValue}%");
+                    }
+                    if (!string.IsNullOrEmpty(typeFilter))
+                    {
+                        dataCmd.Parameters.AddWithValue("@TypeFilter", typeFilter);
+                    }
+                    if (!string.IsNullOrEmpty(statusFilter))
+                    {
+                        dataCmd.Parameters.AddWithValue("@StatusFilter", statusFilter);
+                    }
+                    if (!string.IsNullOrEmpty(assignedToFilter))
+                    {
+                        dataCmd.Parameters.AddWithValue("@AssignedToFilter", int.Parse(assignedToFilter));
                     }
 
                     using (SqlDataReader reader = dataCmd.ExecuteReader())

@@ -119,6 +119,32 @@ namespace SalesMetrics.Services.Helpers
         {
             return roleId == ROLE_ADMIN || roleId == ROLE_PRESIDENT_OWNER;
         }
+
+        /// <summary>
+        /// Checks if the role can view and manage all tasks in their location
+        /// This includes: Admin, President/Owner, Regional Manager, General Manager, and Sales Admin
+        /// </summary>
+        public static bool CanManageLocationTasks(int roleId)
+        {
+            return roleId == ROLE_ADMIN ||
+                   roleId == ROLE_PRESIDENT_OWNER ||
+                   roleId == ROLE_REGIONAL_MANAGER ||
+                   roleId == ROLE_GENERAL_MANAGER ||
+                   roleId == ROLE_SALES_ADMIN;
+        }
+
+        /// <summary>
+        /// Checks if the role can view sales team data/metrics
+        /// This includes management roles that oversee sales operations
+        /// </summary>
+        public static bool CanViewSalesTeamData(int roleId)
+        {
+            return roleId == ROLE_ADMIN ||
+                   roleId == ROLE_PRESIDENT_OWNER ||
+                   roleId == ROLE_REGIONAL_MANAGER ||
+                   roleId == ROLE_GENERAL_MANAGER ||
+                   roleId == ROLE_SALES_ADMIN;
+        }
     }
 
 }

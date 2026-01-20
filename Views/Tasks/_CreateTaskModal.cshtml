@@ -96,7 +96,8 @@
 
                     <div class="mb-3">
                         <label class="form-label">Assign To</label>
-                        @if (Model.RoleId == 1 || Model.RoleId == 3 || Model.RoleId == 4)
+                        @* Management roles (Admin=1, Sales Admin=3, GM=4, President/Owner=7, Regional Manager=8) can assign to team *@
+                        @if (Model.RoleId == 1 || Model.RoleId == 3 || Model.RoleId == 4 || Model.RoleId == 7 || Model.RoleId == 8)
                         {
                             <select asp-for="Task.AssignedTo" class="form-select" name="Task.AssignedTo">
                                 <option disabled selected value="">-- Select User --</option>

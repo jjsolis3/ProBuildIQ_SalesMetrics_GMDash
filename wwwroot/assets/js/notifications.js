@@ -81,7 +81,7 @@
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
-        fetch('/Notifications/GetNotifications?limit=10', { signal: controller.signal })
+        fetch('/Notifications/GetNotifications?unreadOnly=true&limit=10', { signal: controller.signal })
             .then(response => {
                 clearTimeout(timeoutId);
                 return response.json();

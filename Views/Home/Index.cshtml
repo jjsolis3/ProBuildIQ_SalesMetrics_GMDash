@@ -911,11 +911,17 @@
             url += `&salesmanId=${salesmanId}`;
         }
 
-        fetch(url)
-            .then(res => res.json())
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+
+        fetch(url, { signal: controller.signal })
+            .then(res => {
+                clearTimeout(timeoutId);
+                return res.json();
+            })
             .then(data => {
                 if (!data || data.length === 0) {
-                    console.error("No data received from the server.");
+                    // No data to display
                     return;
                 }
 
@@ -947,7 +953,10 @@
                 //     chartInstance.destroy();
                 // }
             })
-            .catch(error => console.error("Error fetching data:", error));
+            .catch(error => {
+                clearTimeout(timeoutId);
+                // Silently fail - chart will remain empty
+            });
     </script>
     <script>
         // Initialize the linked datepickers
@@ -1051,7 +1060,6 @@
     </script>
     <script>
         $('#taskModal').on('shown.bs.modal', function () {
-            console.log("Task modal is now fully visible.");
             const roleId = parseInt($('#CurrentRoleId').val());
             const userId = $('#CurrentUserId').val();
 
@@ -1062,7 +1070,6 @@
 
             $('#taskForm').off('submit').on('submit', function (e) {
                 e.preventDefault();
-                console.log("Intercepted form submit");
 
                 const form = $(this);
                 const data = form.serialize();
@@ -1075,7 +1082,6 @@
                     })
                     .fail(function (xhr) {
                         Swal.fire("Error", "Something went wrong", "error");
-                        console.log(xhr.responseText);
                     });
             });
         });
@@ -1095,7 +1101,6 @@
                 })
                 .fail(function (jqXHR, textStatus, errorThrown) {
                     $('#editTaskModal .modal-content').html('<div class="p-4 text-danger">Error loading modal: ' + jqXHR.responseText + '</div>');
-                    console.error("AJAX Load Error:", textStatus, errorThrown);
                 });
         });
 
@@ -1142,6 +1147,36 @@
             $('#Status').val('Pending');
 
             $('#taskModal').modal('show');
+        });
+    </script>
+
+    <!-- Cleanup on page unload -->
+    <script>
+        window.addEventListener('beforeunload', function() {
+            // Cleanup event handlers
+            $(document).off('click', '.view-order-details');
+            $(document).off('click', '.create-workorder-task');
+            $(document).off('click', '.create-ar-task');
+            $(document).off('click', '.create-task-from-inactive');
+
+            // Cleanup chart instance
+            if (typeof chartInstance !== 'undefined' && chartInstance) {
+                if (chartInstance.destroy) {
+                    chartInstance.destroy();
+                }
+                chartInstance = null;
+            }
+
+            // Cleanup DataTables
+            if ($.fn.DataTable.isDataTable('#workOrdersTable')) {
+                $('#workOrdersTable').DataTable().destroy();
+            }
+            if ($.fn.DataTable.isDataTable('#ar_table')) {
+                $('#ar_table').DataTable().destroy();
+            }
+            if ($.fn.DataTable.isDataTable('#inactive-customers-table')) {
+                $('#inactive-customers-table').DataTable().destroy();
+            }
         });
     </script>
 

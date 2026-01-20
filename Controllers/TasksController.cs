@@ -97,19 +97,14 @@ namespace SalesMetrics.Controllers
             int locationId = LocationHelper.GetCurrentLocationId(HttpContext);
             int salesmanId = int.Parse(User.FindFirst("SalesmanId")?.Value ?? "0");
 
-            var tasks = GetAllTasksByLocation(locationId);
+            // OPTIMIZATION: Pass filter to database query instead of filtering in-memory
+            var tasks = GetAllTasksByLocation(locationId, filter);
 
-            // Backend Filtering
-            if (filter == "active")
-            {
-                tasks = tasks.Where(t => t.Status != "Completed").ToList();
-            }
-            else if (filter == "completed")
-            {
-                tasks = tasks.Where(t => t.Status == "Completed").ToList();
-            }
+            // OPTIMIZATION: Use cached users instead of direct database call
+            var users = GetCachedUsers(Convert.ToInt32(locationId), roleId);
 
-            var users = GetAllUsersForTaskDisplay(Convert.ToInt32(locationId), roleId);
+            // OPTIMIZATION: Build user lookup dictionary to eliminate N+1 in view
+            var userLookup = users.ToDictionary(u => u.Users_ID, u => $"{u.FirstName} {u.LastName}");
 
             var viewModel = new TaskPageViewModel
             {
@@ -129,8 +124,9 @@ namespace SalesMetrics.Controllers
             ViewBag.LocationId = locationId;
             ViewBag.SalesmanId = salesmanId;
             ViewBag.TaskTypes = TaskTypeHelper.GetTaskTypes("AdminTask");
+            ViewBag.UserLookup = userLookup; // OPTIMIZATION: Pass user lookup dictionary to view
 
-            // Add ReturnUrl ViewBag 
+            // Add ReturnUrl ViewBag
             ViewBag.ReturnUrl = Url.Action("AdminTask", "Tasks", new { filter });
 
             return View(viewModel);
@@ -584,7 +580,7 @@ namespace SalesMetrics.Controllers
             return users;
         }
 
-        private List<SalesTask> GetAllTasksByLocation(int locationId)
+        private List<SalesTask> GetAllTasksByLocation(int locationId, string filter = "all")
         {
             string connectionString = _configuration.GetConnectionString("SalesMetrics");
             var tasks = new List<SalesTask>();
@@ -594,7 +590,16 @@ namespace SalesMetrics.Controllers
                 using (SqlConnection conn = new SqlConnection(connectionString))
                 {
                     conn.Open();
-                    SqlCommand cmd = new SqlCommand(@"
+
+                    // OPTIMIZATION: Build SQL filter dynamically to reduce data transfer
+                    string statusFilter = filter switch
+                    {
+                        "active" => "AND Status != 'Completed' AND Status != 'Cancelled'",
+                        "completed" => "AND Status = 'Completed'",
+                        _ => "" // "all" - no additional filter
+                    };
+
+                    string query = $@"
                         SELECT TaskID,
                                Title,
                                Description,
@@ -613,8 +618,10 @@ namespace SalesMetrics.Controllers
                         FROM Tasks
                         WHERE Location = @LocationId
                             AND Status != 'Deleted'
-                    ", conn);
+                            {statusFilter}
+                    ";
 
+                    SqlCommand cmd = new SqlCommand(query, conn);
                     cmd.Parameters.AddWithValue("@LocationId", locationId);
 
                     using (SqlDataReader reader = cmd.ExecuteReader())

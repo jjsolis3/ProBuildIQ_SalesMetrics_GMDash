@@ -177,9 +177,11 @@ var configuration = new ConfigurationBuilder()
     .Build();
 
 // Configure the HTTP request pipeline
+// Use custom error handling middleware that logs to database
+app.UseMiddleware<SalesMetrics.Middleware.GlobalErrorHandlingMiddleware>();
+
 if (!app.Environment.IsDevelopment())
 {
-    app.UseExceptionHandler("/Home/Error");
     app.UseHsts();
 }
 

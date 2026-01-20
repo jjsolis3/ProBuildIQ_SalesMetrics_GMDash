@@ -99,6 +99,9 @@
             });
     }
 
+    // Expose loadNotifications to window so other pages can refresh the bell
+    window.loadNotifications = loadNotifications;
+
     // Update unread count
     function updateUnreadCount() {
         const controller = new AbortController();

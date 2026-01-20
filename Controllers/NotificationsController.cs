@@ -65,6 +65,28 @@ namespace SalesMetrics.Controllers
             return Json(new { success = true });
         }
 
+        // POST: /Notifications/ToggleRead
+        [HttpPost]
+        public async Task<IActionResult> ToggleRead([FromBody] NotificationMarkReadRequest request)
+        {
+            var userId = GetCurrentUserId();
+            if (userId == 0)
+                return Unauthorized();
+
+            // Get current notification status
+            var recipient = await _context.NotificationRecipients
+                .FirstOrDefaultAsync(nr => nr.NotificationId == request.NotificationId && nr.UserId == userId);
+
+            if (recipient != null)
+            {
+                recipient.IsRead = request.IsRead;
+                recipient.ReadDate = request.IsRead ? DateTime.Now : null;
+                await _context.SaveChangesAsync();
+            }
+
+            return Json(new { success = true });
+        }
+
         // POST: /Notifications/MarkAllAsRead
         [HttpPost]
         public async Task<IActionResult> MarkAllAsRead()
@@ -96,7 +118,16 @@ namespace SalesMetrics.Controllers
             if (userId == 0)
                 return RedirectToAction("Login", "Auth");
 
-            var notifications = await _notificationService.GetUserNotificationsAsync(userId, false, 100);
+            var roleId = GetCurrentRoleId();
+            var locationId = int.Parse(User.FindFirst("LocationId")?.Value ?? "0");
+
+            // Get regular notifications (exclude broadcast messages)
+            var allNotifications = await _notificationService.GetUserNotificationsAsync(userId, false, 100);
+            var notifications = allNotifications.Where(n => n.NotificationType != "BroadcastMessage").ToList();
+
+            // Get announcements (broadcast messages)
+            var announcements = await _notificationService.GetBroadcastMessagesAsync(locationId, roleId);
+
             var unreadCount = await _notificationService.GetUnreadCountAsync(userId);
 
             var viewModel = new NotificationListViewModel
@@ -105,6 +136,8 @@ namespace SalesMetrics.Controllers
                 UnreadCount = unreadCount,
                 TotalCount = notifications.Count
             };
+
+            ViewBag.Announcements = announcements;
 
             return View(viewModel);
         }

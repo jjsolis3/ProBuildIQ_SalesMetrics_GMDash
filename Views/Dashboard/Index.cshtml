@@ -874,7 +874,7 @@
         // in a Table Modal,  Display the Work Orders in a DataTable
         $(document).ready(function () {
             let offset = new URLSearchParams(window.location.search).get("weekOffset") || 0;
-            whsId: new URLSearchParams(window.location.search).get("whsId") || 0
+            let whsId = new URLSearchParams(window.location.search).get("whsId") || 0;
 
             $('.day-link').on('click', function (e) {
                 e.preventDefault();

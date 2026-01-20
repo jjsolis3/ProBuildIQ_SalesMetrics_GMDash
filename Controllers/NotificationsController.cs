@@ -121,12 +121,22 @@ namespace SalesMetrics.Controllers
             var roleId = GetCurrentRoleId();
             var locationId = int.Parse(User.FindFirst("LocationId")?.Value ?? "0");
 
-            // Get regular notifications (exclude broadcast messages)
+            // Get ALL notifications for the user (both read and unread)
             var allNotifications = await _notificationService.GetUserNotificationsAsync(userId, false, 100);
-            var notifications = allNotifications.Where(n => n.NotificationType != "BroadcastMessage").ToList();
 
-            // Get announcements (broadcast messages)
-            var announcements = await _notificationService.GetBroadcastMessagesAsync(locationId, roleId);
+            // Separate notifications: BroadcastMessage type goes to announcements, everything else to notifications
+            var notifications = allNotifications
+                .Where(n => n.NotificationType != "BroadcastMessage")
+                .OrderByDescending(n => n.CreatedDate)
+                .ToList();
+
+            var announcementsFromNotifications = allNotifications
+                .Where(n => n.NotificationType == "BroadcastMessage")
+                .OrderByDescending(n => n.CreatedDate)
+                .ToList();
+
+            // Also get company-wide broadcast messages from BroadcastMessages table
+            var broadcastMessages = await _notificationService.GetBroadcastMessagesAsync(locationId, roleId);
 
             var unreadCount = await _notificationService.GetUnreadCountAsync(userId);
 
@@ -137,7 +147,10 @@ namespace SalesMetrics.Controllers
                 TotalCount = notifications.Count
             };
 
-            ViewBag.Announcements = announcements;
+            // Combine both announcement sources for the view
+            ViewBag.Announcements = announcementsFromNotifications;
+            ViewBag.BroadcastMessages = broadcastMessages;
+            ViewBag.TotalAnnouncementsCount = announcementsFromNotifications.Count + broadcastMessages.Count;
 
             return View(viewModel);
         }

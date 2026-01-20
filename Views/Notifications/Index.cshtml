@@ -2,7 +2,9 @@
 
 @{
     ViewData["Title"] = "Notifications";
-    var announcements = ViewBag.Announcements as List<SalesMetrics.Models.BroadcastMessage> ?? new List<SalesMetrics.Models.BroadcastMessage>();
+    var announcementsFromNotifications = ViewBag.Announcements as List<SalesMetrics.Models.Notification> ?? new List<SalesMetrics.Models.Notification>();
+    var broadcastMessages = ViewBag.BroadcastMessages as List<SalesMetrics.Models.BroadcastMessage> ?? new List<SalesMetrics.Models.BroadcastMessage>();
+    var totalAnnouncementsCount = ViewBag.TotalAnnouncementsCount ?? 0;
 }
 
 <div class="container-fluid">
@@ -74,7 +76,7 @@
                                 <span class="d-block d-sm-none"><i class="fas fa-bullhorn"></i></span>
                                 <span class="d-none d-sm-block">
                                     <i class="fas fa-bullhorn me-1"></i> Announcements
-                                    <span class="badge bg-danger ms-2">@announcements.Count</span>
+                                    <span class="badge bg-danger ms-2">@totalAnnouncementsCount</span>
                                 </span>
                             </a>
                         </li>
@@ -193,7 +195,7 @@
                                 </h5>
                             </div>
 
-                            @if (announcements.Count == 0)
+                            @if (totalAnnouncementsCount == 0)
                             {
                                 <div class="text-center py-5">
                                     <i class="fas fa-bullhorn text-muted" style="font-size: 4rem;"></i>
@@ -203,7 +205,43 @@
                             else
                             {
                                 <div class="row">
-                                    @foreach (var announcement in announcements)
+                                    @* Display broadcast notification announcements *@
+                                    @foreach (var announcement in announcementsFromNotifications)
+                                    {
+                                        var timeAgo = (DateTime.Now - announcement.CreatedDate).TotalMinutes < 1 ? "just now" :
+                                                      (DateTime.Now - announcement.CreatedDate).TotalHours < 1 ? $"{(int)(DateTime.Now - announcement.CreatedDate).TotalMinutes} min ago" :
+                                                      (DateTime.Now - announcement.CreatedDate).TotalDays < 1 ? $"{(int)(DateTime.Now - announcement.CreatedDate).TotalHours} hr ago" :
+                                                      $"{(int)(DateTime.Now - announcement.CreatedDate).TotalDays} days ago";
+
+                                        <div class="col-md-12 mb-3">
+                                            <div class="card border-info">
+                                                <div class="card-body">
+                                                    <div class="d-flex align-items-start">
+                                                        <div class="avatar-lg bg-info bg-opacity-10 rounded me-3">
+                                                            <i class="fas fa-bullhorn text-info font-24 avatar-title"></i>
+                                                        </div>
+                                                        <div class="flex-grow-1">
+                                                            <h5 class="mb-2">@announcement.Title</h5>
+                                                            @if (!string.IsNullOrEmpty(announcement.Message))
+                                                            {
+                                                                <p class="text-muted mb-2">@announcement.Message</p>
+                                                            }
+                                                            <small class="text-muted">
+                                                                <i class="mdi mdi-clock-outline"></i> @timeAgo
+                                                                @if (!announcement.IsRead)
+                                                                {
+                                                                    <span class="badge bg-primary ms-2">New</span>
+                                                                }
+                                                            </small>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+
+                                    @* Display company-wide broadcast messages *@
+                                    @foreach (var announcement in broadcastMessages)
                                     {
                                         var priorityClass = announcement.Priority switch
                                         {

@@ -690,7 +690,7 @@ var PDFFieldConfigurator = (function () {
             mergeSpecInput.value = JSON.stringify(existingSpec, null, 2);
 
         } catch (error) {
-            console.error('Error saving coordinates to MergeSpec:', error);
+            // Error saving coordinates - fail silently
         }
     }
 
@@ -732,9 +732,8 @@ var PDFFieldConfigurator = (function () {
                 });
             });
 
-            console.log(`[PDFConfigurator] Loaded ${placedFields.length} existing field placements`);
         } catch (error) {
-            console.error('Error loading existing placements:', error);
+            // Error loading existing placements - will start fresh
         }
     }
 

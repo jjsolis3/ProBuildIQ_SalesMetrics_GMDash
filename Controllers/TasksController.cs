@@ -498,10 +498,13 @@ namespace SalesMetrics.Controllers
             int taskId = SaveTaskToDatabase(task);
             task.TaskID = taskId;
 
-            // Send notification to assigned user
+            // Send notification to assigned user (only if assigning to someone else)
             try
             {
-                await _notificationService.NotifyTaskAssignedAsync(taskId, model.AssignedTo, user.Users_Id, task.Title ?? "New Task");
+                if (model.AssignedTo != user.Users_Id)
+                {
+                    await _notificationService.NotifyTaskAssignedAsync(taskId, model.AssignedTo, user.Users_Id, task.Title ?? "New Task");
+                }
             }
             catch (Exception ex)
             {

@@ -179,11 +179,13 @@
                         </td>
                         <td>
                             @{
-                                var assignedUser = Model.Users?.FirstOrDefault(u => u.Users_ID == task.AssignedTo);
+                                // OPTIMIZATION: Use dictionary lookup O(1) instead of linear search O(N)
+                                var userLookup = ViewBag.UserLookup as Dictionary<int, string>;
+                                var assignedUserName = userLookup != null && userLookup.ContainsKey(task.AssignedTo)
+                                    ? userLookup[task.AssignedTo]
+                                    : "Unassigned";
                             }
-
-                            @(assignedUser != null ? $"{assignedUser.FirstName} {assignedUser.LastName}" : "Unassigned")
-
+                            @assignedUserName
                         </td>
                         <td>@task.CreatedBy</td>
                         <td data-order="@task.CreatedDate?.ToString("yyyy-MM-ddTHH:mm:ss")">@task.CreatedDate?.ToString("g")</td>

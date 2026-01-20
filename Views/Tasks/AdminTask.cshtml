@@ -132,100 +132,15 @@
 
 <div style="overflow-x: auto; width: 100%;">
 @*<div class="table-responsive">*@
-    @if (Model.Tasks != null && Model.Tasks.Any())
-    {
-        <table id="taskTable" class="table table-hover table-bordered table-striped dt-responsive" style="width:100%">
-            <thead class="table-dark">
-                <tr>
-                    <th>Title</th>
-                    <th>Description</th>
-                    <th>Type</th>
-                    <th>Property</th>
-                    <th>Location</th>
-                    <th>Due Date</th>
-                    <th>Completed Date</th>
-                    <th>Status</th>
-                    <th>Assigned To</th>
-                    <th>Created By</th>
-                    <th>Created Date</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var task in Model.Tasks)
-                {
-                    <tr id="task-row-@task.TaskID">
-                        <td>@task.Title</td>
-                        <td>@task.Description</td>
-                        <td>@task.Type</td>
-                        <td>@task.Property</td>
-                        <td>@task.Location</td>
-                        <td data-order="@task.DueDate?.ToString("yyyy-MM-ddTHH:mm:ss")">
-                            @(task.DueDate?.ToString("g") ?? "N/A")
-                        </td>
-                        <td data-order="@task.CompletedDate?.ToString("yyyy-MM-ddTHH:mm:ss")">
-                            @(task.CompletedDate?.ToString("g") ?? "N/A")
-                        </td>
-                        <td>
-                            <select class="form-select form-select-sm status-dropdown" data-task-id="@task.TaskID">
-                                <option selected disabled>@task.Status</option>
-                                <option value="Assigned">Assigned</option>
-                                <option value="Pending">Pending</option>
-                                <option value="In Progress">In Progress</option>
-                                <option value="In Review">In Review</option>
-                                <option value="Completed">Completed</option>
-                                <option value="Cancelled">Cancelled</option>
-                            </select>
-                        </td>
-                        <td>
-                            @{
-                                // OPTIMIZATION: Use dictionary lookup O(1) instead of linear search O(N)
-                                var userLookup = ViewBag.UserLookup as Dictionary<int, string>;
-                                var assignedUserName = userLookup != null && userLookup.ContainsKey(task.AssignedTo)
-                                    ? userLookup[task.AssignedTo]
-                                    : "Unassigned";
-                            }
-                            @assignedUserName
-                        </td>
-                        <td>@task.CreatedBy</td>
-                        <td data-order="@task.CreatedDate?.ToString("yyyy-MM-ddTHH:mm:ss")">@task.CreatedDate?.ToString("g")</td>
-                        <td>
-                            <div class="d-flex gap-1 align-items-center">
-                                <!-- Notes Button -->
-                                <button class="btn btn-sm btn-warning view-notes-btn" data-task-id="@task.TaskID" data-task-title="@task.Title" data-bs-toggle="modal" data-bs-target="#taskNotesModal">
-                                    <i class="fa fa-sticky-note fs-14"></i>
-                                </button>
-
-                                <!-- Existing Edit Button -->
-                                <button class="btn btn-sm btn-info" data-bs-toggle="modal" data-bs-target="#editTaskModal" data-task-id="@task.TaskID">
-                                    <i class="fa fa-edit fs-14"></i>
-                                </button>
-
-                                <!-- Existing Duplicate Button -->
-                                <button class="btn btn-sm btn-secondary duplicate-task-btn" data-task-id="@task.TaskID" data-bs-toggle="modal" data-bs-target="#duplicateTaskModal">
-                                    <i class="fa fa-copy fs-14"></i>
-                                </button>
-
-                                <!-- Existing Delete Form -->
-                                <form id="deleteForm-@task.TaskID" method="post" asp-action="Delete" asp-controller="Tasks">
-                                    <input type="hidden" name="taskId" value="@task.TaskID" />
-                                    <input type="hidden" name="returnUrl" value="@Context.Request.Path" />
-                                    <button type="button" class="btn btn-sm btn-danger" onclick="confirmDelete(@task.TaskID)">
-                                        <i class="fa fa-trash"></i>
-                                    </button>
-                                </form>
-                            </div>
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    }
-    else
-    {
-        <table id="taskTable" class="table d-none"></table>
-        <div class="alert alert-info">No tasks found.</div>
-    }
+    @* SERVER-SIDE PAGINATION: Empty table - DataTables populates via AJAX *@
+    <table id="taskTable" class="table table-hover table-bordered table-striped dt-responsive" style="width:100%">
+        <thead class="table-dark">
+            @* Column headers defined in DataTables configuration *@
+        </thead>
+        <tbody>
+            @* Rows populated by DataTables server-side processing *@
+        </tbody>
+    </table>
 </div>
 
 <!-- Create Modal -->
@@ -352,23 +267,91 @@
 
     <script>
         $(document).ready(function () {
+            var currentFilter = '@ViewBag.CurrentFilter' || 'all';
+
             var table = $('#taskTable').DataTable({
-                order: [[10, 'desc'], [8, 'asc']],
+                processing: true,
+                serverSide: true,  // Enable server-side processing
+                ajax: {
+                    url: '@Url.Action("GetAdminTasksData", "Tasks")',
+                    type: 'POST',
+                    data: function(d) {
+                        d.filter = currentFilter;  // Pass current filter to server
+                    },
+                    error: function(xhr, error, code) {
+                        console.error('DataTable error:', error);
+                        console.error('Response:', xhr.responseText);
+                    }
+                },
+                columns: [
+                    { data: 'taskId', title: 'ID', visible: false },
+                    { data: 'title', title: 'Title' },
+                    { data: 'description', title: 'Description', visible: false },
+                    { data: 'dueDate', title: 'Due Date' },
+                    { data: 'assignedTo', title: 'Assigned To' },
+                    { data: 'property', title: 'Property' },
+                    { data: 'type', title: 'Type' },
+                    {
+                        data: 'status',
+                        title: 'Status',
+                        render: function(data, type, row) {
+                            // Return plain text for sorting/filtering, HTML for display
+                            if (type === 'display') {
+                                return `<select class="form-select form-select-sm status-select" data-task-id="${row.taskId}">
+                                    <option value="Pending" ${data === 'Pending' ? 'selected' : ''}>Pending</option>
+                                    <option value="In Progress" ${data === 'In Progress' ? 'selected' : ''}>In Progress</option>
+                                    <option value="Completed" ${data === 'Completed' ? 'selected' : ''}>Completed</option>
+                                    <option value="Cancelled" ${data === 'Cancelled' ? 'selected' : ''}>Cancelled</option>
+                                </select>`;
+                            }
+                            return data;
+                        }
+                    },
+                    { data: 'createdDate', title: 'Created', visible: false },
+                    {
+                        data: null,
+                        title: 'Actions',
+                        orderable: false,
+                        searchable: false,
+                        render: function(data, type, row) {
+                            return `<div class="d-flex gap-1 align-items-center">
+                                <button class="btn btn-sm btn-warning view-notes-btn"
+                                    data-task-id="${row.taskId}"
+                                    data-task-title="${row.title}"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#taskNotesModal">
+                                    <i class="fa fa-sticky-note fs-14"></i>
+                                </button>
+                                <button class="btn btn-sm btn-info"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#editTaskModal"
+                                    data-task-id="${row.taskId}">
+                                    <i class="fa fa-edit fs-14"></i>
+                                </button>
+                                <button class="btn btn-sm btn-secondary duplicate-task-btn"
+                                    data-task-id="${row.taskId}"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#duplicateTaskModal">
+                                    <i class="fa fa-copy fs-14"></i>
+                                </button>
+                                <button type="button" class="btn btn-sm btn-danger"
+                                    onclick="confirmDelete(${row.taskId})">
+                                    <i class="fa fa-trash"></i>
+                                </button>
+                            </div>`;
+                        }
+                    }
+                ],
+                order: [[3, 'asc']],  // Sort by Due Date ascending
                 responsive: true,
-                rowReorder: true,
                 scrollX: true,
+                pageLength: 25,  // Show 25 records per page
+                lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
                 dom: `
-                    <"top mb-2"P>
                     <"top d-flex justify-content-between align-items-center mb-3" lBf>
                     rt
                     <"bottom d-flex justify-content-between align-items-center mt-3" ip>
                 `,
-                searchPanes: {
-                    cascadePanes: true,
-                    viewTotal: true,
-                    layout: 'columns-3',
-                    initCollapsed: true
-                },
                 buttons: [
                     {
                         extend: 'colvis',
@@ -443,11 +426,6 @@
                         }
                     }
                 ],
-                columnDefs: [
-                    { searchPanes: { show: true }, targets: [2, 7, 8] },
-                    { searchPanes: { show: false }, targets: '_all' }
-                ],
-                processing: true,
                 initComplete: function () {
                     $('#taskTable_wrapper .dt-buttons').appendTo('#taskButtons');
                 }
@@ -498,9 +476,8 @@
     }
 
     <script>
-        // Inline Status Update
-        //$(".status-dropdown").change(function () {
-        $('#taskTable tbody').on("change", ".status-dropdown", function () {
+        // Inline Status Update - Event delegation for dynamically loaded rows
+        $('#taskTable tbody').on("change", ".status-select", function () {
 
             var taskId = $(this).data("task-id");
             var newStatus = $(this).val();

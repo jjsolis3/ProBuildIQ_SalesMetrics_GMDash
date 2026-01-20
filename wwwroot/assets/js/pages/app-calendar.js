@@ -45,8 +45,15 @@ class CalendarSchedule {
 
         const taskId = task.id;
         notesContainer.innerHTML = '<div class="text-muted center"><i class="fa fa-spinner fa-spin"></i></div>'; // Loading spinner'
-        fetch(`/Tasks/GetNotesForTask?taskId=${taskId}`)
-            .then(response => response.json())
+
+        const controller1 = new AbortController();
+        const timeout1 = setTimeout(() => controller1.abort(), 10000);
+
+        fetch(`/Tasks/GetNotesForTask?taskId=${taskId}`, { signal: controller1.signal })
+            .then(response => {
+                clearTimeout(timeout1);
+                return response.json();
+            })
             .then(notes => {
                 if (notes.length === 0) {
                     notesContainer.innerHTML = '<div class="text-muted center">No notes available.</div>';
@@ -60,6 +67,7 @@ class CalendarSchedule {
                 }
             })
             .catch(error => {
+                clearTimeout(timeout1);
                 notesContainer.innerHTML = '<div class="text-danger center">Error loading notes.</div>';
             });
 
@@ -68,13 +76,22 @@ class CalendarSchedule {
             const noteText = newNoteInput.value.trim();
             if (!noteText) return;
 
-            fetch(`/Tasks/AddNoteToTask?taskId=${taskId}&noteText=${encodeURIComponent(noteText)}`, { method: 'POST' })
+            const controller2 = new AbortController();
+            const timeout2 = setTimeout(() => controller2.abort(), 10000);
+
+            fetch(`/Tasks/AddNoteToTask?taskId=${taskId}&noteText=${encodeURIComponent(noteText)}`, {
+                method: 'POST',
+                signal: controller2.signal
+            })
                 .then(response => {
+                    clearTimeout(timeout2);
                     if (response.ok) {
                         newNoteInput.value = ''; // Clear input
                         addNoteBtn.disabled = true; // Disable button
                         // Re-Fetch notes
-                        return fetch(`/Tasks/GetNotesForTask?taskId=${taskId}`);
+                        const controller3 = new AbortController();
+                        const timeout3 = setTimeout(() => controller3.abort(), 10000);
+                        return fetch(`/Tasks/GetNotesForTask?taskId=${taskId}`, { signal: controller3.signal });
                     } else {
                         throw new Error('Failed to add note.');
                     }
@@ -90,7 +107,7 @@ class CalendarSchedule {
                     addNoteBtn.disabled = false; // Re-enable button
                 })
                 .catch(error => {
-                    console.error(error);
+                    clearTimeout(timeout2);
                     notesContainer.innerHTML = '<div class="text-danger center">Error loading notes.</div>';
                     addNoteBtn.disabled = false; // Re-enable button
                 });
@@ -149,8 +166,14 @@ class CalendarSchedule {
             events: function (fetchInfo, successCallback, failureCallback) {
                 const hideCompleted = document.getElementById('hideCompletedToggle')?.checked ? true : false;
 
-                fetch(`/Tasks/GetCalendarEvents?hideCompleted=${hideCompleted}`)
-                    .then(response => response.json())
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+                fetch(`/Tasks/GetCalendarEvents?hideCompleted=${hideCompleted}`, { signal: controller.signal })
+                    .then(response => {
+                        clearTimeout(timeoutId);
+                        return response.json();
+                    })
                     .then(events => {
                         const selectedUser = document.getElementById('userFilter')?.value;
 
@@ -161,7 +184,7 @@ class CalendarSchedule {
                         successCallback(events);
                     })
                     .catch(error => {
-                        console.error('Error fetching events:', error);
+                        clearTimeout(timeoutId);
                         failureCallback(error);
                     });
             },
@@ -197,11 +220,11 @@ class CalendarSchedule {
                 const task = info.event;
                 const newDate = task.start;
 
-                // Optional: Show a loading indicator or confirmation
-                console.log("Task dropped:", task.title, newDate);
-
                 // Send the update to the server
                 try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
                     const response = await fetch('/Tasks/UpdateDueDate', {
                         method: 'POST',
                         headers: {
@@ -212,16 +235,26 @@ class CalendarSchedule {
                             taskId: task.id,
                             title: task.title,
                             newDate: newDate.toISOString()
-                        })
+                        }),
+                        signal: controller.signal
                     });
 
+                    clearTimeout(timeoutId);
                     const result = await response.json();
                     if (!result.success) {
-                        alert("Failed to update task time.");
+                        if (typeof toastr !== 'undefined') {
+                            toastr.error('Failed to update task time.');
+                        }
                         info.revert(); // Rollback
+                    } else {
+                        if (typeof toastr !== 'undefined') {
+                            toastr.success('Task time updated successfully.');
+                        }
                     }
                 } catch (error) {
-                    alert("Error updating task.");
+                    if (typeof toastr !== 'undefined') {
+                        toastr.error('Error updating task.');
+                    }
                     info.revert(); // Rollback
                 }
             }
@@ -285,7 +318,11 @@ class CalendarSchedule {
         const url = `/Tasks/EditModalPartial/${taskId}`;
 
         try {
-            const response = await fetch(url);
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+            const response = await fetch(url, { signal: controller.signal });
+            clearTimeout(timeoutId);
             const htmlContent = await response.text();
 
             // Create a wrapper modal element
@@ -306,12 +343,22 @@ class CalendarSchedule {
             const bootstrapModal = new bootstrap.Modal(modalElement);
             bootstrapModal.show();
 
-            // Remove modal from DOM after it is closed
+            // Remove modal from DOM after it is closed - with proper cleanup
             modalElement.addEventListener('hidden.bs.modal', () => {
-                modalWrapper.remove();
-            });
+                // Dispose bootstrap modal instance first
+                if (bootstrapModal) {
+                    bootstrapModal.dispose();
+                }
+                // Then remove from DOM
+                if (modalWrapper && modalWrapper.parentNode) {
+                    modalWrapper.remove();
+                }
+            }, { once: true }); // Use 'once' to ensure cleanup happens only once
         } catch (error) {
-            console.error('Error loading edit modal:', error);
+            // Silently fail or use toastr
+            if (typeof toastr !== 'undefined') {
+                toastr.error('Error loading edit modal');
+            }
         }
     }
 }
@@ -322,4 +369,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Expose globally
     window.salesMetricsCalendar = calendar.calendarObj;
+
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', () => {
+        // Destroy calendar instance
+        if (window.salesMetricsCalendar) {
+            window.salesMetricsCalendar.destroy();
+            window.salesMetricsCalendar = null;
+        }
+
+        // Cleanup modal if exists
+        const modal = calendar.modal;
+        if (modal) {
+            modal.dispose();
+        }
+    });
 });

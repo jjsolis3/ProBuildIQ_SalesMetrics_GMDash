@@ -213,15 +213,29 @@
                                                       (DateTime.Now - announcement.CreatedDate).TotalDays < 1 ? $"{(int)(DateTime.Now - announcement.CreatedDate).TotalHours} hr ago" :
                                                       $"{(int)(DateTime.Now - announcement.CreatedDate).TotalDays} days ago";
 
-                                        <div class="col-md-12 mb-3">
-                                            <div class="card border-info">
+                                        <div class="col-md-12 mb-3" id="announcement-@announcement.NotificationId">
+                                            <div class="card border-info @(announcement.IsRead ? "" : "bg-light")">
                                                 <div class="card-body">
                                                     <div class="d-flex align-items-start">
                                                         <div class="avatar-lg bg-info bg-opacity-10 rounded me-3">
                                                             <i class="fas fa-bullhorn text-info font-24 avatar-title"></i>
                                                         </div>
                                                         <div class="flex-grow-1">
-                                                            <h5 class="mb-2">@announcement.Title</h5>
+                                                            <div class="d-flex justify-content-between align-items-start">
+                                                                <h5 class="mb-2 @(announcement.IsRead ? "" : "fw-bold")">@announcement.Title</h5>
+                                                                <div class="btn-group btn-group-sm ms-2">
+                                                                    <button type="button" class="btn btn-light"
+                                                                            onclick="toggleAnnouncementReadStatus(@announcement.NotificationId, @announcement.IsRead.ToString().ToLower())"
+                                                                            title="@(announcement.IsRead ? "Mark as unread" : "Mark as read")">
+                                                                        <i class="fas fa-@(announcement.IsRead ? "envelope" : "envelope-open")"></i>
+                                                                    </button>
+                                                                    <button type="button" class="btn btn-light"
+                                                                            onclick="deleteAnnouncement(@announcement.NotificationId)"
+                                                                            title="Delete">
+                                                                        <i class="fas fa-trash text-danger"></i>
+                                                                    </button>
+                                                                </div>
+                                                            </div>
                                                             @if (!string.IsNullOrEmpty(announcement.Message))
                                                             {
                                                                 <p class="text-muted mb-2">@announcement.Message</p>
@@ -460,5 +474,103 @@
                 console.error('Error getting unread count:', error);
             }
         });
+    }
+
+    // Toggle announcement read/unread status
+    function toggleAnnouncementReadStatus(notificationId, isCurrentlyRead) {
+        const newStatus = !isCurrentlyRead;
+
+        $.ajax({
+            url: '/Notifications/ToggleRead',
+            type: 'POST',
+            contentType: 'application/json',
+            headers: {
+                'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+            },
+            data: JSON.stringify({ NotificationId: notificationId, IsRead: newStatus }),
+            success: function (response) {
+                if (response.success) {
+                    const $announcement = $(`#announcement-${notificationId}`);
+                    const $card = $announcement.find('.card');
+                    const $title = $announcement.find('h5').first();
+                    const $icon = $announcement.find('.btn-group button:first i');
+
+                    if (newStatus) {
+                        // Mark as read
+                        $card.removeClass('bg-light');
+                        $title.removeClass('fw-bold');
+                        $announcement.find('.badge.bg-primary').remove();
+                        $icon.removeClass('fa-envelope-open').addClass('fa-envelope');
+                        $announcement.find('.btn-group button:first').attr('title', 'Mark as unread');
+                    } else {
+                        // Mark as unread
+                        $card.addClass('bg-light');
+                        $title.addClass('fw-bold');
+                        $announcement.find('small.text-muted').first().append('<span class="badge bg-primary ms-2">New</span>');
+                        $icon.removeClass('fa-envelope').addClass('fa-envelope-open');
+                        $announcement.find('.btn-group button:first').attr('title', 'Mark as read');
+                    }
+
+                    updateUnreadCount();
+
+                    if (typeof toastr !== 'undefined') {
+                        toastr.success(newStatus ? 'Announcement marked as read' : 'Announcement marked as unread');
+                    }
+                }
+            },
+            error: function (xhr, status, error) {
+                console.error('Error toggling announcement status:', error);
+                if (typeof toastr !== 'undefined') {
+                    toastr.error('Failed to update announcement status');
+                }
+            }
+        });
+    }
+
+    // Delete announcement
+    function deleteAnnouncement(notificationId) {
+        if (confirm('Are you sure you want to delete this announcement?')) {
+            $.ajax({
+                url: '/Notifications/Delete',
+                type: 'POST',
+                contentType: 'application/json',
+                headers: {
+                    'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                },
+                data: JSON.stringify({ NotificationId: notificationId }),
+                success: function (response) {
+                    if (response.success) {
+                        $(`#announcement-${notificationId}`).fadeOut(300, function () {
+                            $(this).remove();
+                            updateUnreadCount();
+
+                            // Update announcements count badge
+                            const remainingCount = $('#announcements-tab .col-md-12').length - 1;
+                            $('#announcements-tab .badge').text(remainingCount);
+
+                            // Check if announcements list is empty
+                            if (remainingCount === 0) {
+                                $('#announcements-tab .row').html(`
+                                    <div class="text-center py-5">
+                                        <i class="fas fa-bullhorn text-muted" style="font-size: 4rem;"></i>
+                                        <p class="text-muted mt-3">No announcements at this time</p>
+                                    </div>
+                                `);
+                            }
+                        });
+
+                        if (typeof toastr !== 'undefined') {
+                            toastr.success('Announcement deleted');
+                        }
+                    }
+                },
+                error: function (xhr, status, error) {
+                    console.error('Error deleting announcement:', error);
+                    if (typeof toastr !== 'undefined') {
+                        toastr.error('Failed to delete announcement');
+                    }
+                }
+            });
+        }
     }
 </script>

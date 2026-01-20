@@ -97,18 +97,13 @@ namespace SalesMetrics.Controllers
             int locationId = LocationHelper.GetCurrentLocationId(HttpContext);
             int salesmanId = int.Parse(User.FindFirst("SalesmanId")?.Value ?? "0");
 
-            // OPTIMIZATION: Pass filter to database query instead of filtering in-memory
-            var tasks = GetAllTasksByLocation(locationId, filter);
-
-            // OPTIMIZATION: Use cached users instead of direct database call
+            // SERVER-SIDE PAGINATION: Don't load tasks here, they'll be loaded via AJAX
+            // Only load users for the task creation form
             var users = GetCachedUsers(Convert.ToInt32(locationId), roleId);
-
-            // OPTIMIZATION: Build user lookup dictionary to eliminate N+1 in view
-            var userLookup = users.ToDictionary(u => u.Users_ID, u => $"{u.FirstName} {u.LastName}");
 
             var viewModel = new TaskPageViewModel
             {
-                Tasks = tasks,
+                Tasks = new List<SalesTask>(), // Empty list - tasks loaded via AJAX
                 Users = users,
                 NewTask = new SalesTask
                 {
@@ -116,20 +111,85 @@ namespace SalesMetrics.Controllers
                 }
             };
 
-            // In Task() action and any other that renders the task modal:
-
             ViewBag.Users_Id = users_Id;
             ViewBag.UserId = userId;
             ViewBag.RoleId = roleId;
             ViewBag.LocationId = locationId;
             ViewBag.SalesmanId = salesmanId;
             ViewBag.TaskTypes = TaskTypeHelper.GetTaskTypes("AdminTask");
-            ViewBag.UserLookup = userLookup; // OPTIMIZATION: Pass user lookup dictionary to view
+            ViewBag.CurrentFilter = filter; // Pass filter to view
 
             // Add ReturnUrl ViewBag
             ViewBag.ReturnUrl = Url.Action("AdminTask", "Tasks", new { filter });
 
             return View(viewModel);
+        }
+
+        /// <summary>
+        /// Server-side DataTables endpoint for AdminTask page with pagination
+        /// </summary>
+        [HttpPost]
+        public IActionResult GetAdminTasksData(string filter = "all")
+        {
+            try
+            {
+                // Get current user context
+                int roleId = int.Parse(User.FindFirst("RoleId")?.Value ?? "0");
+                int locationId = LocationHelper.GetCurrentLocationId(HttpContext);
+
+                // Get DataTables parameters from request
+                var draw = HttpContext.Request.Form["draw"].FirstOrDefault();
+                var start = Request.Form["start"].FirstOrDefault();
+                var length = Request.Form["length"].FirstOrDefault();
+                var searchValue = Request.Form["search[value]"].FirstOrDefault();
+                var sortColumn = Request.Form["order[0][column]"].FirstOrDefault();
+                var sortDirection = Request.Form["order[0][dir]"].FirstOrDefault();
+
+                int pageSize = length != null ? Convert.ToInt32(length) : 10;
+                int skip = start != null ? Convert.ToInt32(start) : 0;
+
+                // Get cached users for lookup
+                var users = GetCachedUsers(locationId, roleId);
+                var userLookup = users.ToDictionary(u => u.Users_ID, u => $"{u.FirstName} {u.LastName}");
+
+                // Get paginated tasks
+                var (tasks, totalRecords, filteredRecords) = GetPaginatedTasksByLocation(
+                    locationId, filter, skip, pageSize, searchValue, sortColumn, sortDirection, userLookup);
+
+                // Format data for DataTables
+                var data = tasks.Select(task => new
+                {
+                    taskId = task.TaskID,
+                    title = task.Title ?? "",
+                    description = task.Description ?? "",
+                    status = task.Status ?? "",
+                    dueDate = task.DueDate?.ToString("MM/dd/yyyy hh:mm tt") ?? "",
+                    assignedTo = userLookup.ContainsKey(task.AssignedTo) ? userLookup[task.AssignedTo] : "Unassigned",
+                    assignedToId = task.AssignedTo,
+                    property = task.Property ?? "",
+                    type = task.Type ?? "",
+                    createdDate = task.CreatedDate?.ToString("MM/dd/yyyy hh:mm tt") ?? ""
+                }).ToList();
+
+                return Json(new
+                {
+                    draw = draw,
+                    recordsTotal = totalRecords,
+                    recordsFiltered = filteredRecords,
+                    data = data
+                });
+            }
+            catch (Exception ex)
+            {
+                return Json(new
+                {
+                    draw = 0,
+                    recordsTotal = 0,
+                    recordsFiltered = 0,
+                    data = new List<object>(),
+                    error = ex.Message
+                });
+            }
         }
 
         public IActionResult Task(string filter = "all")
@@ -659,6 +719,151 @@ namespace SalesMetrics.Controllers
             }
 
             return tasks;
+        }
+
+        /// <summary>
+        /// Get paginated tasks with sorting and searching for DataTables server-side processing
+        /// </summary>
+        private (List<SalesTask> tasks, int totalRecords, int filteredRecords) GetPaginatedTasksByLocation(
+            int locationId, string filter, int skip, int pageSize, string searchValue,
+            string sortColumn, string sortDirection, Dictionary<int, string> userLookup)
+        {
+            string connectionString = _configuration.GetConnectionString("SalesMetrics");
+            var tasks = new List<SalesTask>();
+            int totalRecords = 0;
+            int filteredRecords = 0;
+
+            try
+            {
+                using (SqlConnection conn = new SqlConnection(connectionString))
+                {
+                    conn.Open();
+
+                    // Build status filter
+                    string statusFilter = filter switch
+                    {
+                        "active" => "AND Status != 'Completed' AND Status != 'Cancelled'",
+                        "completed" => "AND Status = 'Completed'",
+                        _ => "" // "all" - no additional filter
+                    };
+
+                    // Build search filter
+                    string searchFilter = "";
+                    if (!string.IsNullOrEmpty(searchValue))
+                    {
+                        searchFilter = @"AND (
+                            Title LIKE @SearchValue OR
+                            Description LIKE @SearchValue OR
+                            Property LIKE @SearchValue OR
+                            Type LIKE @SearchValue OR
+                            Status LIKE @SearchValue
+                        )";
+                    }
+
+                    // Map column index to column name for sorting
+                    string orderByColumn = sortColumn switch
+                    {
+                        "0" => "TaskID",
+                        "1" => "Title",
+                        "2" => "Status",
+                        "3" => "DueDate",
+                        "4" => "AssignedTo",
+                        "5" => "Property",
+                        "6" => "Type",
+                        _ => "DueDate" // Default sort by DueDate
+                    };
+
+                    string orderByDirection = sortDirection == "asc" ? "ASC" : "DESC";
+
+                    // Get total count (before search filter)
+                    string countQuery = $@"
+                        SELECT COUNT(*)
+                        FROM Tasks
+                        WHERE Location = @LocationId
+                            AND Status != 'Deleted'
+                            {statusFilter}
+                    ";
+
+                    SqlCommand countCmd = new SqlCommand(countQuery, conn);
+                    countCmd.Parameters.AddWithValue("@LocationId", locationId);
+                    totalRecords = (int)countCmd.ExecuteScalar();
+
+                    // Get filtered count (with search filter)
+                    string filteredCountQuery = $@"
+                        SELECT COUNT(*)
+                        FROM Tasks
+                        WHERE Location = @LocationId
+                            AND Status != 'Deleted'
+                            {statusFilter}
+                            {searchFilter}
+                    ";
+
+                    SqlCommand filteredCountCmd = new SqlCommand(filteredCountQuery, conn);
+                    filteredCountCmd.Parameters.AddWithValue("@LocationId", locationId);
+                    if (!string.IsNullOrEmpty(searchValue))
+                    {
+                        filteredCountCmd.Parameters.AddWithValue("@SearchValue", $"%{searchValue}%");
+                    }
+                    filteredRecords = (int)filteredCountCmd.ExecuteScalar();
+
+                    // Get paginated data with indexes
+                    string dataQuery = $@"
+                        SELECT TaskID, Title, Description, DueDate, Status, AssignedTo,
+                               Location, Property, Type, CreatedBy, CreatedDate, ModifiedDate,
+                               CompletedDate, CancelledDate, IsSyncedToGoogle
+                        FROM Tasks WITH (INDEX(IX_Tasks_Location_Status))
+                        WHERE Location = @LocationId
+                            AND Status != 'Deleted'
+                            {statusFilter}
+                            {searchFilter}
+                        ORDER BY {orderByColumn} {orderByDirection}
+                        OFFSET @Skip ROWS
+                        FETCH NEXT @PageSize ROWS ONLY
+                    ";
+
+                    SqlCommand dataCmd = new SqlCommand(dataQuery, conn);
+                    dataCmd.Parameters.AddWithValue("@LocationId", locationId);
+                    dataCmd.Parameters.AddWithValue("@Skip", skip);
+                    dataCmd.Parameters.AddWithValue("@PageSize", pageSize);
+                    if (!string.IsNullOrEmpty(searchValue))
+                    {
+                        dataCmd.Parameters.AddWithValue("@SearchValue", $"%{searchValue}%");
+                    }
+
+                    using (SqlDataReader reader = dataCmd.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            var task = new SalesTask
+                            {
+                                TaskID = reader.GetInt32(reader.GetOrdinal("TaskID")),
+                                Title = reader.GetString(reader.GetOrdinal("Title")),
+                                Description = reader.IsDBNull(reader.GetOrdinal("Description")) ? "" : reader.GetString(reader.GetOrdinal("Description")),
+                                DueDate = reader.IsDBNull(reader.GetOrdinal("DueDate")) ? DateTime.Today.AddDays(1) : reader.GetDateTime(reader.GetOrdinal("DueDate")),
+                                Status = reader.GetString(reader.GetOrdinal("Status")),
+                                AssignedTo = reader.GetInt32(reader.GetOrdinal("AssignedTo")),
+                                Location = reader.IsDBNull(reader.GetOrdinal("Location")) ? 0 : reader.GetInt32(reader.GetOrdinal("Location")),
+                                Property = reader.IsDBNull(reader.GetOrdinal("Property")) ? "" : reader.GetString(reader.GetOrdinal("Property")),
+                                Type = reader.IsDBNull(reader.GetOrdinal("Type")) ? "" : reader.GetString(reader.GetOrdinal("Type")),
+                                CreatedBy = reader.IsDBNull(reader.GetOrdinal("CreatedBy")) ? "" : reader.GetString(reader.GetOrdinal("CreatedBy")),
+                                CreatedDate = reader.IsDBNull(reader.GetOrdinal("CreatedDate")) ? DateTime.Now : reader.GetDateTime(reader.GetOrdinal("CreatedDate")),
+                                ModifiedDate = reader.IsDBNull(reader.GetOrdinal("ModifiedDate")) ? (DateTime?)null : reader.GetDateTime(reader.GetOrdinal("ModifiedDate")),
+                                CompletedDate = reader.IsDBNull(reader.GetOrdinal("CompletedDate")) ? (DateTime?)null : reader.GetDateTime(reader.GetOrdinal("CompletedDate")),
+                                CancelledDate = reader.IsDBNull(reader.GetOrdinal("CancelledDate")) ? (DateTime?)null : reader.GetDateTime(reader.GetOrdinal("CancelledDate")),
+                                IsSyncedToGoogle = reader.IsDBNull(reader.GetOrdinal("IsSyncedToGoogle")) ? false : reader.GetBoolean(reader.GetOrdinal("IsSyncedToGoogle"))
+                            };
+
+                            tasks.Add(task);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error retrieving paginated tasks: " + ex.Message);
+            }
+
+            return (tasks, totalRecords, filteredRecords);
         }
 
         private List<SalesTask> GetTasksByUserId(int users_Id, int locationId)

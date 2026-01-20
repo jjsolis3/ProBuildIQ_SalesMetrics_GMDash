@@ -1265,7 +1265,6 @@ WHERE condition = 'value'
                 });
 
                 // Submit to backend
-                console.log('Submitting tables:', selectedTables);
 
                 $.ajax({
                     url: '@Url.Action("CreateStep1", "ReportBuilder")',
@@ -1275,21 +1274,17 @@ WHERE condition = 'value'
                         selectedTableIds: selectedTables.map(t => t.id)
                     }),
                     success: function(response) {
-                        console.log('Server response:', response);
 
                         if (response.success) {
                             Swal.close();
 
                             // Check if we should go to Step 1.5 (Relationships) or Step 2 (Columns)
                             if (response.nextStep === 1.5) {
-                                console.log('Loading Step 1.5 (Relationships) with tables:', response.tablesWithColumns);
                                 loadStep1_5(response.tablesWithColumns);
                             } else if (response.nextStep === 2) {
-                                console.log('Loading Step 2 (Columns) - single table selected');
                                 loadStep2(response.columns);
                             }
                         } else {
-                            console.error('Server returned error:', response.message);
                             Swal.fire({
                                 icon: 'error',
                                 title: 'Error',
@@ -1298,7 +1293,6 @@ WHERE condition = 'value'
                         }
                     },
                     error: function(xhr, status, error) {
-                        console.error('AJAX error:', {
                             status: xhr.status,
                             statusText: xhr.statusText,
                             responseText: xhr.responseText,
@@ -1322,7 +1316,6 @@ WHERE condition = 'value'
             let relationshipIdCounter = 0;
 
             function loadStep1_5(tables) {
-                console.log('loadStep1_5 called with tables:', tables);
                 tablesWithColumns = tables;
 
                 // Hide Step 1, show Step 1.5
@@ -1333,7 +1326,6 @@ WHERE condition = 'value'
                 // Don't mark Step 2 as active yet since we're still configuring table relationships
                 $('.wizard-step:nth-child(1)').addClass('active');
 
-                console.log('Step 1.5 container shown');
 
                 // Auto-add first relationship
                 addRelationship();
@@ -1341,7 +1333,6 @@ WHERE condition = 'value'
                 // Setup Step 1.5 events
                 setupStep1_5Events();
 
-                console.log('Step 1.5 loaded successfully');
             }
 
             function setupStep1_5Events() {
@@ -1572,7 +1563,6 @@ WHERE condition = 'value'
                     AdditionalCondition: r.additionalCondition || null
                 }));
 
-                console.log('Submitting relationships:', relationshipsData);
 
                 // Submit to backend
                 $.ajax({
@@ -1583,11 +1573,9 @@ WHERE condition = 'value'
                         Relationships: relationshipsData
                     }),
                     success: function(response) {
-                        console.log('Step 1.5 response:', response);
 
                         if (response.success) {
                             Swal.close();
-                            console.log('Loading Step 2 with columns:', response.columns);
                             loadStep2(response.columns);
                         } else {
                             Swal.fire({
@@ -1598,7 +1586,6 @@ WHERE condition = 'value'
                         }
                     },
                     error: function(xhr, status, error) {
-                        console.error('AJAX error:', xhr, status, error);
                         Swal.fire({
                             icon: 'error',
                             title: 'Error',
@@ -1615,7 +1602,6 @@ WHERE condition = 'value'
             let selectedColumns = [];
 
             function loadStep2(columns) {
-                console.log('loadStep2 called with', columns.length, 'columns');
 
                 if (!columns || columns.length === 0) {
                     Swal.fire({
@@ -1635,13 +1621,11 @@ WHERE condition = 'value'
                 $('.wizard-step:nth-child(2)').addClass('active');
                 $('#step2Container').show();
 
-                console.log('Step 2 container shown');
 
                 try {
                     // Group columns by table
                     const groupedColumns = {};
                     columns.forEach(col => {
-                        console.log('Processing column:', col);
                         if (!groupedColumns[col.tableName]) {
                             groupedColumns[col.tableName] = {
                                 displayName: col.tableDisplayName,
@@ -1651,12 +1635,10 @@ WHERE condition = 'value'
                         groupedColumns[col.tableName].columns.push(col);
                     });
 
-                    console.log('Grouped columns:', groupedColumns);
 
                     // Render column groups
                     let html = '';
                     for (const [tableName, group] of Object.entries(groupedColumns)) {
-                        console.log('Rendering table group:', tableName, group);
                         html += `
                             <div class="column-table-group">
                                 <div class="table-group-header">
@@ -1694,16 +1676,12 @@ WHERE condition = 'value'
                         `;
                     }
 
-                    console.log('Setting HTML to container');
                     $('#columnGroupsContainer').html(html);
 
-                    console.log('Binding Step 2 events');
                     // Bind events
                     setupStep2Events();
 
-                    console.log('Step 2 loaded successfully');
                 } catch (error) {
-                    console.error('Error in loadStep2:', error);
                     Swal.fire({
                         icon: 'error',
                         title: 'JavaScript Error',
@@ -1849,7 +1827,6 @@ WHERE condition = 'value'
                         return;
                     }
 
-                    console.log('Submitting columns:', selectedColumns);
 
                     // Submit to backend
                     $.ajax({
@@ -1860,7 +1837,6 @@ WHERE condition = 'value'
                             selectedColumns: selectedColumns
                         }),
                         success: function(response) {
-                            console.log('Step 2 response:', response);
                             if (response.success) {
                                 loadStep3(response.selectedColumns);
                             } else {
@@ -1872,7 +1848,6 @@ WHERE condition = 'value'
                             }
                         },
                         error: function(xhr, status, error) {
-                            console.error('AJAX error:', { status: xhr.status, error: error });
                             Swal.fire({
                                 icon: 'error',
                                 title: 'Error',
@@ -1913,7 +1888,6 @@ WHERE condition = 'value'
             let filterIdCounter = 0;
 
             function loadStep3(columns) {
-                console.log('loadStep3 called with', columns.length, 'columns');
 
                 reportColumns = columns;
 
@@ -1923,7 +1897,6 @@ WHERE condition = 'value'
                 $('.wizard-step:nth-child(2)').addClass('completed');
                 $('.wizard-step:nth-child(3)').addClass('active');
 
-                console.log('Step 3 container shown');
 
                 // Setup Step 3 events
                 setupStep3Events();
@@ -1949,7 +1922,6 @@ WHERE condition = 'value'
                 // Next button (Step 3) - Proceed to Step 4 (Preview)
                 $('#btnNextStep3').off('click').on('click', function() {
                     // Filters are optional, so we can proceed even with 0 filters
-                    console.log('Filters:', filters);
 
                     // Proceed to Step 4 (Preview)
                     loadStep4();
@@ -2095,7 +2067,6 @@ WHERE condition = 'value'
 
             // Load Step 4 in SQL Mode
             function loadStep4SqlMode() {
-                console.log('Loading Step 4 (Preview) in SQL Mode');
 
                 // Show wizard container to display Step 4
                 $('#wizardContainer').show();
@@ -2117,7 +2088,6 @@ WHERE condition = 'value'
                     filters: []
                 };
 
-                console.log('Step 4 SQL Mode payload:', payload);
 
                 // Call preview API
                 $.ajax({
@@ -2126,7 +2096,6 @@ WHERE condition = 'value'
                     contentType: 'application/json',
                     data: JSON.stringify(payload),
                     success: function(response) {
-                        console.log('Step 4 response:', response);
 
                         if (response.success) {
                             // Display generated SQL
@@ -2151,7 +2120,6 @@ WHERE condition = 'value'
                         }
                     },
                     error: function(xhr, status, error) {
-                        console.error('Step 4 error:', error);
                         Swal.fire({
                             icon: 'error',
                             title: 'Error Loading Preview',
@@ -2165,7 +2133,6 @@ WHERE condition = 'value'
             }
 
             function loadStep4() {
-                console.log('Loading Step 4 (Preview)');
 
                 // Hide Step 3, show Step 4
                 $('#step3Container').hide();
@@ -2207,7 +2174,6 @@ WHERE condition = 'value'
                         // Look up the column details from reportColumns using columnId
                         const column = reportColumns.find(c => c.columnId === f.columnId);
                         if (!column) {
-                            console.warn('Column not found for filter:', f);
                             return null;
                         }
 
@@ -2226,7 +2192,6 @@ WHERE condition = 'value'
                     }).filter(f => f !== null)
                 };
 
-                console.log('Step 4 payload:', payload);
 
                 // Call preview API
                 $.ajax({
@@ -2235,7 +2200,6 @@ WHERE condition = 'value'
                     contentType: 'application/json',
                     data: JSON.stringify(payload),
                     success: function(response) {
-                        console.log('Step 4 response:', response);
 
                         if (response.success) {
                             // Display generated SQL
@@ -2260,7 +2224,6 @@ WHERE condition = 'value'
                         }
                     },
                     error: function(xhr, status, error) {
-                        console.error('Step 4 error:', error);
                         Swal.fire({
                             icon: 'error',
                             title: 'Error Loading Preview',
@@ -2363,7 +2326,6 @@ WHERE condition = 'value'
                             return value;
                     }
                 } catch (e) {
-                    console.error('Error formatting value:', e);
                     return value;
                 }
             }
@@ -2410,7 +2372,6 @@ WHERE condition = 'value'
             // Step 5: Save Report
             // ============================================
             function loadStep5() {
-                console.log('Loading Step 5 (Save Report)');
 
                 // Hide Step 4, show Step 5
                 $('#step4Container').hide();
@@ -2471,7 +2432,6 @@ WHERE condition = 'value'
                     filters: window.previewPayload.filters || []
                 };
 
-                console.log('Save report payload:', payload);
 
                 // Show loading
                 Swal.fire({
@@ -2490,7 +2450,6 @@ WHERE condition = 'value'
                     contentType: 'application/json',
                     data: JSON.stringify(payload),
                     success: function(response) {
-                        console.log('Save response:', response);
 
                         if (response.success) {
                             Swal.fire({
@@ -2511,7 +2470,6 @@ WHERE condition = 'value'
                         }
                     },
                     error: function(xhr, status, error) {
-                        console.error('Save error:', error);
                         Swal.fire({
                             icon: 'error',
                             title: 'Error Saving Report',

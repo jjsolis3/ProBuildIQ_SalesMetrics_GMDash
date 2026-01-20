@@ -1,7 +1,8 @@
 ﻿@model SalesMetrics.Models.TaskModalViewModel
 
 @{
-    var postAction = Model.RoleId == 1 || Model.RoleId == 3 || Model.RoleId == 4 ? "UpdateFromAdmin" : "Update";
+    // Management roles (Admin=1, Sales Admin=3, GM=4, President/Owner=7, Regional Manager=8) use UpdateFromAdmin
+    var postAction = (Model.RoleId == 1 || Model.RoleId == 3 || Model.RoleId == 4 || Model.RoleId == 7 || Model.RoleId == 8) ? "UpdateFromAdmin" : "Update";
 }
 
 <form id="editTaskForm" asp-action="@postAction" asp-controller="Tasks" method="post">
@@ -86,8 +87,9 @@
             <input name="Task.Property" class="form-control" value="@Model.Task.Property" />
             <span asp-validation-for="Task.Property" class="text-danger"></span>
         </div>
-        
-        @if (Model.RoleId == 1 || Model.RoleId == 3 || Model.RoleId == 4)
+
+        @* Management roles (Admin=1, Sales Admin=3, GM=4, President/Owner=7, Regional Manager=8) can reassign tasks *@
+        @if (Model.RoleId == 1 || Model.RoleId == 3 || Model.RoleId == 4 || Model.RoleId == 7 || Model.RoleId == 8)
         {
             <div class="mb-3">
                 <label class="form-label">Assigned To</label>
@@ -95,7 +97,7 @@
                     @{
                         var assignedTo = Model.Task.AssignedTo;
                     }
-                         
+
                     <option disabled  selected="@(assignedTo == 0)" value="">-- Select User --</option>
                     @* <option disabled selected value="">-- Select User --</option> *@
                     <option value="@Model.LoggedInUserId">Myself</option>

@@ -194,7 +194,8 @@ namespace SalesMetrics.Controllers
             List<SalesTask> tasks;
             List<User> users;
 
-            if (roleId == 1 || roleId == 3 || roleId == 4)
+            // Management roles can see all tasks in their location
+            if (RoleHelper.CanManageLocationTasks(roleId))
             {
                 tasks = GetAllTasksByLocation(locationId);
                 users = GetAllUsersForTaskDisplay(locationId, roleId);
@@ -530,20 +531,23 @@ namespace SalesMetrics.Controllers
 
                 string query;
 
-                if (roleId == 1)
+                // Admin sees all users
+                if (roleId == RoleHelper.ROLE_ADMIN)
                 {
                     query = @"
                         SELECT Users_ID, UserID, FirstName, LastName, RoleID, Location, CreatedDate, SalesmanID
                         FROM Users
                         WHERE Location = @Location";
                 }
-                else if (roleId == 3 || roleId == 4)
+                // Management roles (President/Owner, Regional, GM, Sales Admin) see all except Admin
+                else if (RoleHelper.CanManageLocationTasks(roleId))
                 {
                     query = @"
                         SELECT Users_ID, UserID, FirstName, LastName, RoleID, Location, CreatedDate, SalesmanID
                         FROM Users
                         WHERE RoleId <> 1 AND Location = @Location";
                 }
+                // Other roles see only salespeople
                 else
                 {
                     query = @"
@@ -725,7 +729,8 @@ namespace SalesMetrics.Controllers
         {
             var assignedUser = users.FirstOrDefault(u => u.Users_ID == task.AssignedTo);
 
-            if (roleId == 1 || roleId == 3 || roleId == 4) // Admin or Sales Admin
+            // Management roles see who the task is assigned to in the title
+            if (RoleHelper.CanManageLocationTasks(roleId))
             {
                 return (assignedUser != null ? assignedUser.NameandInitial() + " - " : "") + task.Title;
             }
@@ -854,14 +859,15 @@ namespace SalesMetrics.Controllers
             int locationId = LocationHelper.GetCurrentLocationId(HttpContext);
             SalesTask? task;
 
-            if (roleId == 1 || roleId == 3 || roleId == 4)
+            // Management roles can see all tasks in their location
+            if (RoleHelper.CanManageLocationTasks(roleId))
             {
-                // Admins and Sales Admins can see all tasks by location
+                // Management roles can see all tasks by location
                 task = GetAllTasksByLocation(locationId).FirstOrDefault(t => t.TaskID == id);
             }
             else
             {
-                // Sales users only see their own tasks
+                // Other users only see their own tasks
                 task = GetTasksByUserId(users_Id, locationId).FirstOrDefault(t => t.TaskID == id);
             }
 
@@ -1287,7 +1293,8 @@ namespace SalesMetrics.Controllers
 
             var roleId = Convert.ToInt32(HttpContext.Session.GetString("RoleId"));
 
-            if (roleId == 1 || roleId == 3 || roleId == 4)
+            // Management roles can assign tasks to team members
+            if (RoleHelper.CanManageLocationTasks(roleId))
             {
                 if (model.AssignedTo == null || model.AssignedTo == 0)
                 {
@@ -1490,10 +1497,10 @@ namespace SalesMetrics.Controllers
                 modal.RoleId = roleId;
                 modal.LoggedInUserId = users_Id;
 
-                // Determine AssignedTo
+                // Determine AssignedTo: Management roles can assign to team members, others assign to themselves
                 Console.WriteLine("AssignedTo in CreateFromWorkOrder: " + model.AssignedTo);
 
-                int assignedTo = ((roleId == 1 || roleId == 3 || roleId == 4) ? model.AssignedTo : users_Id);
+                int assignedTo = (RoleHelper.CanManageLocationTasks(roleId) ? model.AssignedTo : users_Id);
 
                 if (assignedTo == 0)
                 {
@@ -1584,10 +1591,10 @@ namespace SalesMetrics.Controllers
                     return BadRequest("Session data missing or invalid.");
                 }
 
-                // Determine AssignedTo
+                // Determine AssignedTo: Management roles can assign to team members, others assign to themselves
                 Console.WriteLine("AssignedTo in CreateFromWorkOrder: " + model.AssignedTo);
 
-                int assignedTo = ((roleId == 1 || roleId == 3 || roleId == 4) ? model.AssignedTo : sessionUserId);
+                int assignedTo = (RoleHelper.CanManageLocationTasks(roleId) ? model.AssignedTo : sessionUserId);
 
                 if (assignedTo == 0)
                 {
@@ -1662,7 +1669,8 @@ namespace SalesMetrics.Controllers
             List<SalesTask> tasks;
             List<User> users;
 
-            if (roleId == 1 || roleId == 3 || roleId == 4)  // Admin or Sales Admin
+            // Management roles can see all location tasks
+            if (RoleHelper.CanManageLocationTasks(roleId))
             {
                 tasks = GetAllTasksByLocation(locationId);
                 users = GetAllUsersForTaskDisplay(locationId, roleId);

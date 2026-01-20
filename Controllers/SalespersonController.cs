@@ -63,14 +63,16 @@ namespace SalesMetrics.Controllers
         {
             var list = new List<SelectListItem>();
 
+            // Select all users with a SalesmanID (includes Salespersons and Sales Managers)
             string sqlQuery = @"
                 SELECT
                     DISTINCT SalesmanID,
                     FirstName + ' ' + LastName AS FullName
                     FROM Users
-                    WHERE RoleID = 2";
+                    WHERE SalesmanID IS NOT NULL";
 
-            if(roleId == 1 || roleId == 3 || roleId == 4)
+            // Management roles filter by their location
+            if(RoleHelper.CanViewSalesTeamData(roleId))
                 sqlQuery += " AND Location = @locationId";
 
             sqlQuery += @" ORDER BY FullName";
@@ -80,7 +82,7 @@ namespace SalesMetrics.Controllers
 
             var cmd = new SqlCommand(sqlQuery, conn);
 
-            if (roleId == 1 || roleId == 3 || roleId == 4)
+            if (RoleHelper.CanViewSalesTeamData(roleId))
                 cmd.Parameters.AddWithValue("@locationId", locationId);
 
             using var reader = cmd.ExecuteReader();

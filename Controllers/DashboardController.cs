@@ -76,8 +76,8 @@ namespace SalesMetrics.Controllers
             {
                 effectiveSalesmanId = salesmanId;  // This is the SalesmanId from session
             }
-            // For Admin/SalesAdmin (Role 1 or 3), use the filterSalesmanId if provided
-            else if (roleId == 1 || roleId == 3 || roleId == 4)
+            // For management roles, use the filterSalesmanId if provided
+            else if (RoleHelper.CanViewSalesTeamData(roleId))
             {
                 effectiveSalesmanId = filterSalesmanId ?? 0; // Fallback to 0 if no filter is selected
             }
@@ -196,7 +196,8 @@ namespace SalesMetrics.Controllers
             ViewBag.UserId = userId;
             ViewBag.Users_Id = users_Id;
 
-            if (roleId == 1 || roleId == 3 || roleId == 4)
+            // Management roles get dropdown to filter by sales team members
+            if (RoleHelper.CanViewSalesTeamData(roleId))
             {
                 ViewBag.Users = GetActiveUsers(Convert.ToInt32(users_Id), roleId, Convert.ToInt32(locationId));
             }
@@ -283,7 +284,8 @@ namespace SalesMetrics.Controllers
             {
                 conn.Open();
 
-                string query = (roleId == 1 || roleId == 3 || roleId == 4)
+                // Management roles see all sales team members in their location
+                string query = RoleHelper.CanViewSalesTeamData(roleId)
                     ? @"SELECT Users_ID, UserID, FirstName, LastName, RoleID, Location, CreatedDate, SalesmanID
                         FROM Users
                         WHERE SalesmanID IS NOT NULL AND Location = @Location"
@@ -293,7 +295,7 @@ namespace SalesMetrics.Controllers
 
                 using (SqlCommand cmd = new SqlCommand(query, conn))
                 {
-                    if (roleId == 1 || roleId == 3 || roleId == 4)
+                    if (RoleHelper.CanViewSalesTeamData(roleId))
                         cmd.Parameters.AddWithValue("@Location", locationId);
                     else
                         cmd.Parameters.AddWithValue("@Users_Id", users_Id);
@@ -351,7 +353,7 @@ namespace SalesMetrics.Controllers
 
             if (roleId == 2)
                 effectiveSalesmanId = Convert.ToInt32(HttpContext.Session.GetInt32("SalesmanId"));
-            else if (roleId == 1 || roleId == 3 || roleId == 4)
+            else if (RoleHelper.CanViewSalesTeamData(roleId))
                 effectiveSalesmanId = filterSalesmanId ?? 0;
 
             // Use ERP abstraction layer
@@ -394,7 +396,7 @@ namespace SalesMetrics.Controllers
             {
                 effectiveSalesmanId = Convert.ToInt32(HttpContext.Session.GetInt32("SalesmanId"));
             }
-            else if (roleId == 1 || roleId == 3 || roleId == 4)
+            else if (RoleHelper.CanViewSalesTeamData(roleId))
             {
                 effectiveSalesmanId = filterSalesmanId ?? 0;
             }

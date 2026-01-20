@@ -404,7 +404,6 @@
                     }
                 })
                 .catch(error => {
-                    console.error('Bulk close error:', error);
                     bulkBtn.disabled = false;
                     bulkBtn.innerHTML = '<i class="fas fa-check-double"></i> Quick Close All Unresolved';
                     showToast('Error', 'Network error occurred during bulk operation', 'error');

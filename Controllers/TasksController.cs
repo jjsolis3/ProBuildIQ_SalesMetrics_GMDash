@@ -539,13 +539,14 @@ namespace SalesMetrics.Controllers
                         FROM Users
                         WHERE Location = @Location";
                 }
-                // Management roles (President/Owner, Regional, GM, Sales Admin) see all except Admin
+                // Management roles (President/Owner, Regional, GM, Sales Admin) see all users INCLUDING admins
+                // This is for DISPLAY purposes - they need to see who tasks are assigned to, even if it's an admin
                 else if (RoleHelper.CanManageLocationTasks(roleId))
                 {
                     query = @"
                         SELECT Users_ID, UserID, FirstName, LastName, RoleID, Location, CreatedDate, SalesmanID
                         FROM Users
-                        WHERE RoleId <> 1 AND Location = @Location";
+                        WHERE Location = @Location";
                 }
                 // Other roles see only salespeople
                 else

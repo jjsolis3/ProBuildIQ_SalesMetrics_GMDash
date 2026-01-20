@@ -22,7 +22,7 @@ namespace SalesMetrics.Services.Notifications
         {
             var query = _context.NotificationRecipients
                 .Include(nr => nr.Notification)
-                .Where(nr => nr.UserId == userId && !nr.IsDeleted);
+                .Where(nr => nr.UserId == userId && !nr.IsDeleted && nr.Notification != null);
 
             if (unreadOnly)
             {
@@ -34,22 +34,24 @@ namespace SalesMetrics.Services.Notifications
                 .Take(limit)
                 .ToListAsync();
 
-            return recipients.Select(nr => new Notification
-            {
-                NotificationId = nr.Notification.NotificationId,
-                NotificationType = nr.Notification.NotificationType,
-                Title = nr.Notification.Title,
-                Message = nr.Notification.Message,
-                ActionUrl = nr.Notification.ActionUrl,
-                RelatedTaskId = nr.Notification.RelatedTaskId,
-                RelatedEnvelopeId = nr.Notification.RelatedEnvelopeId,
-                BroadcastMessageId = nr.Notification.BroadcastMessageId,
-                CreatedByUserId = nr.Notification.CreatedByUserId,
-                CreatedDate = nr.Notification.CreatedDate,
-                IsSystemGenerated = nr.Notification.IsSystemGenerated,
-                IsRead = nr.IsRead,
-                ReadDate = nr.ReadDate
-            }).ToList();
+            return recipients
+                .Where(nr => nr.Notification != null) // Extra safety check
+                .Select(nr => new Notification
+                {
+                    NotificationId = nr.Notification.NotificationId,
+                    NotificationType = nr.Notification.NotificationType,
+                    Title = nr.Notification.Title,
+                    Message = nr.Notification.Message,
+                    ActionUrl = nr.Notification.ActionUrl,
+                    RelatedTaskId = nr.Notification.RelatedTaskId,
+                    RelatedEnvelopeId = nr.Notification.RelatedEnvelopeId,
+                    BroadcastMessageId = nr.Notification.BroadcastMessageId,
+                    CreatedByUserId = nr.Notification.CreatedByUserId,
+                    CreatedDate = nr.Notification.CreatedDate,
+                    IsSystemGenerated = nr.Notification.IsSystemGenerated,
+                    IsRead = nr.IsRead,
+                    ReadDate = nr.ReadDate
+                }).ToList();
         }
 
         public async Task<int> GetUnreadCountAsync(int userId)

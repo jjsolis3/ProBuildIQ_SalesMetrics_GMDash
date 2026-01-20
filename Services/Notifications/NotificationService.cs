@@ -20,44 +20,68 @@ namespace SalesMetrics.Services.Notifications
 
         public async Task<List<Notification>> GetUserNotificationsAsync(int userId, bool unreadOnly = false, int limit = 50)
         {
-            var query = _context.NotificationRecipients
-                .Include(nr => nr.Notification)
-                .Where(nr => nr.UserId == userId && !nr.IsDeleted && nr.Notification != null);
-
-            if (unreadOnly)
+            try
             {
-                query = query.Where(nr => !nr.IsRead);
-            }
+                // Use explicit join to avoid navigation property issues with corrupted data
+                var query = from nr in _context.NotificationRecipients
+                            join n in _context.Notifications on nr.NotificationId equals n.NotificationId
+                            where nr.UserId == userId && !nr.IsDeleted
+                            select new { nr, n };
 
-            var recipients = await query
-                .OrderByDescending(nr => nr.Notification.CreatedDate)
-                .Take(limit)
-                .ToListAsync();
-
-            return recipients
-                .Where(nr => nr.Notification != null) // Extra safety check
-                .Select(nr => new Notification
+                if (unreadOnly)
                 {
-                    NotificationId = nr.Notification.NotificationId,
-                    NotificationType = nr.Notification.NotificationType,
-                    Title = nr.Notification.Title,
-                    Message = nr.Notification.Message,
-                    ActionUrl = nr.Notification.ActionUrl,
-                    RelatedTaskId = nr.Notification.RelatedTaskId,
-                    RelatedEnvelopeId = nr.Notification.RelatedEnvelopeId,
-                    BroadcastMessageId = nr.Notification.BroadcastMessageId,
-                    CreatedByUserId = nr.Notification.CreatedByUserId,
-                    CreatedDate = nr.Notification.CreatedDate,
-                    IsSystemGenerated = nr.Notification.IsSystemGenerated,
-                    IsRead = nr.IsRead,
-                    ReadDate = nr.ReadDate
-                }).ToList();
+                    query = query.Where(x => !x.nr.IsRead);
+                }
+
+                var results = await query
+                    .OrderByDescending(x => x.n.CreatedDate)
+                    .Take(limit)
+                    .AsNoTracking()
+                    .ToListAsync();
+
+                return results
+                    .Where(x => x.n != null) // Extra safety check
+                    .Select(x => new Notification
+                    {
+                        NotificationId = x.n.NotificationId,
+                        NotificationType = x.n.NotificationType ?? "Unknown",
+                        Title = x.n.Title ?? "Notification",
+                        Message = x.n.Message,
+                        ActionUrl = x.n.ActionUrl,
+                        RelatedTaskId = x.n.RelatedTaskId,
+                        RelatedEnvelopeId = x.n.RelatedEnvelopeId,
+                        BroadcastMessageId = x.n.BroadcastMessageId,
+                        CreatedByUserId = x.n.CreatedByUserId,
+                        CreatedDate = x.n.CreatedDate,
+                        IsSystemGenerated = x.n.IsSystemGenerated,
+                        IsRead = x.nr.IsRead,
+                        ReadDate = x.nr.ReadDate
+                    }).ToList();
+            }
+            catch (Exception ex)
+            {
+                // Log error and return empty list to prevent UI crash
+                Console.WriteLine($"Error loading notifications for user {userId}: {ex.Message}");
+                return new List<Notification>();
+            }
         }
 
         public async Task<int> GetUnreadCountAsync(int userId)
         {
-            return await _context.NotificationRecipients
-                .CountAsync(nr => nr.UserId == userId && !nr.IsRead && !nr.IsDeleted);
+            try
+            {
+                // Use explicit join to ensure NotificationRecipients have valid Notification records
+                var count = await (from nr in _context.NotificationRecipients
+                                   join n in _context.Notifications on nr.NotificationId equals n.NotificationId
+                                   where nr.UserId == userId && !nr.IsRead && !nr.IsDeleted
+                                   select nr).CountAsync();
+                return count;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error getting unread count for user {userId}: {ex.Message}");
+                return 0;
+            }
         }
 
         public async Task MarkAsReadAsync(int notificationId, int userId)

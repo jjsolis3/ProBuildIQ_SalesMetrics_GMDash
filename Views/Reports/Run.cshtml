@@ -460,11 +460,11 @@ else if (Model.ShowResults)
                             }
                             // Otherwise no highlighting (both are YES)
                         } catch (rowError) {
-                            console.error('Error processing row:', rowError);
+                            // Row processing error - skip row
                         }
                     });
                 } catch (error) {
-                    console.error('Error in applyRowHighlighting:', error);
+                    // Highlighting error - skip highlighting
                 }
             }
 

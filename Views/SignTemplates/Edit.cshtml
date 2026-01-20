@@ -501,7 +501,7 @@
                     // Show "Place Fields on PDF" button if fields are selected and PDF is loaded
                     updateFieldPlacementButtonVisibility();
                 } catch (e) {
-                    console.error('Error parsing existing MergeSpec:', e);
+                    // Error parsing existing MergeSpec - will use empty spec
                 }
             }
 
@@ -518,10 +518,8 @@
                 const enableBtn = document.getElementById('enableFieldPlacement');
 
                 if (enableBtn && pdfLoaded && selectedFields.length > 0) {
-                    console.log('[Field Button] Showing "Place Fields on PDF" button');
                     enableBtn.style.display = 'inline-block';
                 } else if (enableBtn) {
-                    console.log('[Field Button] Hiding button - PDF loaded:', pdfLoaded, 'Fields selected:', selectedFields.length);
                     enableBtn.style.display = 'none';
                 }
             }
@@ -535,7 +533,6 @@
                 templateForm.addEventListener('submit', function(e) {
                     // If configurator is active, save coordinates
                     if (PDFFieldConfigurator && PDFFieldConfigurator.saveCoordinatesToMergeSpec) {
-                        console.log('[Form Submit] Auto-saving field coordinates');
                         PDFFieldConfigurator.saveCoordinatesToMergeSpec();
                     }
                 });
@@ -626,7 +623,6 @@
 
                     // Store scale for field configurator coordinate conversion
                     window.pdfScale = scale;
-                    console.log(`PDF rendered at scale: ${scale.toFixed(2)} (100%), canvas size: ${canvas.width}x${canvas.height}`);
 
                     const renderContext = {
                         canvasContext: context,
@@ -651,8 +647,6 @@
 
             // Function to load existing PDF
             function loadExistingPDF(pdfFileName) {
-                console.log('Loading existing PDF:', pdfFileName);
-
                 // Show PDF preview container
                 const container = document.getElementById('pdfPreviewContainer');
                 container.style.display = 'block';
@@ -686,15 +680,19 @@
                             // Show field placement button if fields are selected
                             updateFieldPlacementButtonVisibility();
                         }).catch(error => {
-                            console.error('Error loading PDF with PDF.js:', error);
-                            console.log('PDF URL that failed:', pdfUrl);
-                            alert('Error loading PDF. The PDF file may be corrupted. Please upload a new one.');
+                            if (typeof toastr !== 'undefined') {
+                                toastr.error('Error loading PDF. The PDF file may be corrupted. Please upload a new one.');
+                            } else {
+                                alert('Error loading PDF. The PDF file may be corrupted. Please upload a new one.');
+                            }
                         });
                     })
                     .catch(error => {
-                        console.error('Error fetching PDF from server:', error);
-                        console.log('Attempted URL:', pdfUrl);
-                        alert('Could not fetch PDF file from server. Please check the console for details or upload a new PDF.');
+                        if (typeof toastr !== 'undefined') {
+                            toastr.error('Could not fetch PDF file from server. Please upload a new PDF.');
+                        } else {
+                            alert('Could not fetch PDF file from server. Please upload a new PDF.');
+                        }
                     });
             }
         });

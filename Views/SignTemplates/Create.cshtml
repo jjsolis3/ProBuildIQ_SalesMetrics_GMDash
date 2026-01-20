@@ -989,7 +989,6 @@
             if (templateForm) {
                 templateForm.addEventListener('submit', function(e) {
                     if (typeof PDFFieldConfigurator !== 'undefined' && PDFFieldConfigurator.saveCoordinatesToMergeSpec) {
-                        console.log('[Create Form Submit] Auto-saving field coordinates before submission');
                         PDFFieldConfigurator.saveCoordinatesToMergeSpec();
                     }
                 });

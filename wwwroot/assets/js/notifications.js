@@ -14,8 +14,6 @@
 
         // Handle receiving new notifications
         connection.on("ReceiveNotification", function (notification) {
-            console.log("New notification received:", notification);
-
             // Update unread count
             updateUnreadCount();
 
@@ -28,21 +26,18 @@
 
         // Handle notification marked as read
         connection.on("NotificationRead", function (notificationId) {
-            console.log("Notification marked as read:", notificationId);
             updateUnreadCount();
             loadNotifications();
         });
 
         // Handle all notifications marked as read
         connection.on("AllNotificationsRead", function () {
-            console.log("All notifications marked as read");
             updateUnreadCount();
             loadNotifications();
         });
 
         // Handle notification deleted
         connection.on("NotificationDeleted", function (notificationId) {
-            console.log("Notification deleted:", notificationId);
             updateUnreadCount();
             loadNotifications();
         });
@@ -50,42 +45,82 @@
         // Start connection
         connection.start()
             .then(function () {
-                console.log("SignalR connected");
                 // Load initial notifications
                 loadNotifications();
                 updateUnreadCount();
             })
             .catch(function (err) {
-                console.error("SignalR connection error:", err.toString());
+                // Connection failed, will retry automatically
+                if (typeof toastr !== 'undefined') {
+                    toastr.error('Failed to connect to notification service');
+                }
             });
 
         // Handle reconnection
         connection.onreconnected(function () {
-            console.log("SignalR reconnected");
             loadNotifications();
             updateUnreadCount();
         });
     }
 
+    // Cleanup SignalR connection on page unload
+    function cleanupConnection() {
+        if (connection) {
+            connection.stop()
+                .then(function () {
+                    connection = null;
+                })
+                .catch(function (err) {
+                    // Ignore errors during cleanup
+                });
+        }
+    }
+
     // Load notifications from server
     function loadNotifications() {
-        fetch('/Notifications/GetNotifications?limit=10')
-            .then(response => response.json())
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+        fetch('/Notifications/GetNotifications?limit=10', { signal: controller.signal })
+            .then(response => {
+                clearTimeout(timeoutId);
+                return response.json();
+            })
             .then(notifications => {
                 renderNotifications(notifications);
             })
-            .catch(error => console.error('Error loading notifications:', error));
+            .catch(error => {
+                clearTimeout(timeoutId);
+                if (error.name === 'AbortError') {
+                    // Request timed out
+                } else {
+                    // Network error
+                }
+            });
     }
 
     // Update unread count
     function updateUnreadCount() {
-        fetch('/Notifications/GetUnreadCount')
-            .then(response => response.json())
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+        fetch('/Notifications/GetUnreadCount', { signal: controller.signal })
+            .then(response => {
+                clearTimeout(timeoutId);
+                return response.json();
+            })
             .then(data => {
                 unreadCount = data.count;
                 updateUnreadBadge(unreadCount);
             })
-            .catch(error => console.error('Error updating unread count:', error));
+            .catch(error => {
+                clearTimeout(timeoutId);
+                if (error.name === 'AbortError') {
+                    // Request timed out
+                } else {
+                    // Network error
+                }
+            });
     }
 
     // Update unread badge in UI
@@ -158,32 +193,49 @@
 
     // Mark notification as read
     window.markAsRead = function(notificationId) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+
         fetch('/Notifications/MarkAsRead', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ notificationId: notificationId })
+            body: JSON.stringify({ notificationId: notificationId }),
+            signal: controller.signal
         })
-        .then(response => response.json())
+        .then(response => {
+            clearTimeout(timeoutId);
+            return response.json();
+        })
         .then(data => {
             if (data.success) {
                 updateUnreadCount();
                 loadNotifications();
             }
         })
-        .catch(error => console.error('Error marking notification as read:', error));
+        .catch(error => {
+            clearTimeout(timeoutId);
+            // Silently fail
+        });
     };
 
     // Mark all as read
     window.markAllAsRead = function() {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+
         fetch('/Notifications/MarkAllAsRead', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-            }
+            },
+            signal: controller.signal
         })
-        .then(response => response.json())
+        .then(response => {
+            clearTimeout(timeoutId);
+            return response.json();
+        })
         .then(data => {
             if (data.success) {
                 updateUnreadCount();
@@ -193,7 +245,12 @@
                 }
             }
         })
-        .catch(error => console.error('Error marking all as read:', error));
+        .catch(error => {
+            clearTimeout(timeoutId);
+            if (typeof toastr !== 'undefined' && error.name !== 'AbortError') {
+                toastr.error('Failed to mark notifications as read');
+            }
+        });
     };
 
     // Show toast notification
@@ -279,6 +336,16 @@
     // Initialize on page load
     document.addEventListener('DOMContentLoaded', function() {
         initializeSignalR();
+    });
+
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', function() {
+        cleanupConnection();
+    });
+
+    // Fallback cleanup on unload
+    window.addEventListener('unload', function() {
+        cleanupConnection();
     });
 
 })();

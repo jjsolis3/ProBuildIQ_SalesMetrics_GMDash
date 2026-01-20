@@ -295,8 +295,6 @@
                 customSql: sql
             };
 
-            console.log('Updating report:', payload);
-
             // Show loading
             Swal.fire({
                 title: 'Updating Report...',
@@ -314,8 +312,6 @@
                 contentType: 'application/json',
                 data: JSON.stringify(payload),
                 success: function(response) {
-                    console.log('Update response:', response);
-
                     if (response.success) {
                         Swal.fire({
                             icon: 'success',
@@ -335,7 +331,6 @@
                     }
                 },
                 error: function(xhr, status, error) {
-                    console.error('Update error:', error);
                     Swal.fire({
                         icon: 'error',
                         title: 'Error',

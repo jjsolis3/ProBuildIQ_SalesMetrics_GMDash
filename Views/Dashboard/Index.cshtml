@@ -1042,11 +1042,17 @@
         const weekOffset = urlParams.get("weekOffset") || 0;
         const whdId = urlParams.get("whsId") || 0
 
-        fetch(`/Dashboard/GetWeeklyOrders?weekOffset=${weekOffset}`)
-            .then(res => res.json())
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+
+        fetch(`/Dashboard/GetWeeklyOrders?weekOffset=${weekOffset}`, { signal: controller.signal })
+            .then(res => {
+                clearTimeout(timeoutId);
+                return res.json();
+            })
             .then(data => {
                 if (!data || data.length === 0) {
-                    console.error("No data received from the server.");
+                    // No data to display
                     return;
                 }
 
@@ -1073,7 +1079,10 @@
                     }
                 });
             })
-            .catch(error => console.error("Error fetching data:", error));
+            .catch(error => {
+                clearTimeout(timeoutId);
+                // Silently fail - chart will remain empty
+            });
     </script>
     <script>
         // Initialize the linked datepickers
@@ -1225,7 +1234,6 @@
                 })
                 .fail(function (jqXHR, textStatus, errorThrown) {
                     $('#editTaskModal .modal-content').html('<div class="p-4 text-danger">Error loading modal: ' + jqXHR.responseText + '</div>');
-                    console.error("AJAX Load Error:", textStatus, errorThrown);
                 });
         });
 
@@ -1290,6 +1298,36 @@
                 });
         }
 
+    </script>
+
+    <!-- Cleanup on page unload -->
+    <script>
+        window.addEventListener('beforeunload', function() {
+            // Cleanup event handlers
+            $(document).off('click', '.view-order-details');
+            $(document).off('click', '.create-workorder-task');
+            $(document).off('click', '.create-ar-task');
+            $(document).off('click', '.create-task-from-inactive');
+
+            // Cleanup chart instance
+            if (typeof chartInstance !== 'undefined' && chartInstance) {
+                if (chartInstance.destroy) {
+                    chartInstance.destroy();
+                }
+                chartInstance = null;
+            }
+
+            // Cleanup DataTables
+            if ($.fn.DataTable.isDataTable('#workOrdersTable')) {
+                $('#workOrdersTable').DataTable().destroy();
+            }
+            if ($.fn.DataTable.isDataTable('#ar_table')) {
+                $('#ar_table').DataTable().destroy();
+            }
+            if ($.fn.DataTable.isDataTable('#inactive-customers-table')) {
+                $('#inactive-customers-table').DataTable().destroy();
+            }
+        });
     </script>
 
 }

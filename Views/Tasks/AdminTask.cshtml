@@ -535,7 +535,6 @@
                 })
                 .fail(function (jqXHR, textStatus, errorThrown) {
                     $('#editTaskModal .modal-content').html('<div class="p-4 text-danger">Error loading modal: ' + jqXHR.responseText + '</div>');
-                    console.error("AJAX Load Error:", textStatus, errorThrown);
                 });
         });
     </script>
@@ -611,30 +610,9 @@
                 url: "/Tasks/GetNotesForTask",
                 data: { taskId: taskId },
                 success: function (notes) {
-                    // DEBUG: Log the raw response
-                    console.log('=== NOTES RESPONSE DEBUG ===');
-                    console.log('Raw notes response:', notes);
-                    console.log('Number of notes:', notes.length);
-
-                    notes.forEach((note, index) => {
-                        console.log(`Note ${index}:`, {
-                            // Check all possible property names
-                            NoteID: note.NoteID,
-                            noteID: note.noteID,
-                            noteId: note.noteId,
-                            id: note.id,
-                            // Other properties
-                            noteText: note.noteText,
-                            createdBy: note.createdBy,
-                            canEdit: note.canEdit
-                        });
-                    });
-                    console.log('=== END NOTES DEBUG ===');
-
                     displayNotes(notes);
                 },
                 error: function (xhr, status, error) {
-                    console.error('Error loading notes:', error);
                     $('#existingNotes').html(`
                         <div class="alert alert-danger">
                             <i class="bi bi-exclamation-triangle me-2"></i>
@@ -824,8 +802,6 @@
             const noteCard = $(`#note-${noteId}`); // ✅ Finds the specific card
             const textarea = noteCard.find('textarea'); // ✅ Gets textarea from that specific card
             const newText = textarea.val().trim();
-
-            console.log('Saving note:', noteId, 'with text:', newText); // Debug log
 
             if (!newText) {
                 Swal.fire({

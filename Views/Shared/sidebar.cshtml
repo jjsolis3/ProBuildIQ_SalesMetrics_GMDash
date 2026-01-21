@@ -121,15 +121,27 @@
                     }
                 }
 
-                <!-- SALES DASHBOARD -->
+                <!-- DASHBOARD -->
                 @if (hasDashboardAccess)
                 {
                     <li class="menu-title">DASHBOARD</li>
                     <li class="ms-3">
-                        <a href="/Dashboard/Index">
-                            <i class="fas fa-chart-line"></i>
-                            <span>Dashboard</span>
-                        </a>
+                        @if (roleId == "5" || roleId == "6")
+                        {
+                            <!-- Office Manager and Office Staff go to Office Dashboard -->
+                            <a href="/Office/Index">
+                                <i class="fas fa-chart-line"></i>
+                                <span>Office Dashboard</span>
+                            </a>
+                        }
+                        else
+                        {
+                            <!-- All other roles go to Sales Dashboard -->
+                            <a href="/Dashboard/Index">
+                                <i class="fas fa-chart-line"></i>
+                                <span>Dashboard</span>
+                            </a>
+                        }
                     </li>
                 }
 

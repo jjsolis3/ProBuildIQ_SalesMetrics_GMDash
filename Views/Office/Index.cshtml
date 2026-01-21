@@ -474,6 +474,48 @@
     </div>
 </div>
 
+<!-- JOB SCHEDULE MODAL -->
+<div class="modal fade" id="workOrderModal" tabindex="-1" aria-labelledby="workOrderModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="workOrderModalLabel">
+                    <i class="fas fa-truck me-2"></i>Work Orders for <span id="modalDayTitle"></span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <table id="workOrdersTable" class="table table-striped table-hover w-100">
+                    <thead>
+                        <tr>
+                            <th>Order #</th>
+                            <th>Property Name</th>
+                            <th>City</th>
+                            <th>Order Type</th>
+                            <th>Qty</th>
+                            <th>Order $</th>
+                            <th>Unit</th>
+                            <th>Type</th>
+                            <th>Delivery Date</th>
+                            <th>Product Class</th>
+                            <th>Description</th>
+                            <th>Ordered By</th>
+                            <th>Management</th>
+                            <th>Salesperson</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Data will be populated via AJAX -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 @functions {
     string GetStatusBadgeClass(string status)
     {
@@ -583,13 +625,25 @@
                 $('#envelopeStatusChart').parent().html('<p class="text-muted text-center py-5">No envelope data available</p>');
             }
 
-            // Weekly Jobs Bar Chart
+            // Weekly Jobs Bar Chart (Clickable)
             var weeklyData = @Html.Raw(Json.Serialize(weeklyOrders));
 
             if (weeklyData && weeklyData.length > 0) {
                 var ctx2 = document.getElementById('weeklyJobsChart').getContext('2d');
                 var labels2 = weeklyData.map(function(x) { return x.weekdayName; });
                 var orderCounts = weeklyData.map(function(x) { return x.ordersCount; });
+
+                // Color mapping for days
+                var dayColors = {
+                    'Sunday': '#dc3545',
+                    'Monday': '#4e73df',
+                    'Tuesday': '#28a745',
+                    'Wednesday': '#ffc107',
+                    'Thursday': '#17a2b8',
+                    'Friday': '#fd7e14',
+                    'Saturday': '#6c757d'
+                };
+                var backgroundColors = labels2.map(function(day) { return dayColors[day] || '#4e73df'; });
 
                 weeklyJobsChartInstance = new Chart(ctx2, {
                     type: 'bar',
@@ -598,9 +652,11 @@
                         datasets: [{
                             label: 'Orders',
                             data: orderCounts,
-                            backgroundColor: '#4e73df',
-                            borderColor: '#2e59d9',
-                            borderWidth: 1
+                            backgroundColor: backgroundColors,
+                            borderColor: backgroundColors.map(function(c) { return c; }),
+                            borderWidth: 1,
+                            hoverBackgroundColor: backgroundColors.map(function(c) { return c + 'CC'; }),
+                            hoverBorderWidth: 2
                         }]
                     },
                     options: {
@@ -617,7 +673,26 @@
                         plugins: {
                             legend: {
                                 display: false
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        var day = labels2[context.dataIndex];
+                                        var count = orderCounts[context.dataIndex];
+                                        return day + ': ' + count + ' orders (Click to view details)';
+                                    }
+                                }
                             }
+                        },
+                        onClick: function(event, activeElements) {
+                            if (activeElements.length > 0) {
+                                var index = activeElements[0].index;
+                                var dayName = labels2[index];
+                                loadWorkOrders(dayName);
+                            }
+                        },
+                        onHover: function(event, activeElements) {
+                            event.native.target.style.cursor = activeElements.length > 0 ? 'pointer' : 'default';
                         }
                     }
                 });
@@ -641,6 +716,89 @@
                 ]
             });
         });
+
+        // Function to load work orders by day
+        function loadWorkOrders(dayName) {
+            var weekOffset = @weekOffset;
+
+            $.ajax({
+                url: '/Dashboard/GetWorkOrdersByDay',
+                method: 'GET',
+                data: {
+                    dayOfWeek: dayName,
+                    weekOffset: weekOffset
+                },
+                success: function (response) {
+                    const data = response.data;
+                    const date = response.deliveryDate;
+
+                    // Update modal title
+                    $('#modalDayTitle').text(dayName + ' - (' + date + ')');
+
+                    // Destroy existing DataTable instance if already initialized
+                    if ($.fn.DataTable.isDataTable('#workOrdersTable')) {
+                        $('#workOrdersTable').DataTable().clear().destroy();
+                    }
+
+                    // Clear and fill table
+                    const tbody = $('#workOrdersTable tbody');
+                    tbody.empty();
+
+                    if (data && data.length > 0) {
+                        data.forEach(function(row) {
+                            tbody.append(`
+                                <tr>
+                                    <td>${row.orderID}</td>
+                                    <td>${row.propertyName || ''}</td>
+                                    <td>${row.city || ''}</td>
+                                    <td>${row.orderType || ''}</td>
+                                    <td>${row.qty || 0}</td>
+                                    <td>${Number(row.orderTotal || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</td>
+                                    <td>${row.unit || ''}</td>
+                                    <td>${row.type || ''}</td>
+                                    <td>${row.deliveryDate ? new Date(row.deliveryDate).toLocaleDateString() : ''}</td>
+                                    <td>${row.productClass || ''}</td>
+                                    <td>${row.description || ''}</td>
+                                    <td>${row.orderedBy || ''}</td>
+                                    <td>${row.management || ''}</td>
+                                    <td>${row.salesperson || ''}</td>
+                                </tr>
+                            `);
+                        });
+                    } else {
+                        tbody.append(`
+                            <tr>
+                                <td colspan="14" class="text-center text-muted py-4">
+                                    <i class="fas fa-info-circle me-2"></i>No orders found for ${dayName}
+                                </td>
+                            </tr>
+                        `);
+                    }
+
+                    // Initialize DataTable
+                    $('#workOrdersTable').DataTable({
+                        pageLength: 25,
+                        responsive: true,
+                        order: [[0, 'desc']], // Sort by Order # desc
+                        dom: 'Bfrtip',
+                        buttons: [
+                            {
+                                extend: 'excel',
+                                text: '<i class="fas fa-file-excel me-1"></i> Export to Excel',
+                                className: 'btn btn-success btn-sm'
+                            }
+                        ]
+                    });
+
+                    // Show the modal
+                    $('#workOrderModal').modal('show');
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error loading work orders:', error);
+                    alert('Failed to load work orders. Please try again.');
+                }
+            });
+        }
 
         // Toggle Inactive Customers Full Table
         function toggleInactiveCustomersTable() {
@@ -700,6 +858,9 @@
             if (inactiveCustomersTableInstance && $.fn.DataTable.isDataTable('#inactive-customers-table')) {
                 inactiveCustomersTableInstance.destroy();
             }
+            if ($.fn.DataTable.isDataTable('#workOrdersTable')) {
+                $('#workOrdersTable').DataTable().destroy();
+            }
         });
     </script>
 
@@ -727,6 +888,12 @@
         }
         .list-group-item-action:hover {
             background-color: #f8f9fa;
+        }
+        #weeklyJobsChart {
+            cursor: pointer;
+        }
+        .modal-header.bg-primary {
+            background-color: #4e73df !important;
         }
     </style>
 }

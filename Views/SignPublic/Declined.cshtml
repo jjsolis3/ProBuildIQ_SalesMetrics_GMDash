@@ -1,0 +1,46 @@
+@* Views/SignPublic/Declined.cshtml *@
+@{
+    Layout = "~/Views/Shared/PublicSigningLayout.cshtml";
+    ViewData["Title"] = "Signature Declined";
+    var reason = ViewBag.Reason as string;
+}
+
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-danger text-white fw-bold">
+        <i class="bi bi-x-circle-fill"></i> Signature Declined
+    </div>
+    <div class="card-body p-4">
+        <!-- Decline Confirmation Section -->
+        <div class="alert alert-warning" style="padding: 1.5rem;">
+            <div class="d-flex align-items-start mb-3">
+                <i class="bi bi-exclamation-triangle-fill fs-1 text-warning me-3"></i>
+                <div class="flex-grow-1">
+                    <h5 class="fw-bold mb-2">You Have Declined This Signature Request</h5>
+                    <p class="mb-0">Your response has been recorded. All parties involved have been notified of your decision.</p>
+                </div>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(reason))
+        {
+            <div class="card border-0 mb-3" style="background-color: #f8f9fa;">
+                <div class="card-body">
+                    <h6 class="fw-bold mb-2">Reason Provided:</h6>
+                    <p class="mb-0 text-muted">@reason</p>
+                </div>
+            </div>
+        }
+
+        <!-- Information Section -->
+        <div class="alert alert-info mb-0">
+            <h6 class="fw-bold mb-2">
+                <i class="bi bi-info-circle"></i> What Happens Next?
+            </h6>
+            <ul class="mb-0">
+                <li>The envelope creator and other recipients have been notified of your decision</li>
+                <li>No further action is required from you</li>
+                <li>If you declined in error, please contact the envelope sender directly</li>
+            </ul>
+        </div>
+    </div>
+</div>

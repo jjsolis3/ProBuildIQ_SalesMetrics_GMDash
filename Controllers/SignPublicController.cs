@@ -220,5 +220,56 @@ public class SignPublicController : Controller
             return File(fileBytes, "application/pdf");
         }
     }
+
+    /// <summary>
+    /// GET /sign/{token}/status - Check envelope status
+    /// Allows recipients to check the status of their signature request
+    /// </summary>
+    [HttpGet("{token}/status")]
+    public async Task<IActionResult> Status(string token)
+    {
+        _logger.LogInformation("GET Status called with token: {Token}", token);
+        var vm = await _svc.GetReviewAsync(token, Request.Headers["User-Agent"], HttpContext.Connection.RemoteIpAddress?.ToString() ?? "n/a");
+
+        if (vm == null)
+        {
+            _logger.LogWarning("Token {Token} is invalid or expired", token);
+            ViewBag.CompanyBranding = _branding;
+            return View("InvalidOrExpired");
+        }
+
+        // Pass status information to view
+        ViewBag.CompanyBranding = _branding;
+        ViewBag.Token = token;
+
+        return View(vm);
+    }
+
+    /// <summary>
+    /// POST /sign/{token}/decline - Decline to sign envelope
+    /// </summary>
+    [HttpPost("{token}/decline")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Decline(string token, string? reason)
+    {
+        _logger.LogInformation("POST Decline called with token: {Token}", token);
+
+        var success = await _svc.DeclineEnvelopeAsync(
+            token,
+            reason ?? "No reason provided",
+            Request.Headers["User-Agent"],
+            HttpContext.Connection.RemoteIpAddress?.ToString() ?? "n/a");
+
+        if (!success)
+        {
+            _logger.LogWarning("Failed to decline envelope with token: {Token}", token);
+            ViewBag.CompanyBranding = _branding;
+            return View("InvalidOrExpired");
+        }
+
+        ViewBag.CompanyBranding = _branding;
+        ViewBag.Reason = reason;
+        return View("Declined");
+    }
 }
 

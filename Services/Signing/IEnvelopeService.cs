@@ -17,6 +17,7 @@ namespace SalesMetrics.Services.Signing
         //Task<SignReviewVm?> GetReviewAsync(string token, string userAgent, string ip);
         Task<ReviewVm?> GetReviewAsync(string token, string userAgent, string ip);
         Task<(bool ok, string? downloadUrl)> SignAsync(SignSubmitDto dto, string userAgent, string ip);
+        Task<bool> DeclineEnvelopeAsync(string token, string reason, string userAgent, string ip); // Recipient declines to sign
         Task<(bool isComplete, string? downloadUrl)> TryFinalizeEnvelopeAsync(long envelopeId);
 
         // NEW (used by your POST Review action)

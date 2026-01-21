@@ -9,8 +9,9 @@ namespace SalesMetrics.Services.Signing
     {
         Task<long> CreateAsync(int createdByUsersId, CreateEnvelopeVm vm);
         Task SendAsync(long envelopeId); // send emails & mark Sent
+        Task VoidEnvelopeAsync(long envelopeId, int voidedByUserId, string? reason = null); // void/cancel envelope
         Task<EnvelopeDetailsVm?> GetDetailsAsync(long envelopeId);
-        Task<(IReadOnlyList<EnvelopeListItemVm> Rows, int Total)> SearchAsync(string? status, string? office, int page, int pageSize);
+        Task<(IReadOnlyList<EnvelopeListItemVm> Rows, int Total)> SearchAsync(string? status, string? office, int page, int pageSize, int? createdByUserId = null, string? scope = null, int? userRoleId = null, int? userLocationId = null);
 
         // Public flow
         //Task<SignReviewVm?> GetReviewAsync(string token, string userAgent, string ip);

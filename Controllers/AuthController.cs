@@ -167,7 +167,7 @@ namespace SalesMetrics.Controllers
             catch (Exception ex)
             {
                 // Log the exception (optional)
-                string errorMsg = "An error occurred while validating the password.";
+                string errorMsg = "An error occurred while validating the password. ("+ex+")";
                 ViewBag.Error = errorMsg + " Please try again later.";
                 LogLoginAttempt(salesMetricsUserId, userName, officeLocation, false, errorMsg);
                 return View("Login");

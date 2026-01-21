@@ -564,12 +564,15 @@
     }
 
     <script>
+        // Store Chart.js instance for cleanup
+        let arChartInstance = null;
+
         const ctx = document.getElementById('arChart').getContext('2d');
 
         const labels = @Html.Raw(Json.Serialize(chartData.Select(x => x.Label)));
         const data = @Html.Raw(Json.Serialize(chartData.Select(x => x.Value)));
 
-        new Chart(ctx, {
+        arChartInstance = new Chart(ctx, {
             type: 'doughnut',
             data: {
                 labels: labels,
@@ -790,8 +793,10 @@
             $.get('/GMDash/GetInstallerDetails', { location: office, range: selectedRange }, function (html) {
                 $('#installerModalBody').html(html);
 
-                // Initialize DataTable
-                $('#installerDetailTable').DataTable({
+                // Initialize DataTable (check if already initialized first)
+                const $table = $('#installerDetailTable');
+                if ($table.length && !$.fn.DataTable.isDataTable($table)) {
+                    $table.DataTable({
                     order: [[0, 'asc']],
                     responsive: true,
                     paging: true,
@@ -818,8 +823,37 @@
                             }
                         }
                     ]
-                });
+                    });
+                }
             });
+        });
+    </script>
+
+    <!-- Cleanup on page unload -->
+    <script>
+        window.addEventListener('beforeunload', function() {
+            // Cleanup Chart.js instance
+            if (typeof arChartInstance !== 'undefined' && arChartInstance) {
+                arChartInstance.destroy();
+                arChartInstance = null;
+            }
+
+            // Cleanup DataTables
+            if ($.fn.DataTable.isDataTable('#installerDetailTable')) {
+                $('#installerDetailTable').DataTable().destroy();
+            }
+
+            // Cleanup DataTables in modals
+            $('#rtjModalBody table, #inventoryModalBody table').each(function() {
+                if ($.fn.DataTable.isDataTable(this)) {
+                    $(this).DataTable().destroy();
+                }
+            });
+
+            // Cleanup global variables
+            window.currentInventoryOfficeLabel = null;
+            window.currentRTJLocation = null;
+            window.currentInstallerOfficeLabel = null;
         });
     </script>
 }

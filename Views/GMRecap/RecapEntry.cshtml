@@ -681,6 +681,14 @@
             // Initialize field statuses
             textareas.forEach(updateFieldStatus);
         });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', function() {
+            // Clear auto-save timer
+            if (typeof autoSaveTimer !== 'undefined' && autoSaveTimer) {
+                clearTimeout(autoSaveTimer);
+            }
+        });
     </script>
 
     @if (TempData["ErrorMessage"] != null)

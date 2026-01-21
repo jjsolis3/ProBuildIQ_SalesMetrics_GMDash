@@ -601,8 +601,16 @@
             }
 
             // Add event listeners
+            const filterChangeHandler = applyFilters;
             [weekFilter, gmFilter].forEach(filter => {
-                filter.addEventListener('change', applyFilters);
+                filter.addEventListener('change', filterChangeHandler);
+            });
+
+            // Cleanup on page unload
+            window.addEventListener('beforeunload', function() {
+                [weekFilter, gmFilter].forEach(filter => {
+                    filter.removeEventListener('change', filterChangeHandler);
+                });
             });
         });
 

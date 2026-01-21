@@ -19,12 +19,32 @@ var PDFFieldConfigurator = (function () {
 
     // Field definitions (matching Phase 1 & 2)
     const fieldDefinitions = {
+        // Property Information Fields
         'PropertyName': { displayName: 'Property Name', category: 'Property', type: 'text' },
         'PropertyAddress': { displayName: 'Property Address', category: 'Property', type: 'text' },
         'PropertyPhone': { displayName: 'Property Phone', category: 'Property', type: 'text' },
+        'PropertyCity': { displayName: 'Property City', category: 'Property', type: 'text' },
+        'PropertyState': { displayName: 'Property State', category: 'Property', type: 'text' },
+        'PropertyZip': { displayName: 'Property Zip Code', category: 'Property', type: 'text' },
+
+        // Customer Contact Information Fields
+        'CustomerName': { displayName: 'Customer Name', category: 'Customer', type: 'text' },
+        'CustomerPhone': { displayName: 'Customer Phone', category: 'Customer', type: 'text' },
+        'CustomerEmail': { displayName: 'Customer Email', category: 'Customer', type: 'text' },
+        'CustomerCompany': { displayName: 'Customer Company', category: 'Customer', type: 'text' },
+
+        // Work Order Information Fields
+        'OrderNumber': { displayName: 'Order Number', category: 'Order', type: 'text' },
         'InstallationDate': { displayName: 'Installation Date', category: 'Order', type: 'date' },
         'UnitNumber': { displayName: 'Unit Number', category: 'Order', type: 'text' },
         'DeliveryDate': { displayName: 'Delivery Date', category: 'Order', type: 'date' },
+        'OrderStartDate': { displayName: 'Order Start Date', category: 'Order', type: 'date' },
+        'OrderEndDate': { displayName: 'Order End Date', category: 'Order', type: 'date' },
+        'OrderSignedDate': { displayName: 'Order Signed Date', category: 'Order', type: 'date' },
+        'LeaseStartDate': { displayName: 'Lease Start Date', category: 'Order', type: 'date' },
+        'LeaseEndDate': { displayName: 'Lease End Date', category: 'Order', type: 'date' },
+
+        // Signature Fields
         'PropertyStaffName': { displayName: 'Property Staff Name', category: 'Signature', type: 'text' },
         'PropertyStaffSignature': { displayName: 'Property Staff Signature', category: 'Signature', type: 'signature' },
         'PropertyStaffDate': { displayName: 'Property Staff Date', category: 'Signature', type: 'date' },

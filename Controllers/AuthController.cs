@@ -588,9 +588,9 @@ namespace SalesMetrics.Controllers
                 case "SALES":
                     return RedirectToAction("Index", "Dashboard");
                 case "OFFICE MANAGER":
-                    return RedirectToAction("Index", "Dashboard");
+                    return RedirectToAction("Index", "Office");
                 case "OFFICE":
-                    return RedirectToAction("Index", "Dashboard");
+                    return RedirectToAction("Index", "Office");
                 default:
                     return RedirectToAction("Index", "Home");
             }

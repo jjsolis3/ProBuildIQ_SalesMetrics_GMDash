@@ -15,6 +15,12 @@
     var weekOffset = ViewBag.WeekOffset ?? 0;
 }
 
+@section styles {
+    <!-- DataTables CSS -->
+    <link href="~/assets/libs/datatables.net-bs5/css/dataTables.bootstrap5.min.css" rel="stylesheet" type="text/css" />
+    <link href="~/assets/libs/datatables.net-buttons-bs5/css/buttons.bootstrap5.min.css" rel="stylesheet" type="text/css" />
+}
+
 <div class="container-fluid">
     <!-- Header -->
     <div class="row mb-4">
@@ -118,96 +124,131 @@
         </div>
     </div>
 
-    <!-- Envelope Status Chart & Quick Actions Row -->
+    <!-- Envelope Status Chart, Quick Actions & Recent Activity Row -->
     <div class="row mb-4">
         <!-- Envelope Status Chart -->
-        <div class="col-xl-6 col-lg-6 mb-4">
+        <div class="col-xl-4 col-lg-4 mb-3">
             <div class="card shadow h-100">
                 <div class="card-header py-3">
                     <h6 class="m-0 font-weight-bold text-primary">Envelope Status Breakdown</h6>
                 </div>
-                <div class="card-body">
-                    <canvas id="envelopeStatusChart" style="max-height: 300px;"></canvas>
+                <div class="card-body d-flex align-items-center justify-content-center">
+                    <div style="max-width: 300px; width: 100%;">
+                        <canvas id="envelopeStatusChart"></canvas>
+                    </div>
                 </div>
             </div>
         </div>
 
         <!-- Quick Actions & Recent Activity -->
-        <div class="col-xl-6 col-lg-6 mb-4">
-            <!-- Quick Actions -->
-            <div class="card shadow mb-3">
+        <div class="col-xl-4 col-lg-4 mb-3">
+            <div class="card shadow h-100">
                 <div class="card-header py-3">
                     <h6 class="m-0 font-weight-bold text-primary">Quick Actions</h6>
                 </div>
                 <div class="card-body">
-                    <div class="d-flex flex-wrap gap-2">
-                        <a href="/SignAdmin/Create" class="btn btn-primary">
-                            <i class="fas fa-plus"></i> Send New Envelope
+                    <div class="d-grid gap-2">
+                        <a href="/SignAdmin/Create" class="btn btn-lg btn-primary">
+                            <i class="fas fa-plus-circle me-2"></i> Send New Envelope
                         </a>
-                        <a href="/SignAdmin?scope=mine" class="btn btn-outline-primary">
-                            <i class="fas fa-folder-open"></i> View My Envelopes
+                        <a href="/SignAdmin?scope=mine" class="btn btn-lg btn-outline-primary">
+                            <i class="fas fa-folder-open me-2"></i> View My Envelopes
                         </a>
-                        <a href="/SignTemplate" class="btn btn-outline-secondary">
-                            <i class="fas fa-file-alt"></i> Manage Templates
+                        <a href="/SignTemplate" class="btn btn-lg btn-outline-secondary">
+                            <i class="fas fa-file-alt me-2"></i> Manage Templates
                         </a>
+                    </div>
+
+                    <!-- Recent Envelope Activity (Compact) -->
+                    <div class="mt-4">
+                        <h6 class="font-weight-bold text-muted mb-3">Recent Activity</h6>
+                        @if (recentEnvelopes != null && recentEnvelopes.Any())
+                        {
+                            <div class="list-group list-group-flush">
+                                @foreach (var envelope in recentEnvelopes.Take(3))
+                                {
+                                    <a href="/SignAdmin/Details/@envelope.EnvelopeId" class="list-group-item list-group-item-action px-0 py-2 border-0">
+                                        <div class="d-flex justify-content-between align-items-start">
+                                            <div class="text-truncate" style="max-width: 200px;">
+                                                <small class="fw-bold">@envelope.Subject</small><br />
+                                                <small class="text-muted">@envelope.CreatedDateUtc.ToLocalTime().ToString("MMM dd, h:mm tt")</small>
+                                            </div>
+                                            <span class="badge badge-@GetStatusBadgeClass(envelope.Status) ms-2">
+                                                @envelope.Status
+                                            </span>
+                                        </div>
+                                    </a>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="text-muted mb-0 small">No recent activity</p>
+                        }
                     </div>
                 </div>
             </div>
+        </div>
 
-            <!-- Recent Envelope Activity -->
-            <div class="card shadow">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">Recent Envelope Activity</h6>
+        <!-- Documents Needing Follow-up -->
+        <div class="col-xl-4 col-lg-4 mb-3">
+            <div class="card shadow h-100">
+                <div class="card-header py-3 bg-warning-subtle">
+                    <h6 class="m-0 font-weight-bold text-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>Documents Needing Follow-up
+                    </h6>
                 </div>
-                <div class="card-body" style="max-height: 250px; overflow-y: auto;">
-                    @if (recentEnvelopes != null && recentEnvelopes.Any())
+                <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                    @if (needsFollowUp != null && needsFollowUp.Any())
                     {
-                        <ul class="list-group list-group-flush">
-                            @foreach (var envelope in recentEnvelopes.Take(5))
+                        <div class="list-group list-group-flush">
+                            @foreach (var doc in needsFollowUp.Take(10))
                             {
-                                <li class="list-group-item px-0 py-2">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <div>
-                                            <a href="/SignAdmin/Details/@envelope.EnvelopeId" class="font-weight-bold">
-                                                @envelope.Subject
-                                            </a>
-                                            <br />
-                                            <small class="text-muted">
-                                                @envelope.CreatedDateUtc.ToLocalTime().ToString("MMM dd, h:mm tt")
-                                            </small>
-                                        </div>
-                                        <span class="badge badge-@GetStatusBadgeClass(envelope.Status)">
-                                            @envelope.Status
+                                <div class="list-group-item px-0 py-2 border-bottom">
+                                    <div class="d-flex justify-content-between align-items-start mb-1">
+                                        <strong class="text-truncate" style="max-width: 200px;">@doc.Subject</strong>
+                                        <span class="badge bg-@(doc.DaysPending >= 7 ? "danger" : "warning") ms-2">
+                                            @doc.DaysPending days
                                         </span>
                                     </div>
-                                </li>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <small class="text-muted">@doc.SentAtUtc.ToLocalTime().ToString("MMM dd, yyyy")</small>
+                                        <a href="/SignAdmin/Details/@doc.EnvelopeId" class="btn btn-sm btn-outline-primary">
+                                            View
+                                        </a>
+                                    </div>
+                                </div>
                             }
-                        </ul>
+                        </div>
                     }
                     else
                     {
-                        <p class="text-muted mb-0">No recent activity</p>
+                        <div class="text-center py-4">
+                            <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+                            <p class="text-muted mb-0">No documents need follow-up.<br />Great work!</p>
+                        </div>
                     }
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Weekly Jobs Chart -->
+    <!-- Weekly Jobs & Inactive Customers Row -->
     <div class="row mb-4">
-        <div class="col-12">
-            <div class="card shadow">
+        <!-- Weekly Jobs Chart -->
+        <div class="col-xl-6 col-lg-6 mb-3">
+            <div class="card shadow h-100">
                 <div class="card-header py-3 d-flex justify-content-between align-items-center">
                     <h6 class="m-0 font-weight-bold text-primary">Weekly Jobs</h6>
                     <div>
                         <button class="btn btn-sm btn-outline-primary" onclick="changeWeek(-1)">
-                            <i class="fas fa-chevron-left"></i> Previous
+                            <i class="fas fa-chevron-left"></i>
                         </button>
                         <span class="mx-2 font-weight-bold">
                             @ViewBag.WeeklyStart.ToString("MMM dd") - @ViewBag.WeeklyEnd.ToString("MMM dd, yyyy")
                         </span>
                         <button class="btn btn-sm btn-outline-primary" onclick="changeWeek(1)" @(weekOffset >= 0 ? "disabled" : "")>
-                            Next <i class="fas fa-chevron-right"></i>
+                            <i class="fas fa-chevron-right"></i>
                         </button>
                     </div>
                 </div>
@@ -216,75 +257,19 @@
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- Documents Needing Follow-up & Inactive Customers Row -->
-    <div class="row mb-4">
-        <!-- Documents Needing Follow-up -->
-        <div class="col-xl-5 col-lg-5 mb-4">
+        <!-- Inactive Customers Preview -->
+        <div class="col-xl-6 col-lg-6 mb-3">
             <div class="card shadow h-100">
                 <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">Documents Needing Follow-up</h6>
-                </div>
-                <div class="card-body" style="max-height: 400px; overflow-y: auto;">
-                    @if (needsFollowUp != null && needsFollowUp.Any())
-                    {
-                        <div class="table-responsive">
-                            <table class="table table-sm">
-                                <thead>
-                                    <tr>
-                                        <th>Subject</th>
-                                        <th>Status</th>
-                                        <th>Days Pending</th>
-                                        <th>Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var doc in needsFollowUp)
-                                    {
-                                        <tr>
-                                            <td>@doc.Subject</td>
-                                            <td>
-                                                <span class="badge badge-@GetStatusBadgeClass(doc.Status)">
-                                                    @doc.Status
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <span class="text-@(doc.DaysPending >= 7 ? "danger" : "warning")">
-                                                    @doc.DaysPending days
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <a href="/SignAdmin/Details/@doc.EnvelopeId" class="btn btn-sm btn-outline-primary">
-                                                    View
-                                                </a>
-                                            </td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-                    }
-                    else
-                    {
-                        <p class="text-muted mb-0">No documents need follow-up. Great work!</p>
-                    }
-                </div>
-            </div>
-        </div>
-
-        <!-- Inactive Customers (Preview) -->
-        <div class="col-xl-7 col-lg-7 mb-4">
-            <div class="card shadow h-100">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">Inactive Customers (Preview)</h6>
+                    <h6 class="m-0 font-weight-bold text-primary">Inactive Customers</h6>
                 </div>
                 <div class="card-body" style="max-height: 400px; overflow-y: auto;">
                     @if (inactiveCustomers != null && inactiveCustomers.Any())
                     {
                         <div class="table-responsive">
-                            <table class="table table-sm">
-                                <thead>
+                            <table class="table table-sm table-hover">
+                                <thead class="table-light">
                                     <tr>
                                         <th>Customer</th>
                                         <th>Management Co</th>
@@ -299,15 +284,15 @@
                                             <td>@customer.CustomerName</td>
                                             <td>@customer.MgmtCo</td>
                                             <td>@(customer.LastOrderDate?.ToString("MM/dd/yyyy") ?? "N/A")</td>
-                                            <td>@customer.DaysSinceLastOrder</td>
+                                            <td><span class="badge bg-secondary">@customer.DaysSinceLastOrder</span></td>
                                         </tr>
                                     }
                                 </tbody>
                             </table>
                         </div>
-                        <div class="text-center mt-2">
-                            <button class="btn btn-sm btn-outline-primary" onclick="toggleInactiveCustomersTable()">
-                                View All (@inactiveCustomers.Count customers)
+                        <div class="text-center mt-3">
+                            <button class="btn btn-primary" onclick="toggleInactiveCustomersTable()">
+                                <i class="fas fa-table me-2"></i>View All (@inactiveCustomers.Count customers)
                             </button>
                         </div>
                     }
@@ -378,7 +363,7 @@
         </div>
     </div>
 
-    <!-- AR Table -->
+    <!-- AR Section -->
     <div class="row mb-4">
         <div class="col-12">
             <div class="card shadow">
@@ -387,49 +372,58 @@
                 </div>
                 <div class="card-body">
                     <!-- AR Summary Cards -->
-                    <div class="row mb-3">
-                        <div class="col-md-2">
-                            <div class="card bg-light">
-                                <div class="card-body text-center">
-                                    <h6>Under 30</h6>
-                                    <h5 class="text-success">$@transactionSummary.DueUnder30Amount.ToString("N0")</h5>
-                                    <small>@transactionSummary.DueUnder30 invoices</small>
+                    <div class="row mb-4">
+                        <div class="col-md-2 mb-2">
+                            <div class="card bg-light h-100">
+                                <div class="card-body text-center p-2">
+                                    <small class="d-block mb-1">Under 30</small>
+                                    <h5 class="text-success mb-1">$@transactionSummary.DueUnder30Amount.ToString("N0")</h5>
+                                    <small class="text-muted">@transactionSummary.DueUnder30 invoices</small>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-2">
-                            <div class="card bg-light">
-                                <div class="card-body text-center">
-                                    <h6>30-60 Days</h6>
-                                    <h5 class="text-warning">$@transactionSummary.Due30to60Amount.ToString("N0")</h5>
-                                    <small>@transactionSummary.Due30to60 invoices</small>
+                        <div class="col-md-2 mb-2">
+                            <div class="card bg-light h-100">
+                                <div class="card-body text-center p-2">
+                                    <small class="d-block mb-1">30-60 Days</small>
+                                    <h5 class="text-warning mb-1">$@transactionSummary.Due30to60Amount.ToString("N0")</h5>
+                                    <small class="text-muted">@transactionSummary.Due30to60 invoices</small>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-2">
-                            <div class="card bg-light">
-                                <div class="card-body text-center">
-                                    <h6>60-90 Days</h6>
-                                    <h5 class="text-orange">$@transactionSummary.Due60to90Amount.ToString("N0")</h5>
-                                    <small>@transactionSummary.Due60to90 invoices</small>
+                        <div class="col-md-2 mb-2">
+                            <div class="card bg-light h-100">
+                                <div class="card-body text-center p-2">
+                                    <small class="d-block mb-1">60-90 Days</small>
+                                    <h5 class="text-orange mb-1">$@transactionSummary.Due60to90Amount.ToString("N0")</h5>
+                                    <small class="text-muted">@transactionSummary.Due60to90 invoices</small>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-2">
-                            <div class="card bg-light">
-                                <div class="card-body text-center">
-                                    <h6>90-120 Days</h6>
-                                    <h5 class="text-danger">$@transactionSummary.Due90to120Amount.ToString("N0")</h5>
-                                    <small>@transactionSummary.Due90to120 invoices</small>
+                        <div class="col-md-2 mb-2">
+                            <div class="card bg-light h-100">
+                                <div class="card-body text-center p-2">
+                                    <small class="d-block mb-1">90-120 Days</small>
+                                    <h5 class="text-danger mb-1">$@transactionSummary.Due90to120Amount.ToString("N0")</h5>
+                                    <small class="text-muted">@transactionSummary.Due90to120 invoices</small>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-2">
-                            <div class="card bg-light">
-                                <div class="card-body text-center">
-                                    <h6>Over 120</h6>
-                                    <h5 class="text-danger font-weight-bold">$@transactionSummary.DueOver120Amount.ToString("N0")</h5>
-                                    <small>@transactionSummary.DueOver120 invoices</small>
+                        <div class="col-md-2 mb-2">
+                            <div class="card bg-light h-100">
+                                <div class="card-body text-center p-2">
+                                    <small class="d-block mb-1">Over 120</small>
+                                    <h5 class="text-danger font-weight-bold mb-1">$@transactionSummary.DueOver120Amount.ToString("N0")</h5>
+                                    <small class="text-muted">@transactionSummary.DueOver120 invoices</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-2 mb-2">
+                            <div class="card bg-primary text-white h-100">
+                                <div class="card-body text-center p-2">
+                                    <small class="d-block mb-1">TOTAL AR</small>
+                                    <h5 class="mb-1">$@((transactionSummary.DueUnder30Amount + transactionSummary.Due30to60Amount + transactionSummary.Due60to90Amount + transactionSummary.Due90to120Amount + transactionSummary.DueOver120Amount).ToString("N0"))</h5>
+                                    <small>@((transactionSummary.DueUnder30 + transactionSummary.Due30to60 + transactionSummary.Due60to90 + transactionSummary.Due90to120 + transactionSummary.DueOver120)) invoices</small>
                                 </div>
                             </div>
                         </div>
@@ -463,7 +457,7 @@
                                             <td>@invoice.DueDate.ToString("MM/dd/yyyy")</td>
                                             <td>@invoice.DaysPastDue</td>
                                             <td>
-                                                <span class="badge badge-@GetAgingBadgeClass(invoice.InvoiceAging)">
+                                                <span class="badge bg-@GetAgingBadgeClass(invoice.InvoiceAging)">
                                                     @invoice.InvoiceAging
                                                 </span>
                                             </td>
@@ -510,161 +504,229 @@
     }
 }
 
-<!-- Scripts -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
-    // Store chart instances for cleanup
-    let envelopeStatusChartInstance = null;
-    let weeklyJobsChartInstance = null;
-    let inactiveCustomersTableInstance = null;
-    let arTableInstance = null;
+@section scripts {
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-    // Envelope Status Chart
-    $(document).ready(function() {
-        // Envelope Status Doughnut Chart
-        var statusData = @Html.Raw(Json.Serialize(envelopeMetrics.StatusBreakdown));
+    <!-- DataTables JS -->
+    <script src="~/assets/libs/datatables.net/js/jquery.dataTables.min.js"></script>
+    <script src="~/assets/libs/datatables.net-bs5/js/dataTables.bootstrap5.min.js"></script>
+    <script src="~/assets/libs/datatables.net-buttons/js/dataTables.buttons.min.js"></script>
+    <script src="~/assets/libs/datatables.net-buttons-bs5/js/buttons.bootstrap5.min.js"></script>
+    <script src="~/assets/libs/datatables.net-buttons/js/buttons.html5.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
-        if (statusData && statusData.length > 0) {
-            var ctx = document.getElementById('envelopeStatusChart').getContext('2d');
-            var labels = statusData.map(x => x.Status);
-            var data = statusData.map(x => x.Count);
-            var colors = statusData.map(x => {
-                switch(x.Status) {
-                    case 'Completed': return '#28a745';
-                    case 'Sent': return '#007bff';
-                    case 'Viewed': return '#17a2b8';
-                    case 'Draft': return '#6c757d';
-                    case 'Declined': return '#dc3545';
-                    case 'Voided': return '#343a40';
-                    case 'Expired': return '#ffc107';
-                    default: return '#6c757d';
-                }
-            });
+    <script>
+        // Store chart instances for cleanup
+        let envelopeStatusChartInstance = null;
+        let weeklyJobsChartInstance = null;
+        let inactiveCustomersTableInstance = null;
+        let arTableInstance = null;
 
-            envelopeStatusChartInstance = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        data: data,
-                        backgroundColor: colors
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom'
+        $(document).ready(function() {
+            // Envelope Status Doughnut Chart
+            var statusData = @Html.Raw(Json.Serialize(envelopeMetrics.StatusBreakdown));
+
+            if (statusData && statusData.length > 0) {
+                var ctx = document.getElementById('envelopeStatusChart').getContext('2d');
+                var labels = statusData.map(function(x) { return x.status; });
+                var data = statusData.map(function(x) { return x.count; });
+                var colors = statusData.map(function(x) {
+                    switch(x.status) {
+                        case 'Completed': return '#28a745';
+                        case 'Sent': return '#007bff';
+                        case 'Viewed': return '#17a2b8';
+                        case 'Draft': return '#6c757d';
+                        case 'Declined': return '#dc3545';
+                        case 'Voided': return '#343a40';
+                        case 'Expired': return '#ffc107';
+                        default: return '#6c757d';
+                    }
+                });
+
+                envelopeStatusChartInstance = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            data: data,
+                            backgroundColor: colors,
+                            borderWidth: 2,
+                            borderColor: '#fff'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    padding: 10,
+                                    font: {
+                                        size: 11
+                                    }
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return context.label + ': ' + context.parsed;
+                                    }
+                                }
+                            }
                         }
                     }
-                }
-            });
-        }
+                });
+            } else {
+                // Show "No data" message
+                $('#envelopeStatusChart').parent().html('<p class="text-muted text-center py-5">No envelope data available</p>');
+            }
 
-        // Weekly Jobs Bar Chart
-        var weeklyData = @Html.Raw(Json.Serialize(weeklyOrders));
+            // Weekly Jobs Bar Chart
+            var weeklyData = @Html.Raw(Json.Serialize(weeklyOrders));
 
-        if (weeklyData && weeklyData.length > 0) {
-            var ctx2 = document.getElementById('weeklyJobsChart').getContext('2d');
-            var labels2 = weeklyData.map(x => x.WeekdayName);
-            var orderCounts = weeklyData.map(x => x.OrdersCount);
+            if (weeklyData && weeklyData.length > 0) {
+                var ctx2 = document.getElementById('weeklyJobsChart').getContext('2d');
+                var labels2 = weeklyData.map(function(x) { return x.weekdayName; });
+                var orderCounts = weeklyData.map(function(x) { return x.ordersCount; });
 
-            weeklyJobsChartInstance = new Chart(ctx2, {
-                type: 'bar',
-                data: {
-                    labels: labels2,
-                    datasets: [{
-                        label: 'Orders',
-                        data: orderCounts,
-                        backgroundColor: '#4e73df'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: {
-                            beginAtZero: true
+                weeklyJobsChartInstance = new Chart(ctx2, {
+                    type: 'bar',
+                    data: {
+                        labels: labels2,
+                        datasets: [{
+                            label: 'Orders',
+                            data: orderCounts,
+                            backgroundColor: '#4e73df',
+                            borderColor: '#2e59d9',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    stepSize: 1
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
                         }
                     }
-                }
-            });
-        }
+                });
+            }
 
-        // Initialize AR DataTable
-        arTableInstance = $('#ar_table').DataTable({
-            order: [[5, 'desc']], // Sort by Days Past Due
-            pageLength: 10,
-            responsive: true,
-            dom: 'Bfrtip',
-            buttons: ['excel']
-        });
-    });
-
-    // Toggle Inactive Customers Full Table
-    function toggleInactiveCustomersTable() {
-        var section = $('#fullInactiveCustomersSection');
-        section.toggle();
-
-        // Initialize DataTable if showing for the first time
-        if (section.is(':visible') && !inactiveCustomersTableInstance) {
-            inactiveCustomersTableInstance = $('#inactive-customers-table').DataTable({
-                order: [[5, 'desc']], // Sort by Days Since Order
+            // Initialize AR DataTable
+            if ($.fn.DataTable.isDataTable('#ar_table')) {
+                $('#ar_table').DataTable().destroy();
+            }
+            arTableInstance = $('#ar_table').DataTable({
+                order: [[5, 'desc']], // Sort by Days Past Due
                 pageLength: 25,
                 responsive: true,
                 dom: 'Bfrtip',
-                buttons: ['excel']
+                buttons: [
+                    {
+                        extend: 'excel',
+                        text: '<i class="fas fa-file-excel me-1"></i> Export to Excel',
+                        className: 'btn btn-success btn-sm'
+                    }
+                ]
             });
-        }
-    }
+        });
 
-    // Change week for Weekly Jobs
-    function changeWeek(offset) {
-        var currentOffset = @weekOffset;
-        var newOffset = currentOffset + offset;
-        window.location.href = '/Office/Index?weekOffset=' + newOffset;
-    }
+        // Toggle Inactive Customers Full Table
+        function toggleInactiveCustomersTable() {
+            var section = $('#fullInactiveCustomersSection');
 
-    // Cleanup on page unload
-    window.addEventListener('beforeunload', function() {
-        // Cleanup Chart.js instances
-        if (envelopeStatusChartInstance) {
-            envelopeStatusChartInstance.destroy();
-            envelopeStatusChartInstance = null;
-        }
-        if (weeklyJobsChartInstance) {
-            weeklyJobsChartInstance.destroy();
-            weeklyJobsChartInstance = null;
+            if (section.is(':visible')) {
+                section.slideUp();
+                // Destroy DataTable when hiding
+                if (inactiveCustomersTableInstance && $.fn.DataTable.isDataTable('#inactive-customers-table')) {
+                    inactiveCustomersTableInstance.destroy();
+                    inactiveCustomersTableInstance = null;
+                }
+            } else {
+                section.slideDown();
+                // Initialize DataTable when showing
+                if (!inactiveCustomersTableInstance && !$.fn.DataTable.isDataTable('#inactive-customers-table')) {
+                    inactiveCustomersTableInstance = $('#inactive-customers-table').DataTable({
+                        order: [[5, 'desc']], // Sort by Days Since Order
+                        pageLength: 25,
+                        responsive: true,
+                        dom: 'Bfrtip',
+                        buttons: [
+                            {
+                                extend: 'excel',
+                                text: '<i class="fas fa-file-excel me-1"></i> Export to Excel',
+                                className: 'btn btn-success btn-sm'
+                            }
+                        ]
+                    });
+                }
+            }
         }
 
-        // Cleanup DataTables
-        if (arTableInstance && $.fn.DataTable.isDataTable('#ar_table')) {
-            arTableInstance.destroy();
+        // Change week for Weekly Jobs
+        function changeWeek(offset) {
+            var currentOffset = @weekOffset;
+            var newOffset = currentOffset + offset;
+            window.location.href = '/Office/Index?weekOffset=' + newOffset;
         }
-        if (inactiveCustomersTableInstance && $.fn.DataTable.isDataTable('#inactive-customers-table')) {
-            inactiveCustomersTableInstance.destroy();
-        }
-    });
-</script>
 
-<style>
-    .border-left-primary {
-        border-left: 0.25rem solid #4e73df !important;
-    }
-    .border-left-success {
-        border-left: 0.25rem solid #1cc88a !important;
-    }
-    .border-left-warning {
-        border-left: 0.25rem solid #f6c23e !important;
-    }
-    .border-left-info {
-        border-left: 0.25rem solid #36b9cc !important;
-    }
-    .text-orange {
-        color: #fd7e14 !important;
-    }
-    .gap-2 {
-        gap: 0.5rem;
-    }
-</style>
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', function() {
+            // Cleanup Chart.js instances
+            if (envelopeStatusChartInstance) {
+                envelopeStatusChartInstance.destroy();
+                envelopeStatusChartInstance = null;
+            }
+            if (weeklyJobsChartInstance) {
+                weeklyJobsChartInstance.destroy();
+                weeklyJobsChartInstance = null;
+            }
+
+            // Cleanup DataTables
+            if (arTableInstance && $.fn.DataTable.isDataTable('#ar_table')) {
+                arTableInstance.destroy();
+            }
+            if (inactiveCustomersTableInstance && $.fn.DataTable.isDataTable('#inactive-customers-table')) {
+                inactiveCustomersTableInstance.destroy();
+            }
+        });
+    </script>
+
+    <style>
+        .border-left-primary {
+            border-left: 0.25rem solid #4e73df !important;
+        }
+        .border-left-success {
+            border-left: 0.25rem solid #1cc88a !important;
+        }
+        .border-left-warning {
+            border-left: 0.25rem solid #f6c23e !important;
+        }
+        .border-left-info {
+            border-left: 0.25rem solid #36b9cc !important;
+        }
+        .text-orange {
+            color: #fd7e14 !important;
+        }
+        .bg-orange {
+            background-color: #fd7e14 !important;
+        }
+        .bg-warning-subtle {
+            background-color: #fff3cd !important;
+        }
+        .list-group-item-action:hover {
+            background-color: #f8f9fa;
+        }
+    </style>
+}

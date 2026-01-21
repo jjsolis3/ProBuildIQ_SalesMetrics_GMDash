@@ -1,3 +1,6 @@
+@using SalesMetrics.Controllers
+@using SalesMetrics.Models
+
 @{
     ViewData["Title"] = "Office Dashboard";
     var greeting = ViewBag.Greeting;
@@ -295,7 +298,7 @@
                                         <tr>
                                             <td>@customer.CustomerName</td>
                                             <td>@customer.MgmtCo</td>
-                                            <td>@customer.LastOrderDate.ToString("MM/dd/yyyy")</td>
+                                            <td>@(customer.LastOrderDate?.ToString("MM/dd/yyyy") ?? "N/A")</td>
                                             <td>@customer.DaysSinceLastOrder</td>
                                         </tr>
                                     }
@@ -356,9 +359,9 @@
                                             <td>@customer.CustomerName</td>
                                             <td>@customer.MgmtCo</td>
                                             <td>@customer.Units</td>
-                                            <td>@customer.LastOrderDate.ToString("MM/dd/yyyy")</td>
+                                            <td>@(customer.LastOrderDate?.ToString("MM/dd/yyyy") ?? "N/A")</td>
                                             <td>@customer.DaysSinceLastOrder</td>
-                                            <td>@customer.LastInstallDate.ToString("MM/dd/yyyy")</td>
+                                            <td>@(customer.LastInstallDate?.ToString("MM/dd/yyyy") ?? "N/A")</td>
                                             <td>@customer.DaysSinceLastInstall</td>
                                             <td>$@customer.YTDCurrent.ToString("N2")</td>
                                             <td>$@customer.YTDPrevious.ToString("N2")</td>

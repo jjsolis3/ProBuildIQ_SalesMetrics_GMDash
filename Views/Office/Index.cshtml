@@ -31,6 +31,8 @@
     </div>
 
     <!-- KPI Cards Row -->
+    @if (ViewBag.HasEnvelopesAccess == true)
+    {
     <div class="row mb-4">
         <!-- Envelopes Sent This Month -->
         <div class="col-xl-3 col-md-6 mb-3">
@@ -123,10 +125,13 @@
             </div>
         </div>
     </div>
+    }
 
     <!-- Envelope Status Chart, Quick Actions & Recent Activity Row -->
     <div class="row mb-4">
         <!-- Envelope Status Chart -->
+        @if (ViewBag.HasEnvelopesAccess == true)
+        {
         <div class="col-xl-4 col-lg-4 mb-3">
             <div class="card shadow h-100">
                 <div class="card-header py-3">
@@ -139,6 +144,7 @@
                 </div>
             </div>
         </div>
+        }
 
         <!-- Quick Actions & Recent Activity -->
         <div class="col-xl-4 col-lg-4 mb-3">
@@ -148,49 +154,68 @@
                 </div>
                 <div class="card-body">
                     <div class="d-grid gap-2">
-                        <a href="/SignAdmin/Create" class="btn btn-lg btn-primary">
-                            <i class="fas fa-plus-circle me-2"></i> Send New Envelope
-                        </a>
-                        <a href="/SignAdmin?scope=mine" class="btn btn-lg btn-outline-primary">
-                            <i class="fas fa-folder-open me-2"></i> View My Envelopes
-                        </a>
-                        <a href="/SignTemplate" class="btn btn-lg btn-outline-secondary">
-                            <i class="fas fa-file-alt me-2"></i> Manage Templates
-                        </a>
+                        @if (ViewBag.HasEnvelopesAccess == true)
+                        {
+                            <a href="/SignAdmin/Create" class="btn btn-lg btn-primary">
+                                <i class="fas fa-plus-circle me-2"></i> Send New Envelope
+                            </a>
+                            <a href="/SignAdmin?scope=mine" class="btn btn-lg btn-outline-primary">
+                                <i class="fas fa-folder-open me-2"></i> View My Envelopes
+                            </a>
+                        }
+                        @if (ViewBag.HasEnvelopeTemplatesAccess == true)
+                        {
+                            <a href="/SignTemplate" class="btn btn-lg btn-outline-secondary">
+                                <i class="fas fa-file-alt me-2"></i> Manage Templates
+                            </a>
+                        }
+                        @if (ViewBag.HasEnvelopesAccess != true && ViewBag.HasEnvelopeTemplatesAccess != true)
+                        {
+                            <div class="alert alert-info mb-0" role="alert">
+                                <i class="fas fa-info-circle me-2"></i>
+                                <strong>No envelope access granted.</strong><br/>
+                                Contact your administrator to enable envelope features.
+                            </div>
+                        }
                     </div>
 
                     <!-- Recent Envelope Activity (Compact) -->
-                    <div class="mt-4">
-                        <h6 class="font-weight-bold text-muted mb-3">Recent Activity</h6>
-                        @if (recentEnvelopes != null && recentEnvelopes.Any())
-                        {
-                            <div class="list-group list-group-flush">
-                                @foreach (var envelope in recentEnvelopes.Take(3))
-                                {
-                                    <a href="/SignAdmin/Details/@envelope.EnvelopeId" class="list-group-item list-group-item-action px-0 py-2 border-0">
-                                        <div class="d-flex justify-content-between align-items-start">
-                                            <div class="text-truncate" style="max-width: 200px;">
-                                                <small class="fw-bold">@envelope.Subject</small><br />
-                                                <small class="text-muted">@envelope.CreatedDateUtc.ToLocalTime().ToString("MMM dd, h:mm tt")</small>
+                    @if (ViewBag.HasEnvelopesAccess == true)
+                    {
+                        <div class="mt-4">
+                            <h6 class="font-weight-bold text-muted mb-3">Recent Activity</h6>
+                            @if (recentEnvelopes != null && recentEnvelopes.Any())
+                            {
+                                <div class="list-group list-group-flush">
+                                    @foreach (var envelope in recentEnvelopes.Take(3))
+                                    {
+                                        <a href="/SignAdmin/Details/@envelope.EnvelopeId" class="list-group-item list-group-item-action px-0 py-2 border-0">
+                                            <div class="d-flex justify-content-between align-items-start">
+                                                <div class="text-truncate" style="max-width: 200px;">
+                                                    <small class="fw-bold">@envelope.Subject</small><br />
+                                                    <small class="text-muted">@envelope.CreatedDateUtc.ToLocalTime().ToString("MMM dd, h:mm tt")</small>
+                                                </div>
+                                                <span class="badge badge-@GetStatusBadgeClass(envelope.Status) ms-2">
+                                                    @envelope.Status
+                                                </span>
                                             </div>
-                                            <span class="badge badge-@GetStatusBadgeClass(envelope.Status) ms-2">
-                                                @envelope.Status
-                                            </span>
-                                        </div>
-                                    </a>
-                                }
-                            </div>
-                        }
-                        else
-                        {
-                            <p class="text-muted mb-0 small">No recent activity</p>
-                        }
-                    </div>
+                                        </a>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <p class="text-muted mb-0 small">No recent activity</p>
+                            }
+                        </div>
+                    }
                 </div>
             </div>
         </div>
 
         <!-- Documents Needing Follow-up -->
+        @if (ViewBag.HasEnvelopesAccess == true)
+        {
         <div class="col-xl-4 col-lg-4 mb-3">
             <div class="card shadow h-100">
                 <div class="card-header py-3 bg-warning-subtle">
@@ -231,6 +256,7 @@
                 </div>
             </div>
         </div>
+        }
     </div>
 
     <!-- Weekly Jobs & Inactive Customers Row -->
@@ -566,11 +592,12 @@
         let arTableInstance = null;
 
         $(document).ready(function() {
-            // Envelope Status Doughnut Chart
+            // Envelope Status Doughnut Chart (only if user has envelope access)
+            var envelopeChartElement = document.getElementById('envelopeStatusChart');
             var statusData = @Html.Raw(Json.Serialize(envelopeMetrics.StatusBreakdown));
 
-            if (statusData && statusData.length > 0) {
-                var ctx = document.getElementById('envelopeStatusChart').getContext('2d');
+            if (envelopeChartElement && statusData && statusData.length > 0) {
+                var ctx = envelopeChartElement.getContext('2d');
                 var labels = statusData.map(function(x) { return x.status; });
                 var data = statusData.map(function(x) { return x.count; });
                 var colors = statusData.map(function(x) {

@@ -1,0 +1,667 @@
+@{
+    ViewData["Title"] = "Office Dashboard";
+    var greeting = ViewBag.Greeting;
+    var username = ViewBag.Username;
+    var envelopeMetrics = ViewBag.EnvelopeMetrics as EnvelopeMetrics;
+    var recentEnvelopes = ViewBag.RecentEnvelopes as List<RecentEnvelope>;
+    var needsFollowUp = ViewBag.NeedsFollowUp as List<EnvelopeFollowUp>;
+    var weeklyOrders = ViewBag.WeeklyOrders as List<DailyOrderCount>;
+    var inactiveCustomers = ViewBag.InactiveCustomers as List<InactiveCustomerViewModel>;
+    var transactionSummary = ViewBag.TransactionSummary as TransactionSummary;
+    var overdueInvoices = ViewBag.OverdueInvoices as List<OverdueInvoice>;
+    var weekOffset = ViewBag.WeekOffset ?? 0;
+}
+
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2>@greeting, @username!</h2>
+            <p class="text-muted">Office Dashboard - Envelope & Business Metrics</p>
+        </div>
+    </div>
+
+    <!-- KPI Cards Row -->
+    <div class="row mb-4">
+        <!-- Envelopes Sent This Month -->
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Envelopes Sent This Month
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                @envelopeMetrics.EnvelopesSentThisMonth
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-envelope fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Completion Rate -->
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Completion Rate
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                @envelopeMetrics.CompletionRate.ToString("F1")%
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pending Signatures -->
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Pending Signatures
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                @envelopeMetrics.PendingSignatures
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-clock fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Avg Time to Sign -->
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Avg Time to Sign
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                @if (envelopeMetrics.AvgTimeToSign < 24)
+                                {
+                                    @envelopeMetrics.AvgTimeToSign.ToString("F1") <text> hrs</text>
+                                }
+                                else
+                                {
+                                    @((envelopeMetrics.AvgTimeToSign / 24).ToString("F1")) <text> days</text>
+                                }
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-hourglass-half fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Envelope Status Chart & Quick Actions Row -->
+    <div class="row mb-4">
+        <!-- Envelope Status Chart -->
+        <div class="col-xl-6 col-lg-6 mb-4">
+            <div class="card shadow h-100">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Envelope Status Breakdown</h6>
+                </div>
+                <div class="card-body">
+                    <canvas id="envelopeStatusChart" style="max-height: 300px;"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions & Recent Activity -->
+        <div class="col-xl-6 col-lg-6 mb-4">
+            <!-- Quick Actions -->
+            <div class="card shadow mb-3">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Quick Actions</h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex flex-wrap gap-2">
+                        <a href="/SignAdmin/Create" class="btn btn-primary">
+                            <i class="fas fa-plus"></i> Send New Envelope
+                        </a>
+                        <a href="/SignAdmin?scope=mine" class="btn btn-outline-primary">
+                            <i class="fas fa-folder-open"></i> View My Envelopes
+                        </a>
+                        <a href="/SignTemplate" class="btn btn-outline-secondary">
+                            <i class="fas fa-file-alt"></i> Manage Templates
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Envelope Activity -->
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Recent Envelope Activity</h6>
+                </div>
+                <div class="card-body" style="max-height: 250px; overflow-y: auto;">
+                    @if (recentEnvelopes != null && recentEnvelopes.Any())
+                    {
+                        <ul class="list-group list-group-flush">
+                            @foreach (var envelope in recentEnvelopes.Take(5))
+                            {
+                                <li class="list-group-item px-0 py-2">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <a href="/SignAdmin/Details/@envelope.EnvelopeId" class="font-weight-bold">
+                                                @envelope.Subject
+                                            </a>
+                                            <br />
+                                            <small class="text-muted">
+                                                @envelope.CreatedDateUtc.ToLocalTime().ToString("MMM dd, h:mm tt")
+                                            </small>
+                                        </div>
+                                        <span class="badge badge-@GetStatusBadgeClass(envelope.Status)">
+                                            @envelope.Status
+                                        </span>
+                                    </div>
+                                </li>
+                            }
+                        </ul>
+                    }
+                    else
+                    {
+                        <p class="text-muted mb-0">No recent activity</p>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Weekly Jobs Chart -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-primary">Weekly Jobs</h6>
+                    <div>
+                        <button class="btn btn-sm btn-outline-primary" onclick="changeWeek(-1)">
+                            <i class="fas fa-chevron-left"></i> Previous
+                        </button>
+                        <span class="mx-2 font-weight-bold">
+                            @ViewBag.WeeklyStart.ToString("MMM dd") - @ViewBag.WeeklyEnd.ToString("MMM dd, yyyy")
+                        </span>
+                        <button class="btn btn-sm btn-outline-primary" onclick="changeWeek(1)" @(weekOffset >= 0 ? "disabled" : "")>
+                            Next <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <canvas id="weeklyJobsChart" style="max-height: 300px;"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Documents Needing Follow-up & Inactive Customers Row -->
+    <div class="row mb-4">
+        <!-- Documents Needing Follow-up -->
+        <div class="col-xl-5 col-lg-5 mb-4">
+            <div class="card shadow h-100">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Documents Needing Follow-up</h6>
+                </div>
+                <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                    @if (needsFollowUp != null && needsFollowUp.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Subject</th>
+                                        <th>Status</th>
+                                        <th>Days Pending</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var doc in needsFollowUp)
+                                    {
+                                        <tr>
+                                            <td>@doc.Subject</td>
+                                            <td>
+                                                <span class="badge badge-@GetStatusBadgeClass(doc.Status)">
+                                                    @doc.Status
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <span class="text-@(doc.DaysPending >= 7 ? "danger" : "warning")">
+                                                    @doc.DaysPending days
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <a href="/SignAdmin/Details/@doc.EnvelopeId" class="btn btn-sm btn-outline-primary">
+                                                    View
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted mb-0">No documents need follow-up. Great work!</p>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Inactive Customers (Preview) -->
+        <div class="col-xl-7 col-lg-7 mb-4">
+            <div class="card shadow h-100">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Inactive Customers (Preview)</h6>
+                </div>
+                <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                    @if (inactiveCustomers != null && inactiveCustomers.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Customer</th>
+                                        <th>Management Co</th>
+                                        <th>Last Order</th>
+                                        <th>Days</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var customer in inactiveCustomers.Take(8))
+                                    {
+                                        <tr>
+                                            <td>@customer.CustomerName</td>
+                                            <td>@customer.MgmtCo</td>
+                                            <td>@customer.LastOrderDate.ToString("MM/dd/yyyy")</td>
+                                            <td>@customer.DaysSinceLastOrder</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="text-center mt-2">
+                            <button class="btn btn-sm btn-outline-primary" onclick="toggleInactiveCustomersTable()">
+                                View All (@inactiveCustomers.Count customers)
+                            </button>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted mb-0">No inactive customers found.</p>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Full Inactive Customers DataTable (Hidden by default) -->
+    <div class="row mb-4" id="fullInactiveCustomersSection" style="display: none;">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-primary">Inactive Customers - Full List</h6>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="toggleInactiveCustomersTable()">
+                        <i class="fas fa-times"></i> Hide
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table id="inactive-customers-table" class="table table-bordered table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Customer #</th>
+                                    <th>Customer Name</th>
+                                    <th>Management Co</th>
+                                    <th>Units</th>
+                                    <th>Last Order</th>
+                                    <th>Days Since Order</th>
+                                    <th>Last Install</th>
+                                    <th>Days Since Install</th>
+                                    <th>YTD Current</th>
+                                    <th>YTD Previous</th>
+                                    <th>AR Balance</th>
+                                    <th>Salesperson</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (inactiveCustomers != null)
+                                {
+                                    foreach (var customer in inactiveCustomers)
+                                    {
+                                        <tr>
+                                            <td>@customer.CustomerNumber</td>
+                                            <td>@customer.CustomerName</td>
+                                            <td>@customer.MgmtCo</td>
+                                            <td>@customer.Units</td>
+                                            <td>@customer.LastOrderDate.ToString("MM/dd/yyyy")</td>
+                                            <td>@customer.DaysSinceLastOrder</td>
+                                            <td>@customer.LastInstallDate.ToString("MM/dd/yyyy")</td>
+                                            <td>@customer.DaysSinceLastInstall</td>
+                                            <td>$@customer.YTDCurrent.ToString("N2")</td>
+                                            <td>$@customer.YTDPrevious.ToString("N2")</td>
+                                            <td>$@customer.Balance.ToString("N2")</td>
+                                            <td>@customer.Salesperson</td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- AR Table -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Accounts Receivable</h6>
+                </div>
+                <div class="card-body">
+                    <!-- AR Summary Cards -->
+                    <div class="row mb-3">
+                        <div class="col-md-2">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h6>Under 30</h6>
+                                    <h5 class="text-success">$@transactionSummary.DueUnder30Amount.ToString("N0")</h5>
+                                    <small>@transactionSummary.DueUnder30 invoices</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h6>30-60 Days</h6>
+                                    <h5 class="text-warning">$@transactionSummary.Due30to60Amount.ToString("N0")</h5>
+                                    <small>@transactionSummary.Due30to60 invoices</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h6>60-90 Days</h6>
+                                    <h5 class="text-orange">$@transactionSummary.Due60to90Amount.ToString("N0")</h5>
+                                    <small>@transactionSummary.Due60to90 invoices</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h6>90-120 Days</h6>
+                                    <h5 class="text-danger">$@transactionSummary.Due90to120Amount.ToString("N0")</h5>
+                                    <small>@transactionSummary.Due90to120 invoices</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h6>Over 120</h6>
+                                    <h5 class="text-danger font-weight-bold">$@transactionSummary.DueOver120Amount.ToString("N0")</h5>
+                                    <small>@transactionSummary.DueOver120 invoices</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- AR Overdue Table -->
+                    <div class="table-responsive">
+                        <table id="ar_table" class="table table-bordered table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Invoice</th>
+                                    <th>Customer</th>
+                                    <th>Management Co</th>
+                                    <th>Amount Due</th>
+                                    <th>Due Date</th>
+                                    <th>Days Past Due</th>
+                                    <th>Aging</th>
+                                    <th>Salesperson</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (overdueInvoices != null)
+                                {
+                                    foreach (var invoice in overdueInvoices)
+                                    {
+                                        <tr>
+                                            <td>@invoice.Invoice</td>
+                                            <td>@invoice.CustomerName</td>
+                                            <td>@invoice.MgmtCo</td>
+                                            <td>$@invoice.OutstandingAmount.ToString("N2")</td>
+                                            <td>@invoice.DueDate.ToString("MM/dd/yyyy")</td>
+                                            <td>@invoice.DaysPastDue</td>
+                                            <td>
+                                                <span class="badge badge-@GetAgingBadgeClass(invoice.InvoiceAging)">
+                                                    @invoice.InvoiceAging
+                                                </span>
+                                            </td>
+                                            <td>@invoice.Salesperson</td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@functions {
+    string GetStatusBadgeClass(string status)
+    {
+        return status switch
+        {
+            "Completed" => "success",
+            "Sent" => "primary",
+            "Viewed" => "info",
+            "Draft" => "secondary",
+            "Declined" => "danger",
+            "Voided" => "dark",
+            "Expired" => "warning",
+            _ => "secondary"
+        };
+    }
+
+    string GetAgingBadgeClass(string aging)
+    {
+        return aging switch
+        {
+            "Under 30 Days" => "success",
+            "30 to 60 Days" => "warning",
+            "60 to 90 Days" => "warning",
+            "90 to 120 Days" => "danger",
+            "Over 120 Days" => "danger",
+            _ => "secondary"
+        };
+    }
+}
+
+<!-- Scripts -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Store chart instances for cleanup
+    let envelopeStatusChartInstance = null;
+    let weeklyJobsChartInstance = null;
+    let inactiveCustomersTableInstance = null;
+    let arTableInstance = null;
+
+    // Envelope Status Chart
+    $(document).ready(function() {
+        // Envelope Status Doughnut Chart
+        var statusData = @Html.Raw(Json.Serialize(envelopeMetrics.StatusBreakdown));
+
+        if (statusData && statusData.length > 0) {
+            var ctx = document.getElementById('envelopeStatusChart').getContext('2d');
+            var labels = statusData.map(x => x.Status);
+            var data = statusData.map(x => x.Count);
+            var colors = statusData.map(x => {
+                switch(x.Status) {
+                    case 'Completed': return '#28a745';
+                    case 'Sent': return '#007bff';
+                    case 'Viewed': return '#17a2b8';
+                    case 'Draft': return '#6c757d';
+                    case 'Declined': return '#dc3545';
+                    case 'Voided': return '#343a40';
+                    case 'Expired': return '#ffc107';
+                    default: return '#6c757d';
+                }
+            });
+
+            envelopeStatusChartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: colors
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+
+        // Weekly Jobs Bar Chart
+        var weeklyData = @Html.Raw(Json.Serialize(weeklyOrders));
+
+        if (weeklyData && weeklyData.length > 0) {
+            var ctx2 = document.getElementById('weeklyJobsChart').getContext('2d');
+            var labels2 = weeklyData.map(x => x.WeekdayName);
+            var orderCounts = weeklyData.map(x => x.OrdersCount);
+
+            weeklyJobsChartInstance = new Chart(ctx2, {
+                type: 'bar',
+                data: {
+                    labels: labels2,
+                    datasets: [{
+                        label: 'Orders',
+                        data: orderCounts,
+                        backgroundColor: '#4e73df'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        // Initialize AR DataTable
+        arTableInstance = $('#ar_table').DataTable({
+            order: [[5, 'desc']], // Sort by Days Past Due
+            pageLength: 10,
+            responsive: true,
+            dom: 'Bfrtip',
+            buttons: ['excel']
+        });
+    });
+
+    // Toggle Inactive Customers Full Table
+    function toggleInactiveCustomersTable() {
+        var section = $('#fullInactiveCustomersSection');
+        section.toggle();
+
+        // Initialize DataTable if showing for the first time
+        if (section.is(':visible') && !inactiveCustomersTableInstance) {
+            inactiveCustomersTableInstance = $('#inactive-customers-table').DataTable({
+                order: [[5, 'desc']], // Sort by Days Since Order
+                pageLength: 25,
+                responsive: true,
+                dom: 'Bfrtip',
+                buttons: ['excel']
+            });
+        }
+    }
+
+    // Change week for Weekly Jobs
+    function changeWeek(offset) {
+        var currentOffset = @weekOffset;
+        var newOffset = currentOffset + offset;
+        window.location.href = '/Office/Index?weekOffset=' + newOffset;
+    }
+
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', function() {
+        // Cleanup Chart.js instances
+        if (envelopeStatusChartInstance) {
+            envelopeStatusChartInstance.destroy();
+            envelopeStatusChartInstance = null;
+        }
+        if (weeklyJobsChartInstance) {
+            weeklyJobsChartInstance.destroy();
+            weeklyJobsChartInstance = null;
+        }
+
+        // Cleanup DataTables
+        if (arTableInstance && $.fn.DataTable.isDataTable('#ar_table')) {
+            arTableInstance.destroy();
+        }
+        if (inactiveCustomersTableInstance && $.fn.DataTable.isDataTable('#inactive-customers-table')) {
+            inactiveCustomersTableInstance.destroy();
+        }
+    });
+</script>
+
+<style>
+    .border-left-primary {
+        border-left: 0.25rem solid #4e73df !important;
+    }
+    .border-left-success {
+        border-left: 0.25rem solid #1cc88a !important;
+    }
+    .border-left-warning {
+        border-left: 0.25rem solid #f6c23e !important;
+    }
+    .border-left-info {
+        border-left: 0.25rem solid #36b9cc !important;
+    }
+    .text-orange {
+        color: #fd7e14 !important;
+    }
+    .gap-2 {
+        gap: 0.5rem;
+    }
+</style>

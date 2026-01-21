@@ -185,9 +185,51 @@
             <button class="btn btn-success btn-lg w-100" type="submit" id="submitBtn">
                 <i class="bi bi-check-circle-fill"></i> Sign & Finish
             </button>
+
+            <button type="button" class="btn btn-outline-danger w-100 mt-3" data-bs-toggle="modal" data-bs-target="#declineModal">
+                <i class="bi bi-x-circle"></i> Decline to Sign
+            </button>
         </div>
     </div>
 </form>
+
+<!-- Decline Modal -->
+<div class="modal fade" id="declineModal" tabindex="-1" aria-labelledby="declineModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="declineModalLabel">
+                    <i class="bi bi-exclamation-triangle-fill"></i> Decline Signature Request
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="/sign/@ViewBag.Token/decline" method="post">
+                @Html.AntiForgeryToken()
+                <div class="modal-body">
+                    <p class="fw-bold">Are you sure you want to decline this signature request?</p>
+                    <p class="text-muted">By declining, you are refusing to sign this document. All parties involved will be notified of your decision.</p>
+
+                    <div class="mb-3">
+                        <label for="declineReason" class="form-label">Reason (optional):</label>
+                        <textarea class="form-control" id="declineReason" name="reason" rows="3" placeholder="Enter your reason for declining..."></textarea>
+                        <div class="form-text">Providing a reason helps the sender understand your decision.</div>
+                    </div>
+
+                    <div class="alert alert-warning mb-0">
+                        <i class="bi bi-info-circle"></i>
+                        <strong>Note:</strong> This action cannot be undone. If you decline in error, you'll need to contact the sender directly.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-x-circle"></i> Decline Signature
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
 @section Scripts {
     <!-- PDF.js Library -->

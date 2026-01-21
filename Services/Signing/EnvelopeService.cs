@@ -571,6 +571,68 @@ public sealed class EnvelopeService : IEnvelopeService
         return (true, null);
     }
 
+    public async Task<bool> DeclineEnvelopeAsync(string token, string reason, string userAgent, string ip)
+    {
+        var recipient = await _db.SignRecipients
+            .Include(r => r.Envelope)
+            .ThenInclude(e => e.Recipients)
+            .FirstOrDefaultAsync(r => r.AccessToken == token);
+
+        if (recipient == null)
+            return false;
+
+        // Check if already signed or declined
+        if (recipient.SignedAtUtc != null)
+            return false; // Already signed, can't decline
+
+        if (recipient.DeclinedAtUtc != null)
+            return false; // Already declined
+
+        // Mark recipient as declined
+        recipient.DeclinedAtUtc = DateTime.UtcNow;
+        recipient.IPAddressSigned = ip; // Track IP of decline action
+        recipient.UserAgentSigned = userAgent;
+
+        // Update envelope status to Declined
+        var envelope = recipient.Envelope;
+        envelope.Status = "Declined";
+        envelope.ModifiedDateUtc = DateTime.UtcNow;
+
+        // Add decline event
+        _db.SignEvents.Add(new SignEvent
+        {
+            EnvelopeId = envelope.EnvelopeId,
+            RecipientId = recipient.RecipientId,
+            EventType = "Declined",
+            OccurredAtUtc = DateTime.UtcNow,
+            MetaJson = System.Text.Json.JsonSerializer.Serialize(new { reason, ip, userAgent })
+        });
+
+        await _db.SaveChangesAsync();
+
+        // Notify other recipients and envelope creator
+        try
+        {
+            // Notify all other recipients that envelope was declined
+            foreach (var otherRecipient in envelope.Recipients.Where(r => r.RecipientId != recipient.RecipientId))
+            {
+                var html = $"""
+                    <p>Hello {otherRecipient.FullName},</p>
+                    <p>The signature request for <b>{envelope.Subject}</b> has been declined by {recipient.FullName}.</p>
+                    {(!string.IsNullOrWhiteSpace(reason) ? $"<p>Reason: {reason}</p>" : "")}
+                    <p>No further action is required.</p>
+                    """;
+                await _notify.SendEnvelopeEmailAsync(otherRecipient.Email, otherRecipient.FullName, $"Declined: {envelope.Subject}", html);
+            }
+        }
+        catch
+        {
+            // Don't fail the decline operation if email fails
+        }
+
+        return true;
+    }
+
     public async Task UpsertTenantRecipientAsync(long envelopeId, string fullName, string email, string? phone = null)
     {
         var env = await _db.SignEnvelopes.Include(e => e.Recipients).FirstAsync(e => e.EnvelopeId == envelopeId);

@@ -1,0 +1,188 @@
+@* Views/SignPublic/Status.cshtml *@
+@model SalesMetrics.Models.Signing.ReviewVm
+@{
+    Layout = "~/Views/Shared/PublicSigningLayout.cshtml";
+    ViewData["Title"] = "Envelope Status";
+    var token = ViewBag.Token as string;
+    var hasSignature = Model.Recipient.SignedAtUtc != null;
+    var isComplete = Model.Envelope.Status == "Completed";
+    var downloadUrl = isComplete ? Model.Envelope.PdfStoragePath : null;
+}
+
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-primary text-white fw-bold">
+        <i class="bi bi-envelope-check"></i> Envelope Status
+    </div>
+    <div class="card-body p-4">
+        <!-- Envelope Information -->
+        <div class="mb-4">
+            <h5 class="fw-bold">@Model.Envelope.Subject</h5>
+            @if (!string.IsNullOrWhiteSpace(Model.Envelope.MessageBody))
+            {
+                <p class="text-muted mb-0">@Model.Envelope.MessageBody</p>
+            }
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(Model.PropertyName) || !string.IsNullOrWhiteSpace(Model.OrderNumber))
+        {
+            <div class="card border-info mb-4">
+                <div class="card-body">
+                    <h6 class="fw-bold text-info mb-2">Property Details</h6>
+                    @if (!string.IsNullOrWhiteSpace(Model.PropertyName))
+                    {
+                        <div><strong>Property:</strong> @Model.PropertyName</div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(Model.OrderNumber))
+                    {
+                        <div><strong>Order #:</strong> @Model.OrderNumber</div>
+                    }
+                </div>
+            </div>
+        }
+
+        <!-- Your Status Section -->
+        <div class="card border-0 mb-4" style="background-color: #f8f9fa;">
+            <div class="card-body">
+                <h6 class="fw-bold mb-3">Your Status</h6>
+                <div class="d-flex align-items-center mb-2">
+                    <div class="flex-grow-1">
+                        <div class="fw-semibold">@Model.Recipient.FullName</div>
+                        <div class="small text-muted">@Model.Recipient.Email</div>
+                    </div>
+                    <div>
+                        @if (hasSignature)
+                        {
+                            <span class="badge bg-success px-3 py-2">
+                                <i class="bi bi-check-circle-fill"></i> Signed
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-warning text-dark px-3 py-2">
+                                <i class="bi bi-clock-history"></i> Pending
+                            </span>
+                        }
+                    </div>
+                </div>
+                @if (hasSignature)
+                {
+                    <div class="small text-success">
+                        <i class="bi bi-check-circle"></i> Signed on @Model.Recipient.SignedAtUtc.Value.ToLocalTime().ToString("g")
+                    </div>
+                }
+                else
+                {
+                    <div class="alert alert-warning mt-3 mb-0">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        <strong>Action Required:</strong> You haven't signed this document yet.
+                        <div class="mt-2">
+                            <a href="/sign/@token" class="btn btn-warning btn-sm">
+                                <i class="bi bi-pen"></i> Sign Now
+                            </a>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Other Recipients Status -->
+        @if (Model.AllRecipients.Count > 1)
+        {
+            <div class="card border-0 mb-4" style="background-color: #f8f9fa;">
+                <div class="card-body">
+                    <h6 class="fw-bold mb-3">Other Recipients</h6>
+                    @foreach (var recipient in Model.AllRecipients.Where(r => r.RecipientId != Model.Recipient.RecipientId))
+                    {
+                        <div class="d-flex align-items-center mb-2 pb-2 border-bottom">
+                            <div class="flex-grow-1">
+                                <div class="fw-semibold">@recipient.FullName (@recipient.Role)</div>
+                                <div class="small text-muted">@recipient.Email</div>
+                            </div>
+                            <div>
+                                @if (recipient.SignedAtUtc != null)
+                                {
+                                    <span class="badge bg-success px-2 py-1">
+                                        <i class="bi bi-check-circle-fill"></i> Signed
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary px-2 py-1">
+                                        <i class="bi bi-clock"></i> Pending
+                                    </span>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        <!-- Envelope Status -->
+        <div class="card border-0 mb-4">
+            <div class="card-body">
+                <h6 class="fw-bold mb-3">Envelope Status</h6>
+                <div class="d-flex align-items-center mb-3">
+                    <div class="flex-grow-1">
+                        <span class="badge @(isComplete ? "bg-success" : "bg-info") px-3 py-2">
+                            @Model.Envelope.Status.ToUpper()
+                        </span>
+                    </div>
+                </div>
+
+                <div class="row g-2 text-muted small">
+                    @if (Model.Envelope.SentAtUtc != null)
+                    {
+                        <div class="col-md-6">
+                            <i class="bi bi-send"></i> <strong>Sent:</strong> @Model.Envelope.SentAtUtc.Value.ToLocalTime().ToString("g")
+                        </div>
+                    }
+                    @if (Model.Envelope.ExpiresAtUtc != null)
+                    {
+                        <div class="col-md-6">
+                            <i class="bi bi-calendar-x"></i> <strong>Expires:</strong> @Model.Envelope.ExpiresAtUtc.Value.ToLocalTime().ToString("g")
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Download Section (if complete) -->
+        @if (isComplete && !string.IsNullOrWhiteSpace(downloadUrl))
+        {
+            <div class="alert alert-success mb-0" style="padding: 1.5rem;">
+                <div class="d-flex align-items-start">
+                    <i class="bi bi-file-earmark-check-fill fs-1 text-success me-3"></i>
+                    <div class="flex-grow-1">
+                        <h5 class="fw-bold mb-2">Document Complete</h5>
+                        <p class="mb-3">All parties have signed! You can download the completed document below:</p>
+                        <a class="btn btn-success btn-lg" href="@downloadUrl" target="_blank">
+                            <i class="bi bi-download"></i> Download Signed PDF
+                        </a>
+                    </div>
+                </div>
+            </div>
+        }
+        else if (hasSignature)
+        {
+            <div class="alert alert-info mb-0">
+                <i class="bi bi-info-circle"></i>
+                <strong>Waiting for Additional Signatures</strong>
+                <p class="mb-0 mt-2">The document is waiting for other parties to sign. You will receive an email when all signatures are complete.</p>
+            </div>
+        }
+
+        <!-- Actions -->
+        <div class="mt-4 text-center">
+            @if (!hasSignature)
+            {
+                <a href="/sign/@token" class="btn btn-primary btn-lg me-2">
+                    <i class="bi bi-pen"></i> Sign Document
+                </a>
+            }
+            <a href="/sign/@token" class="btn btn-outline-secondary">
+                <i class="bi bi-eye"></i> View Document
+            </a>
+        </div>
+    </div>
+</div>

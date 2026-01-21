@@ -90,9 +90,36 @@ public class SignAdminController : Controller
     // GET /SignAdmin/Create
     public async Task<IActionResult> Create()
     {
+        var userId = GetCurrentUserId();
+        var currentLocationCode = HttpContext.Session.GetString("OfficeLocation") ?? "LAX";
+        var currentLocationId = GetCurrentLocationId();
+
+        // Get user's assigned locations from database
+        var userLocations = await _db.UserLocationAssignments
+            .Where(ula => ula.UserID == userId && ula.IsActive == "Y")
+            .Select(ula => ula.LocationID)
+            .ToListAsync();
+
+        // Filter LocationHelper.Locations to only show user's assigned locations
+        Dictionary<int, (string Code, string Name)> userAccessibleLocations;
+
+        if (userLocations.Any())
+        {
+            // User has specific location assignments - filter to those
+            userAccessibleLocations = LocationHelper.Locations
+                .Where(loc => userLocations.Contains(loc.Key))
+                .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+        }
+        else
+        {
+            // No specific assignments found - show all locations (fallback for admins/legacy users)
+            userAccessibleLocations = LocationHelper.Locations;
+        }
+
         var vm = new CreateEnvelopeVm
         {
             ExpiresAtUtc = DateTime.UtcNow.AddDays(14),
+            LocationCode = currentLocationCode, // Pre-populate with current location
             Templates = await _db.SignTemplates
                 .Where(t => t.IsActive)
                 .OrderBy(t => t.DisplayName)
@@ -100,8 +127,10 @@ public class SignAdminController : Controller
                 .ToListAsync()
         };
 
-        // Pass branch locations for dropdown
-        ViewBag.Locations = LocationHelper.Locations;
+        // Pass filtered branch locations for dropdown
+        ViewBag.Locations = userAccessibleLocations;
+        ViewBag.CurrentLocationCode = currentLocationCode;
+        ViewBag.HasMultipleLocations = userAccessibleLocations.Count > 1;
 
         return View(vm);
     }
@@ -113,19 +142,42 @@ public class SignAdminController : Controller
     {
         if (!ModelState.IsValid)
         {
+            var userId = GetCurrentUserId();
+            var currentLocationCode = HttpContext.Session.GetString("OfficeLocation") ?? "LAX";
+
+            // Get user's assigned locations
+            var userLocations = await _db.UserLocationAssignments
+                .Where(ula => ula.UserID == userId && ula.IsActive == "Y")
+                .Select(ula => ula.LocationID)
+                .ToListAsync();
+
+            Dictionary<int, (string Code, string Name)> userAccessibleLocations;
+            if (userLocations.Any())
+            {
+                userAccessibleLocations = LocationHelper.Locations
+                    .Where(loc => userLocations.Contains(loc.Key))
+                    .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+            }
+            else
+            {
+                userAccessibleLocations = LocationHelper.Locations;
+            }
+
             vm.Templates = await _db.SignTemplates
                 .Where(t => t.IsActive)
                 .OrderBy(t => t.DisplayName)
                 .Select(t => new ValueTuple<string, string>(t.TemplateKey, t.DisplayName))
                 .ToListAsync();
 
-            // Repopulate branch locations for dropdown
-            ViewBag.Locations = LocationHelper.Locations;
+            // Repopulate filtered branch locations for dropdown
+            ViewBag.Locations = userAccessibleLocations;
+            ViewBag.CurrentLocationCode = currentLocationCode;
+            ViewBag.HasMultipleLocations = userAccessibleLocations.Count > 1;
 
             return View(vm);
         }
-        var userId = GetCurrentUserId();
-        var id = await _svc.CreateAsync(userId, vm);
+        var userId2 = GetCurrentUserId();
+        var id = await _svc.CreateAsync(userId2, vm);
         await _svc.SendAsync(id);
         return RedirectToAction(nameof(Details), new { id });
     }

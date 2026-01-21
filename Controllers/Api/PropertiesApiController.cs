@@ -8,16 +8,45 @@ namespace SalesMetrics.Controllers.Api
     [Route("api/properties")]
     public class PropertiesApiController : ControllerBase
     {
-        private readonly IErpMergeService _erp; // whatever you use today
-        public PropertiesApiController(IErpMergeService erp) => _erp = erp;
+        private readonly IErpMergeService _erp;
+        private readonly IHttpContextAccessor _http;
 
-        // GET /api/properties/search?term=park
-        // PropertiesApiController.cs
-        [HttpGet("search")]
-        public async Task<IActionResult> Search([FromQuery] string term, [FromQuery] int take = 20)
+        public PropertiesApiController(IErpMergeService erp, IHttpContextAccessor http)
         {
-            var props = await _erp.SearchPropertiesAsync(term, take);
-            return Ok(props.Select(p => new { id = p.CustomerId, name = p.CustomerName }));
+            _erp = erp;
+            _http = http;
+        }
+
+        // GET /api/properties/search?term=park&locationCode=LSV
+        [HttpGet("search")]
+        public async Task<IActionResult> Search([FromQuery] string term, [FromQuery] int take = 20, [FromQuery] string? locationCode = null)
+        {
+            // If locationCode is provided, temporarily override the session location for this search
+            if (!string.IsNullOrWhiteSpace(locationCode))
+            {
+                var originalLocation = _http.HttpContext?.Session.GetString("OfficeLocation");
+                try
+                {
+                    // Temporarily set the location for this request
+                    _http.HttpContext?.Session.SetString("OfficeLocation", locationCode);
+                    var props = await _erp.SearchPropertiesAsync(term, take);
+                    return Ok(props.Select(p => new { id = p.CustomerId, name = p.CustomerName }));
+                }
+                finally
+                {
+                    // Restore original session location
+                    if (originalLocation != null)
+                    {
+                        _http.HttpContext?.Session.SetString("OfficeLocation", originalLocation);
+                    }
+                }
+            }
+            else
+            {
+                // Use session location (default behavior)
+                var props = await _erp.SearchPropertiesAsync(term, take);
+                return Ok(props.Select(p => new { id = p.CustomerId, name = p.CustomerName }));
+            }
         }
 
     }

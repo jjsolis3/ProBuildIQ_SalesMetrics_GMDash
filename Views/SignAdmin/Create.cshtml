@@ -35,17 +35,33 @@
 
                 <div class="col-md-3">
                     <label class="form-label">Branch</label>
-                    <select asp-for="LocationCode" id="branchSelect" class="form-select" required>
-                        <option value="">-- Select Branch --</option>
+                    @if (ViewBag.HasMultipleLocations == true)
+                    {
+                        @* User has multiple location access - show dropdown *@
+                        <select asp-for="LocationCode" id="branchSelect" class="form-select" required>
+                            @if (ViewBag.Locations != null)
+                            {
+                                @foreach (var loc in (Dictionary<int, (string Code, string Name)>)ViewBag.Locations)
+                                {
+                                    <option value="@loc.Value.Code">@loc.Value.Code - @loc.Value.Name</option>
+                                }
+                            }
+                        </select>
+                    }
+                    else
+                    {
+                        @* User has single location - show as read-only *@
                         @if (ViewBag.Locations != null)
                         {
-                            @foreach (var loc in (Dictionary<int, (string Code, string Name)>)ViewBag.Locations)
-                            {
-                                <option value="@loc.Value.Code">@loc.Value.Code - @loc.Value.Name</option>
-                            }
+                            var singleLoc = ((Dictionary<int, (string Code, string Name)>)ViewBag.Locations).Values.FirstOrDefault();
+                            <input type="text" class="form-control" value="@singleLoc.Code - @singleLoc.Name" readonly style="background-color: #e9ecef;" />
+                            <input type="hidden" asp-for="LocationCode" id="branchSelect" />
                         }
-                    </select>
+                    }
                     <span asp-validation-for="LocationCode" class="text-danger"></span>
+                    <small class="form-text text-muted">
+                        <i class="bi bi-info-circle"></i> Property and order searches will use this branch location
+                    </small>
                 </div>
 
                 @* <div class="col-md-3">
@@ -220,7 +236,11 @@
           const q = propSearch.value.trim();
           if (!q) { propResults.innerHTML = ''; return; }
           propTimer = setTimeout(async () => {
-            const res = await fetch(`/api/properties/search?term=${encodeURIComponent(q)}`);
+            // Get selected branch location code
+            const branchSelect = document.getElementById('branchSelect');
+            const locationCode = branchSelect?.value || '';
+            const url = `/api/properties/search?term=${encodeURIComponent(q)}${locationCode ? '&locationCode=' + encodeURIComponent(locationCode) : ''}`;
+            const res = await fetch(url);
             const items = await res.json();
             propResults.innerHTML = items.map(i =>
               `<button type="button" class="list-group-item list-group-item-action" data-id="${i.id}" data-name="${i.name}">${i.name}</button>`
@@ -238,7 +258,11 @@
           // load orders for this property
           orderSelect.innerHTML = '<option value="">Loading orders…</option>';
           orderSelect.disabled = true;
-          const res = await fetch(`/api/orders/by-property?propertyId=${encodeURIComponent(propId.value)}&status=pending`);
+          // Get selected branch location code
+          const branchSelect = document.getElementById('branchSelect');
+          const locationCode = branchSelect?.value || '';
+          const orderUrl = `/api/orders/by-property?propertyId=${encodeURIComponent(propId.value)}${locationCode ? '&locationCode=' + encodeURIComponent(locationCode) : ''}`;
+          const res = await fetch(orderUrl);
           const items = await res.json();
           orderSelect.innerHTML = '<option value="">Select an order (optional)</option>' +
             items.map(o => `<option value="${o.id}">${o.display}</option>`).join('');

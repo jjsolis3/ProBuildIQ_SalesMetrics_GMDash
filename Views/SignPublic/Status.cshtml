@@ -23,18 +23,18 @@
             }
         </div>
 
-        @if (!string.IsNullOrWhiteSpace(Model.PropertyName) || !string.IsNullOrWhiteSpace(Model.OrderNumber))
+        @if (!string.IsNullOrWhiteSpace(Model.Property?.Name) || !string.IsNullOrWhiteSpace(Model.Envelope.OrderNumber))
         {
             <div class="card border-info mb-4">
                 <div class="card-body">
                     <h6 class="fw-bold text-info mb-2">Property Details</h6>
-                    @if (!string.IsNullOrWhiteSpace(Model.PropertyName))
+                    @if (!string.IsNullOrWhiteSpace(Model.Property?.Name))
                     {
-                        <div><strong>Property:</strong> @Model.PropertyName</div>
+                        <div><strong>Property:</strong> @Model.Property.Name</div>
                     }
-                    @if (!string.IsNullOrWhiteSpace(Model.OrderNumber))
+                    @if (!string.IsNullOrWhiteSpace(Model.Envelope.OrderNumber))
                     {
-                        <div><strong>Order #:</strong> @Model.OrderNumber</div>
+                        <div><strong>Order #:</strong> @Model.Envelope.OrderNumber</div>
                     }
                 </div>
             </div>
@@ -86,12 +86,12 @@
         </div>
 
         <!-- Other Recipients Status -->
-        @if (Model.AllRecipients.Count > 1)
+        @if (Model.Envelope.Recipients.Count > 1)
         {
             <div class="card border-0 mb-4" style="background-color: #f8f9fa;">
                 <div class="card-body">
                     <h6 class="fw-bold mb-3">Other Recipients</h6>
-                    @foreach (var recipient in Model.AllRecipients.Where(r => r.RecipientId != Model.Recipient.RecipientId))
+                    @foreach (var recipient in Model.Envelope.Recipients.Where(r => r.RecipientId != Model.Recipient.RecipientId))
                     {
                         <div class="d-flex align-items-center mb-2 pb-2 border-bottom">
                             <div class="flex-grow-1">

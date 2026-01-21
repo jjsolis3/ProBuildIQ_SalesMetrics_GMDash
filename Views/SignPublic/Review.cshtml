@@ -242,6 +242,7 @@
         let pageNum = 1;
         let pageRendering = false;
         let pageNumPending = null;
+        let currentRenderTask = null;
         const scale = 1.5;
         const canvas = document.getElementById('pdfCanvas');
         const ctx = canvas.getContext('2d');
@@ -258,11 +259,19 @@
                 document.getElementById('nextPage').disabled = false;
             }
         }).catch(function(error) {
-            document.getElementById('pdfContainer').innerHTML = '<div class="alert alert-warning m-3">Unable to load PDF preview. Please use the "View Full PDF" button above.</div>';
+            console.error('PDF loading error:', error);
+            document.getElementById('pdfContainer').innerHTML = '<div class="alert alert-warning m-3"><i class="bi bi-exclamation-triangle"></i> Unable to load PDF preview. Please use the "View Full PDF" button above or refresh the page.</div>';
         });
 
         function renderPage(num) {
             pageRendering = true;
+
+            // Cancel previous render task if still running
+            if (currentRenderTask) {
+                currentRenderTask.cancel();
+                currentRenderTask = null;
+            }
+
             pdfDoc.getPage(num).then(function(page) {
                 const viewport = page.getViewport({ scale: scale });
                 canvas.height = viewport.height;
@@ -273,14 +282,25 @@
                     viewport: viewport
                 };
 
-                const renderTask = page.render(renderContext);
-                renderTask.promise.then(function() {
+                currentRenderTask = page.render(renderContext);
+                currentRenderTask.promise.then(function() {
                     pageRendering = false;
+                    currentRenderTask = null;
                     if (pageNumPending !== null) {
                         renderPage(pageNumPending);
                         pageNumPending = null;
                     }
+                }).catch(function(error) {
+                    // Ignore cancellation errors
+                    if (error.name !== 'RenderingCancelledException') {
+                        console.error('Page rendering error:', error);
+                    }
+                    pageRendering = false;
+                    currentRenderTask = null;
                 });
+            }).catch(function(error) {
+                console.error('Failed to get page:', error);
+                pageRendering = false;
             });
 
             document.getElementById('pageNum').textContent = num;
@@ -289,6 +309,24 @@
             document.getElementById('prevPage').disabled = (num <= 1);
             document.getElementById('nextPage').disabled = (num >= pdfDoc.numPages);
         }
+
+        // Cleanup function for PDF.js resources
+        function cleanupPdf() {
+            if (currentRenderTask) {
+                currentRenderTask.cancel();
+                currentRenderTask = null;
+            }
+            if (pdfDoc) {
+                pdfDoc.destroy();
+                pdfDoc = null;
+            }
+        }
+
+        // Register cleanup on page unload
+        window.addEventListener('beforeunload', function() {
+            cleanupPdf();
+            cleanupSignatureCanvas();
+        });
 
         function queueRenderPage(num) {
             if (pageRendering) {
@@ -398,6 +436,7 @@
           document.getElementById('SigData').value = dataUrl;
         }
 
+        // Attach event listeners
         sigCanvas.addEventListener('mousedown', start);
         sigCanvas.addEventListener('mousemove', move);
         sigCanvas.addEventListener('mouseup', end);
@@ -408,11 +447,34 @@
         sigCanvas.addEventListener('touchend', end);
         sigCanvas.addEventListener('touchcancel', end);
 
-        document.getElementById('clearSig').addEventListener('click', ()=>{
+        const clearSigHandler = function() {
           sigCtx.clearRect(0, 0, sigCanvas.width, sigCanvas.height);
           document.getElementById('SigData').value = '';
           hasInk = false;
-        });
+        };
+        document.getElementById('clearSig').addEventListener('click', clearSigHandler);
+
+        // Cleanup function for signature canvas
+        function cleanupSignatureCanvas() {
+          // Remove event listeners
+          sigCanvas.removeEventListener('mousedown', start);
+          sigCanvas.removeEventListener('mousemove', move);
+          sigCanvas.removeEventListener('mouseup', end);
+          sigCanvas.removeEventListener('mouseleave', end);
+          sigCanvas.removeEventListener('touchstart', start);
+          sigCanvas.removeEventListener('touchmove', move);
+          sigCanvas.removeEventListener('touchend', end);
+          sigCanvas.removeEventListener('touchcancel', end);
+
+          // Remove resize listener
+          window.removeEventListener('resize', resizeSigPad);
+
+          // Remove clear button listener
+          const clearBtn = document.getElementById('clearSig');
+          if (clearBtn) {
+            clearBtn.removeEventListener('click', clearSigHandler);
+          }
+        }
 
         // Form Submission Validation
         document.getElementById('signForm').addEventListener('submit', function(e){

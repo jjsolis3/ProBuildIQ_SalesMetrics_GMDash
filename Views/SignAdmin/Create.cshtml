@@ -231,24 +231,33 @@
         const propResults = document.getElementById('propResults');
         const orderSelect = document.getElementById('orderSelect');
 
-        propSearch.addEventListener('input', () => {
+        const propSearchHandler = function() {
           clearTimeout(propTimer);
           const q = propSearch.value.trim();
           if (!q) { propResults.innerHTML = ''; return; }
           propTimer = setTimeout(async () => {
-            // Get selected branch location code
-            const branchSelect = document.getElementById('branchSelect');
-            const locationCode = branchSelect?.value || '';
-            const url = `/api/properties/search?term=${encodeURIComponent(q)}${locationCode ? '&locationCode=' + encodeURIComponent(locationCode) : ''}`;
-            const res = await fetch(url);
-            const items = await res.json();
-            propResults.innerHTML = items.map(i =>
-              `<button type="button" class="list-group-item list-group-item-action" data-id="${i.id}" data-name="${i.name}">${i.name}</button>`
-            ).join('');
+            try {
+              // Get selected branch location code
+              const branchSelect = document.getElementById('branchSelect');
+              const locationCode = branchSelect?.value || '';
+              const url = `/api/properties/search?term=${encodeURIComponent(q)}${locationCode ? '&locationCode=' + encodeURIComponent(locationCode) : ''}`;
+              const res = await fetch(url);
+              if (!res.ok) {
+                throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+              }
+              const items = await res.json();
+              propResults.innerHTML = items.map(i =>
+                `<button type="button" class="list-group-item list-group-item-action" data-id="${i.id}" data-name="${i.name}">${i.name}</button>`
+              ).join('');
+            } catch (error) {
+              console.error('Property search error:', error);
+              propResults.innerHTML = '<div class="list-group-item text-danger">Error loading properties. Please try again.</div>';
+            }
           }, 250);
-        });
+        };
+        propSearch.addEventListener('input', propSearchHandler);
 
-        propResults.addEventListener('click', async (e) => {
+        const propResultsClickHandler = async function(e) {
           const btn = e.target.closest('button[data-id]');
           if (!btn) return;
           propId.value = btn.dataset.id;
@@ -258,31 +267,44 @@
           // load orders for this property
           orderSelect.innerHTML = '<option value="">Loading orders…</option>';
           orderSelect.disabled = true;
-          // Get selected branch location code
-          const branchSelect = document.getElementById('branchSelect');
-          const locationCode = branchSelect?.value || '';
-          const orderUrl = `/api/orders/by-property?propertyId=${encodeURIComponent(propId.value)}${locationCode ? '&locationCode=' + encodeURIComponent(locationCode) : ''}`;
-          const res = await fetch(orderUrl);
-          const items = await res.json();
-          orderSelect.innerHTML = '<option value="">Select an order (optional)</option>' +
-            items.map(o => `<option value="${o.id}">${o.display}</option>`).join('');
-          orderSelect.disabled = false;
+          try {
+            // Get selected branch location code
+            const branchSelect = document.getElementById('branchSelect');
+            const locationCode = branchSelect?.value || '';
+            const orderUrl = `/api/orders/by-property?propertyId=${encodeURIComponent(propId.value)}${locationCode ? '&locationCode=' + encodeURIComponent(locationCode) : ''}`;
+            const res = await fetch(orderUrl);
+            if (!res.ok) {
+              throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+            }
+            const items = await res.json();
+            orderSelect.innerHTML = '<option value="">Select an order (optional)</option>' +
+              items.map(o => `<option value="${o.id}">${o.display}</option>`).join('');
+            orderSelect.disabled = false;
 
-          // Auto-populate message body
-          updateMessageBody();
-        });
+            // Auto-populate message body
+            updateMessageBody();
+          } catch (error) {
+            console.error('Order loading error:', error);
+            orderSelect.innerHTML = '<option value="">Error loading orders - Please try again</option>';
+            orderSelect.disabled = false;
+          }
+        };
+        propResults.addEventListener('click', propResultsClickHandler);
 
         // Update message body when order is selected
-        orderSelect.addEventListener('change', () => {
+        const orderSelectHandler = function() {
           updateMessageBody();
-        });
+        };
+        orderSelect.addEventListener('change', orderSelectHandler);
 
         // Update message body when branch is changed
         const branchSelect = document.getElementById('branchSelect');
+        let branchSelectHandler = null;
         if (branchSelect) {
-          branchSelect.addEventListener('change', () => {
+          branchSelectHandler = function() {
             updateMessageBody();
-          });
+          };
+          branchSelect.addEventListener('change', branchSelectHandler);
         }
 
         // Auto-update message body with property, order, and branch info
@@ -322,10 +344,37 @@ Envelope for:
         }
 
         // dismiss suggestions if clicking elsewhere
-        document.addEventListener('click', (e) => {
+        const documentClickHandler = function(e) {
           if (!propResults.contains(e.target) && e.target !== propSearch)
             propResults.innerHTML = '';
-        });
+        };
+        document.addEventListener('click', documentClickHandler);
+
+        // Cleanup function for Create.cshtml event listeners
+        function cleanupCreateEventListeners() {
+          // Clear any pending timers
+          if (propTimer) {
+            clearTimeout(propTimer);
+          }
+
+          // Remove event listeners
+          if (propSearch) {
+            propSearch.removeEventListener('input', propSearchHandler);
+          }
+          if (propResults) {
+            propResults.removeEventListener('click', propResultsClickHandler);
+          }
+          if (orderSelect) {
+            orderSelect.removeEventListener('change', orderSelectHandler);
+          }
+          if (branchSelect && branchSelectHandler) {
+            branchSelect.removeEventListener('change', branchSelectHandler);
+          }
+          document.removeEventListener('click', documentClickHandler);
+        }
+
+        // Register cleanup on page unload
+        window.addEventListener('beforeunload', cleanupCreateEventListeners);
     </script>
 
 }

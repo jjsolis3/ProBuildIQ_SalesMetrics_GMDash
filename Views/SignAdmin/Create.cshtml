@@ -35,7 +35,17 @@
 
                 <div class="col-md-3">
                     <label class="form-label">Branch</label>
-                    <input asp-for="LocationCode" class="form-control" placeholder="LAX" />
+                    <select asp-for="LocationCode" id="branchSelect" class="form-select" required>
+                        <option value="">-- Select Branch --</option>
+                        @if (ViewBag.Locations != null)
+                        {
+                            @foreach (var loc in (Dictionary<int, (string Code, string Name)>)ViewBag.Locations)
+                            {
+                                <option value="@loc.Value.Code">@loc.Value.Code - @loc.Value.Name</option>
+                            }
+                        }
+                    </select>
+                    <span asp-validation-for="LocationCode" class="text-danger"></span>
                 </div>
 
                 @* <div class="col-md-3">
@@ -244,9 +254,9 @@
         });
 
         // Update message body when branch is changed
-        const branchInput = document.querySelector('input[name="LocationCode"]');
-        if (branchInput) {
-          branchInput.addEventListener('input', () => {
+        const branchSelect = document.getElementById('branchSelect');
+        if (branchSelect) {
+          branchSelect.addEventListener('change', () => {
             updateMessageBody();
           });
         }
@@ -256,7 +266,9 @@
           const messageBody = document.getElementById('messageBody');
           const propName = propSearch.value || '[Property Name]';
           const orderDisplay = orderSelect.options[orderSelect.selectedIndex]?.text || '[Order Number]';
-          const branch = document.querySelector('input[name="LocationCode"]')?.value || '[Branch]';
+          const branchCode = branchSelect?.value || '[Branch]';
+          const branchText = branchSelect?.options[branchSelect.selectedIndex]?.text || '[Branch]';
+          const branch = branchCode ? branchText : '[Branch]';
 
           // Don't update if property hasn't been selected yet
           if (!propName || propName === 'Search by property name...') {

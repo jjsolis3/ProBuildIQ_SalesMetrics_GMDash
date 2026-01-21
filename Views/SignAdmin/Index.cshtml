@@ -2,6 +2,14 @@
 @model IReadOnlyList<SalesMetrics.Models.Signing.EnvelopeListItemVm>
 @{
     ViewData["Title"] = "E-Sign Envelopes";
+    var scope = ViewBag.Scope?.ToString() ?? "all";
+    var status = ViewBag.Status?.ToString() ?? "";
+    var office = ViewBag.Office?.ToString() ?? "";
+    var roleId = (int)(ViewBag.RoleId ?? 0);
+
+    // Determine which scopes are available based on role
+    var canViewAll = roleId == 1 || roleId == 3 || roleId == 4 || roleId == 5 || roleId == 7 || roleId == 8;
+    var canViewBranch = roleId == 5; // Office Manager
 }
 <div class="card mb-3 border-0 shadow-sm">
     <div class="card-header bg-warning text-dark fw-bold">E-Sign Hub</div>
@@ -11,6 +19,65 @@
                 <a class="btn btn-success" asp-action="Create">+ New Envelope</a>
             </div>
             <div class="text-muted">Total: @ViewBag.Total</div>
+        </div>
+
+        @* Scope Filter Buttons *@
+        <div class="mb-3">
+            <div class="btn-group" role="group" aria-label="Envelope scope filter">
+                <a class="btn btn-sm @(scope == "mine" ? "btn-primary" : "btn-outline-primary")"
+                   asp-action="Index" asp-route-scope="mine" asp-route-status="@status" asp-route-office="@office">
+                    My Envelopes
+                </a>
+                @if (canViewBranch)
+                {
+                    <a class="btn btn-sm @(scope == "branch" ? "btn-primary" : "btn-outline-primary")"
+                       asp-action="Index" asp-route-scope="branch" asp-route-status="@status" asp-route-office="@office">
+                        Branch Envelopes
+                    </a>
+                }
+                @if (canViewAll)
+                {
+                    <a class="btn btn-sm @(scope == "all" ? "btn-primary" : "btn-outline-primary")"
+                       asp-action="Index" asp-route-scope="all" asp-route-status="@status" asp-route-office="@office">
+                        All Envelopes
+                    </a>
+                }
+            </div>
+        </div>
+
+        @* Status and Office Filters *@
+        <div class="row g-2 mb-3">
+            <div class="col-md-3">
+                <label class="form-label small">Filter by Status:</label>
+                <select class="form-select form-select-sm" id="statusFilter" onchange="applyFilters()">
+                    <option value="">All Statuses</option>
+                    <option value="Draft" @(status == "Draft" ? "selected" : "")>Draft</option>
+                    <option value="Sent" @(status == "Sent" ? "selected" : "")>Sent</option>
+                    <option value="Viewed" @(status == "Viewed" ? "selected" : "")>Viewed</option>
+                    <option value="Completed" @(status == "Completed" ? "selected" : "")>Completed</option>
+                    <option value="Expired" @(status == "Expired" ? "selected" : "")>Expired</option>
+                    <option value="Declined" @(status == "Declined" ? "selected" : "")>Declined</option>
+                    <option value="Voided" @(status == "Voided" ? "selected" : "")>Voided</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small">Filter by Branch:</label>
+                <select class="form-select form-select-sm" id="officeFilter" onchange="applyFilters()">
+                    <option value="">All Branches</option>
+                    @if (ViewBag.Locations != null)
+                    {
+                        @foreach (var loc in (Dictionary<int, (string Code, string Name)>)ViewBag.Locations)
+                        {
+                            <option value="@loc.Value.Code" @(office == loc.Value.Code ? "selected" : "")>
+                                @loc.Value.Code - @loc.Value.Name
+                            </option>
+                        }
+                    }
+                </select>
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <a class="btn btn-sm btn-outline-secondary" asp-action="Index" asp-route-scope="@scope">Clear Filters</a>
+            </div>
         </div>
 
         <div class="table-responsive">
@@ -50,3 +117,20 @@
         </div>
     </div>
 </div>
+
+@section Scripts {
+    <script>
+        function applyFilters() {
+            const status = document.getElementById('statusFilter').value;
+            const office = document.getElementById('officeFilter').value;
+            const scope = '@scope';
+
+            // Build query string
+            let url = '/SignAdmin?scope=' + encodeURIComponent(scope);
+            if (status) url += '&status=' + encodeURIComponent(status);
+            if (office) url += '&office=' + encodeURIComponent(office);
+
+            window.location.href = url;
+        }
+    </script>
+}

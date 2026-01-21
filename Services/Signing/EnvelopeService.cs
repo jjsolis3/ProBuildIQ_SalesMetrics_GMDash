@@ -277,6 +277,63 @@ public sealed class EnvelopeService : IEnvelopeService
         await _db.SaveChangesAsync();
     }
 
+    public async Task VoidEnvelopeAsync(long envelopeId, int voidedByUserId, string? reason = null)
+    {
+        var env = await _db.SignEnvelopes
+            .Include(e => e.Recipients)
+            .FirstOrDefaultAsync(e => e.EnvelopeId == envelopeId);
+
+        if (env == null)
+            throw new InvalidOperationException($"Envelope {envelopeId} not found");
+
+        // Only allow voiding if envelope is not already completed or voided
+        if (env.Status == "Completed")
+            throw new InvalidOperationException("Cannot void a completed envelope");
+
+        if (env.Status == "Voided")
+            throw new InvalidOperationException("Envelope is already voided");
+
+        // Update envelope status
+        env.Status = "Voided";
+        env.ModifiedByUsers_ID = voidedByUserId;
+        env.ModifiedDateUtc = DateTime.UtcNow;
+
+        // Add void event
+        _db.SignEvents.Add(new SignEvent
+        {
+            EnvelopeId = env.EnvelopeId,
+            EventType = "Voided",
+            OccurredAtUtc = DateTime.UtcNow,
+            MetaJson = !string.IsNullOrWhiteSpace(reason)
+                ? System.Text.Json.JsonSerializer.Serialize(new { reason, voidedByUserId })
+                : System.Text.Json.JsonSerializer.Serialize(new { voidedByUserId })
+        });
+
+        await _db.SaveChangesAsync();
+
+        // Optionally send notification emails to recipients (if envelope was already sent)
+        if (env.SentAtUtc.HasValue)
+        {
+            foreach (var recipient in env.Recipients.Where(r => !r.SignedAtUtc.HasValue))
+            {
+                try
+                {
+                    var html = $"""
+                        <p>Hello {recipient.FullName},</p>
+                        <p>The signature request for <b>{env.Subject}</b> has been cancelled.</p>
+                        {(!string.IsNullOrWhiteSpace(reason) ? $"<p>Reason: {reason}</p>" : "")}
+                        <p>No further action is required.</p>
+                        """;
+                    await _notify.SendEnvelopeEmailAsync(recipient.Email, recipient.FullName, $"Cancelled: {env.Subject}", html);
+                }
+                catch
+                {
+                    // Don't fail the void operation if email fails
+                }
+            }
+        }
+    }
+
     public async Task<EnvelopeDetailsVm?> GetDetailsAsync(long envelopeId)
     {
         var e = await _db.SignEnvelopes
@@ -334,11 +391,35 @@ public sealed class EnvelopeService : IEnvelopeService
         };
     }
 
-    public async Task<(IReadOnlyList<EnvelopeListItemVm> Rows, int Total)> SearchAsync(string? status, string? office, int page, int pageSize)
+    public async Task<(IReadOnlyList<EnvelopeListItemVm> Rows, int Total)> SearchAsync(string? status, string? office, int page, int pageSize, int? createdByUserId = null, string? scope = null, int? userRoleId = null, int? userLocationId = null)
     {
         var q = _db.SignEnvelopes.AsNoTracking();
         if (!string.IsNullOrWhiteSpace(status)) q = q.Where(e => e.Status == status);
         if (!string.IsNullOrWhiteSpace(office)) q = q.Where(e => e.LocationCode == office);
+
+        // Role-based filtering
+        // Scope: "mine" = created by user, "branch" = same location, "all" = no filter (admin/GM only)
+        if (!string.IsNullOrWhiteSpace(scope) && scope == "mine" && createdByUserId.HasValue)
+        {
+            q = q.Where(e => e.CreatedByUsers_ID == createdByUserId.Value);
+        }
+        else if (!string.IsNullOrWhiteSpace(scope) && scope == "branch" && userLocationId.HasValue)
+        {
+            // For Office Managers: show all envelopes from their branch
+            var locationCode = GetLocationCodeById(userLocationId.Value);
+            if (!string.IsNullOrWhiteSpace(locationCode))
+            {
+                q = q.Where(e => e.LocationCode == locationCode);
+            }
+        }
+        // For regular staff (Office, Sales) without explicit scope, default to "mine"
+        else if (userRoleId.HasValue && (userRoleId.Value == 2 || userRoleId.Value == 6) && createdByUserId.HasValue)
+        {
+            // RoleId 2 = Sales, RoleId 6 = Office Staff - see only their own envelopes by default
+            q = q.Where(e => e.CreatedByUsers_ID == createdByUserId.Value);
+        }
+        // Admin (1), General Manager (4), Sales Admin (3), Office Manager (5), Regional Manager (8), President (7) can see all by default
+        // No additional filtering needed for "all" scope
 
         var total = await q.CountAsync();
         var envelopes = await q
@@ -654,4 +735,19 @@ public sealed class EnvelopeService : IEnvelopeService
             .FirstOrDefaultAsync(t => t.TemplateKey == templateKey);
     }
 
+    /// <summary>
+    /// Helper method to convert LocationId to LocationCode
+    /// </summary>
+    private string? GetLocationCodeById(int locationId)
+    {
+        return locationId switch
+        {
+            1 => "LAX",  // Los Angeles
+            2 => "LSV",  // Las Vegas
+            3 => "CHN",  // Chino
+            4 => "PHX",  // Phoenix
+            5 => "SND",  // San Diego
+            _ => null
+        };
+    }
 }

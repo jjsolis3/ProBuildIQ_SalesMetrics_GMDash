@@ -98,8 +98,10 @@
 
             <!-- Current Branch Indicator -->
         @{
-            // Show location switcher if user has multiple locations assigned OR has admin/settings access
-            var showLocationSwitcher = userAssignedLocations.Count > 1 || hasUsersAccess || hasSettingsAccess;
+            // Show location switcher if user has multiple locations assigned OR has admin/settings access OR is Office Manager/Staff
+            var roleId = Context.Session.GetString("RoleId");
+            var isOfficeRole = roleId == "5" || roleId == "6"; // Office Manager (5) or Office Staff (6)
+            var showLocationSwitcher = userAssignedLocations.Count > 1 || hasUsersAccess || hasSettingsAccess || isOfficeRole;
         }
         @if (!hideLocationSwitcher && showLocationSwitcher)
         {

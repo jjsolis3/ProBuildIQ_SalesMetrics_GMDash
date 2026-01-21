@@ -266,5 +266,115 @@ namespace SalesMetrics.Services.Signing
                 PaidInFullDate = order.PaidInFullDate?.ToString("MM/dd/yyyy") ?? string.Empty
             };
         }
+
+        // New methods for customer contact info
+        public async Task<string?> GetCustomerPhoneAsync(int? propertyId)
+        {
+            if (!propertyId.HasValue) return null;
+
+            try
+            {
+                var context = GetErpContext();
+                var client = _erpFactory.GetClient(context);
+                var customer = await client.GetCustomerAsync(propertyId.Value, context);
+                return customer?.Phone;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        public async Task<string?> GetCustomerEmailAsync(int? propertyId)
+        {
+            if (!propertyId.HasValue) return null;
+
+            try
+            {
+                var context = GetErpContext();
+                var client = _erpFactory.GetClient(context);
+                var customer = await client.GetCustomerAsync(propertyId.Value, context);
+                return customer?.Email;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        public async Task<string?> GetCustomerNameAsync(int? propertyId)
+        {
+            if (!propertyId.HasValue) return null;
+
+            try
+            {
+                var context = GetErpContext();
+                var client = _erpFactory.GetClient(context);
+                var customer = await client.GetCustomerAsync(propertyId.Value, context);
+                return customer?.Name;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        // New methods for order/lease dates
+        public async Task<DateTime?> GetOrderStartDateAsync(int? orderId)
+        {
+            if (!orderId.HasValue) return null;
+
+            try
+            {
+                var order = await GetOrderByIdAsync(orderId.Value.ToString());
+                // Assuming start date could be delivery date or a custom start date field
+                if (order != null && DateTime.TryParse(order.DeliveryDate, out var date))
+                {
+                    return date;
+                }
+                return null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        public async Task<DateTime?> GetOrderEndDateAsync(int? orderId)
+        {
+            if (!orderId.HasValue) return null;
+
+            try
+            {
+                var order = await GetOrderByIdAsync(orderId.Value.ToString());
+                // End date could be calculated from start date + lease term
+                // For now, return null - can be enhanced with actual lease end date logic
+                return null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        public async Task<DateTime?> GetOrderSignedDateAsync(int? orderId)
+        {
+            if (!orderId.HasValue) return null;
+
+            try
+            {
+                var order = await GetOrderByIdAsync(orderId.Value.ToString());
+                // Signed date could be PaidInFullDate or OrderDate
+                if (order != null && DateTime.TryParse(order.PaidInFullDate, out var date))
+                {
+                    return date;
+                }
+                return null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
     }
 }

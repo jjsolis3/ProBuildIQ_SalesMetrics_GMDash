@@ -276,8 +276,8 @@ namespace SalesMetrics.Services.Signing
             {
                 var context = GetErpContext();
                 var client = _erpFactory.GetClient(context);
-                var customer = await client.GetCustomerAsync(propertyId.Value, context);
-                return customer?.Phone;
+                var property = await client.GetPropertyByIdAsync(propertyId.Value, context);
+                return property?.PhoneNumber;
             }
             catch
             {
@@ -293,8 +293,8 @@ namespace SalesMetrics.Services.Signing
             {
                 var context = GetErpContext();
                 var client = _erpFactory.GetClient(context);
-                var customer = await client.GetCustomerAsync(propertyId.Value, context);
-                return customer?.Email;
+                var property = await client.GetPropertyByIdAsync(propertyId.Value, context);
+                return property?.Email;
             }
             catch
             {
@@ -310,8 +310,8 @@ namespace SalesMetrics.Services.Signing
             {
                 var context = GetErpContext();
                 var client = _erpFactory.GetClient(context);
-                var customer = await client.GetCustomerAsync(propertyId.Value, context);
-                return customer?.Name;
+                var property = await client.GetPropertyByIdAsync(propertyId.Value, context);
+                return property?.CustomerName;
             }
             catch
             {

@@ -51,13 +51,13 @@
                 <label class="form-label small">Filter by Status:</label>
                 <select class="form-select form-select-sm" id="statusFilter" onchange="applyFilters()">
                     <option value="">All Statuses</option>
-                    <option value="Draft" @(status == "Draft" ? "selected" : "")>Draft</option>
-                    <option value="Sent" @(status == "Sent" ? "selected" : "")>Sent</option>
-                    <option value="Viewed" @(status == "Viewed" ? "selected" : "")>Viewed</option>
-                    <option value="Completed" @(status == "Completed" ? "selected" : "")>Completed</option>
-                    <option value="Expired" @(status == "Expired" ? "selected" : "")>Expired</option>
-                    <option value="Declined" @(status == "Declined" ? "selected" : "")>Declined</option>
-                    <option value="Voided" @(status == "Voided" ? "selected" : "")>Voided</option>
+                    <option value="Draft" selected="@(status == "Draft" ? "selected" : null)">Draft</option>
+                    <option value="Sent" selected="@(status == "Sent" ? "selected" : null)">Sent</option>
+                    <option value="Viewed" selected="@(status == "Viewed" ? "selected" : null)">Viewed</option>
+                    <option value="Completed" selected="@(status == "Completed" ? "selected" : null)">Completed</option>
+                    <option value="Expired" selected="@(status == "Expired" ? "selected" : null)">Expired</option>
+                    <option value="Declined" selected="@(status == "Declined" ? "selected" : null)">Declined</option>
+                    <option value="Voided" selected="@(status == "Voided" ? "selected" : null)">Voided</option>
                 </select>
             </div>
             <div class="col-md-3">
@@ -68,7 +68,7 @@
                     {
                         @foreach (var loc in (Dictionary<int, (string Code, string Name)>)ViewBag.Locations)
                         {
-                            <option value="@loc.Value.Code" @(office == loc.Value.Code ? "selected" : "")>
+                            <option value="@loc.Value.Code" selected="@(office == loc.Value.Code ? "selected" : null)">
                                 @loc.Value.Code - @loc.Value.Name
                             </option>
                         }

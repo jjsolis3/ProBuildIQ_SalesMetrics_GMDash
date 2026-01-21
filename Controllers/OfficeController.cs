@@ -6,6 +6,7 @@ using SalesMetrics.Data;
 using SalesMetrics.Models;
 using SalesMetrics.Services.Helpers;
 using SalesMetrics.Services.Erp;
+using System.Data;
 using System.Security.Claims;
 
 namespace SalesMetrics.Controllers
@@ -456,21 +457,21 @@ namespace SalesMetrics.Controllers
                 {
                     results.Add(new InactiveCustomerViewModel
                     {
-                        CustomerId = reader.GetInt32("CustomerId"),
-                        CustomerNumber = reader["Customer#"].ToString(),
-                        CustomerName = reader["Customer Name"].ToString(),
+                        CustomerId = Convert.ToInt32(reader["CustomerId"]),
+                        CustomerNumber = reader["Customer#"]?.ToString() ?? "",
+                        CustomerName = reader["Customer Name"]?.ToString() ?? "",
                         PriceCode = reader["Price Code"] == DBNull.Value ? 0 : Convert.ToInt32(reader["Price Code"]),
-                        MgmtCo = reader["Mgmt Co"].ToString(),
+                        MgmtCo = reader["Mgmt Co"]?.ToString() ?? "",
                         Units = Convert.ToInt32(reader["# of Units"]),
                         LastOrderDate = Convert.ToDateTime(reader["Last Order Date"]),
                         LastInstallDate = Convert.ToDateTime(reader["Last Install Date"]),
                         DaysSinceLastOrder = Convert.ToInt32(reader["Last Order Days"]),
                         DaysSinceLastInstall = Convert.ToInt32(reader["Last Install Days"]),
-                        YTDCurrent = reader.IsDBNull("YTD Current") ? 0 : Convert.ToDouble(reader["YTD Current"]),
-                        YTDPrevious = reader.IsDBNull("YTD Previous") ? 0 : Convert.ToDouble(reader["YTD Previous"]),
-                        Balance = reader.IsDBNull("AR Balance") ? 0 : Convert.ToDouble(reader["AR Balance"]),
-                        SalesmanID = reader.IsDBNull("SalespersonID") ? 0 : Convert.ToInt32(reader["SalespersonID"]),
-                        Salesperson = reader["Salesperson"].ToString(),
+                        YTDCurrent = reader["YTD Current"] == DBNull.Value ? 0 : Convert.ToDouble(reader["YTD Current"]),
+                        YTDPrevious = reader["YTD Previous"] == DBNull.Value ? 0 : Convert.ToDouble(reader["YTD Previous"]),
+                        Balance = reader["AR Balance"] == DBNull.Value ? 0 : Convert.ToDouble(reader["AR Balance"]),
+                        SalesmanID = reader["SalespersonID"] == DBNull.Value ? 0 : Convert.ToInt32(reader["SalespersonID"]),
+                        Salesperson = reader["Salesperson"]?.ToString() ?? "",
                         EstablishedDate = Convert.ToDateTime(reader["Established Date"])
                     });
                 }

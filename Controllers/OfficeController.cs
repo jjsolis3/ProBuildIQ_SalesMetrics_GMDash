@@ -6,6 +6,7 @@ using SalesMetrics.Data;
 using SalesMetrics.Models;
 using SalesMetrics.Services.Helpers;
 using SalesMetrics.Services.Erp;
+using SalesMetrics.Services.Permissions;
 using System.Data;
 using System.Security.Claims;
 
@@ -21,12 +22,14 @@ namespace SalesMetrics.Controllers
         private readonly IConfiguration _configuration;
         private readonly ErpClientFactory _erpFactory;
         private readonly SalesMetricsDbContext _db;
+        private readonly IPermissionService _permissionService;
 
-        public OfficeController(IConfiguration configuration, ErpClientFactory erpFactory, SalesMetricsDbContext db)
+        public OfficeController(IConfiguration configuration, ErpClientFactory erpFactory, SalesMetricsDbContext db, IPermissionService permissionService)
         {
             _configuration = configuration;
             _erpFactory = erpFactory;
             _db = db;
+            _permissionService = permissionService;
         }
 
         /// <summary>
@@ -68,6 +71,10 @@ namespace SalesMetrics.Controllers
             {
                 return RedirectToAction("Index", "Dashboard");
             }
+
+            // Check envelope feature permissions for Quick Actions
+            var hasEnvelopesAccess = await _permissionService.HasFeatureAccessAsync(users_Id, "Envelopes");
+            var hasEnvelopeTemplatesAccess = await _permissionService.HasFeatureAccessAsync(users_Id, "EnvelopeTemplates");
 
             // Get envelope metrics
             var envelopeMetrics = await GetEnvelopeMetricsAsync(locationId);
@@ -157,6 +164,10 @@ namespace SalesMetrics.Controllers
             ViewBag.EnvelopeMetrics = envelopeMetrics;
             ViewBag.RecentEnvelopes = recentEnvelopes;
             ViewBag.NeedsFollowUp = needsFollowUp;
+
+            // Envelope permissions for Quick Actions
+            ViewBag.HasEnvelopesAccess = hasEnvelopesAccess;
+            ViewBag.HasEnvelopeTemplatesAccess = hasEnvelopeTemplatesAccess;
 
             // Weekly jobs
             ViewBag.WeeklyOrders = weeklyOrders ?? new List<DailyOrderCount>();

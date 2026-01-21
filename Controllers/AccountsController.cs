@@ -782,9 +782,28 @@ namespace SalesMetrics.Controllers
             selectedLocation = selectedLocation ?? "LAX"; // or your default
 
             var roleId = int.Parse(User.FindFirst("RoleId")?.Value ?? "0");
+            var userId = int.Parse(User.FindFirst("Users_ID")?.Value ?? "0");
 
-            // Allow switching only for Admins and GMs
-            if ((roleId == 1 || roleId == 4) && !string.IsNullOrEmpty(selectedLocation))
+            // Allow switching for Admins, GMs, Office Managers, and Office Staff
+            // Admin (1) and GM (4) can switch to any location
+            // Office Manager (5) and Office Staff (6) can only switch to assigned locations
+            bool canSwitch = false;
+
+            if (roleId == 1 || roleId == 4)
+            {
+                // Admin and GM can switch to any location
+                canSwitch = true;
+            }
+            else if (roleId == 5 || roleId == 6)
+            {
+                // Office Manager and Office Staff - verify they have access to this location
+                var targetLocationId = LocationHelper.GetLocationId(selectedLocation);
+                var hasAccess = _context.UserLocationAssignments
+                    .Any(a => a.UserID == userId && a.LocationID == targetLocationId && a.IsActive == "YES");
+                canSwitch = hasAccess;
+            }
+
+            if (canSwitch && !string.IsNullOrEmpty(selectedLocation))
             {
                 HttpContext.Session.SetString("OfficeLocation", selectedLocation);
 

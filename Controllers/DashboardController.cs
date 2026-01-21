@@ -706,13 +706,13 @@ namespace SalesMetrics.Controllers
                     results.Add(new WorkOrderViewModel
                     {
                         OrderID = reader["OrderID"]?.ToString(),
-                        PropertyId = Convert.ToInt32(reader["PropertyID"]),
-                        PropertyNumber = Convert.ToInt32(reader["PropertyNumber"]),
+                        PropertyId = reader["PropertyID"] == DBNull.Value ? 0 : Convert.ToInt32(reader["PropertyID"]),
+                        PropertyNumber = reader["PropertyNumber"] == DBNull.Value ? 0 : Convert.ToInt32(reader["PropertyNumber"]),
                         PropertyName = reader["PropertyName"]?.ToString(),
                         City = reader["City"]?.ToString(),
                         OrderType = reader["OrderType"]?.ToString(),
-                        Qty = Convert.ToDouble(reader["Qty"]),
-                        OrderTotal = Math.Round(Convert.ToDecimal(reader["OrderTotal"]), 2),
+                        Qty = reader["Qty"] == DBNull.Value ? 0 : Convert.ToDouble(reader["Qty"]),
+                        OrderTotal = reader["OrderTotal"] == DBNull.Value ? 0 : Math.Round(Convert.ToDecimal(reader["OrderTotal"]), 2),
                         UnitNumber = reader["UnitNumber"]?.ToString(),
                         UnitType = reader["UnitType"]?.ToString(),
                         DeliveryDate = reader["DeliveryDate"]?.ToString(),
@@ -722,7 +722,7 @@ namespace SalesMetrics.Controllers
                         ManagementName = reader["ManagementName"]?.ToString(),
                         Status = reader["Status"]?.ToString(),
                         Location = reader["Location"]?.ToString(),
-                        SalesmanId = Convert.ToInt32(reader["SalesmanID"]),
+                        SalesmanId = reader["SalesmanID"] == DBNull.Value ? 0 : Convert.ToInt32(reader["SalesmanID"]),
                         SalesmanName = reader["SalesmanName"]?.ToString(),
                     });
                 }

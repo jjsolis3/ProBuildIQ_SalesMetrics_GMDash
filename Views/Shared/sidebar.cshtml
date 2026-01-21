@@ -23,6 +23,8 @@
     var hasYardiUploadAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "YardiUpload") : false;
     var hasErrorLogsAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "ErrorLogs") : false;
     var hasSigningAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Signing") : false;
+    var hasEnvelopesAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Envelopes") : false;
+    var hasEnvelopeTemplatesAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "EnvelopeTemplates") : false;
 
     // Query Builder feature permissions (use FeatureCode from seed-data.sql)
     var hasQueryBuilderAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "REPORT_BUILDER_ACCESS") : false;
@@ -230,23 +232,26 @@
                     </li>
                 }
 
-                @* @if (roleId == "1")
+                @if (hasEnvelopesAccess || hasEnvelopeTemplatesAccess)
                 {
-                    <!-- SIGN & SEND (ENVELOPES) -->
-                    <li class="menu-title">✍️ SIGN & SEND</li>
-                    <li class="ms-3">
-                        <a href="/SignAdmin/Index">
-                            <i class="fa fa-envelope"></i>
-                            <span>Envelopes</span>
-                        </a>
-                    </li>
-                    <li class="ms-3">
-                        <a href="/SignAdmin/Create">
-                            <i class="fa fa-paper-plane"></i>
-                            <span>Send Document</span>
-                        </a>
-                    </li>
-                    @if (roleId == "1")
+                    <!-- DOCUMENTS & SIGNING -->
+                    <li class="menu-title">DOCUMENTS & SIGNING</li>
+                    @if (hasEnvelopesAccess)
+                    {
+                        <li class="ms-3">
+                            <a href="/SignAdmin/Index">
+                                <i class="fa fa-envelope"></i>
+                                <span>My Envelopes</span>
+                            </a>
+                        </li>
+                        <li class="ms-3">
+                            <a href="/SignAdmin/Create">
+                                <i class="fa fa-paper-plane"></i>
+                                <span>Send Document</span>
+                            </a>
+                        </li>
+                    }
+                    @if (hasEnvelopeTemplatesAccess)
                     {
                         <li class="ms-3">
                             <a href="/SignTemplates/Index">
@@ -255,7 +260,7 @@
                             </a>
                         </li>
                     }
-                } *@
+                }
 
                 @if (hasReportsAccess || hasQueryBuilderAccess)
                 {

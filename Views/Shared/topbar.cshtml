@@ -20,6 +20,12 @@
     var hasFormRequestsAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "FormRequests") : false;
     var hasUsersAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Users") : false;
     var hasSettingsAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Settings") : false;
+    // Additional permissions for avatar menu
+    var hasTasksAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Tasks") : false;
+    var hasOrdersAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Orders") : false;
+    var hasPropertiesAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Properties") : false;
+    var hasYardiAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Yardi") : false;
+    var hasJournalAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Journal") : false;
 }
 
 <!-- Start topbar -->
@@ -83,7 +89,11 @@
             </div>
 
             <!-- Current Branch Indicator -->
-        @if (!hideLocationSwitcher && (hasUsersAccess || hasSettingsAccess))
+        @{
+            // Show location switcher if user has multiple locations assigned OR has admin/settings access
+            var showLocationSwitcher = switchModel.AvailableLocations.Count > 1 || hasUsersAccess || hasSettingsAccess;
+        }
+        @if (!hideLocationSwitcher && showLocationSwitcher)
         {
             <!-- Current Branch Indicator Switch Button -->
             <div class="d-none d-md-flex align-items-center ms-2">
@@ -196,35 +206,51 @@
                             <div class="card-body p-0">
                                 <!-- Main Navigation Grid -->
                                 <div class="grid-nav grid-nav-flush grid-nav-action grid-nav-no-rounded">
-                                    <div class="grid-nav-row">
-                                        <a href="/Accounts/Profile" class="grid-nav-item" aria-label="View Profile">
-                                            <div class="grid-nav-icon"><i class="far fa-address-card"></i></div>
-                                            <span class="grid-nav-content">Profile</span>
-                                        </a>
-                                        <a href="/Tasks/Task" class="grid-nav-item" aria-label="View Tasks">
-                                            <div class="grid-nav-icon"><i class="far fa-calendar-check"></i></div>
-                                            <span class="grid-nav-content">Tasks</span>
-                                        </a>
-                                        <a href="/Orders/Orders" class="grid-nav-item" aria-label="View Job Schedule">
-                                            <div class="grid-nav-icon"><i class="far fa-calendar"></i></div>
-                                            <span class="grid-nav-content">Job Schedule</span>
-                                        </a>
-                                    </div>
+                                    @{
+                                        // Build rows dynamically based on permissions
+                                        var firstRowItems = new List<(string Url, string Icon, string Label, string AriaLabel, bool HasAccess)>
+                                        {
+                                            ("/Accounts/Profile", "far fa-address-card", "Profile", "View Profile", true), // Always show Profile
+                                            ("/Tasks/Task", "far fa-calendar-check", "Tasks", "View Tasks", hasTasksAccess),
+                                            ("/Orders/Orders", "far fa-calendar", "Job Schedule", "View Job Schedule", hasOrdersAccess)
+                                        };
 
-                                    <div class="grid-nav-row">
-                                        <a href="/Properties/Properties" class="grid-nav-item" aria-label="View Properties">
-                                            <div class="grid-nav-icon"><i class="far fa-building"></i></div>
-                                            <span class="grid-nav-content">Properties</span>
-                                        </a>
-                                        <a href="/Yardi/YardiProperties" class="grid-nav-item" aria-label="View Yardi">
-                                            <div class="grid-nav-icon"><i class="far fa-address-book"></i></div>
-                                            <span class="grid-nav-content">Yardi</span>
-                                        </a>
-                                        <a href="/Journal/Index" class="grid-nav-item" aria-label="View Journal">
-                                            <div class="grid-nav-icon"><i class="far fa-comments"></i></div>
-                                            <span class="grid-nav-content">Journal</span>
-                                        </a>
-                                    </div>
+                                        var secondRowItems = new List<(string Url, string Icon, string Label, string AriaLabel, bool HasAccess)>
+                                        {
+                                            ("/Properties/Properties", "far fa-building", "Properties", "View Properties", hasPropertiesAccess),
+                                            ("/Yardi/YardiProperties", "far fa-address-book", "Yardi", "View Yardi", hasYardiAccess),
+                                            ("/Journal/Index", "far fa-comments", "Journal", "View Journal", hasJournalAccess)
+                                        };
+
+                                        var firstRowFiltered = firstRowItems.Where(item => item.HasAccess).ToList();
+                                        var secondRowFiltered = secondRowItems.Where(item => item.HasAccess).ToList();
+                                    }
+
+                                    @if (firstRowFiltered.Any())
+                                    {
+                                        <div class="grid-nav-row">
+                                            @foreach (var item in firstRowFiltered)
+                                            {
+                                                <a href="@item.Url" class="grid-nav-item" aria-label="@item.AriaLabel">
+                                                    <div class="grid-nav-icon"><i class="@item.Icon"></i></div>
+                                                    <span class="grid-nav-content">@item.Label</span>
+                                                </a>
+                                            }
+                                        </div>
+                                    }
+
+                                    @if (secondRowFiltered.Any())
+                                    {
+                                        <div class="grid-nav-row">
+                                            @foreach (var item in secondRowFiltered)
+                                            {
+                                                <a href="@item.Url" class="grid-nav-item" aria-label="@item.AriaLabel">
+                                                    <div class="grid-nav-icon"><i class="@item.Icon"></i></div>
+                                                    <span class="grid-nav-content">@item.Label</span>
+                                                </a>
+                                            }
+                                        </div>
+                                    }
 
                                     @if (hasFormRequestsAccess)
                                     {
@@ -271,12 +297,12 @@
                                             }
                                         </div>
                                     }
-                                    @if (hasUsersAccess || hasSettingsAccess)
+                                    @if (showLocationSwitcher)
                                     {
 
                                         <!-- Office Location Section -->
                                         <div class="nav-menu-divider">
-                                            <span class="nav-menu-divider-text">Settings</span>
+                                            <span class="nav-menu-divider-text">@(hasUsersAccess || hasSettingsAccess ? "Settings" : "Office Location")</span>
                                         </div>
                                         <div class="location-switcher-section">
                                             <div class="d-flex align-items-center px-3 py-3">

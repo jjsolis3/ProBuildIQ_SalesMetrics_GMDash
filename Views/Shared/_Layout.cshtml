@@ -141,8 +141,11 @@
     @{
         var hideLocationSwitcher = PageHelper.ShouldHideLocationSwitcher(currentController, currentAction);
 
+        // Show modal if user has multiple locations OR is admin/GM/Office Manager
         var showSwitchLocationModal = !hideLocationSwitcher
-        && (User.IsInRole("Admin") || User.IsInRole("General Manager") || User.IsInRole("Office Manager") || User.FindFirst("RoleId")?.Value == "1" || User.FindFirst("RoleId")?.Value == "4" || User.FindFirst("RoleId")?.Value == "5");
+        && (switchModel.AvailableLocations.Count > 1 ||
+            User.IsInRole("Admin") || User.IsInRole("General Manager") || User.IsInRole("Office Manager") ||
+            User.FindFirst("RoleId")?.Value == "1" || User.FindFirst("RoleId")?.Value == "4" || User.FindFirst("RoleId")?.Value == "5" || User.FindFirst("RoleId")?.Value == "6");
     }
 
     @if (showSwitchLocationModal)

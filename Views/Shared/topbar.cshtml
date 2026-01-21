@@ -1,7 +1,9 @@
 ﻿@using SalesMetrics.Services.Helpers
 @using System.Security.Claims
 @using SalesMetrics.Services.Permissions
+@using SalesMetrics.Data
 @inject IPermissionService PermissionService
+@inject SalesMetricsDbContext DbContext
 
 @{
     var currentBranchCode = Context.Session.GetString("OfficeLocation") ?? "LAX";
@@ -26,6 +28,12 @@
     var hasPropertiesAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Properties") : false;
     var hasYardiAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Yardi") : false;
     var hasJournalAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Journal") : false;
+
+    // Get user's assigned locations to determine if switcher should be shown
+    var userAssignedLocations = DbContext.UserLocationAssignments
+        .Where(x => x.UserID == usersId && x.IsActive == "YES")
+        .Select(x => x.LocationID)
+        .ToList();
 }
 
 <!-- Start topbar -->
@@ -91,7 +99,7 @@
             <!-- Current Branch Indicator -->
         @{
             // Show location switcher if user has multiple locations assigned OR has admin/settings access
-            var showLocationSwitcher = switchModel.AvailableLocations.Count > 1 || hasUsersAccess || hasSettingsAccess;
+            var showLocationSwitcher = userAssignedLocations.Count > 1 || hasUsersAccess || hasSettingsAccess;
         }
         @if (!hideLocationSwitcher && showLocationSwitcher)
         {

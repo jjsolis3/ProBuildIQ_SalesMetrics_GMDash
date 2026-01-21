@@ -192,25 +192,51 @@ public sealed class EnvelopeService : IEnvelopeService
         {
             // Property fields
             var propertyName = await _merge.GetPropertyNameAsync(env.PropertyID) ?? "";
+            var propertyAddress = await _merge.GetPropertyAddressAsync(env.PropertyID) ?? "";
+            var propertyPhone = await _merge.GetCustomerPhoneAsync(env.PropertyID) ?? "";
+            var customerEmail = await _merge.GetCustomerEmailAsync(env.PropertyID) ?? "";
+            var customerName = await _merge.GetCustomerNameAsync(env.PropertyID) ?? propertyName;
+
             data["PropertyName"] = propertyName;
-            data["PropertyAddress"] = "";
-            data["PropertyPhone"] = "";
+            data["PropertyAddress"] = propertyAddress;
+            data["PropertyPhone"] = propertyPhone;
+            data["CustomerName"] = customerName;
+            data["CustomerEmail"] = customerEmail;
+            data["CustomerPhone"] = propertyPhone; // Same as property phone
 
             // Order fields
             var unitNumber = await _merge.GetUnitNumberByOrderIdAsync(env.OrderId) ?? "";
+            var orderStartDate = await _merge.GetOrderStartDateAsync(env.OrderId);
+            var orderEndDate = await _merge.GetOrderEndDateAsync(env.OrderId);
+            var orderSignedDate = await _merge.GetOrderSignedDateAsync(env.OrderId);
+
             data["UnitNumber"] = unitNumber;
-            data["InstallationDate"] = DateTime.UtcNow.ToString("MM/dd/yyyy");
-            data["DeliveryDate"] = "";
+            data["OrderStartDate"] = orderStartDate?.ToString("MM/dd/yyyy") ?? "";
+            data["OrderEndDate"] = orderEndDate?.ToString("MM/dd/yyyy") ?? "";
+            data["OrderSignedDate"] = orderSignedDate?.ToString("MM/dd/yyyy") ?? "";
+            data["InstallationDate"] = orderStartDate?.ToString("MM/dd/yyyy") ?? DateTime.UtcNow.ToString("MM/dd/yyyy");
+            data["DeliveryDate"] = orderStartDate?.ToString("MM/dd/yyyy") ?? "";
+            data["LeaseStartDate"] = orderStartDate?.ToString("MM/dd/yyyy") ?? "";
+            data["LeaseEndDate"] = orderEndDate?.ToString("MM/dd/yyyy") ?? "";
+
+            // Envelope metadata
+            data["EnvelopeSubject"] = env.Subject;
+            data["EnvelopeMessage"] = env.MessageBody ?? "";
+            data["LocationCode"] = env.LocationCode ?? "";
+            data["CurrentDate"] = DateTime.UtcNow.ToString("MM/dd/yyyy");
 
             // Recipient fields - these will be populated at signing time
             var manager = env.Recipients.FirstOrDefault(r => r.Role == "Manager");
             var tenant = env.Recipients.FirstOrDefault(r => r.Role == "Tenant") ?? env.Recipients.First();
 
             data["PropertyStaffName"] = manager?.FullName ?? "Property Staff";
+            data["PropertyStaffEmail"] = manager?.Email ?? "";
+            data["PropertyStaffPhone"] = manager?.Phone ?? "";
             data["PropertyStaffDate"] = ""; // Will be filled when signed
             data["PropertyStaffSignature"] = ""; // Will be filled when signed
 
             data["ResidentName"] = tenant.FullName;
+            data["ResidentEmail"] = tenant.Email ?? "";
             data["ResidentPhone"] = tenant.Phone ?? "";
             data["ResidentSignature"] = ""; // Will be filled when signed
         }

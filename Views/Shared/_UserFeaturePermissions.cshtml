@@ -8,26 +8,37 @@
                 <small>Select which features this user can access</small>
             </div>
             <div class="card-body">
-                @if (Model.AllFeatures != null && Model.AllFeatures.Any())
+                @if (Model.GroupedFeatures != null && Model.GroupedFeatures.Any())
                 {
-                    <div class="row">
-                        @foreach (var feature in Model.AllFeatures)
-                        {
-                            <div class="col-md-4 col-sm-6 mb-2">
-                                <div class="form-check">
-                                    <input type="checkbox"
-                                           class="form-check-input"
-                                           name="AssignedFeatureIds"
-                                           id="feature_@feature.Value"
-                                           value="@feature.Value"
-                                           @(Model.AssignedFeatureIds.Contains(int.Parse(feature.Value)) ? "checked" : "") />
-                                    <label class="form-check-label" for="feature_@feature.Value">
-                                        @feature.Text
-                                    </label>
-                                </div>
+                    @foreach (var categoryGroup in Model.GroupedFeatures.OrderBy(g => g.Key))
+                    {
+                        <div class="feature-category-group mb-4">
+                            <!-- Category Header -->
+                            <h6 class="text-uppercase fw-bold mb-3 pb-2 border-bottom">
+                                <i class="fas fa-folder me-2"></i>@categoryGroup.Key
+                            </h6>
+
+                            <!-- Features in this category -->
+                            <div class="row">
+                                @foreach (var feature in categoryGroup.Value)
+                                {
+                                    <div class="col-md-4 col-sm-6 mb-2">
+                                        <div class="form-check">
+                                            <input type="checkbox"
+                                                   class="form-check-input"
+                                                   name="AssignedFeatureIds"
+                                                   id="feature_@feature.FeatureId"
+                                                   value="@feature.FeatureId"
+                                                   @(Model.AssignedFeatureIds.Contains(feature.FeatureId) ? "checked" : "") />
+                                            <label class="form-check-label" for="feature_@feature.FeatureId">
+                                                @feature.FeatureName
+                                            </label>
+                                        </div>
+                                    </div>
+                                }
                             </div>
-                        }
-                    </div>
+                        </div>
+                    }
 
                     <!-- Quick select buttons -->
                     <div class="mt-3 border-top pt-3">
@@ -56,3 +67,19 @@
         </div>
     </div>
 </div>
+
+<style>
+    .feature-category-group h6 {
+        color: #495057;
+        font-size: 0.9rem;
+        letter-spacing: 0.5px;
+    }
+
+    .feature-category-group h6 i {
+        color: #667eea;
+    }
+
+    .feature-category-group:last-child {
+        margin-bottom: 0 !important;
+    }
+</style>

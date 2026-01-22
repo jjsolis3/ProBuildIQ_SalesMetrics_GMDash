@@ -9,7 +9,7 @@
     var hasGMDashboardAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "GMDashboard") : false;
     var hasGMRecapAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "GMRecap") : false;
     var hasDashboardAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Dashboard") : false;
-    var hasOfficeDashboardAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Office Dashboard") : false;
+    var hasOfficeDashboardAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "OfficeDashboard") : false;
     var hasTasksAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Tasks") : false;
     var hasSalesPulseAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "SalesPulse") : false;
     var hasJournalAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Journal") : false;
@@ -123,27 +123,38 @@
                 }
 
                 <!-- DASHBOARD -->
-                @if (hasDashboardAccess)
+                @if (hasDashboardAccess || hasOfficeDashboardAccess)
                 {
                     <li class="menu-title">DASHBOARD</li>
+<<<<<<< HEAD
                     <li class="ms-3">
                         @if (roleId == "1" || roleId == "5" || roleId == "6")
                         {
                             <!-- Office Manager and Office Staff go to Office Dashboard -->
+=======
+
+                    @if (hasOfficeDashboardAccess)
+                    {
+                        <!-- Office Dashboard - shown if user has Office Dashboard permission -->
+                        <li class="ms-3">
+>>>>>>> 035fdc1 (feat: Add Office Dashboard permission and group features by category)
                             <a href="/Office/Index">
                                 <i class="fas fa-chart-line"></i>
                                 <span>Office Dashboard</span>
                             </a>
-                        }
-                        else
-                        {
-                            <!-- All other roles go to Sales Dashboard -->
+                        </li>
+                    }
+
+                    @if (hasDashboardAccess)
+                    {
+                        <!-- Sales Dashboard - shown if user has Dashboard permission -->
+                        <li class="ms-3">
                             <a href="/Dashboard/Index">
                                 <i class="fas fa-chart-line"></i>
-                                <span>Dashboard</span>
+                                <span>Sales Dashboard</span>
                             </a>
-                        }
-                    </li>
+                        </li>
+                    }
                 }
 
                 @if (hasTasksAccess)

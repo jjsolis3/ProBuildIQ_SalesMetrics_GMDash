@@ -74,6 +74,15 @@ namespace SalesMetrics.Models
         // Feature Permissions
         public List<int> AssignedFeatureIds { get; set; } = new();
         public List<SelectListItem> AllFeatures { get; set; } = new();
+        public Dictionary<string, List<FeatureItemViewModel>> GroupedFeatures { get; set; } = new();
+    }
+
+    public class FeatureItemViewModel
+    {
+        public int FeatureId { get; set; }
+        public string FeatureName { get; set; } = string.Empty;
+        public string? Category { get; set; }
+        public int DisplayOrder { get; set; }
     }
 
     public class FlaggedUserViewModel

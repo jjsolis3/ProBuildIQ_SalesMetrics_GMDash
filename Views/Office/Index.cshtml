@@ -766,16 +766,27 @@
             }
             arTableInstance = $('#ar_table').DataTable({
                 order: [[5, 'desc']], // Sort by Days Past Due
-                pageLength: 25,
+                pageLength: 10,
                 responsive: true,
-                dom: 'Bfrtip',
+                scrollX: true,
+                dom: `
+                    <"top d-flex justify-content-between align-items-center mb-3" lBf>
+                    rt
+                    <"bottom d-flex justify-content-between align-items-center mt-3" ip>`,
                 buttons: [
                     {
-                        extend: 'excel',
+                        extend: 'excelHtml5',
                         text: '<i class="fas fa-file-excel me-1"></i> Export to Excel',
-                        className: 'btn btn-success btn-sm'
+                        className: 'btn btn-success btn-sm',
+                        title: 'AR - Invoices Past Due-Date\n' + Location,
+                        filename: 'AR_Invoices_Past_Due_' + location + '_' + new Date().toISOString().split('T')[0],
+                        exportOptions: {
+                            columns: ':visible'
+                        }
                     }
                 ]
+                //lengthChange: true,
+                //ordering: true
             });
         });
 
@@ -899,14 +910,24 @@
                 if (!inactiveCustomersTableInstance && !$.fn.DataTable.isDataTable('#inactive-customers-table')) {
                     inactiveCustomersTableInstance = $('#inactive-customers-table').DataTable({
                         order: [[5, 'desc']], // Sort by Days Since Order
-                        pageLength: 25,
+                        pageLength: 10,
                         responsive: true,
-                        dom: 'Bfrtip',
+                        //dom: 'Bfrtip',
+                        dom: `
+                            <"top d-flex justify-content-between align-items-center mb-3" lBf>
+                            rt
+                            <"bottom d-flex justify-content-between align-items-center mt-3" ip>
+                            `,
                         buttons: [
                             {
-                                extend: 'excel',
+                                extend: 'excelHtml5',
                                 text: '<i class="fas fa-file-excel me-1"></i> Export to Excel',
-                                className: 'btn btn-success btn-sm'
+                                className: 'btn btn-success btn-sm',
+                                title: 'Customers Inactivity (30+ Days)' + Location,
+                                filename: 'Inactive_Customers_' + location + '_' + new Date().toISOString().split('T')[0],
+                                exportOptions: {
+                                    columns: ':visible'
+                                }
                             }
                         ]
                     });

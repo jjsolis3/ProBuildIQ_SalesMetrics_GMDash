@@ -26,6 +26,7 @@
     var hasTasksAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Tasks") : false;
     var hasOrdersAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Orders") : false;
     var hasPropertiesAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Properties") : false;
+    var hasManagementAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Management") : false;
     var hasYardiAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Yardi") : false;
     var hasJournalAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Journal") : false;
 
@@ -227,9 +228,10 @@
 
                                         var secondRowItems = new List<(string Url, string Icon, string Label, string AriaLabel, bool HasAccess)>
                                         {
+                                            ("/Management/Management", "far fa-building", "Management", "View Management", hasManagementAccess),
                                             ("/Properties/Properties", "far fa-building", "Properties", "View Properties", hasPropertiesAccess),
                                             ("/Yardi/YardiProperties", "far fa-address-book", "Yardi", "View Yardi", hasYardiAccess),
-                                            ("/Journal/Index", "far fa-comments", "Journal", "View Journal", hasJournalAccess)
+                                            //("/Journal/Index", "far fa-comments", "Journal", "View Journal", hasJournalAccess)
                                         };
 
                                         var firstRowFiltered = firstRowItems.Where(item => item.HasAccess).ToList();

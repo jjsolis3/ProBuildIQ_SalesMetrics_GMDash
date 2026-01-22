@@ -611,11 +611,7 @@
                             <th>Mgmt Co</th>
                             <th>Amount</th>
                             <th>Due Date</th>
-                            @* Management roles see salesperson column *@
-                            @if (ViewBag.RoleId == 1 || ViewBag.RoleId == 3 || ViewBag.RoleId == 4 || ViewBag.RoleId == 7 || ViewBag.RoleId == 8)
-                            {
                                 <th>Salesperson</th>
-                            }
                             <th>Aging</th>
                             <th>Action</th>
                         </tr>
@@ -639,11 +635,7 @@
                                 <td>@invoice.MgmtCo</td>
                                 <td>@String.Format("{0:C}", invoice.OutstandingAmount)</td>
                                 <td data-order="@invoice.DueDate.ToString("yyyy-MM-ddTHH:mm:ss")">@invoice.DueDate.ToString("d")</td>
-                                @* Management roles see salesperson column *@
-                                @if (ViewBag.RoleId == 1 || ViewBag.RoleId == 3 || ViewBag.RoleId == 4 || ViewBag.RoleId == 7 || ViewBag.RoleId == 8)
-                                {
-                                    <td>@invoice.Salesperson</td>
-                                }
+                                <td>@invoice.Salesperson</td>
                                 <td>
                                     @if (invoice.InvoiceAging == "30 to 60 Days")
                                     {
@@ -975,7 +967,7 @@
                     buttons: [
                         {
                             extend: 'excelHtml5',
-                            text: '<i class="fas fa-file-excel me-1"></i> Excel',
+                            text: '<i class="fas fa-file-excel me-1"></i>Export to Excel',
                             className: 'btn btn-sm btn-success',
                             title: 'AR - Invoices Past Due-Date\n' + locationName,
                             filename: 'AR_Invoices_Past_Due_' + locationCode + '_' + new Date().toISOString().split('T')[0],

@@ -126,18 +126,11 @@
                 @if (hasDashboardAccess || hasOfficeDashboardAccess)
                 {
                     <li class="menu-title">DASHBOARD</li>
-<<<<<<< HEAD
-                    <li class="ms-3">
-                        @if (roleId == "1" || roleId == "5" || roleId == "6")
-                        {
-                            <!-- Office Manager and Office Staff go to Office Dashboard -->
-=======
 
                     @if (hasOfficeDashboardAccess)
                     {
                         <!-- Office Dashboard - shown if user has Office Dashboard permission -->
                         <li class="ms-3">
->>>>>>> 035fdc1 (feat: Add Office Dashboard permission and group features by category)
                             <a href="/Office/Index">
                                 <i class="fas fa-chart-line"></i>
                                 <span>Office Dashboard</span>

@@ -798,9 +798,21 @@ namespace SalesMetrics.Controllers
             {
                 // Office Manager and Office Staff - verify they have access to this location
                 var targetLocationId = LocationHelper.GetLocationId(selectedLocation);
-                var hasAccess = _context.UserLocationAssignments
-                    .Any(a => a.UserID == userId && a.LocationID == targetLocationId && a.IsActive == "YES");
-                canSwitch = hasAccess;
+
+                string connStr = _configuration.GetConnectionString("SalesMetrics");
+                using var conn = new SqlConnection(connStr);
+                conn.Open();
+
+                var cmd = new SqlCommand(@"
+                    SELECT COUNT(*)
+                    FROM UserLocationAssignments
+                    WHERE UserID = @UserId AND LocationID = @LocationId AND IsActive = 'YES'
+                ", conn);
+                cmd.Parameters.AddWithValue("@UserId", userId);
+                cmd.Parameters.AddWithValue("@LocationId", targetLocationId);
+
+                int count = (int)cmd.ExecuteScalar();
+                canSwitch = count > 0;
             }
 
             if (canSwitch && !string.IsNullOrEmpty(selectedLocation))

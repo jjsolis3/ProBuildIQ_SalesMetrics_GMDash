@@ -66,9 +66,12 @@ namespace SalesMetrics.Controllers
                 fullName = User.FindFirstValue("FullName");
             }
 
-            // Access control - Only Office Manager (5) and Office Staff (6)
-            if (roleId != 5 && roleId != 6)
+            // Check if user has Office Dashboard permission
+            var hasOfficeDashboardAccess = await _permissionService.HasFeatureAccessAsync(users_Id, "OfficeDashboard");
+            if (!hasOfficeDashboardAccess)
             {
+                // User doesn't have permission - redirect to Sales Dashboard or show error
+                TempData["Error"] = "You don't have permission to access the Office Dashboard.";
                 return RedirectToAction("Index", "Dashboard");
             }
 

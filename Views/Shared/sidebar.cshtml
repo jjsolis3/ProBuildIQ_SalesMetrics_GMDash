@@ -9,6 +9,7 @@
     var hasGMDashboardAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "GMDashboard") : false;
     var hasGMRecapAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "GMRecap") : false;
     var hasDashboardAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Dashboard") : false;
+    var hasOfficeDashboardAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Office Dashboard") : false;
     var hasTasksAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Tasks") : false;
     var hasSalesPulseAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "SalesPulse") : false;
     var hasJournalAccess = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "Journal") : false;
@@ -126,7 +127,7 @@
                 {
                     <li class="menu-title">DASHBOARD</li>
                     <li class="ms-3">
-                        @if (roleId == "5" || roleId == "6")
+                        @if (roleId == "1" || roleId == "5" || roleId == "6")
                         {
                             <!-- Office Manager and Office Staff go to Office Dashboard -->
                             <a href="/Office/Index">

@@ -426,6 +426,22 @@ namespace SalesMetrics.Controllers
                 Value = f.FeatureId.ToString()
             }).ToList();
 
+            // Group features by category for organized display
+            user.GroupedFeatures = allFeatures
+                .GroupBy(f => f.Category ?? "Other")
+                .OrderBy(g => g.Key)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.OrderBy(f => f.DisplayOrder)
+                          .Select(f => new FeatureItemViewModel
+                          {
+                              FeatureId = f.FeatureId,
+                              FeatureName = f.FeatureName,
+                              Category = f.Category,
+                              DisplayOrder = f.DisplayOrder
+                          }).ToList()
+                );
+
             // Load user's current permissions (using Users_Id primary key)
             var userPermissionIds = await _permissionService.GetUserPermissionIdsAsync(user.Users_Id);
             user.AssignedFeatureIds = userPermissionIds;
@@ -576,7 +592,7 @@ namespace SalesMetrics.Controllers
         }
 
         [HttpGet]
-        public IActionResult GetCreateUserModal()
+        public async Task<IActionResult> GetCreateUserModal()
         {
             var model = new RegisterViewModel
             {
@@ -589,8 +605,33 @@ namespace SalesMetrics.Controllers
                     new("PHX", "4"),
                     new("SND", "5")
                 },
-                AssignedLocationIds = new List<int>() // Initialize empty list for new users
+                AssignedLocationIds = new List<int>(), // Initialize empty list for new users
+                AssignedFeatureIds = new List<int>() // Initialize empty list for new users
             };
+
+            // Load all available features for permission checkboxes
+            var allFeatures = await _permissionService.GetAllFeaturesAsync();
+            model.AllFeatures = allFeatures.Select(f => new SelectListItem
+            {
+                Text = f.FeatureName,
+                Value = f.FeatureId.ToString()
+            }).ToList();
+
+            // Group features by category for organized display
+            model.GroupedFeatures = allFeatures
+                .GroupBy(f => f.Category ?? "Other")
+                .OrderBy(g => g.Key)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.OrderBy(f => f.DisplayOrder)
+                          .Select(f => new FeatureItemViewModel
+                          {
+                              FeatureId = f.FeatureId,
+                              FeatureName = f.FeatureName,
+                              Category = f.Category,
+                              DisplayOrder = f.DisplayOrder
+                          }).ToList()
+                );
 
             // Set new users to active by default
             ViewBag.IsActive = true;

@@ -553,7 +553,7 @@ namespace SalesMetrics.Services.Erp.Clients
             if (await reader.ReadAsync())
             {
                 summary.PendingInvoices = reader.GetInt32(0);
-                summary.PendingInvoicesAmount = Convert.ToDecimal(reader.GetDouble(1));
+                summary.PendingInvoicesAmount = Convert.ToDecimal(reader.GetValue(1));
             }
 
             // Read 30-60 days
@@ -561,7 +561,7 @@ namespace SalesMetrics.Services.Erp.Clients
             if (await reader.ReadAsync())
             {
                 summary.Due30to60 = reader.GetInt32(0);
-                summary.Due30to60Amount = Convert.ToDecimal(reader.GetDouble(1));
+                summary.Due30to60Amount = Convert.ToDecimal(reader.GetValue(1));
             }
 
             // Read 60-90 days
@@ -569,7 +569,7 @@ namespace SalesMetrics.Services.Erp.Clients
             if (await reader.ReadAsync())
             {
                 summary.Due60to90 = reader.GetInt32(0);
-                summary.Due60to90Amount = Convert.ToDecimal(reader.GetDouble(1));
+                summary.Due60to90Amount = Convert.ToDecimal(reader.GetValue(1));
             }
 
             // Read 90-120 days
@@ -577,7 +577,7 @@ namespace SalesMetrics.Services.Erp.Clients
             if (await reader.ReadAsync())
             {
                 summary.Due90to120 = reader.GetInt32(0);
-                summary.Due90to120Amount = Convert.ToDecimal(reader.GetDouble(1));
+                summary.Due90to120Amount = Convert.ToDecimal(reader.GetValue(1));
             }
 
             // Read over 120 days
@@ -585,7 +585,7 @@ namespace SalesMetrics.Services.Erp.Clients
             if (await reader.ReadAsync())
             {
                 summary.DueOver120 = reader.GetInt32(0);
-                summary.DueOver120Amount = Convert.ToDecimal(reader.GetDouble(1));
+                summary.DueOver120Amount = Convert.ToDecimal(reader.GetValue(1));
             }
 
             // Read under 30 days
@@ -593,7 +593,7 @@ namespace SalesMetrics.Services.Erp.Clients
             if (await reader.ReadAsync())
             {
                 summary.DueUnder30 = reader.GetInt32(0);
-                summary.DueUnder30Amount = Convert.ToDecimal(reader.GetDouble(1));
+                summary.DueUnder30Amount = Convert.ToDecimal(reader.GetValue(1));
             }
 
             // Read top delinquent customers
@@ -608,8 +608,8 @@ namespace SalesMetrics.Services.Erp.Clients
                     CustomerName = reader.GetString(0),
                     CustomerNumber = customerNumber,
                     CustomerId = reader.GetInt32(2),
-                    OutstandingAmount = Convert.ToDecimal(reader.GetDouble(3)),
-                    BalanceDue = Convert.ToDecimal(reader.GetDouble(3))
+                    OutstandingAmount = Convert.ToDecimal(reader.GetValue(3)),
+                    BalanceDue = Convert.ToDecimal(reader.GetValue(3))
                 });
             }
 

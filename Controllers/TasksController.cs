@@ -836,15 +836,22 @@ namespace SalesMetrics.Controllers
                     }
 
                     // Map column index to column name for sorting
+                    // Columns in AdminTask.cshtml DataTables:
+                    // 0: taskId (hidden), 1: title, 2: description, 3: type, 4: property,
+                    // 5: dueDate, 6: completedDate, 7: status, 8: assignedTo, 9: createdBy, 10: createdDate
                     string orderByColumn = sortColumn switch
                     {
                         "0" => "TaskID",
                         "1" => "Title",
-                        "2" => "Status",
-                        "3" => "DueDate",
-                        "4" => "AssignedTo",
-                        "5" => "Property",
-                        "6" => "Type",
+                        "2" => "Description",
+                        "3" => "Type",
+                        "4" => "Property",
+                        "5" => "DueDate",
+                        "6" => "CompletedDate",
+                        "7" => "Status",
+                        "8" => "AssignedTo",
+                        "9" => "CreatedBy",
+                        "10" => "CreatedDate",
                         _ => "DueDate" // Default sort by DueDate
                     };
 

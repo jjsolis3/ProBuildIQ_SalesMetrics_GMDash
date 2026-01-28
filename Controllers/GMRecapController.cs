@@ -606,29 +606,61 @@ namespace SalesMetrics.Controllers
 
                 try
                 {
-                    // Update the main recap entry
-                    var updateRecapEntry = new SqlCommand(@"
-                UPDATE GMWeeklyRecapEntry 
-                SET ModifiedDate = GETDATE(),
-                    ModifiedBy = @ModifiedBy
-                WHERE RecapID = @RecapID AND GMUserID = @GMUserID", conn, tran);
-                    updateRecapEntry.Parameters.AddWithValue("@RecapID", model.RecapID);
-                    updateRecapEntry.Parameters.AddWithValue("@GMUserID", currentUserId); // Double-check ownership
-                    updateRecapEntry.Parameters.AddWithValue("@ModifiedBy", currentUserClaim.Value ?? "Unknown");
-                    await updateRecapEntry.ExecuteNonQueryAsync();
+                    // IMPROVED: Only update fields that actually changed
+                    // First, get the current values from the database
+                    var fieldIds = string.Join(",", model.Fields.Select(f => f.FieldID));
+                    var currentValuesCmd = new SqlCommand($@"
+                        SELECT FieldID, FieldValue FROM GMWeeklyRecapField
+                        WHERE FieldID IN ({fieldIds})", conn, tran);
+
+                    var currentValues = new Dictionary<int, string>();
+                    using (var reader = await currentValuesCmd.ExecuteReaderAsync())
+                    {
+                        while (await reader.ReadAsync())
+                        {
+                            var fieldId = reader.GetInt32(0);
+                            var fieldValue = reader.IsDBNull(1) ? "" : reader.GetString(1);
+                            currentValues[fieldId] = fieldValue;
+                        }
+                    }
+
+                    // Track if any fields were actually updated
+                    bool anyFieldsUpdated = false;
 
                     // FIXED: Update specific field entries by FieldID (not FieldName)
-                    // This allows multiple entries for the same field to be edited individually
+                    // Only update if the value actually changed
                     foreach (var field in model.Fields)
                     {
-                        var updateFieldCmd = new SqlCommand(@"
-                    UPDATE GMWeeklyRecapField
-                    SET FieldValue = @FieldValue, ModifiedDate = GETDATE()
-                    WHERE FieldID = @FieldID", conn, tran);
-                        updateFieldCmd.Parameters.AddWithValue("@FieldID", field.FieldID);
-                        updateFieldCmd.Parameters.AddWithValue("@FieldValue", field.FieldValue ?? "");
+                        var newValue = field.FieldValue ?? "";
+                        var oldValue = currentValues.ContainsKey(field.FieldID) ? currentValues[field.FieldID] : "";
 
-                        await updateFieldCmd.ExecuteNonQueryAsync();
+                        // Only update if the value has changed
+                        if (newValue != oldValue)
+                        {
+                            var updateFieldCmd = new SqlCommand(@"
+                                UPDATE GMWeeklyRecapField
+                                SET FieldValue = @FieldValue, ModifiedDate = GETDATE()
+                                WHERE FieldID = @FieldID", conn, tran);
+                            updateFieldCmd.Parameters.AddWithValue("@FieldID", field.FieldID);
+                            updateFieldCmd.Parameters.AddWithValue("@FieldValue", newValue);
+
+                            await updateFieldCmd.ExecuteNonQueryAsync();
+                            anyFieldsUpdated = true;
+                        }
+                    }
+
+                    // Only update the main recap entry's ModifiedDate if any fields were actually changed
+                    if (anyFieldsUpdated)
+                    {
+                        var updateRecapEntry = new SqlCommand(@"
+                            UPDATE GMWeeklyRecapEntry
+                            SET ModifiedDate = GETDATE(),
+                                ModifiedBy = @ModifiedBy
+                            WHERE RecapID = @RecapID AND GMUserID = @GMUserID", conn, tran);
+                        updateRecapEntry.Parameters.AddWithValue("@RecapID", model.RecapID);
+                        updateRecapEntry.Parameters.AddWithValue("@GMUserID", currentUserId);
+                        updateRecapEntry.Parameters.AddWithValue("@ModifiedBy", currentUserClaim.Value ?? "Unknown");
+                        await updateRecapEntry.ExecuteNonQueryAsync();
                     }
 
                     await tran.CommitAsync();

@@ -830,41 +830,52 @@ namespace SalesMetrics.Controllers
 
                 try
                 {
-                    // Check if draft entry exists
+                    // FIXED: Check for ANY existing entry for this week (not just drafts)
+                    // This prevents creating duplicate entries when user returns to add more fields
+                    // after already submitting a recap for the same week
                     var checkCmd = new SqlCommand(@"
-                SELECT RecapID FROM GMWeeklyRecapEntry
-                WHERE GMUserID = @GMUserID AND LocationID = @LocationID 
-                AND WeekStartDate = @WeekStartDate AND IsDraft = 1
-            ", conn, tran);
+                        SELECT RecapID, IsDraft FROM GMWeeklyRecapEntry
+                        WHERE GMUserID = @GMUserID AND LocationID = @LocationID
+                        AND WeekStartDate = @WeekStartDate
+                        ORDER BY IsDraft DESC, CreatedDate DESC", conn, tran);
 
                     checkCmd.Parameters.AddWithValue("@GMUserID", user_id);
                     checkCmd.Parameters.AddWithValue("@LocationID", model.LocationID);
                     checkCmd.Parameters.AddWithValue("@WeekStartDate", model.WeekStartDate);
 
-                    var existing = await checkCmd.ExecuteScalarAsync();
                     int entryId;
+                    bool existingEntryFound = false;
 
-                    if (existing != null)
+                    using (var reader = await checkCmd.ExecuteReaderAsync())
                     {
-                        entryId = (int)existing;
+                        if (await reader.ReadAsync())
+                        {
+                            entryId = reader.GetInt32(0);
+                            existingEntryFound = true;
+                        }
+                        else
+                        {
+                            entryId = 0;
+                        }
+                    }
 
-                        // Update last modified
+                    if (existingEntryFound)
+                    {
+                        // Update last modified on the existing entry
                         var updateCmd = new SqlCommand(@"
-                    UPDATE GMWeeklyRecapEntry 
-                    SET ModifiedDate = GETDATE() 
-                    WHERE RecapID = @RecapID
-                ", conn, tran);
+                            UPDATE GMWeeklyRecapEntry
+                            SET ModifiedDate = GETDATE()
+                            WHERE RecapID = @RecapID", conn, tran);
                         updateCmd.Parameters.AddWithValue("@RecapID", entryId);
                         await updateCmd.ExecuteNonQueryAsync();
                     }
                     else
                     {
-                        // Create new draft entry
+                        // Create new draft entry only if no entry exists for this week
                         var insertCmd = new SqlCommand(@"
-                    INSERT INTO GMWeeklyRecapEntry (GMUserID, LocationID, WeekStartDate, CreatedDate, IsDraft)
-                    OUTPUT INSERTED.RecapID
-                    VALUES (@GMUserID, @LocationID, @WeekStartDate, GETDATE(), 1)
-                ", conn, tran);
+                            INSERT INTO GMWeeklyRecapEntry (GMUserID, LocationID, WeekStartDate, CreatedDate, IsDraft)
+                            OUTPUT INSERTED.RecapID
+                            VALUES (@GMUserID, @LocationID, @WeekStartDate, GETDATE(), 1)", conn, tran);
 
                         insertCmd.Parameters.AddWithValue("@GMUserID", user_id);
                         insertCmd.Parameters.AddWithValue("@LocationID", model.LocationID);

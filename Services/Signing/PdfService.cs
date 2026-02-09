@@ -95,7 +95,7 @@ public sealed class PdfService : IPdfService
 
         // Log page dimensions for debugging coordinate issues
         _logger.LogDebug("Page count: {PageCount}, Page 0 dimensions: {PageWidth}x{PageHeight} points",
-            doc.Pages.Count, page.Width.ToString("F1"), page.Height.ToString("F1"));
+            doc.Pages.Count, page.Width.Point.ToString("F1"), page.Height.Point.ToString("F1"));
 
         // 4) Fonts & brushes
         var font = new XFont("Roboto", 11, XFontStyle.Regular);
@@ -573,7 +573,7 @@ public sealed class PdfService : IPdfService
             // PDFSharp uses same coordinate system as canvas (top-left origin)
             // Use coordinates directly as saved from configurator
             _logger.LogDebug("Signature - Page: {PageWidth}x{PageHeight}pt, x={X}, y={Y}, size={Width}x{Height}",
-                page.Width.ToString("F1"), page.Height.ToString("F1"), x, y, width, height);
+                page.Width.Point.ToString("F1"), page.Height.Point.ToString("F1"), x, y, width, height);
 
             gfx.DrawImage(img, x, y, width, height);
         }
@@ -591,7 +591,7 @@ public sealed class PdfService : IPdfService
         // Use coordinates directly from configurator without adjustment
         // The configurator saves Y coordinate for the baseline position
         _logger.LogDebug("Text '{Text}' - Page: {PageWidth}x{PageHeight}pt, x={X}, y={Y}",
-            text, page.Width.ToString("F1"), page.Height.ToString("F1"), x, y);
+            text, page.Width.Point.ToString("F1"), page.Height.Point.ToString("F1"), x, y);
 
         //gfx.DrawString(text, font, brush, new XPoint(x, y), XStringFormats.Default);
         gfx.DrawString(text, font, brush, new XPoint(x, y), XStringFormats.TopLeft);

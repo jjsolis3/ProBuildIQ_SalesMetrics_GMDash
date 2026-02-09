@@ -203,7 +203,7 @@
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form action="/sign/@ViewBag.Token/decline" method="post">
+            <form action="/sign/@token/decline" method="post">
                 @Html.AntiForgeryToken()
                 <div class="modal-body">
                     <p class="fw-bold">Are you sure you want to decline this signature request?</p>

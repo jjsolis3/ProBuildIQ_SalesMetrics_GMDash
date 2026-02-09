@@ -14,9 +14,7 @@ namespace SalesMetrics.Services.Signing
         Task<(IReadOnlyList<EnvelopeListItemVm> Rows, int Total)> SearchAsync(string? status, string? office, int page, int pageSize, int? createdByUserId = null, string? scope = null, int? userRoleId = null, int? userLocationId = null);
 
         // Public flow
-        //Task<SignReviewVm?> GetReviewAsync(string token, string userAgent, string ip);
         Task<ReviewVm?> GetReviewAsync(string token, string userAgent, string ip);
-        Task<(bool ok, string? downloadUrl)> SignAsync(SignSubmitDto dto, string userAgent, string ip);
         Task<bool> DeclineEnvelopeAsync(string token, string reason, string userAgent, string ip); // Recipient declines to sign
         Task<(bool isComplete, string? downloadUrl)> TryFinalizeEnvelopeAsync(long envelopeId);
 

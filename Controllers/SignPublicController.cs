@@ -1,6 +1,7 @@
 ﻿// Controllers/SignPublicController.cs
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using System.Text.RegularExpressions;
 using SalesMetrics.Services.Signing;
 using SalesMetrics.Models.Signing;
 
@@ -120,6 +121,16 @@ public class SignPublicController : Controller
                 {
                     _logger.LogWarning("Manager validation failed: Tenant info missing");
                     ModelState.AddModelError("", "Please enter the tenant name and email, or check 'Skip tenant signature'.");
+                    ViewBag.Token = token;
+                    ViewBag.CompanyBranding = _branding;
+                    return View(vm);
+                }
+
+                // Validate tenant email format
+                if (!Regex.IsMatch(post.TenantEmail.Trim(), @"^[^@\s]+@[^@\s]+\.[^@\s]+$"))
+                {
+                    _logger.LogWarning("Manager validation failed: Invalid tenant email format: {Email}", post.TenantEmail);
+                    ModelState.AddModelError("", "Please enter a valid email address for the tenant.");
                     ViewBag.Token = token;
                     ViewBag.CompanyBranding = _branding;
                     return View(vm);

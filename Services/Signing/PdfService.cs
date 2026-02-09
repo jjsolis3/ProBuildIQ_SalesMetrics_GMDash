@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.Extensions.Logging;
 using PdfSharpCore.Drawing;
 using PdfSharpCore.Pdf;
 using PdfSharpCore.Pdf.IO;
@@ -16,15 +17,16 @@ public sealed class PdfService : IPdfService
     private readonly SalesMetricsDbContext _db;
     private readonly IErpMergeService _merge;
     private readonly IWebHostEnvironment _env;
+    private readonly ILogger<PdfService> _logger;
 
-    public PdfService(SalesMetricsDbContext db, IErpMergeService merge, IWebHostEnvironment env)
+    public PdfService(SalesMetricsDbContext db, IErpMergeService merge, IWebHostEnvironment env, ILogger<PdfService> logger)
     {
-        _db = db; _merge = merge; _env = env;
+        _db = db; _merge = merge; _env = env; _logger = logger;
     }
 
     public async Task<(byte[] bytes, string storagePath, byte[] sha256)> RenderAndSealAsync(long envelopeId)
     {
-        Console.WriteLine($"[PDF DEBUG] ===== STARTING PDF GENERATION FOR ENVELOPE {envelopeId} =====");
+        _logger.LogDebug("===== STARTING PDF GENERATION FOR ENVELOPE {EnvelopeId} =====", envelopeId);
 
         // 1) Load envelope + template + recipients + fields
         var env = await _db.SignEnvelopes
@@ -38,10 +40,10 @@ public sealed class PdfService : IPdfService
             .AsNoTracking()
             .FirstAsync(t => t.TemplateKey == env.TemplateKey);
 
-        Console.WriteLine($"[PDF DEBUG] Template: {template.TemplateKey} ({template.DisplayName})");
-        Console.WriteLine($"[PDF DEBUG] PDF File: {template.PdfFilePath ?? "NONE - will use default"}");
-        Console.WriteLine($"[PDF DEBUG] Has MergeSpec: {!string.IsNullOrWhiteSpace(template.MergeSpecJson)}");
-        Console.WriteLine($"[PDF DEBUG] SignField records found: {env.Fields?.Count ?? 0}");
+        _logger.LogDebug("Template: {TemplateKey} ({DisplayName})", template.TemplateKey, template.DisplayName);
+        _logger.LogDebug("PDF File: {PdfFilePath}", template.PdfFilePath ?? "NONE - will use default");
+        _logger.LogDebug("Has MergeSpec: {HasMergeSpec}", !string.IsNullOrWhiteSpace(template.MergeSpecJson));
+        _logger.LogDebug("SignField records found: {FieldCount}", env.Fields?.Count ?? 0);
 
         var tenant = env.Recipients.FirstOrDefault(r => r.Role == "Tenant");
         var manager = env.Recipients.FirstOrDefault(r => r.Role == "Manager");
@@ -49,11 +51,11 @@ public sealed class PdfService : IPdfService
         // 2) Gather data from SignField records and supplement with ERP data
         var fieldData = await GatherFieldDataAsync(env, tenant, manager);
 
-        Console.WriteLine($"[PDF DEBUG] ========== ENVELOPE {envelopeId} ==========");
-        Console.WriteLine($"[PDF DEBUG] Field data gathered: {fieldData.Count} fields");
+        _logger.LogDebug("========== ENVELOPE {EnvelopeId} ==========", envelopeId);
+        _logger.LogDebug("Field data gathered: {FieldCount} fields", fieldData.Count);
         foreach (var kvp in fieldData)
         {
-            Console.WriteLine($"[PDF DEBUG] Field '{kvp.Key}' = '{kvp.Value}'");
+            _logger.LogDebug("Field '{FieldKey}' = '{FieldValue}'", kvp.Key, kvp.Value);
         }
 
         // 3) Determine which PDF to use
@@ -73,12 +75,27 @@ public sealed class PdfService : IPdfService
             throw new FileNotFoundException($"PDF template not found: {templatePath}", templatePath);
 
         using var doc = PdfReader.Open(templatePath, PdfDocumentOpenMode.Modify);
-        var page = doc.Pages[0];
+        var page = doc.Pages[0]; // default page for legacy stamping, tenant-skip, audit footer
         using var gfx = XGraphics.FromPdfPage(page);
 
+        // Cache XGraphics per page for multi-page MergeSpec stamping
+        var pageGfxCache = new Dictionary<int, (PdfPage Page, XGraphics Gfx)> { [0] = (page, gfx) };
+        XGraphics GetPageGfx(int pageIndex)
+        {
+            pageIndex = Math.Clamp(pageIndex, 0, doc.Pages.Count - 1);
+            if (!pageGfxCache.TryGetValue(pageIndex, out var entry))
+            {
+                var p = doc.Pages[pageIndex];
+                entry = (p, XGraphics.FromPdfPage(p));
+                pageGfxCache[pageIndex] = entry;
+            }
+            return entry.Gfx;
+        }
+        PdfPage GetPage(int pageIndex) => pageGfxCache[Math.Clamp(pageIndex, 0, doc.Pages.Count - 1)].Page;
+
         // Log page dimensions for debugging coordinate issues
-        Console.WriteLine($"[PDF DEBUG] Page dimensions: {page.Width:F1} x {page.Height:F1} points");
-        Console.WriteLine($"[PDF DEBUG] Page size in inches: {page.Width/72:F2}\" x {page.Height/72:F2}\"");
+        _logger.LogDebug("Page count: {PageCount}, Page 0 dimensions: {PageWidth}x{PageHeight} points",
+            doc.Pages.Count, page.Width.ToString("F1"), page.Height.ToString("F1"));
 
         // 4) Fonts & brushes
         var font = new XFont("Roboto", 11, XFontStyle.Regular);
@@ -97,24 +114,24 @@ public sealed class PdfService : IPdfService
         {
             try
             {
-                Console.WriteLine($"[PDF DEBUG] Parsing MergeSpec for envelope {envelopeId}");
-                Console.WriteLine($"[PDF DEBUG] MergeSpec JSON: {template.MergeSpecJson}");
+                _logger.LogDebug("Parsing MergeSpec for envelope {EnvelopeId}", envelopeId);
+                _logger.LogDebug("MergeSpec JSON: {MergeSpecJson}", template.MergeSpecJson);
 
                 var mergeSpec = JsonSerializer.Deserialize<MergeSpec>(template.MergeSpecJson);
                 if (mergeSpec?.fieldMapping != null)
                 {
-                    Console.WriteLine($"[PDF DEBUG] Found {mergeSpec.fieldMapping.Count} fields in MergeSpec");
+                    _logger.LogDebug("Found {FieldMappingCount} fields in MergeSpec", mergeSpec.fieldMapping.Count);
 
                     foreach (var (fieldKey, fieldInfo) in mergeSpec.fieldMapping)
                     {
                         // Get the value for this field
                         if (!fieldData.TryGetValue(fieldKey, out var value))
                         {
-                            Console.WriteLine($"[PDF DEBUG] Field '{fieldKey}' not found in field data - skipping");
+                            _logger.LogDebug("Field '{FieldKey}' not found in field data - skipping", fieldKey);
                             continue;
                         }
 
-                        Console.WriteLine($"[PDF DEBUG] Processing field '{fieldKey}' with value: {value}");
+                        _logger.LogDebug("Processing field '{FieldKey}' with value: {FieldValue}", fieldKey, value);
 
                         // Support multiple placements of the same field
                         var placements = fieldInfo.placements ?? new List<Coordinates>();
@@ -125,44 +142,45 @@ public sealed class PdfService : IPdfService
                             placements = new List<Coordinates> { fieldInfo.coordinates };
                         }
 
-                        Console.WriteLine($"[PDF DEBUG] Field '{fieldKey}' has {placements.Count} placement(s)");
+                        _logger.LogDebug("Field '{FieldKey}' has {PlacementCount} placement(s)", fieldKey, placements.Count);
 
-                        // Place field at all specified locations
+                        // Place field at all specified locations (multi-page aware)
                         foreach (var coord in placements)
                         {
-                            Console.WriteLine($"[PDF DEBUG] Placing '{fieldKey}' at page={coord.page}, x={coord.x}, y={coord.y}, w={coord.width}, h={coord.height}");
+                            var coordGfx = GetPageGfx(coord.page);
+                            var coordPage = GetPage(coord.page);
+                            _logger.LogDebug("Placing '{FieldKey}' at page={Page}, x={X}, y={Y}, w={Width}, h={Height}", fieldKey, coord.page, coord.x, coord.y, coord.width, coord.height);
 
                             // Draw debug rectangle if enabled
                             if (debug)
                             {
                                 var boxRect = new XRect(coord.x, coord.y, coord.width, coord.height);
-                                gfx.DrawRectangle(new XPen(XColors.Blue, 0.5), boxRect);
-                                DrawLabel(gfx, fieldKey, coord.x, coord.y - 5);
+                                coordGfx.DrawRectangle(new XPen(XColors.Blue, 0.5), boxRect);
+                                DrawLabel(coordGfx, fieldKey, coord.x, coord.y - 5);
                             }
 
                             // Handle signatures differently
                             if (fieldInfo.type == "signature" && value is string sigPath && !string.IsNullOrWhiteSpace(sigPath))
                             {
-                                Console.WriteLine($"[PDF DEBUG] Drawing signature for '{fieldKey}' from path: {sigPath}");
-                                DrawSignature(gfx, page, sigPath, coord.x, coord.y, coord.width, coord.height);
+                                _logger.LogDebug("Drawing signature for '{FieldKey}' from path: {SignaturePath}", fieldKey, sigPath);
+                                DrawSignature(coordGfx, coordPage, sigPath, coord.x, coord.y, coord.width, coord.height);
                             }
                             else if (value is string textValue)
                             {
-                                Console.WriteLine($"[PDF DEBUG] Drawing text for '{fieldKey}': {textValue}");
-                                DrawTextWithCoordinateConversion(gfx, page, font, brush, textValue, coord.x, coord.y);
+                                _logger.LogDebug("Drawing text for '{FieldKey}': {TextValue}", fieldKey, textValue);
+                                DrawTextWithCoordinateConversion(coordGfx, coordPage, font, brush, textValue, coord.x, coord.y);
                             }
                         }
                     }
                 }
                 else
                 {
-                    Console.WriteLine($"[PDF DEBUG] No field mappings found in MergeSpec");
+                    _logger.LogDebug("No field mappings found in MergeSpec");
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[PDF ERROR] Error parsing MergeSpec: {ex.Message}");
-                Console.WriteLine($"[PDF ERROR] Stack trace: {ex.StackTrace}");
+                _logger.LogError(ex, "Error parsing MergeSpec for envelope {EnvelopeId}", envelopeId);
                 // Fall back to default behavior
                 StampFieldsLegacy(gfx, font, brush, fieldData);
             }
@@ -205,7 +223,7 @@ public sealed class PdfService : IPdfService
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[PDF DEBUG] Could not find resident field coordinates: {ex.Message}");
+                    _logger.LogDebug(ex, "Could not find resident field coordinates");
                 }
             }
 
@@ -229,7 +247,8 @@ public sealed class PdfService : IPdfService
                 var bottomEdgeSig = residentSigCoords.y + residentSigCoords.height;
                 stampHeight = Math.Max(bottomEdgeName, bottomEdgeSig) - stampY;
 
-                Console.WriteLine($"[PDF DEBUG] Combined stamp area: Name({residentNameCoords.x},{residentNameCoords.y}) + Sig({residentSigCoords.x},{residentSigCoords.y}) = Stamp({stampX},{stampY},{stampWidth}x{stampHeight})");
+                _logger.LogDebug("Combined stamp area: Name({NameX},{NameY}) + Sig({SigX},{SigY}) = Stamp({StampX},{StampY},{StampWidth}x{StampHeight})",
+                    residentNameCoords.x, residentNameCoords.y, residentSigCoords.x, residentSigCoords.y, stampX, stampY, stampWidth, stampHeight);
             }
             else if (residentSigCoords != null)
             {
@@ -278,8 +297,12 @@ public sealed class PdfService : IPdfService
                     new XPoint(stampX + In(0.1), textY), XStringFormats.Default);
             }
 
-            Console.WriteLine($"[PDF DEBUG] Added tenant skip notation covering ResidentName + ResidentSignature at ({stampX}, {stampY})");
+            _logger.LogDebug("Added tenant skip notation covering ResidentName + ResidentSignature at ({StampX}, {StampY})", stampX, stampY);
         }
+
+        // Dispose any extra-page graphics (page 0 is disposed by the using statement)
+        foreach (var kvp in pageGfxCache.Where(k => k.Key != 0))
+            kvp.Value.Gfx.Dispose();
 
         // 7) Save to bytes
         using var ms = new MemoryStream();
@@ -293,14 +316,14 @@ public sealed class PdfService : IPdfService
         var filePath = Path.Combine(dir, $"envelope-{envelopeId}.pdf");
         await File.WriteAllBytesAsync(filePath, bytes);
 
-        Console.WriteLine($"[PDF DEBUG] PDF saved to: {filePath}");
-        Console.WriteLine($"[PDF DEBUG] PDF size: {bytes.Length} bytes");
+        _logger.LogDebug("PDF saved to: {FilePath}", filePath);
+        _logger.LogDebug("PDF size: {PdfSizeBytes} bytes", bytes.Length);
 
         // 9) Hash for tamper evidence
         var sha = HashHelper.Sha256(bytes);
         var webPath = filePath.Replace("wwwroot", "").Replace("\\", "/");
 
-        Console.WriteLine($"[PDF DEBUG] ===== PDF GENERATION COMPLETE FOR ENVELOPE {envelopeId} =====");
+        _logger.LogDebug("===== PDF GENERATION COMPLETE FOR ENVELOPE {EnvelopeId} =====", envelopeId);
 
         return (bytes, webPath, sha);
     }
@@ -312,7 +335,7 @@ public sealed class PdfService : IPdfService
     /// </summary>
     public async Task<byte[]> GeneratePreviewPdfAsync(long envelopeId, long currentRecipientId)
     {
-        Console.WriteLine($"[PREVIEW PDF] ===== GENERATING PREVIEW FOR ENVELOPE {envelopeId}, RECIPIENT {currentRecipientId} =====");
+        _logger.LogDebug("===== GENERATING PREVIEW FOR ENVELOPE {EnvelopeId}, RECIPIENT {RecipientId} =====", envelopeId, currentRecipientId);
 
         // 1) Load envelope + template + recipients + fields
         var env = await _db.SignEnvelopes
@@ -322,7 +345,7 @@ public sealed class PdfService : IPdfService
             .FirstAsync(e => e.EnvelopeId == envelopeId);
 
         var currentRecipient = env.Recipients.First(r => r.RecipientId == currentRecipientId);
-        Console.WriteLine($"[PREVIEW PDF] Current recipient: {currentRecipient.FullName} ({currentRecipient.Role})");
+        _logger.LogDebug("Current recipient: {RecipientName} ({RecipientRole})", currentRecipient.FullName, currentRecipient.Role);
 
         var template = await _db.SignTemplates
             .AsNoTracking()
@@ -341,7 +364,7 @@ public sealed class PdfService : IPdfService
             fieldsToShow.Add("PropertyName");
             fieldsToShow.Add("InstallationDate");
             fieldsToShow.Add("UnitNumber");
-            Console.WriteLine($"[PREVIEW PDF] Manager view - showing property fields only");
+            _logger.LogDebug("Manager view - showing property fields only");
         }
         else if (currentRecipient.Role == "Tenant")
         {
@@ -352,10 +375,10 @@ public sealed class PdfService : IPdfService
             fieldsToShow.Add("PropertyStaffName");
             fieldsToShow.Add("PropertyStaffDate");
             fieldsToShow.Add("PropertyStaffSignature");
-            Console.WriteLine($"[PREVIEW PDF] Tenant view - showing property fields + manager signature");
+            _logger.LogDebug("Tenant view - showing property fields + manager signature");
         }
 
-        Console.WriteLine($"[PREVIEW PDF] Fields to display: {string.Join(", ", fieldsToShow)}");
+        _logger.LogDebug("Fields to display: {FieldsToShow}", string.Join(", ", fieldsToShow));
 
         // 3) Load the PDF template
         string templatePath;
@@ -391,17 +414,17 @@ public sealed class PdfService : IPdfService
                         // Only show fields that are in the allowed list
                         if (!fieldsToShow.Contains(fieldKey))
                         {
-                            Console.WriteLine($"[PREVIEW PDF] Skipping field '{fieldKey}' - not visible to {currentRecipient.Role}");
+                            _logger.LogDebug("Skipping field '{FieldKey}' - not visible to {RecipientRole}", fieldKey, currentRecipient.Role);
                             continue;
                         }
 
                         if (!fieldData.TryGetValue(fieldKey, out var value))
                         {
-                            Console.WriteLine($"[PREVIEW PDF] Field '{fieldKey}' not found in field data");
+                            _logger.LogDebug("Field '{FieldKey}' not found in field data", fieldKey);
                             continue;
                         }
 
-                        Console.WriteLine($"[PREVIEW PDF] Stamping field '{fieldKey}' = '{value}'");
+                        _logger.LogDebug("Stamping field '{FieldKey}' = '{FieldValue}'", fieldKey, value);
 
                         var placements = fieldInfo.placements ?? new List<Coordinates>();
                         if (placements.Count == 0 && fieldInfo.coordinates != null)
@@ -425,7 +448,7 @@ public sealed class PdfService : IPdfService
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[PREVIEW PDF ERROR] Error generating preview: {ex.Message}");
+                _logger.LogError(ex, "Error generating preview for envelope {EnvelopeId}", envelopeId);
             }
         }
 
@@ -434,7 +457,7 @@ public sealed class PdfService : IPdfService
         doc.Save(ms, false);
         var bytes = ms.ToArray();
 
-        Console.WriteLine($"[PREVIEW PDF] ===== PREVIEW GENERATION COMPLETE, SIZE: {bytes.Length} bytes =====");
+        _logger.LogDebug("===== PREVIEW GENERATION COMPLETE, SIZE: {PdfSizeBytes} bytes =====", bytes.Length);
 
         return bytes;
     }
@@ -453,19 +476,19 @@ public sealed class PdfService : IPdfService
         // First, populate from SignField records if they exist
         if (env.Fields != null && env.Fields.Any())
         {
-            Console.WriteLine($"[PDF DEBUG] Loading data from {env.Fields.Count} SignField records");
+            _logger.LogDebug("Loading data from {FieldCount} SignField records", env.Fields.Count);
             foreach (var field in env.Fields)
             {
                 if (!string.IsNullOrWhiteSpace(field.FieldValue))
                 {
                     data[field.FieldKey] = field.FieldValue;
-                    Console.WriteLine($"[PDF DEBUG] Field from DB: {field.FieldKey} = {field.FieldValue}");
+                    _logger.LogDebug("Field from DB: {FieldKey} = {FieldValue}", field.FieldKey, field.FieldValue);
                 }
             }
         }
         else
         {
-            Console.WriteLine($"[PDF DEBUG] No SignField records found, using legacy ERP data gathering");
+            _logger.LogDebug("No SignField records found, using legacy ERP data gathering");
         }
 
         // Supplement with ERP data for any missing fields
@@ -549,24 +572,26 @@ public sealed class PdfService : IPdfService
 
             // PDFSharp uses same coordinate system as canvas (top-left origin)
             // Use coordinates directly as saved from configurator
-            Console.WriteLine($"[COORDINATE DEBUG] Signature - Page: {page.Width:F1}x{page.Height:F1}pt, x={x}, y={y}, size={width}x{height}");
+            _logger.LogDebug("Signature - Page: {PageWidth}x{PageHeight}pt, x={X}, y={Y}, size={Width}x{Height}",
+                page.Width.ToString("F1"), page.Height.ToString("F1"), x, y, width, height);
 
             gfx.DrawImage(img, x, y, width, height);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error drawing signature: {ex.Message}");
+            _logger.LogError(ex, "Error drawing signature from {ImagePath}", imagePath);
         }
     }
 
     /// <summary>
     /// Draw text on PDF
     /// </summary>
-    private static void DrawTextWithCoordinateConversion(XGraphics gfx, PdfPage page, XFont font, XBrush brush, string text, double x, double y)
+    private void DrawTextWithCoordinateConversion(XGraphics gfx, PdfPage page, XFont font, XBrush brush, string text, double x, double y)
     {
         // Use coordinates directly from configurator without adjustment
         // The configurator saves Y coordinate for the baseline position
-        Console.WriteLine($"[COORDINATE DEBUG] Text '{text}' - Page: {page.Width:F1}x{page.Height:F1}pt, x={x}, y={y}");
+        _logger.LogDebug("Text '{Text}' - Page: {PageWidth}x{PageHeight}pt, x={X}, y={Y}",
+            text, page.Width.ToString("F1"), page.Height.ToString("F1"), x, y);
 
         //gfx.DrawString(text, font, brush, new XPoint(x, y), XStringFormats.Default);
         gfx.DrawString(text, font, brush, new XPoint(x, y), XStringFormats.TopLeft);

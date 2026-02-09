@@ -5,6 +5,7 @@ using SalesMetrics.Domain.Signing;
 using SalesMetrics.Models.Signing;
 using SalesMetrics.Utilities.Security;
 
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SalesMetrics.Services.Signing; // for AppSettings
 using System.Text.Json;
@@ -19,10 +20,11 @@ public sealed class EnvelopeService : IEnvelopeService
     private readonly IPdfService _pdf;
     private readonly AppSettings _appSettings;
     private readonly IEmailTemplateService _emailTemplate;
+    private readonly ILogger<EnvelopeService> _logger;
 
-    public EnvelopeService(SalesMetricsDbContext db, INotificationService notify, IErpMergeService merge, IPdfService pdf, IOptions<AppSettings> appSettings, IEmailTemplateService emailTemplate)
+    public EnvelopeService(SalesMetricsDbContext db, INotificationService notify, IErpMergeService merge, IPdfService pdf, IOptions<AppSettings> appSettings, IEmailTemplateService emailTemplate, ILogger<EnvelopeService> logger)
     {
-        _db = db; _notify = notify; _merge = merge; _pdf = pdf; _appSettings = appSettings.Value; _emailTemplate = emailTemplate;
+        _db = db; _notify = notify; _merge = merge; _pdf = pdf; _appSettings = appSettings.Value; _emailTemplate = emailTemplate; _logger = logger;
     }
 
     public async Task<long> CreateAsync(int createdByUsersId, CreateEnvelopeVm vm)
@@ -108,22 +110,22 @@ public sealed class EnvelopeService : IEnvelopeService
     {
         if (string.IsNullOrWhiteSpace(template.MergeSpecJson))
         {
-            Console.WriteLine($"[CreateFields] No MergeSpec found for template {template.TemplateKey}");
+            _logger.LogDebug("No MergeSpec found for template {TemplateKey}", template.TemplateKey);
             return;
         }
 
         try
         {
-            Console.WriteLine($"[CreateFields] Parsing MergeSpec for envelope {env.EnvelopeId}");
+            _logger.LogDebug("Parsing MergeSpec for envelope {EnvelopeId}", env.EnvelopeId);
             var mergeSpec = JsonSerializer.Deserialize<MergeSpec>(template.MergeSpecJson);
 
             if (mergeSpec?.fieldMapping == null || mergeSpec.fieldMapping.Count == 0)
             {
-                Console.WriteLine($"[CreateFields] No field mappings found in MergeSpec");
+                _logger.LogDebug("No field mappings found in MergeSpec");
                 return;
             }
 
-            Console.WriteLine($"[CreateFields] Found {mergeSpec.fieldMapping.Count} fields in MergeSpec");
+            _logger.LogDebug("Found {FieldCount} fields in MergeSpec", mergeSpec.fieldMapping.Count);
 
             // Gather field data using the merge service
             var fieldData = await GatherFieldDataForEnvelopeAsync(env);
@@ -169,15 +171,14 @@ public sealed class EnvelopeService : IEnvelopeService
                 };
 
                 env.Fields.Add(field);
-                Console.WriteLine($"[CreateFields] Created field: {fieldKey} (type: {fieldType}, role: {fieldInfo.role ?? "N/A"}, value: {fieldValue ?? "NULL"})");
+                _logger.LogDebug("Created field: {FieldKey} (type: {FieldType}, role: {Role}, value: {FieldValue})", fieldKey, fieldType, fieldInfo.role ?? "N/A", fieldValue ?? "NULL");
             }
 
-            Console.WriteLine($"[CreateFields] Created {env.Fields.Count} SignField records");
+            _logger.LogDebug("Created {FieldCount} SignField records", env.Fields.Count);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[CreateFields ERROR] Failed to parse MergeSpec: {ex.Message}");
-            Console.WriteLine($"[CreateFields ERROR] Stack trace: {ex.StackTrace}");
+            _logger.LogError(ex, "Failed to parse MergeSpec for envelope {EnvelopeId}", env.EnvelopeId);
             // Don't throw - allow envelope creation to continue without fields
         }
     }
@@ -244,7 +245,7 @@ public sealed class EnvelopeService : IEnvelopeService
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[GatherFieldData ERROR] {ex.Message}");
+            _logger.LogError(ex, "Failed to gather field data for envelope {EnvelopeId}", env.EnvelopeId);
         }
 
         return data;
@@ -277,7 +278,8 @@ public sealed class EnvelopeService : IEnvelopeService
 
     public async Task SendAsync(long envelopeId)
     {
-        var env = await _db.SignEnvelopes.Include(e => e.Recipients).FirstAsync(e => e.EnvelopeId == envelopeId);
+        var env = await _db.SignEnvelopes.Include(e => e.Recipients).FirstOrDefaultAsync(e => e.EnvelopeId == envelopeId)
+            ?? throw new InvalidOperationException($"Envelope {envelopeId} not found");
         if (env.Status == "Draft") env.Status = "Sent";
         env.SentAtUtc = env.SentAtUtc ?? DateTime.UtcNow;
         await _db.SaveChangesAsync();
@@ -485,14 +487,19 @@ public sealed class EnvelopeService : IEnvelopeService
             })
             .ToListAsync();
 
-        // Populate PropertyName from ERP for each envelope
+        // Populate PropertyName from ERP for each envelope (cached to avoid N+1 calls)
+        var propertyNameCache = new Dictionary<int, string?>();
         var rows = new List<EnvelopeListItemVm>();
         foreach (var e in envelopes)
         {
             string? propertyName = null;
             if (e.PropertyID.HasValue)
             {
-                propertyName = await _merge.GetPropertyNameAsync(e.PropertyID.Value);
+                if (!propertyNameCache.TryGetValue(e.PropertyID.Value, out propertyName))
+                {
+                    propertyName = await _merge.GetPropertyNameAsync(e.PropertyID.Value);
+                    propertyNameCache[e.PropertyID.Value] = propertyName;
+                }
             }
 
             rows.Add(new EnvelopeListItemVm
@@ -540,9 +547,6 @@ public sealed class EnvelopeService : IEnvelopeService
         });
         await _db.SaveChangesAsync();
 
-        // render HTML body for template
-        var html = await _merge.RenderHtmlAsync(r.Envelope.TemplateKey, r.EnvelopeId, r.RecipientId);
-
         // find if a tenant recipient exists
         var hasTenant = await _db.SignRecipients
             .AnyAsync(x => x.EnvelopeId == r.EnvelopeId && x.Role == "Tenant");
@@ -557,85 +561,8 @@ public sealed class EnvelopeService : IEnvelopeService
             Envelope = r.Envelope,
             Recipient = r,
             HasTenantRecipient = hasTenant,
-            Property = prop,
-            HtmlBody = html
+            Property = prop
         };
-    }
-
-    public async Task<(bool ok, string? downloadUrl)> SignAsync(SignSubmitDto dto, string userAgent, string ip)
-    {
-        if (!dto.Consented) return (false, null);
-
-        var r = await _db.SignRecipients.Include(x => x.Envelope).FirstOrDefaultAsync(x => x.AccessToken == dto.Token);
-        if (r is null) return (false, null);
-
-        r.SignedAtUtc = DateTime.UtcNow;
-        r.IPAddressSigned = ip;
-        r.UserAgentSigned = userAgent;
-        r.SignatureTyped = dto.SignatureTyped;
-        if (!string.IsNullOrWhiteSpace(dto.SignatureImageBase64))
-        {
-            // save PNG to /Files/Sign/YYYY/MM/<recipient>.png
-            var bytes = Convert.FromBase64String(dto.SignatureImageBase64.Split(',').Last());
-            var dir = Path.Combine("wwwroot", "Files", "Sign", DateTime.UtcNow.ToString("yyyy"), DateTime.UtcNow.ToString("MM"));
-            Directory.CreateDirectory(dir);
-            var file = Path.Combine(dir, $"sig-{r.RecipientId}.png");
-            await File.WriteAllBytesAsync(file, bytes);
-            r.SignatureImagePath = file.Replace("wwwroot", "").Replace("\\", "/");
-        }
-
-        _db.SignEvents.Add(new SignEvent { EnvelopeId = r.EnvelopeId, RecipientId = r.RecipientId, EventType = "Signed", OccurredAtUtc = DateTime.UtcNow });
-        await _db.SaveChangesAsync();
-
-        // If all signers done → finalize
-        var env = r.Envelope;
-        var allSigned = await _db.SignRecipients.Where(x => x.EnvelopeId == env.EnvelopeId).AllAsync(x => x.SignedAtUtc != null);
-        if (allSigned)
-        {
-            var pdf = await _pdf.RenderAndSealAsync(env.EnvelopeId);
-            env.PdfStoragePath = pdf.storagePath.Replace("\\", "/");
-            env.PdfSha256 = pdf.sha256;
-            env.Status = "Completed";
-            env.CompletedAtUtc = DateTime.UtcNow;
-
-            _db.SignEvents.Add(new SignEvent { EnvelopeId = env.EnvelopeId, EventType = "Downloaded", OccurredAtUtc = DateTime.UtcNow, MetaJson = "{\"auto\":\"finalized\"}" });
-            await _db.SaveChangesAsync();
-
-            var downloadUrl = env.PdfStoragePath;
-            // notify all recipients + front desk (basic example)
-            foreach (var rr in await _db.SignRecipients.Where(x => x.EnvelopeId == env.EnvelopeId).ToListAsync())
-            {
-                var downloadBtnHtml = "";
-                if (!string.IsNullOrWhiteSpace(downloadUrl))
-                {
-                    var absoluteDownload = downloadUrl.StartsWith("/")
-                        ? $"{_appSettings.BaseUrl.TrimEnd('/')}{downloadUrl}"
-                        : downloadUrl;
-                    downloadBtnHtml = $@"
-                    <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:24px 0;"">
-                      <tr>
-                        <td align=""center"" style=""background-color:#16a34a;border-radius:6px;"">
-                          <a href=""{absoluteDownload}"" style=""display:inline-block;padding:12px 32px;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px;"">Download Completed PDF</a>
-                        </td>
-                      </tr>
-                    </table>";
-                }
-
-                var completionInner = $@"
-                    <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Document Completed</h2>
-                    <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Hello {rr.FullName},</p>
-                    <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Thank you for signing. The document <strong>{env.Subject}</strong> has been completed by all parties.</p>
-                    {downloadBtnHtml}";
-
-                var completionHtml = _emailTemplate.WrapInBrandedTemplate(completionInner);
-                await _notify.SendCompletedReceiptAsync(rr.Email, rr.FullName, $"Completed: {env.Subject}",
-                    completionHtml, null);
-            }
-
-            return (true, downloadUrl);
-        }
-
-        return (true, null);
     }
 
     public async Task<bool> DeclineEnvelopeAsync(string token, string reason, string userAgent, string ip)
@@ -706,7 +633,8 @@ public sealed class EnvelopeService : IEnvelopeService
 
     public async Task UpsertTenantRecipientAsync(long envelopeId, string fullName, string email, string? phone = null)
     {
-        var env = await _db.SignEnvelopes.Include(e => e.Recipients).FirstAsync(e => e.EnvelopeId == envelopeId);
+        var env = await _db.SignEnvelopes.Include(e => e.Recipients).FirstOrDefaultAsync(e => e.EnvelopeId == envelopeId)
+            ?? throw new InvalidOperationException($"Envelope {envelopeId} not found");
         var existing = env.Recipients.FirstOrDefault(r => r.Role == "Tenant");
 
         if (existing == null)
@@ -740,20 +668,31 @@ public sealed class EnvelopeService : IEnvelopeService
 
     public async Task MarkTenantSkippedAsync(long envelopeId, string skippedByName)
     {
-        var env = await _db.SignEnvelopes.FirstAsync(e => e.EnvelopeId == envelopeId);
+        var env = await _db.SignEnvelopes.Include(e => e.Recipients).FirstOrDefaultAsync(e => e.EnvelopeId == envelopeId)
+            ?? throw new InvalidOperationException($"Envelope {envelopeId} not found");
+
         env.TenantSkipped = true;
         env.TenantSkippedByName = skippedByName;
         env.TenantSkippedAtUtc = DateTime.UtcNow;
 
-        // Note: Not logging as SignEvent since "TenantSkipped" is not in the allowed EventType constraint
-        // The envelope fields (TenantSkipped, TenantSkippedByName, TenantSkippedAtUtc) provide complete audit trail
+        // Remove any existing unsigned Tenant recipients so they don't block envelope finalization
+        var unsignedTenants = env.Recipients.Where(r => r.Role == "Tenant" && r.SignedAtUtc == null).ToList();
+        foreach (var t in unsignedTenants)
+            _db.SignRecipients.Remove(t);
 
         await _db.SaveChangesAsync();
     }
 
     public async Task CaptureSignatureAsync(long envelopeId, long recipientId, string typedFullName, string sigDataBase64)
     {
-        var rec = await _db.SignRecipients.FirstAsync(r => r.RecipientId == recipientId && r.EnvelopeId == envelopeId);
+        var rec = await _db.SignRecipients.FirstOrDefaultAsync(r => r.RecipientId == recipientId && r.EnvelopeId == envelopeId)
+            ?? throw new InvalidOperationException($"Recipient {recipientId} not found for envelope {envelopeId}");
+
+        if (rec.SignedAtUtc != null)
+            throw new InvalidOperationException("Recipient has already signed");
+
+        if (rec.AccessTokenExpiresAt != null && rec.AccessTokenExpiresAt < DateTime.UtcNow)
+            throw new InvalidOperationException("Signing token has expired");
 
         // save typed name
         rec.TypedFullName = typedFullName;
@@ -790,7 +729,8 @@ public sealed class EnvelopeService : IEnvelopeService
         // All signed! Now load the envelope for updating (use a fresh query)
         var env = await _db.SignEnvelopes
             .Include(e => e.Recipients)
-            .FirstAsync(e => e.EnvelopeId == envelopeId);
+            .FirstOrDefaultAsync(e => e.EnvelopeId == envelopeId)
+            ?? throw new InvalidOperationException($"Envelope {envelopeId} not found");
 
         // Generate PDF and finalize
         var pdf = await _pdf.RenderAndSealAsync(env.EnvelopeId);
@@ -852,7 +792,8 @@ public sealed class EnvelopeService : IEnvelopeService
     public async Task ProgressToNextAsync(long envelopeId)
     {
         var env = await _db.SignEnvelopes.Include(e => e.Recipients)
-                                         .FirstAsync(e => e.EnvelopeId == envelopeId);
+                                         .FirstOrDefaultAsync(e => e.EnvelopeId == envelopeId)
+            ?? throw new InvalidOperationException($"Envelope {envelopeId} not found");
         // find next unsigned recipient in order
         var next = env.Recipients
                       .OrderBy(r => r.SignerOrder)

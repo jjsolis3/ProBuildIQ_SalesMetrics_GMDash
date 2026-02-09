@@ -9,7 +9,6 @@ public sealed class ReviewVm
     public SignRecipient Recipient { get; set; } = default!; // current recipient entity
     public bool HasTenantRecipient { get; set; }
     public PropertyVm? Property { get; set; } // optional property summary
-    public string HtmlBody { get; set; } = default!; // rendered Razor HTML
 }
 
 public sealed class ReviewPostVm

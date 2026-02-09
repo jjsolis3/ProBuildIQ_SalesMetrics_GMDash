@@ -86,7 +86,7 @@ public sealed class EmailTemplateService : IEmailTemplateService
     <td style=""padding:20px 32px 24px 32px;text-align:center;"">
       <p style=""margin:0;font-size:12px;color:#6b7280;"">&copy; {year} {companyName}. All rights reserved.</p>
       {contactLine}
-      <p style=""margin:12px 0 0 0;font-size:11px;color:#9ca3af;"">Powered by SalesMetrics ProBuildIQ</p>
+      <p style=""margin:12px 0 0 0;font-size:11px;color:#9ca3af;"">Powered by ProBuildIQ SalesMetrics</p>
     </td>
   </tr>
 

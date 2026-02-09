@@ -18,10 +18,11 @@ public sealed class EnvelopeService : IEnvelopeService
     private readonly IErpMergeService _merge;
     private readonly IPdfService _pdf;
     private readonly AppSettings _appSettings;
+    private readonly IEmailTemplateService _emailTemplate;
 
-    public EnvelopeService(SalesMetricsDbContext db, INotificationService notify, IErpMergeService merge, IPdfService pdf, IOptions<AppSettings> appSettings)
+    public EnvelopeService(SalesMetricsDbContext db, INotificationService notify, IErpMergeService merge, IPdfService pdf, IOptions<AppSettings> appSettings, IEmailTemplateService emailTemplate)
     {
-        _db = db; _notify = notify; _merge = merge; _pdf = pdf; _appSettings = appSettings.Value;
+        _db = db; _notify = notify; _merge = merge; _pdf = pdf; _appSettings = appSettings.Value; _emailTemplate = emailTemplate;
     }
 
     public async Task<long> CreateAsync(int createdByUsersId, CreateEnvelopeVm vm)
@@ -287,15 +288,25 @@ public sealed class EnvelopeService : IEnvelopeService
 
             // Build email body with optional custom message
             var messageHtml = !string.IsNullOrWhiteSpace(env.MessageBody)
-                ? $"<p>{env.MessageBody}</p>"
+                ? $"<p style=\"margin:12px 0;font-size:14px;color:#374151;\">{env.MessageBody}</p>"
                 : "";
 
-            var html = $"""
-                <p>Hello {r.FullName},</p>
-                <p>Please review and sign the document: <b>{env.Subject}</b>.</p>
+            var innerHtml = $@"
+                <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Document Signing Request</h2>
+                <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Hello {r.FullName},</p>
+                <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Please review and sign the document: <strong>{env.Subject}</strong>.</p>
                 {messageHtml}
-                <p><a href="{link}">Open & Sign</a></p>
-                """;
+                <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:24px 0;"">
+                  <tr>
+                    <td align=""center"" style=""background-color:#3b82f6;border-radius:6px;"">
+                      <a href=""{link}"" style=""display:inline-block;padding:12px 32px;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px;"">Open &amp; Sign</a>
+                    </td>
+                  </tr>
+                </table>
+                <p style=""margin:0;font-size:12px;color:#9ca3af;"">If the button above doesn't work, copy and paste this link into your browser:</p>
+                <p style=""margin:4px 0 0 0;font-size:12px;color:#3b82f6;word-break:break-all;""><a href=""{link}"" style=""color:#3b82f6;"">{link}</a></p>";
+
+            var html = _emailTemplate.WrapInBrandedTemplate(innerHtml);
             await _notify.SendEnvelopeEmailAsync(r.Email, r.FullName, env.Subject, html);
 
             _db.SignEvents.Add(new SignEvent { EnvelopeId = env.EnvelopeId, RecipientId = r.RecipientId, EventType = "Sent", OccurredAtUtc = DateTime.UtcNow });
@@ -768,12 +779,37 @@ public sealed class EnvelopeService : IEnvelopeService
         var downloadUrl = env.PdfStoragePath;
         foreach (var recipient in env.Recipients)
         {
+            // Build download button if a PDF path is available
+            var downloadBtnHtml = "";
+            if (!string.IsNullOrWhiteSpace(downloadUrl))
+            {
+                var absoluteDownload = downloadUrl.StartsWith("/")
+                    ? $"{_appSettings.BaseUrl.TrimEnd('/')}{downloadUrl}"
+                    : downloadUrl;
+                downloadBtnHtml = $@"
+                <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:24px 0;"">
+                  <tr>
+                    <td align=""center"" style=""background-color:#16a34a;border-radius:6px;"">
+                      <a href=""{absoluteDownload}"" style=""display:inline-block;padding:12px 32px;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px;"">Download Completed PDF</a>
+                    </td>
+                  </tr>
+                </table>";
+            }
+
+            var completionInner = $@"
+                <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Document Completed</h2>
+                <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Hello {recipient.FullName},</p>
+                <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Thank you for signing. The document <strong>{env.Subject}</strong> has been completed by all parties.</p>
+                {downloadBtnHtml}";
+
+            var completionHtml = _emailTemplate.WrapInBrandedTemplate(completionInner);
+            // Pass null for downloadUrl since it's already included in the branded template
             await _notify.SendCompletedReceiptAsync(
                 recipient.Email,
                 recipient.FullName,
                 $"Completed: {env.Subject}",
-                $"<p>Thank you for signing. The document has been completed by all parties.</p>",
-                downloadUrl);
+                completionHtml,
+                null);
         }
 
         return (true, downloadUrl);

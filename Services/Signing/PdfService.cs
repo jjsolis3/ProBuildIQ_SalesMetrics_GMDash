@@ -43,7 +43,7 @@ public sealed class PdfService : IPdfService
         Console.WriteLine($"[PDF DEBUG] Has MergeSpec: {!string.IsNullOrWhiteSpace(template.MergeSpecJson)}");
         Console.WriteLine($"[PDF DEBUG] SignField records found: {env.Fields?.Count ?? 0}");
 
-        var tenant = env.Recipients.FirstOrDefault(r => r.Role == "Tenant") ?? env.Recipients.First();
+        var tenant = env.Recipients.FirstOrDefault(r => r.Role == "Tenant");
         var manager = env.Recipients.FirstOrDefault(r => r.Role == "Manager");
 
         // 2) Gather data from SignField records and supplement with ERP data
@@ -328,7 +328,7 @@ public sealed class PdfService : IPdfService
             .AsNoTracking()
             .FirstAsync(t => t.TemplateKey == env.TemplateKey);
 
-        var tenant = env.Recipients.FirstOrDefault(r => r.Role == "Tenant") ?? env.Recipients.First();
+        var tenant = env.Recipients.FirstOrDefault(r => r.Role == "Tenant");
         var manager = env.Recipients.FirstOrDefault(r => r.Role == "Manager");
 
         // 2) Determine which fields to show based on current recipient's role
@@ -494,21 +494,30 @@ public sealed class PdfService : IPdfService
         if (!data.ContainsKey("DeliveryDate"))
             data["DeliveryDate"] = ""; // TODO: Get from ERP if needed
 
-        // Property Staff (Manager) fields - updated with signing data
-        if (!data.ContainsKey("PropertyStaffName"))
-            data["PropertyStaffName"] = manager?.FullName ?? "Property Staff";
-        if (!data.ContainsKey("PropertyStaffDate"))
-            data["PropertyStaffDate"] = manager?.SignedAtUtc?.ToLocalTime().ToString("MM/dd/yyyy") ?? "";
-        if (!data.ContainsKey("PropertyStaffSignature"))
-            data["PropertyStaffSignature"] = GetSignatureFilePath(manager) ?? "";
+        // Property Staff (Manager) fields - always use fresh recipient data at PDF generation time
+        data["PropertyStaffName"] = manager?.FullName ?? "Property Staff";
+        data["PropertyStaffDate"] = manager?.SignedAtUtc?.ToLocalTime().ToString("MM/dd/yyyy") ?? "";
+        data["PropertyStaffSignature"] = GetSignatureFilePath(manager) ?? "";
 
-        // Resident (Tenant) fields - updated with signing data
-        if (!data.ContainsKey("ResidentName"))
+        // Resident (Tenant) fields - always override with actual tenant data at PDF generation time.
+        // SignField records may contain stale data (e.g., Manager fallback from envelope creation
+        // when no Tenant recipient existed yet), so we always use the current tenant recipient data.
+        if (tenant != null)
+        {
             data["ResidentName"] = tenant.FullName;
-        if (!data.ContainsKey("ResidentPhone"))
             data["ResidentPhone"] = tenant.Phone ?? "";
-        if (!data.ContainsKey("ResidentSignature"))
             data["ResidentSignature"] = GetSignatureFilePath(tenant) ?? "";
+        }
+        else
+        {
+            // No tenant recipient exists - use empty values (not Manager fallback)
+            if (!data.ContainsKey("ResidentName"))
+                data["ResidentName"] = "";
+            if (!data.ContainsKey("ResidentPhone"))
+                data["ResidentPhone"] = "";
+            if (!data.ContainsKey("ResidentSignature"))
+                data["ResidentSignature"] = "";
+        }
 
         return data;
     }

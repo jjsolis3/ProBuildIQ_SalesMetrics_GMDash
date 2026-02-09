@@ -228,7 +228,7 @@ public sealed class EnvelopeService : IEnvelopeService
 
             // Recipient fields - these will be populated at signing time
             var manager = env.Recipients.FirstOrDefault(r => r.Role == "Manager");
-            var tenant = env.Recipients.FirstOrDefault(r => r.Role == "Tenant") ?? env.Recipients.First();
+            var tenant = env.Recipients.FirstOrDefault(r => r.Role == "Tenant");
 
             data["PropertyStaffName"] = manager?.FullName ?? "Property Staff";
             data["PropertyStaffEmail"] = manager?.Email ?? "";
@@ -236,9 +236,10 @@ public sealed class EnvelopeService : IEnvelopeService
             data["PropertyStaffDate"] = ""; // Will be filled when signed
             data["PropertyStaffSignature"] = ""; // Will be filled when signed
 
-            data["ResidentName"] = tenant.FullName;
-            data["ResidentEmail"] = tenant.Email ?? "";
-            data["ResidentPhone"] = tenant.Phone ?? "";
+            // Only populate resident fields from actual Tenant recipient (not Manager fallback)
+            data["ResidentName"] = tenant?.FullName ?? "";
+            data["ResidentEmail"] = tenant?.Email ?? "";
+            data["ResidentPhone"] = tenant?.Phone ?? "";
             data["ResidentSignature"] = ""; // Will be filled when signed
         }
         catch (Exception ex)
@@ -355,12 +356,16 @@ public sealed class EnvelopeService : IEnvelopeService
             {
                 try
                 {
-                    var html = $"""
-                        <p>Hello {recipient.FullName},</p>
-                        <p>The signature request for <b>{env.Subject}</b> has been cancelled.</p>
-                        {(!string.IsNullOrWhiteSpace(reason) ? $"<p>Reason: {reason}</p>" : "")}
-                        <p>No further action is required.</p>
-                        """;
+                    var reasonHtml = !string.IsNullOrWhiteSpace(reason)
+                        ? $"<p style=\"margin:12px 0;font-size:14px;color:#374151;\"><strong>Reason:</strong> {reason}</p>"
+                        : "";
+                    var innerHtml = $@"
+                        <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Signing Request Cancelled</h2>
+                        <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Hello {recipient.FullName},</p>
+                        <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">The signature request for <strong>{env.Subject}</strong> has been cancelled.</p>
+                        {reasonHtml}
+                        <p style=""margin:12px 0 0 0;font-size:15px;color:#374151;"">No further action is required.</p>";
+                    var html = _emailTemplate.WrapInBrandedTemplate(innerHtml);
                     await _notify.SendEnvelopeEmailAsync(recipient.Email, recipient.FullName, $"Cancelled: {env.Subject}", html);
                 }
                 catch
@@ -599,8 +604,33 @@ public sealed class EnvelopeService : IEnvelopeService
             var downloadUrl = env.PdfStoragePath;
             // notify all recipients + front desk (basic example)
             foreach (var rr in await _db.SignRecipients.Where(x => x.EnvelopeId == env.EnvelopeId).ToListAsync())
+            {
+                var downloadBtnHtml = "";
+                if (!string.IsNullOrWhiteSpace(downloadUrl))
+                {
+                    var absoluteDownload = downloadUrl.StartsWith("/")
+                        ? $"{_appSettings.BaseUrl.TrimEnd('/')}{downloadUrl}"
+                        : downloadUrl;
+                    downloadBtnHtml = $@"
+                    <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:24px 0;"">
+                      <tr>
+                        <td align=""center"" style=""background-color:#16a34a;border-radius:6px;"">
+                          <a href=""{absoluteDownload}"" style=""display:inline-block;padding:12px 32px;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px;"">Download Completed PDF</a>
+                        </td>
+                      </tr>
+                    </table>";
+                }
+
+                var completionInner = $@"
+                    <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Document Completed</h2>
+                    <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Hello {rr.FullName},</p>
+                    <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Thank you for signing. The document <strong>{env.Subject}</strong> has been completed by all parties.</p>
+                    {downloadBtnHtml}";
+
+                var completionHtml = _emailTemplate.WrapInBrandedTemplate(completionInner);
                 await _notify.SendCompletedReceiptAsync(rr.Email, rr.FullName, $"Completed: {env.Subject}",
-                    "<p>Your document has been completed.</p>", downloadUrl);
+                    completionHtml, null);
+            }
 
             return (true, downloadUrl);
         }
@@ -653,12 +683,16 @@ public sealed class EnvelopeService : IEnvelopeService
             // Notify all other recipients that envelope was declined
             foreach (var otherRecipient in envelope.Recipients.Where(r => r.RecipientId != recipient.RecipientId))
             {
-                var html = $"""
-                    <p>Hello {otherRecipient.FullName},</p>
-                    <p>The signature request for <b>{envelope.Subject}</b> has been declined by {recipient.FullName}.</p>
-                    {(!string.IsNullOrWhiteSpace(reason) ? $"<p>Reason: {reason}</p>" : "")}
-                    <p>No further action is required.</p>
-                    """;
+                var reasonHtml = !string.IsNullOrWhiteSpace(reason)
+                    ? $"<p style=\"margin:12px 0;font-size:14px;color:#374151;\"><strong>Reason:</strong> {reason}</p>"
+                    : "";
+                var innerHtml = $@"
+                    <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Signing Request Declined</h2>
+                    <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Hello {otherRecipient.FullName},</p>
+                    <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">The signature request for <strong>{envelope.Subject}</strong> has been declined by {recipient.FullName}.</p>
+                    {reasonHtml}
+                    <p style=""margin:12px 0 0 0;font-size:15px;color:#374151;"">No further action is required.</p>";
+                var html = _emailTemplate.WrapInBrandedTemplate(innerHtml);
                 await _notify.SendEnvelopeEmailAsync(otherRecipient.Email, otherRecipient.FullName, $"Declined: {envelope.Subject}", html);
             }
         }
@@ -834,11 +868,20 @@ public sealed class EnvelopeService : IEnvelopeService
         // send their invite
         var baseUrl = _appSettings.BaseUrl.TrimEnd('/');
         var link = $"{baseUrl}/sign/{next.AccessToken}";
-        var html = $"""
-        <p>Hello {next.FullName},</p>
-        <p>Please review and sign the document: <b>{env.Subject}</b>.</p>
-        <p><a href="{link}">Open & Sign</a></p>
-        """;
+        var innerHtml = $@"
+            <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Document Signing Request</h2>
+            <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Hello {next.FullName},</p>
+            <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Please review and sign the document: <strong>{env.Subject}</strong>.</p>
+            <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:24px 0;"">
+              <tr>
+                <td align=""center"" style=""background-color:#3b82f6;border-radius:6px;"">
+                  <a href=""{link}"" style=""display:inline-block;padding:12px 32px;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px;"">Open &amp; Sign</a>
+                </td>
+              </tr>
+            </table>
+            <p style=""margin:0;font-size:12px;color:#9ca3af;"">If the button above doesn't work, copy and paste this link into your browser:</p>
+            <p style=""margin:4px 0 0 0;font-size:12px;color:#3b82f6;word-break:break-all;""><a href=""{link}"" style=""color:#3b82f6;"">{link}</a></p>";
+        var html = _emailTemplate.WrapInBrandedTemplate(innerHtml);
         await _notify.SendEnvelopeEmailAsync(next.Email, next.FullName, env.Subject, html);
 
         _db.SignEvents.Add(new SignEvent

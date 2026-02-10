@@ -1293,12 +1293,6 @@ WHERE condition = 'value'
                         }
                     },
                     error: function(xhr, status, error) {
-                            status: xhr.status,
-                            statusText: xhr.statusText,
-                            responseText: xhr.responseText,
-                            error: error
-                        });
-
                         Swal.fire({
                             icon: 'error',
                             title: 'Error',

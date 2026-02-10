@@ -326,6 +326,42 @@ namespace SalesMetrics.Controllers
         }
 
         /// <summary>
+        /// Placeholder token stored in saved SQL so reports are branch-agnostic.
+        /// Replaced at execution time with the running user's CompUFloor database.
+        /// </summary>
+        private const string BranchDbPlaceholder = "{BRANCH_DB}";
+
+        /// <summary>
+        /// All known CompUFloor database names across branches.
+        /// </summary>
+        private static readonly string[] AllCompUFloorDatabases =
+            { "CompUFloorLA", "CompUFloorLV", "CompUFloorChino", "CompUFloorPHX", "CompUFloorSD" };
+
+        /// <summary>
+        /// Replaces the {BRANCH_DB} placeholder AND any hardcoded CompUFloor database
+        /// names in a SQL string with the target database for the current user's branch.
+        /// This allows a single report to work across all branches.
+        /// </summary>
+        private static string ResolveBranchDatabase(string sql, string targetDatabase)
+        {
+            if (string.IsNullOrEmpty(sql)) return sql;
+
+            // 1. Replace the placeholder token (wizard-mode saved reports)
+            var result = sql.Replace(BranchDbPlaceholder, targetDatabase, StringComparison.OrdinalIgnoreCase);
+
+            // 2. Replace any hardcoded CompUFloor database names (SQL-mode cross-branch)
+            foreach (var db in AllCompUFloorDatabases)
+            {
+                if (!db.Equals(targetDatabase, StringComparison.OrdinalIgnoreCase))
+                {
+                    result = result.Replace($"[{db}]", $"[{targetDatabase}]", StringComparison.OrdinalIgnoreCase);
+                }
+            }
+
+            return result;
+        }
+
+        /// <summary>
         /// Process Step 1.5 (Table Relationships) and advance to Step 2 (Column Configuration)
         /// </summary>
         [HttpPost]
@@ -595,11 +631,7 @@ namespace SalesMetrics.Controllers
                 }
                 else
                 {
-                    // Wizard Mode - generate SQL from selections
-                    var userLocation = HttpContext.Session.GetString("OfficeLocation") ?? "LAX";
-                    var compuFloorDb = GetCompUFloorDatabaseName(userLocation);
-
-                    // Create Step4SubmissionDto from the update model
+                    // Wizard Mode - generate SQL with placeholder for branch-agnostic storage
                     var step4Model = new Step4SubmissionDto
                     {
                         QueryMode = "wizard",
@@ -609,7 +641,7 @@ namespace SalesMetrics.Controllers
                         Filters = model.Filters
                     };
 
-                    generatedSql = GenerateSQL(step4Model, compuFloorDb);
+                    generatedSql = GenerateSQL(step4Model, BranchDbPlaceholder);
 
                     queryDefJson = System.Text.Json.JsonSerializer.Serialize(new
                     {
@@ -690,16 +722,15 @@ namespace SalesMetrics.Controllers
                     _logger.LogInformation("Generating SQL from {TableCount} tables, {ColumnCount} columns, {FilterCount} filters",
                         model.Tables?.Count ?? 0, model.Columns?.Count ?? 0, model.Filters?.Count ?? 0);
 
-                    // Get user's office location and determine CompUFloor database
-                    var userLocation = HttpContext.Session.GetString("OfficeLocation") ?? "LAX";
-                    var compuFloorDb = GetCompUFloorDatabaseName(userLocation);
-
-                    _logger.LogInformation("User location: {Location}, CompUFloor database: {Database}", userLocation, compuFloorDb);
-
-                    // Build SQL query with fully qualified table names
-                    sql = GenerateSQL(model, compuFloorDb);
-                    _logger.LogInformation("Generated SQL: {SQL}", sql);
+                    // Generate SQL with placeholder — resolve below before execution
+                    sql = GenerateSQL(model, BranchDbPlaceholder);
+                    _logger.LogInformation("Generated SQL (template): {SQL}", sql);
                 }
+
+                // Resolve the current user's branch database for execution
+                var userLocation = HttpContext.Session.GetString("OfficeLocation") ?? "LAX";
+                var compuFloorDb = GetCompUFloorDatabaseName(userLocation);
+                _logger.LogInformation("User location: {Location}, CompUFloor database: {Database}", userLocation, compuFloorDb);
 
                 // Execute query with limit
                 var connStr = _configuration.GetConnectionString("SalesMetrics");
@@ -708,18 +739,16 @@ namespace SalesMetrics.Controllers
 
                 // For SQL mode, switch to the user's CompUFloor database so unqualified
                 // table names (e.g. INVOICE_HEADER) resolve correctly.
-                // Wizard mode already uses fully qualified [Database].[dbo].[Table] names.
                 if (model.QueryMode == "sql")
                 {
-                    var userLocation = HttpContext.Session.GetString("OfficeLocation") ?? "LAX";
-                    var compuFloorDb = GetCompUFloorDatabaseName(userLocation);
                     _logger.LogInformation("SQL mode: switching connection to database {Database}", compuFloorDb);
                     await conn.ChangeDatabaseAsync(compuFloorDb);
                 }
 
                 var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
-                var sqlToExecute = sql;
+                // Resolve {BRANCH_DB} placeholder and any hardcoded branch DB names
+                var sqlToExecute = ResolveBranchDatabase(sql, compuFloorDb);
                 var cmd = new System.Data.SqlClient.SqlCommand();
                 cmd.Connection = conn;
                 cmd.CommandTimeout = 30; // 30 seconds timeout
@@ -797,7 +826,7 @@ namespace SalesMetrics.Controllers
                     columnNames,
                     rowCount = previewData.Count,
                     executionTimeMs = stopwatch.ElapsedMilliseconds,
-                    generatedSql = sql,
+                    generatedSql = ResolveBranchDatabase(sql, compuFloorDb),
                     hasMoreRows = rowCount == 100
                 });
             }
@@ -878,29 +907,27 @@ namespace SalesMetrics.Controllers
                         return Json(new { success = false, message = "At least one column must be selected" });
                     }
 
-                    // Get user's office location and determine CompUFloor database
-                    var userLocation = HttpContext.Session.GetString("OfficeLocation") ?? "LAX";
-                    var compuFloorDb = GetCompUFloorDatabaseName(userLocation);
+                    // Use placeholder so saved SQL is branch-agnostic.
+                    // At execution time, {BRANCH_DB} is replaced with the running user's database.
 
-                    // Build query definition JSON
+                    // Build query definition JSON (no hardcoded database name)
                     queryDefJson = System.Text.Json.JsonSerializer.Serialize(new
                     {
                         queryMode = "wizard",
                         tables = model.Tables,
                         relationships = model.Relationships,
                         columns = model.Columns,
-                        filters = model.Filters,
-                        compuFloorDatabase = compuFloorDb
+                        filters = model.Filters
                     });
 
-                    // Generate SQL with fully qualified table names
+                    // Generate SQL with placeholder for branch database
                     generatedSql = GenerateSQL(new Step4SubmissionDto
                     {
                         Tables = model.Tables,
                         Relationships = model.Relationships,
                         Columns = model.Columns,
                         Filters = model.Filters
-                    }, compuFloorDb);
+                    }, BranchDbPlaceholder);
                 }
 
                 // Generate report ID
@@ -1290,6 +1317,10 @@ namespace SalesMetrics.Controllers
                 }
 
                 // If report has parameters, show parameter entry form
+                // Resolve branch DB placeholder for display (show user their actual DB name)
+                var currentLocation = HttpContext.Session.GetString("OfficeLocation") ?? "LAX";
+                var currentBranchDb = GetCompUFloorDatabaseName(currentLocation);
+
                 if (parameters.Any())
                 {
                     var viewModel = new ReportExecutionViewModel
@@ -1298,7 +1329,7 @@ namespace SalesMetrics.Controllers
                         ReportName = report.Name ?? "Untitled Report",
                         ReportDescription = report.Description ?? "",
                         Category = report.Category ?? "Custom Reports",
-                        GeneratedSql = report.GeneratedSql ?? "",
+                        GeneratedSql = ResolveBranchDatabase(report.GeneratedSql ?? "", currentBranchDb),
                         Parameters = parameters,
                         QueryDefinitionJson = report.QueryDefinitionJson,
                         ColumnNames = new List<string>(),
@@ -1372,21 +1403,25 @@ namespace SalesMetrics.Controllers
             using var conn = new System.Data.SqlClient.SqlConnection(connStr);
             await conn.OpenAsync();
 
-            // Check if this is a SQL-mode report (no fully-qualified table names)
-            // and switch to the user's CompUFloor database so table names resolve
+            // Resolve branch database for the current user — works for BOTH wizard and SQL modes.
+            // Wizard-mode SQL has {BRANCH_DB} placeholder; SQL-mode may have hardcoded DB names.
+            var userLocation = HttpContext.Session.GetString("OfficeLocation") ?? "LAX";
+            var compuFloorDb = GetCompUFloorDatabaseName(userLocation);
+            _logger.LogInformation("Executing report for location {Location}, database {Database}", userLocation, compuFloorDb);
+
+            // For SQL-mode reports with unqualified table names, also switch the connection
             var isSqlMode = report.QueryDefinitionJson?.Contains("\"queryMode\":\"sql\"", StringComparison.OrdinalIgnoreCase) == true
                          || report.QueryDefinitionJson?.Contains("\"queryMode\": \"sql\"", StringComparison.OrdinalIgnoreCase) == true;
             if (isSqlMode)
             {
-                var userLocation = HttpContext.Session.GetString("OfficeLocation") ?? "LAX";
-                var compuFloorDb = GetCompUFloorDatabaseName(userLocation);
-                _logger.LogInformation("SQL-mode report: switching to database {Database}", compuFloorDb);
+                _logger.LogInformation("SQL-mode report: switching connection to database {Database}", compuFloorDb);
                 await conn.ChangeDatabaseAsync(compuFloorDb);
             }
 
             var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
-            var sqlToExecute = report.GeneratedSql;
+            // Resolve {BRANCH_DB} placeholder and any hardcoded branch DB names
+            var sqlToExecute = ResolveBranchDatabase(report.GeneratedSql, compuFloorDb);
             var cmd = new System.Data.SqlClient.SqlCommand();
             cmd.Connection = conn;
             cmd.CommandTimeout = 60; // 60 seconds timeout for report execution
@@ -1478,7 +1513,7 @@ namespace SalesMetrics.Controllers
                 ReportName = report.Name ?? "Untitled Report",
                 ReportDescription = report.Description ?? "",
                 Category = report.Category ?? "Custom Reports",
-                GeneratedSql = report.GeneratedSql ?? "",
+                GeneratedSql = ResolveBranchDatabase(report.GeneratedSql ?? "", compuFloorDb),
                 ColumnNames = columnNames,
                 ResultData = resultData,
                 RowCount = resultData.Count,

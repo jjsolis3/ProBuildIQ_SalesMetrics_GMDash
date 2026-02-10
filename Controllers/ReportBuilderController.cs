@@ -706,6 +706,17 @@ namespace SalesMetrics.Controllers
                 using var conn = new System.Data.SqlClient.SqlConnection(connStr);
                 await conn.OpenAsync();
 
+                // For SQL mode, switch to the user's CompUFloor database so unqualified
+                // table names (e.g. INVOICE_HEADER) resolve correctly.
+                // Wizard mode already uses fully qualified [Database].[dbo].[Table] names.
+                if (model.QueryMode == "sql")
+                {
+                    var userLocation = HttpContext.Session.GetString("OfficeLocation") ?? "LAX";
+                    var compuFloorDb = GetCompUFloorDatabaseName(userLocation);
+                    _logger.LogInformation("SQL mode: switching connection to database {Database}", compuFloorDb);
+                    await conn.ChangeDatabaseAsync(compuFloorDb);
+                }
+
                 var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
                 var cmd = new System.Data.SqlClient.SqlCommand(sql, conn);
@@ -1310,6 +1321,18 @@ namespace SalesMetrics.Controllers
             var connStr = _configuration.GetConnectionString("SalesMetrics");
             using var conn = new System.Data.SqlClient.SqlConnection(connStr);
             await conn.OpenAsync();
+
+            // Check if this is a SQL-mode report (no fully-qualified table names)
+            // and switch to the user's CompUFloor database so table names resolve
+            var isSqlMode = report.QueryDefinitionJson?.Contains("\"queryMode\":\"sql\"", StringComparison.OrdinalIgnoreCase) == true
+                         || report.QueryDefinitionJson?.Contains("\"queryMode\": \"sql\"", StringComparison.OrdinalIgnoreCase) == true;
+            if (isSqlMode)
+            {
+                var userLocation = HttpContext.Session.GetString("OfficeLocation") ?? "LAX";
+                var compuFloorDb = GetCompUFloorDatabaseName(userLocation);
+                _logger.LogInformation("SQL-mode report: switching to database {Database}", compuFloorDb);
+                await conn.ChangeDatabaseAsync(compuFloorDb);
+            }
 
             var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 

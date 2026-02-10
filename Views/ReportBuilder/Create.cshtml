@@ -694,16 +694,17 @@
     column1,
     column2,
     column3
-FROM [CompUFloorLA].[dbo].[TableName]
+FROM TableName AS T1
+    INNER JOIN OtherTable AS T2 ON T2.Id = T1.Id
 WHERE condition = 'value'
 
 -- Only SELECT statements are allowed
--- Use fully qualified table names: [DatabaseName].[schema].[TableName]"></textarea>
+-- Table names are resolved against your branch's ERP database automatically"></textarea>
 
             <div class="sql-editor-hint">
                 <i class="fa fa-info-circle"></i>
                 <strong>Security Note:</strong> Only SELECT queries are allowed. No DDL/DML operations (INSERT, UPDATE, DELETE, DROP, etc.).
-                Use fully qualified table names like <code>[CompUFloorLA].[dbo].[TableName]</code>
+                Queries run against your branch's ERP database. You can use simple table names like <code>INVOICE_HEADER</code> or fully qualified names like <code>[CompUFloorLA].[dbo].[TableName]</code>.
             </div>
 
             <div class="sql-editor-actions">

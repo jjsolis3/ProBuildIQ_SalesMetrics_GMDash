@@ -1163,14 +1163,14 @@ WHERE condition = 'value'
                 });
             });
 
-            // Detect @ParameterName patterns in SQL (skip @@system variables)
+            // Detect parameter patterns in SQL (skip system variables)
             function detectSqlParameters(sql) {
-                const matches = sql.match(/(?<!@)@([A-Za-z_]\w*)/g);
+                const matches = sql.match(/(?<!@@)@@([A-Za-z_]\w*)/g);
                 if (!matches) return [];
-                // Deduplicate and strip the @ prefix
+                // Deduplicate and strip the prefix
                 const unique = [...new Set(matches)];
                 return unique.map(m => {
-                    const name = m.substring(1); // strip @
+                    const name = m.substring(1); // strip the at-sign
                     // Guess input type from parameter name
                     const lower = name.toLowerCase();
                     let type = 'text';
@@ -1178,7 +1178,7 @@ WHERE condition = 'value'
                         type = 'date';
                     }
                     // Check if used in IN() clause
-                    const inRegex = new RegExp(`IN\\s*\\(\\s*@${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\)`, 'i');
+                    const inRegex = new RegExp('IN\\s*\\(\\s*@@' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*\\)', 'i');
                     const isInClause = inRegex.test(sql);
                     return { name, type, isInClause };
                 });
@@ -1215,10 +1215,10 @@ WHERE condition = 'value'
                     const hint = p.isInClause ? '<small class="text-muted">Comma-separated for multiple values</small>' : '';
                     formHtml += `
                         <div class="mb-3">
-                            <label class="form-label fw-bold">@${p.name}</label>
+                            <label class="form-label fw-bold">@@${p.name}</label>
                             ${hint}
                             <input type="${inputType}" class="form-control swal-param-input"
-                                   data-param-name="${p.name}" placeholder="Enter value for @${p.name}">
+                                   data-param-name="${p.name}" placeholder="Enter value for @@${p.name}">
                         </div>`;
                 });
                 formHtml += '</div>';

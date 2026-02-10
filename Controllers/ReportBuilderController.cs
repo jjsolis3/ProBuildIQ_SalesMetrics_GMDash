@@ -3,8 +3,11 @@ using Microsoft.AspNetCore.Authorization;
 using SalesMetrics.Data;
 using SalesMetrics.Data.Entities.QueryBuilder;
 using SalesMetrics.Services.Permissions;
+using SalesMetrics.Services.Reports;
+using SalesMetrics.Services.Signing;
 using SalesMetrics.Models.QueryBuilder;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace SalesMetrics.Controllers
 {
@@ -15,17 +18,26 @@ namespace SalesMetrics.Controllers
         private readonly IPermissionService _permissionService;
         private readonly ILogger<ReportBuilderController> _logger;
         private readonly IConfiguration _configuration;
+        private readonly IReportExportService _exportService;
+        private readonly CompanyBrandingSettings _branding;
+        private readonly IWebHostEnvironment _env;
 
         public ReportBuilderController(
             SalesMetricsDbContext context,
             IPermissionService permissionService,
             ILogger<ReportBuilderController> logger,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            IReportExportService exportService,
+            IOptions<CompanyBrandingSettings> branding,
+            IWebHostEnvironment env)
         {
             _context = context;
             _permissionService = permissionService;
             _logger = logger;
             _configuration = configuration;
+            _exportService = exportService;
+            _branding = branding.Value;
+            _env = env;
         }
 
         /// <summary>
@@ -1426,6 +1438,134 @@ namespace SalesMetrics.Controllers
         }
 
         /// <summary>
+        /// Export report to Excel with branding, logo, and formatted data.
+        /// Re-executes the query and returns a downloadable .xlsx file.
+        /// </summary>
+        [HttpPost]
+        public async Task<IActionResult> ExportToExcel(int id, [FromForm] Dictionary<string, string>? parameterValues)
+        {
+            try
+            {
+                var userId = GetCurrentUserId();
+
+                var hasAccess = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_ACCESS");
+                if (!hasAccess) return Forbid();
+
+                var report = await _context.ReportDefinitions
+                    .FirstOrDefaultAsync(r => r.ReportDefinitionId == id && r.IsActive);
+                if (report == null) return NotFound();
+
+                _logger.LogInformation("User {UserId} exporting report {ReportId} to Excel", userId, id);
+
+                // Resolve branch database
+                var userLocation = HttpContext.Session.GetString("OfficeLocation") ?? "LAX";
+                var compuFloorDb = GetCompUFloorDatabaseName(userLocation);
+                var sqlToExecute = ResolveBranchDatabase(report.GeneratedSql ?? "", compuFloorDb);
+
+                // Open connection
+                var connStr = _configuration.GetConnectionString("SalesMetrics");
+                using var conn = new System.Data.SqlClient.SqlConnection(connStr);
+                await conn.OpenAsync();
+
+                // Switch database for SQL mode
+                var isSqlMode = report.QueryDefinitionJson?.Contains("\"queryMode\":\"sql\"", StringComparison.OrdinalIgnoreCase) == true
+                             || report.QueryDefinitionJson?.Contains("\"queryMode\": \"sql\"", StringComparison.OrdinalIgnoreCase) == true;
+                if (isSqlMode)
+                {
+                    await conn.ChangeDatabaseAsync(compuFloorDb);
+                }
+
+                // Build command with parameters
+                var cmd = new System.Data.SqlClient.SqlCommand();
+                cmd.Connection = conn;
+                cmd.CommandTimeout = 120; // 2 min for full export (no row limit)
+
+                if (parameterValues != null && parameterValues.Any())
+                {
+                    foreach (var param in parameterValues)
+                    {
+                        if (string.IsNullOrEmpty(param.Key)) continue;
+                        var paramName = param.Key.StartsWith("@") ? param.Key : "@" + param.Key;
+                        var paramValue = param.Value;
+
+                        // IN clause expansion
+                        var inPattern = $@"IN\s*\(\s*{System.Text.RegularExpressions.Regex.Escape(paramName)}\s*\)";
+                        if (!string.IsNullOrEmpty(paramValue) && paramValue.Contains(',')
+                            && System.Text.RegularExpressions.Regex.IsMatch(sqlToExecute, inPattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                        {
+                            var values = paramValue.Split(',').Select(v => v.Trim()).Where(v => v.Length > 0).ToArray();
+                            var expandedParams = new List<string>();
+                            for (int i = 0; i < values.Length; i++)
+                            {
+                                var expandedName = $"{paramName}_{i}";
+                                expandedParams.Add(expandedName);
+                                cmd.Parameters.AddWithValue(expandedName, values[i]);
+                            }
+                            sqlToExecute = System.Text.RegularExpressions.Regex.Replace(
+                                sqlToExecute, inPattern,
+                                $"IN ({string.Join(", ", expandedParams)})",
+                                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                        }
+                        else
+                        {
+                            cmd.Parameters.AddWithValue(paramName, string.IsNullOrEmpty(paramValue) ? DBNull.Value : (object)paramValue);
+                        }
+                    }
+                }
+
+                cmd.CommandText = sqlToExecute;
+
+                // Execute and load into DataTable
+                var dataTable = new System.Data.DataTable();
+                using (var reader = await cmd.ExecuteReaderAsync())
+                {
+                    dataTable.Load(reader);
+                }
+
+                _logger.LogInformation("Export query returned {RowCount} rows", dataTable.Rows.Count);
+
+                // Find local logo file
+                string? logoPath = null;
+                var candidateLogos = new[] { "logo.png", "logo-light.png", "logo-dark.png" };
+                foreach (var logo in candidateLogos)
+                {
+                    var path = Path.Combine(_env.WebRootPath, "assets", "images", logo);
+                    if (System.IO.File.Exists(path))
+                    {
+                        logoPath = path;
+                        break;
+                    }
+                }
+
+                // Build export options with branding
+                var options = new ExcelExportOptions
+                {
+                    ReportName = report.Name ?? "Untitled Report",
+                    ReportDescription = report.Description,
+                    CompanyName = _branding.CompanyName,
+                    CompanyWebsite = _branding.Website,
+                    CompanyPhone = _branding.Phone,
+                    LogoFilePath = logoPath
+                };
+
+                var bytes = _exportService.ExportToExcel(dataTable, options, out var contentType);
+
+                // Sanitize filename
+                var safeName = (report.Name ?? "Report").Replace(" ", "_");
+                safeName = System.Text.RegularExpressions.Regex.Replace(safeName, @"[^\w\-]", "");
+                var fileName = $"{safeName}_{DateTime.Now:yyyyMMdd_HHmm}.xlsx";
+
+                return File(bytes, contentType, fileName);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error exporting report {ReportId} to Excel", id);
+                TempData["ErrorMessage"] = $"Error exporting report: {ex.Message}";
+                return RedirectToAction("Execute", new { id });
+            }
+        }
+
+        /// <summary>
         /// Helper method to execute report with optional parameter values
         /// </summary>
         private async Task<IActionResult> ExecuteReportWithParameters(Data.Entities.QueryBuilder.ReportDefinitionEntity report, Dictionary<string, string>? parameterValues)
@@ -1551,7 +1691,8 @@ namespace SalesMetrics.Controllers
                 ExecutionTimeMs = stopwatch.ElapsedMilliseconds,
                 ExecutedDate = DateTime.Now,
                 QueryDefinitionJson = report.QueryDefinitionJson,
-                Parameters = new List<ReportParameter>()
+                Parameters = new List<ReportParameter>(),
+                SubmittedParameterValues = parameterValues
             };
 
             return View(viewModel);

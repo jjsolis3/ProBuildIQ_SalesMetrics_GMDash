@@ -260,6 +260,10 @@ namespace SalesMetrics.Models.QueryBuilder
         public string? QueryDefinitionJson { get; set; }
         public List<ReportParameter> Parameters { get; set; } = new();
         public bool HasParameters => Parameters.Any();
+        /// <summary>
+        /// Parameter values that were used to generate the current results (for export).
+        /// </summary>
+        public Dictionary<string, string>? SubmittedParameterValues { get; set; }
     }
 
     /// <summary>

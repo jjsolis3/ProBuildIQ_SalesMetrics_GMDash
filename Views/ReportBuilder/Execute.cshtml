@@ -316,10 +316,21 @@ else
     <button type="button" class="btn btn-success" onclick="location.reload()">
         <i class="fa fa-sync"></i> Refresh
     </button>
-    <button type="button" class="btn btn-export" onclick="exportToExcel()">
+    <button type="button" class="btn btn-export" onclick="exportToExcel()" id="btnExportExcel">
         <i class="fa fa-file-excel"></i> Export to Excel
     </button>
 </div>
+
+@* Hidden form for Excel export — posts reportId + any parameter values to the ExportToExcel action *@
+<form id="exportForm" method="post" action="@Url.Action("ExportToExcel", "ReportBuilder", new { id = Model.ReportId })" style="display:none;">
+    @if (Model.SubmittedParameterValues != null)
+    {
+        @foreach (var param in Model.SubmittedParameterValues)
+        {
+            <input type="hidden" name="@param.Key" value="@param.Value" />
+        }
+    }
+</form>
 
 <div class="row g-3 mb-4">
     <div class="col-md-4">
@@ -412,12 +423,19 @@ else
         }
 
         function exportToExcel() {
-            // TODO: Implement Excel export
-            Swal.fire({
-                icon: 'info',
-                title: 'Export to Excel',
-                text: 'Excel export feature coming soon!'
-            });
+            var btn = document.getElementById('btnExportExcel');
+            var originalHtml = btn.innerHTML;
+            btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Exporting...';
+            btn.disabled = true;
+
+            // Submit the hidden form to trigger the file download
+            document.getElementById('exportForm').submit();
+
+            // Re-enable after a delay (download starts in background)
+            setTimeout(function() {
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+            }, 3000);
         }
     </script>
 }

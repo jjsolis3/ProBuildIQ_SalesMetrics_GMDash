@@ -1083,14 +1083,22 @@ namespace SalesMetrics.Controllers
 
                 uniqueParams.Add(paramName);
 
+                // Check if this parameter is used inside an IN() clause
+                var inPattern = $@"IN\s*\(\s*@{System.Text.RegularExpressions.Regex.Escape(paramName)}\s*\)";
+                var isInClause = System.Text.RegularExpressions.Regex.IsMatch(sql, inPattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+                var displayName = FormatParameterDisplayName(paramName);
+
                 // Create parameter with default settings
                 var parameter = new ReportParameter
                 {
                     Name = paramName,
-                    DisplayName = FormatParameterDisplayName(paramName), // e.g., "WarehouseID" -> "Warehouse ID"
-                    DataType = GuessParameterDataType(paramName), // Guess based on name
+                    DisplayName = displayName,
+                    DataType = GuessParameterDataType(paramName),
                     IsRequired = true,
-                    PromptText = $"Enter {FormatParameterDisplayName(paramName)}"
+                    PromptText = isInClause
+                        ? $"Enter {displayName} (comma-separated for multiple values, e.g. VALUE1, VALUE2)"
+                        : $"Enter {displayName}"
                 };
 
                 parameters.Add(parameter);
@@ -1336,7 +1344,9 @@ namespace SalesMetrics.Controllers
 
             var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
-            var cmd = new System.Data.SqlClient.SqlCommand(report.GeneratedSql, conn);
+            var sqlToExecute = report.GeneratedSql;
+            var cmd = new System.Data.SqlClient.SqlCommand();
+            cmd.Connection = conn;
             cmd.CommandTimeout = 60; // 60 seconds timeout for report execution
 
             // Add parameters if provided
@@ -1355,10 +1365,40 @@ namespace SalesMetrics.Controllers
 
                     _logger.LogInformation("Adding parameter {ParamName} = {ParamValue}", paramName, paramValue);
 
-                    // Add parameter to SQL command for safe substitution
-                    cmd.Parameters.AddWithValue(paramName, string.IsNullOrEmpty(paramValue) ? DBNull.Value : paramValue);
+                    // Check if this parameter is used inside an IN() clause and has comma-separated values
+                    // Pattern: IN ( @ParamName ) with optional whitespace
+                    var inPattern = $@"IN\s*\(\s*{System.Text.RegularExpressions.Regex.Escape(paramName)}\s*\)";
+                    if (!string.IsNullOrEmpty(paramValue)
+                        && paramValue.Contains(',')
+                        && System.Text.RegularExpressions.Regex.IsMatch(sqlToExecute, inPattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                    {
+                        // Expand comma-separated value into individual parameters
+                        // e.g. @ProductClass with "CARPET,VINYL" becomes @ProductClass_0, @ProductClass_1
+                        var values = paramValue.Split(',').Select(v => v.Trim()).Where(v => v.Length > 0).ToArray();
+                        var expandedParams = new List<string>();
+                        for (int i = 0; i < values.Length; i++)
+                        {
+                            var expandedName = $"{paramName}_{i}";
+                            expandedParams.Add(expandedName);
+                            cmd.Parameters.AddWithValue(expandedName, values[i]);
+                        }
+                        // Replace IN(@ParamName) with IN(@ParamName_0, @ParamName_1, ...)
+                        sqlToExecute = System.Text.RegularExpressions.Regex.Replace(
+                            sqlToExecute,
+                            inPattern,
+                            $"IN ({string.Join(", ", expandedParams)})",
+                            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                        _logger.LogInformation("Expanded IN clause for {ParamName}: {Count} values", paramName, values.Length);
+                    }
+                    else
+                    {
+                        // Standard single-value parameter
+                        cmd.Parameters.AddWithValue(paramName, string.IsNullOrEmpty(paramValue) ? DBNull.Value : paramValue);
+                    }
                 }
             }
+
+            cmd.CommandText = sqlToExecute;
 
             var resultData = new List<Dictionary<string, object>>();
             var columnNames = new List<string>();

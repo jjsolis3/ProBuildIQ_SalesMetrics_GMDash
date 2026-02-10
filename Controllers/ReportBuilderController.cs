@@ -719,8 +719,50 @@ namespace SalesMetrics.Controllers
 
                 var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
-                var cmd = new System.Data.SqlClient.SqlCommand(sql, conn);
+                var sqlToExecute = sql;
+                var cmd = new System.Data.SqlClient.SqlCommand();
+                cmd.Connection = conn;
                 cmd.CommandTimeout = 30; // 30 seconds timeout
+
+                // Apply parameter values for SQL mode
+                if (model.QueryMode == "sql" && model.ParameterValues != null && model.ParameterValues.Any())
+                {
+                    foreach (var param in model.ParameterValues)
+                    {
+                        var paramName = param.Key.StartsWith("@") ? param.Key : "@" + param.Key;
+                        var paramValue = param.Value;
+
+                        _logger.LogInformation("SQL mode parameter: {ParamName} = {ParamValue}", paramName, paramValue);
+
+                        // Check if this parameter is used inside an IN() clause with comma-separated values
+                        var inPattern = $@"IN\s*\(\s*{System.Text.RegularExpressions.Regex.Escape(paramName)}\s*\)";
+                        if (!string.IsNullOrEmpty(paramValue)
+                            && paramValue.Contains(',')
+                            && System.Text.RegularExpressions.Regex.IsMatch(sqlToExecute, inPattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                        {
+                            // Expand comma-separated value into individual parameters
+                            var values = paramValue.Split(',').Select(v => v.Trim()).Where(v => v.Length > 0).ToArray();
+                            var expandedParams = new List<string>();
+                            for (int i = 0; i < values.Length; i++)
+                            {
+                                var expandedName = $"{paramName}_{i}";
+                                expandedParams.Add(expandedName);
+                                cmd.Parameters.AddWithValue(expandedName, values[i]);
+                            }
+                            sqlToExecute = System.Text.RegularExpressions.Regex.Replace(
+                                sqlToExecute, inPattern,
+                                $"IN ({string.Join(", ", expandedParams)})",
+                                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                            _logger.LogInformation("Expanded IN clause for {ParamName}: {Count} values", paramName, values.Length);
+                        }
+                        else
+                        {
+                            cmd.Parameters.AddWithValue(paramName, string.IsNullOrEmpty(paramValue) ? DBNull.Value : (object)paramValue);
+                        }
+                    }
+                }
+
+                cmd.CommandText = sqlToExecute;
 
                 var previewData = new List<Dictionary<string, object>>();
                 var columnNames = new List<string>();

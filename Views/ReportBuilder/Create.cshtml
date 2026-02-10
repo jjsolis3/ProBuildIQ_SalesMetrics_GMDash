@@ -1102,6 +1102,7 @@ WHERE condition = 'value'
             // ============================================
             let queryMode = 'wizard'; // 'wizard' or 'sql'
             let customSqlQuery = '';
+            let sqlParameterValues = {}; // Parameter values for SQL mode
 
             // Mode toggle buttons
             $('#wizardModeBtn').on('click', function() {
@@ -1162,6 +1163,27 @@ WHERE condition = 'value'
                 });
             });
 
+            // Detect @ParameterName patterns in SQL (skip @@system variables)
+            function detectSqlParameters(sql) {
+                const matches = sql.match(/(?<!@)@([A-Za-z_]\w*)/g);
+                if (!matches) return [];
+                // Deduplicate and strip the @ prefix
+                const unique = [...new Set(matches)];
+                return unique.map(m => {
+                    const name = m.substring(1); // strip @
+                    // Guess input type from parameter name
+                    const lower = name.toLowerCase();
+                    let type = 'text';
+                    if (lower.includes('date') || lower.includes('start') || lower.includes('end') || lower.includes('from') || lower.includes('to')) {
+                        type = 'date';
+                    }
+                    // Check if used in IN() clause
+                    const inRegex = new RegExp(`IN\\s*\\(\\s*@${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\)`, 'i');
+                    const isInClause = inRegex.test(sql);
+                    return { name, type, isInClause };
+                });
+            }
+
             // Preview SQL button
             $('#btnPreviewSql').on('click', function() {
                 const sql = $('#sqlQueryEditor').val().trim();
@@ -1175,7 +1197,59 @@ WHERE condition = 'value'
                 }
 
                 customSqlQuery = sql;
-                loadStep4SqlMode();
+
+                // Detect parameters in the SQL
+                const params = detectSqlParameters(sql);
+
+                if (params.length === 0) {
+                    // No parameters — execute directly
+                    sqlParameterValues = {};
+                    loadStep4SqlMode();
+                    return;
+                }
+
+                // Build a parameter input form using SweetAlert
+                let formHtml = '<div style="text-align:left;">';
+                params.forEach(p => {
+                    const inputType = p.type === 'date' ? 'date' : 'text';
+                    const hint = p.isInClause ? '<small class="text-muted">Comma-separated for multiple values</small>' : '';
+                    formHtml += `
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">@${p.name}</label>
+                            ${hint}
+                            <input type="${inputType}" class="form-control swal-param-input"
+                                   data-param-name="${p.name}" placeholder="Enter value for @${p.name}">
+                        </div>`;
+                });
+                formHtml += '</div>';
+
+                Swal.fire({
+                    title: 'Enter Parameter Values',
+                    html: formHtml,
+                    width: 500,
+                    showCancelButton: true,
+                    confirmButtonText: '<i class="fa fa-eye"></i> Preview Results',
+                    confirmButtonColor: '#28a745',
+                    preConfirm: () => {
+                        const values = {};
+                        let hasEmpty = false;
+                        document.querySelectorAll('.swal-param-input').forEach(input => {
+                            const val = input.value.trim();
+                            if (!val) hasEmpty = true;
+                            values[input.dataset.paramName] = val;
+                        });
+                        if (hasEmpty) {
+                            Swal.showValidationMessage('Please fill in all parameter values');
+                            return false;
+                        }
+                        return values;
+                    }
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        sqlParameterValues = result.value;
+                        loadStep4SqlMode();
+                    }
+                });
             });
 
             let selectedTables = [];
@@ -2080,7 +2154,8 @@ WHERE condition = 'value'
                     tables: [],
                     relationships: [],
                     columns: [],
-                    filters: []
+                    filters: [],
+                    parameterValues: sqlParameterValues
                 };
 
 

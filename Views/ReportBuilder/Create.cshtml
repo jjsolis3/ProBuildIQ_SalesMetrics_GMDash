@@ -2134,6 +2134,18 @@ WHERE condition = 'value'
                 $('.wizard-step:nth-child(3)').addClass('completed');
                 $('.wizard-step:nth-child(4)').addClass('active');
 
+                // Build a stable alias map: tableName -> T1, T2, etc.
+                // This ensures every reference to the same table uses the same alias.
+                const aliasMap = {};
+                tablesWithColumns.forEach((t, index) => {
+                    const name = t.tableName || t.TableName;
+                    aliasMap[name] = `T${index + 1}`;
+                });
+
+                function getAlias(tableName) {
+                    return aliasMap[tableName] || 'T0';
+                }
+
                 // Build request payload
                 const payload = {
                     queryMode: 'wizard',
@@ -2143,18 +2155,22 @@ WHERE condition = 'value'
                         alias: `T${index + 1}`,
                         isBaseTable: index === 0
                     })),
-                    relationships: relationships.map(r => ({
-                        fromTable: r.leftTable || r.LeftTable,
-                        fromColumn: r.leftColumn || r.LeftColumn,
-                        fromAlias: `T${tablesWithColumns.findIndex(t => (t.tableName || t.TableName) === (r.leftTable || r.LeftTable)) + 1}`,
-                        toTable: r.rightTable || r.RightTable,
-                        toColumn: r.rightColumn || r.RightColumn,
-                        toAlias: `T${tablesWithColumns.findIndex(t => (t.tableName || t.TableName) === (r.rightTable || r.RightTable)) + 1}`,
-                        joinType: r.joinType || r.JoinType
-                    })),
+                    relationships: relationships.map(r => {
+                        const fromTable = r.leftTable || r.LeftTable;
+                        const toTable = r.rightTable || r.RightTable;
+                        return {
+                            fromTable: fromTable,
+                            fromColumn: r.leftColumn || r.LeftColumn,
+                            fromAlias: getAlias(fromTable),
+                            toTable: toTable,
+                            toColumn: r.rightColumn || r.RightColumn,
+                            toAlias: getAlias(toTable),
+                            joinType: r.joinType || r.JoinType
+                        };
+                    }),
                     columns: selectedColumns.map((col, index) => ({
                         tableName: col.tableName || col.TableName,
-                        tableAlias: `T${tablesWithColumns.findIndex(t => (t.tableName || t.TableName) === (col.tableName || col.TableName)) + 1}`,
+                        tableAlias: getAlias(col.tableName || col.TableName),
                         columnName: col.columnName || col.ColumnName,
                         displayName: col.displayName || col.DisplayName || col.columnName || col.ColumnName,
                         dataType: col.dataType || col.DataType,
@@ -2171,13 +2187,8 @@ WHERE condition = 'value'
                             return null;
                         }
 
-                        // Find the table alias
-                        const tableName = column.tableName || column.TableName;
-                        const tableIndex = tablesWithColumns.findIndex(t => (t.tableName || t.TableName) === tableName);
-                        const tableAlias = `T${tableIndex + 1}`;
-
                         return {
-                            tableAlias: tableAlias,
+                            tableAlias: getAlias(column.tableName || column.TableName),
                             columnName: column.columnName || column.ColumnName,
                             operator: f.operator || f.Operator,
                             value: f.value || f.Value,

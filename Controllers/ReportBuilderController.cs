@@ -902,6 +902,14 @@ namespace SalesMetrics.Controllers
         {
             var sql = new System.Text.StringBuilder();
 
+            // Build a lookup from table name to alias using the Tables list
+            var tableAliasMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var t in model.Tables)
+            {
+                if (!tableAliasMap.ContainsKey(t.TableName))
+                    tableAliasMap[t.TableName] = t.Alias;
+            }
+
             // SELECT clause - Quote column names and aliases to handle spaces and special characters
             sql.AppendLine("SELECT");
             var columnExpressions = model.Columns.Select(c =>
@@ -919,12 +927,33 @@ namespace SalesMetrics.Controllers
 
             sql.AppendLine($"FROM [{compuFloorDatabase}].[dbo].[{baseTable.TableName}] AS {baseTable.Alias}");
 
-            // JOIN clauses (from relationships) - Use fully qualified table names
+            // JOIN clauses (from relationships)
+            // Track which tables have already been added to the FROM/JOIN chain to avoid
+            // emitting duplicate aliases (e.g. "T2" appearing twice).
+            var joinedTables = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { baseTable.TableName };
+
             if (model.Relationships != null && model.Relationships.Any())
             {
                 foreach (var rel in model.Relationships)
                 {
-                    sql.AppendLine($"{rel.JoinType} JOIN [{compuFloorDatabase}].[dbo].[{rel.ToTable}] AS {rel.ToAlias} ON {rel.FromAlias}.[{rel.FromColumn}] = {rel.ToAlias}.[{rel.ToColumn}]");
+                    // Resolve aliases from the canonical table alias map
+                    var fromAlias = tableAliasMap.GetValueOrDefault(rel.FromTable, rel.FromAlias);
+                    var toAlias = tableAliasMap.GetValueOrDefault(rel.ToTable, rel.ToAlias);
+
+                    if (!joinedTables.Contains(rel.ToTable))
+                    {
+                        // Normal case: first time this table appears, emit a JOIN
+                        sql.AppendLine($"{rel.JoinType} JOIN [{compuFloorDatabase}].[dbo].[{rel.ToTable}] AS {toAlias} ON {fromAlias}.[{rel.FromColumn}] = {toAlias}.[{rel.ToColumn}]");
+                        joinedTables.Add(rel.ToTable);
+                    }
+                    else if (!joinedTables.Contains(rel.FromTable))
+                    {
+                        // The "To" table is already joined but "From" is not — join the From table instead
+                        sql.AppendLine($"{rel.JoinType} JOIN [{compuFloorDatabase}].[dbo].[{rel.FromTable}] AS {fromAlias} ON {fromAlias}.[{rel.FromColumn}] = {toAlias}.[{rel.ToColumn}]");
+                        joinedTables.Add(rel.FromTable);
+                    }
+                    // else: both tables already joined, skip the JOIN but the ON condition
+                    // is implicitly satisfied through the existing join chain
                 }
             }
 
@@ -955,8 +984,11 @@ namespace SalesMetrics.Controllers
                     }
                     else if (f.Operator.Equals("IN", StringComparison.OrdinalIgnoreCase))
                     {
-                        // IN operator needs parentheses
-                        condition.Append($"{f.TableAlias}.[{f.ColumnName}] {f.Operator} ({f.Value})");
+                        // IN operator - wrap each value in quotes for string columns
+                        var inValues = f.Value.Split(',')
+                            .Select(v => $"'{v.Trim()}'")
+                            .ToArray();
+                        condition.Append($"{f.TableAlias}.[{f.ColumnName}] {f.Operator} ({string.Join(", ", inValues)})");
                     }
                     else if (f.Operator.Equals("LIKE", StringComparison.OrdinalIgnoreCase))
                     {

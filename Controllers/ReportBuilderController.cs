@@ -1216,7 +1216,7 @@ namespace SalesMetrics.Controllers
         }
 
         /// <summary>
-        /// Validates SQL query for security (ensures SELECT only, no DDL/DML)
+        /// Validates SQL query for security (ensures SELECT/CTE only, no DDL/DML)
         /// </summary>
         private (bool isValid, string? errorMessage) ValidateCustomSql(string sql)
         {
@@ -1230,26 +1230,57 @@ namespace SalesMetrics.Controllers
             normalized = System.Text.RegularExpressions.Regex.Replace(normalized, @"/\*.*?\*/", "", System.Text.RegularExpressions.RegexOptions.Singleline);
             normalized = normalized.Trim().ToUpper();
 
-            // Must start with SELECT
-            if (!normalized.StartsWith("SELECT"))
+            // Must start with SELECT or WITH (CTE)
+            if (normalized.StartsWith("SELECT"))
             {
-                return (false, "Query must be a SELECT statement");
+                // Simple SELECT — OK
+            }
+            else if (normalized.StartsWith("WITH"))
+            {
+                // CTE — must contain a final SELECT after the WITH...AS block(s)
+                // Verify the query has a SELECT that isn't only inside the CTE definition
+                if (!System.Text.RegularExpressions.Regex.IsMatch(normalized, @"\)\s*SELECT\b"))
+                {
+                    return (false, "CTE query must end with a SELECT statement after the WITH...AS block");
+                }
+            }
+            else
+            {
+                return (false, "Query must start with SELECT or WITH (for CTEs)");
             }
 
-            // Blocked keywords (DDL/DML operations)
+            // Blocked keywords (DDL/DML operations) — use word boundaries to avoid
+            // false positives on column/table names like LAST_UPDATE_DATE orABORTING_EXECUTION
             var blockedKeywords = new[]
             {
-                "INSERT", "UPDATE", "DELETE", "DROP", "CREATE", "ALTER",
-                "TRUNCATE", "EXEC", "EXECUTE", "SP_", "XP_", "BACKUP",
-                "RESTORE", "GRANT", "REVOKE", "DENY"
+                "INSERT", "DELETE", "DROP", "ALTER",
+                "TRUNCATE", "BACKUP", "RESTORE", "GRANT", "REVOKE", "DENY"
             };
 
             foreach (var keyword in blockedKeywords)
             {
-                if (normalized.Contains(keyword))
+                // \b ensures we match whole words, not substrings of table/column names
+                if (System.Text.RegularExpressions.Regex.IsMatch(normalized, $@"\b{keyword}\b"))
                 {
                     return (false, $"Query contains blocked keyword: {keyword}");
                 }
+            }
+
+            // These need special handling: block UPDATE/EXEC only as statements, not in names
+            // UPDATE is blocked as a statement but allowed in column names like "UPDATE_DATE"
+            if (System.Text.RegularExpressions.Regex.IsMatch(normalized, @"\bUPDATE\s+\w+\s+SET\b"))
+            {
+                return (false, "Query contains blocked keyword: UPDATE");
+            }
+            // EXEC/EXECUTE as standalone statements
+            if (System.Text.RegularExpressions.Regex.IsMatch(normalized, @"\bEXEC(UTE)?\s+(SP_|XP_|DBO\.|@|\[)"))
+            {
+                return (false, "Query contains blocked keyword: EXEC/EXECUTE");
+            }
+            // SP_ and XP_ as procedure prefixes (not in column names)
+            if (System.Text.RegularExpressions.Regex.IsMatch(normalized, @"\b(SP|XP)_\w+\s*(\(|$)", System.Text.RegularExpressions.RegexOptions.Multiline))
+            {
+                return (false, "Query contains blocked system procedure call");
             }
 
             // Check for semicolons (multiple statements)

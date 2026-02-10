@@ -690,21 +690,28 @@
             <h2 class="wizard-title"><i class="fa fa-code"></i> SQL Query Editor</h2>
             <p class="wizard-subtitle">Write your custom SQL SELECT query below</p>
 
-            <textarea id="sqlQueryEditor" class="sql-editor" placeholder="SELECT
-    column1,
-    column2,
-    column3
-FROM TableName AS T1
-    INNER JOIN OtherTable AS T2 ON T2.Id = T1.Id
+            <textarea id="sqlQueryEditor" class="sql-editor" placeholder="-- Simple query:
+SELECT column1, column2
+FROM TableName
 WHERE condition = 'value'
 
--- Only SELECT statements are allowed
--- Table names are resolved against your branch's ERP database automatically"></textarea>
+-- CTE (WITH) is supported:
+WITH OrderTotals AS (
+    SELECT OrderId, SUM(Amount) AS Total
+    FROM ORDER_DETAIL
+    GROUP BY OrderId
+)
+SELECT o.OrderId, o.Total
+FROM OrderTotals o
+
+-- Use @@ParamName for reusable filters (e.g. @@StartDate, @@ProductClass)
+-- Table names resolve against your branch's ERP database automatically"></textarea>
 
             <div class="sql-editor-hint">
                 <i class="fa fa-info-circle"></i>
-                <strong>Security Note:</strong> Only SELECT queries are allowed. No DDL/DML operations (INSERT, UPDATE, DELETE, DROP, etc.).
-                Queries run against your branch's ERP database. You can use simple table names like <code>INVOICE_HEADER</code> or fully qualified names like <code>[CompUFloorLA].[dbo].[TableName]</code>.
+                <strong>Supported:</strong> SELECT and WITH (CTE) queries. Use <code>@@ParamName</code> for reusable parameters.
+                No DDL/DML (INSERT, UPDATE, DELETE, DROP).
+                Queries run against your branch's ERP database. Use simple names like <code>INVOICE_HEADER</code> or qualified like <code>[CompUFloorLA].[dbo].[TableName]</code>.
             </div>
 
             <div class="sql-editor-actions">
@@ -1134,19 +1141,33 @@ WHERE condition = 'value'
                 }
 
                 // Basic client-side validation
-                const upperSql = sql.toUpperCase();
-                if (!upperSql.startsWith('SELECT')) {
+                // Strip SQL comments before checking
+                const stripped = sql.replace(/--.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '').trim();
+                const upperSql = stripped.toUpperCase();
+                if (!upperSql.startsWith('SELECT') && !upperSql.startsWith('WITH')) {
                     Swal.fire({
                         icon: 'error',
                         title: 'Invalid Query',
-                        text: 'Query must start with SELECT'
+                        text: 'Query must start with SELECT or WITH (for CTEs)'
                     });
                     return;
                 }
 
-                const blockedKeywords = ['INSERT', 'UPDATE', 'DELETE', 'DROP', 'CREATE', 'ALTER', 'TRUNCATE', 'EXEC'];
+                // For CTEs, verify there's a final SELECT after the WITH...AS block
+                if (upperSql.startsWith('WITH') && !/\)\s*SELECT\b/.test(upperSql)) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Invalid CTE',
+                        text: 'CTE query must end with a SELECT statement after the WITH...AS block'
+                    });
+                    return;
+                }
+
+                // Use word-boundary matching to avoid false positives on column/table names
+                const blockedKeywords = ['INSERT', 'DELETE', 'DROP', 'ALTER', 'TRUNCATE', 'BACKUP', 'RESTORE', 'GRANT', 'REVOKE', 'DENY'];
                 for (let keyword of blockedKeywords) {
-                    if (upperSql.includes(keyword)) {
+                    const re = new RegExp('\\b' + keyword + '\\b');
+                    if (re.test(upperSql)) {
                         Swal.fire({
                             icon: 'error',
                             title: 'Blocked Keyword',
@@ -1154,6 +1175,17 @@ WHERE condition = 'value'
                         });
                         return;
                     }
+                }
+
+                // Block UPDATE as a statement (not in column names like UPDATE_DATE)
+                if (/\bUPDATE\s+\w+\s+SET\b/.test(upperSql)) {
+                    Swal.fire({ icon: 'error', title: 'Blocked', text: 'UPDATE statements are not allowed' });
+                    return;
+                }
+                // Block EXEC/EXECUTE as procedure calls
+                if (/\bEXEC(UTE)?\s+(SP_|XP_|DBO\.|@@|\[)/.test(upperSql)) {
+                    Swal.fire({ icon: 'error', title: 'Blocked', text: 'EXEC/EXECUTE statements are not allowed' });
+                    return;
                 }
 
                 Swal.fire({

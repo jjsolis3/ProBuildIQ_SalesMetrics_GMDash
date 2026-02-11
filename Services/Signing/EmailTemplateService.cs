@@ -49,7 +49,7 @@ public sealed class EmailTemplateService : IEmailTemplateService
 
   <!-- Header with logo -->
   <tr>
-    <td style=""background-color:#1e293b;padding:20px 32px;text-align:center;"">
+    <td style=""background-color:#DBDBDB;padding:20px 32px;text-align:center;"">
       <table role=""presentation"" width=""100%"" cellpadding=""0"" cellspacing=""0"" border=""0"">
         <tr>
           <td align=""center"">
@@ -62,7 +62,7 @@ public sealed class EmailTemplateService : IEmailTemplateService
 
   <!-- Accent bar -->
   <tr>
-    <td style=""background-color:#3b82f6;height:4px;font-size:0;line-height:0;"">&nbsp;</td>
+    <td style=""background-color:#E87600;height:4px;font-size:0;line-height:0;"">&nbsp;</td>
   </tr>
 
   <!-- Body content -->
@@ -86,7 +86,7 @@ public sealed class EmailTemplateService : IEmailTemplateService
     <td style=""padding:20px 32px 24px 32px;text-align:center;"">
       <p style=""margin:0;font-size:12px;color:#6b7280;"">&copy; {year} {companyName}. All rights reserved.</p>
       {contactLine}
-      <p style=""margin:12px 0 0 0;font-size:11px;color:#9ca3af;"">Powered by ProBuildIQ SalesMetrics</p>
+      <p style=""margin:12px 0 0 0;font-size:11px;color:#9ca3af;"">Powered by ProBuild<span style=""color:#E87600;"">IQ</span> SalesMetrics</p>
     </td>
   </tr>
 

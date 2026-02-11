@@ -1680,15 +1680,27 @@ a {
 }
 
 .btn-orange {
-    color: #ff6720 !important;
+    color: #ff9400 !important;
 }
 
     .btn-orange:hover, btn-orange:active, .btn-orange.active, .btn-orange:focus, .btn-orange.disabled {
-        color: #ff9400 !important;
+        color: #eb8900 !important;
     }
 
-.btn-outline-orange::after hover, .btn-outline-orange:active, {
+.btn-outline-orange::after hover, .btn-outline-orange:active{
     color: #eb8900 !important;
+}
+
+btn-orange-subtle {
+    color: #FFD08A !important;
+}
+
+    .btn-orange-subtle:hover, btn-orange-subtle:active, .btn-orange-subtle.active, .btn-orange-subtle:focus, .btn-orange-subtle.disabled {
+        color: #E39E36 !important;
+    }
+
+.btn-outline-orange-subtle::after hover, .btn-outline-orange-subtle:active{
+    color: #E39E36 !important;
 }
 
 .btn-info {

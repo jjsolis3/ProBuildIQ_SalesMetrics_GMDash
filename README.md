@@ -47,6 +47,7 @@ This allows one feature to be visible/hidden per user while still supporting ope
 For a complete feature-by-feature functional breakdown (including GM Recap renaming guidance), use:
 
 - [`Documentation/FEATURES_README.md`](Documentation/FEATURES_README.md)
+- [`Documentation/ERP_CONNECTIVITY_REVIEW_AND_API_MIGRATION_GUIDE.md`](Documentation/ERP_CONNECTIVITY_REVIEW_AND_API_MIGRATION_GUIDE.md)
 
 ## Naming update recommendation: GM Recap
 

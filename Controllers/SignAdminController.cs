@@ -49,12 +49,52 @@ public class SignAdminController : Controller
         return int.Parse(User.FindFirst("LocationId")?.Value ?? "0");
     }
 
+    /// <summary>
+    /// Gets the location codes the current user is allowed to access,
+    /// based on UserLocationAssignments. Falls back to all locations if
+    /// no assignments exist (admin/legacy users).
+    /// </summary>
+    private async Task<Dictionary<int, (string Code, string Name)>> GetUserAccessibleLocationsAsync(int userId)
+    {
+        var assignedLocationIds = await _db.UserLocationAssignments
+            .Where(ula => ula.UserID == userId && ula.IsActive == "Y")
+            .Select(ula => ula.LocationID)
+            .ToListAsync();
+
+        if (assignedLocationIds.Any())
+        {
+            return LocationHelper.Locations
+                .Where(loc => assignedLocationIds.Contains(loc.Key))
+                .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+        }
+
+        // No specific assignments — fallback for admins/legacy users
+        return LocationHelper.Locations;
+    }
+
+    /// <summary>
+    /// Checks whether the given location code is within the user's accessible locations.
+    /// </summary>
+    private async Task<bool> CanAccessLocationAsync(int userId, string? locationCode)
+    {
+        if (string.IsNullOrWhiteSpace(locationCode)) return true;
+        var accessible = await GetUserAccessibleLocationsAsync(userId);
+        return accessible.Values.Any(l => l.Code.Equals(locationCode, StringComparison.OrdinalIgnoreCase));
+    }
+
     // /SignAdmin
     public async Task<IActionResult> Index(string? status, string? office, string? scope, int page = 1, int pageSize = 20)
     {
         var userId = GetCurrentUserId();
         var roleId = GetCurrentRoleId();
         var locationId = GetCurrentLocationId();
+        var currentLocationCode = HttpContext.Session.GetString("OfficeLocation") ?? "LAX";
+
+        // Default office filter to current session location so users see only their branch
+        if (string.IsNullOrWhiteSpace(office))
+        {
+            office = currentLocationCode;
+        }
 
         // Determine default scope based on role if not explicitly provided
         if (string.IsNullOrWhiteSpace(scope))
@@ -62,6 +102,13 @@ public class SignAdminController : Controller
             // RoleId 2 = Sales, RoleId 6 = Office Staff - default to "mine"
             // Others default to "all"
             scope = (roleId == 2 || roleId == 6) ? "mine" : "all";
+        }
+
+        // Validate the selected office is within user's accessible locations
+        var userLocations = await GetUserAccessibleLocationsAsync(userId);
+        if (!userLocations.Values.Any(l => l.Code.Equals(office, StringComparison.OrdinalIgnoreCase)))
+        {
+            office = currentLocationCode; // Reset to session location if invalid
         }
 
         var (rows, total) = await _svc.SearchAsync(status, office, page, pageSize, userId, scope, roleId, locationId);
@@ -72,9 +119,10 @@ public class SignAdminController : Controller
         ViewBag.Scope = scope;
         ViewBag.RoleId = roleId;
         ViewBag.UserId = userId;
+        ViewBag.CurrentLocationCode = currentLocationCode;
 
-        // Pass location options for dropdown
-        ViewBag.Locations = LocationHelper.Locations;
+        // Pass only user's accessible locations for the dropdown
+        ViewBag.Locations = userLocations;
 
         return View(rows);
     }
@@ -84,6 +132,20 @@ public class SignAdminController : Controller
     {
         var vm = await _svc.GetDetailsAsync(id);
         if (vm == null) return NotFound();
+
+        // Verify user has access to this envelope's location
+        var userId = GetCurrentUserId();
+        var envelopeLocation = await _db.SignEnvelopes
+            .Where(e => e.EnvelopeId == id)
+            .Select(e => e.LocationCode)
+            .FirstOrDefaultAsync();
+
+        if (!await CanAccessLocationAsync(userId, envelopeLocation))
+        {
+            TempData["error"] = "You do not have access to envelopes from this branch.";
+            return RedirectToAction(nameof(Index));
+        }
+
         return View(vm);
     }
 
@@ -92,34 +154,13 @@ public class SignAdminController : Controller
     {
         var userId = GetCurrentUserId();
         var currentLocationCode = HttpContext.Session.GetString("OfficeLocation") ?? "LAX";
-        var currentLocationId = GetCurrentLocationId();
 
-        // Get user's assigned locations from database
-        var userLocations = await _db.UserLocationAssignments
-            .Where(ula => ula.UserID == userId && ula.IsActive == "Y")
-            .Select(ula => ula.LocationID)
-            .ToListAsync();
-
-        // Filter LocationHelper.Locations to only show user's assigned locations
-        Dictionary<int, (string Code, string Name)> userAccessibleLocations;
-
-        if (userLocations.Any())
-        {
-            // User has specific location assignments - filter to those
-            userAccessibleLocations = LocationHelper.Locations
-                .Where(loc => userLocations.Contains(loc.Key))
-                .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
-        }
-        else
-        {
-            // No specific assignments found - show all locations (fallback for admins/legacy users)
-            userAccessibleLocations = LocationHelper.Locations;
-        }
+        var userAccessibleLocations = await GetUserAccessibleLocationsAsync(userId);
 
         var vm = new CreateEnvelopeVm
         {
             ExpiresAtUtc = DateTime.UtcNow.AddDays(14),
-            LocationCode = currentLocationCode, // Pre-populate with current location
+            LocationCode = currentLocationCode,
             Templates = await _db.SignTemplates
                 .Where(t => t.IsActive)
                 .OrderBy(t => t.DisplayName)
@@ -127,7 +168,6 @@ public class SignAdminController : Controller
                 .ToListAsync()
         };
 
-        // Pass filtered branch locations for dropdown
         ViewBag.Locations = userAccessibleLocations;
         ViewBag.CurrentLocationCode = currentLocationCode;
         ViewBag.HasMultipleLocations = userAccessibleLocations.Count > 1;
@@ -144,24 +184,7 @@ public class SignAdminController : Controller
         {
             var userId = GetCurrentUserId();
             var currentLocationCode = HttpContext.Session.GetString("OfficeLocation") ?? "LAX";
-
-            // Get user's assigned locations
-            var userLocations = await _db.UserLocationAssignments
-                .Where(ula => ula.UserID == userId && ula.IsActive == "Y")
-                .Select(ula => ula.LocationID)
-                .ToListAsync();
-
-            Dictionary<int, (string Code, string Name)> userAccessibleLocations;
-            if (userLocations.Any())
-            {
-                userAccessibleLocations = LocationHelper.Locations
-                    .Where(loc => userLocations.Contains(loc.Key))
-                    .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
-            }
-            else
-            {
-                userAccessibleLocations = LocationHelper.Locations;
-            }
+            var userAccessibleLocations = await GetUserAccessibleLocationsAsync(userId);
 
             vm.Templates = await _db.SignTemplates
                 .Where(t => t.IsActive)
@@ -169,7 +192,6 @@ public class SignAdminController : Controller
                 .Select(t => new ValueTuple<string, string>(t.TemplateKey, t.DisplayName))
                 .ToListAsync();
 
-            // Repopulate filtered branch locations for dropdown
             ViewBag.Locations = userAccessibleLocations;
             ViewBag.CurrentLocationCode = currentLocationCode;
             ViewBag.HasMultipleLocations = userAccessibleLocations.Count > 1;
@@ -186,6 +208,19 @@ public class SignAdminController : Controller
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Resend(long id)
     {
+        // Verify user has access to this envelope's location
+        var userId = GetCurrentUserId();
+        var envelopeLocation = await _db.SignEnvelopes
+            .Where(e => e.EnvelopeId == id)
+            .Select(e => e.LocationCode)
+            .FirstOrDefaultAsync();
+
+        if (!await CanAccessLocationAsync(userId, envelopeLocation))
+        {
+            TempData["error"] = "You do not have access to envelopes from this branch.";
+            return RedirectToAction(nameof(Index));
+        }
+
         await _svc.SendAsync(id);
         TempData["msg"] = "Envelope resent.";
         return RedirectToAction(nameof(Details), new { id });
@@ -195,9 +230,21 @@ public class SignAdminController : Controller
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Void(long id, string? reason)
     {
+        // Verify user has access to this envelope's location
+        var userId = GetCurrentUserId();
+        var envelopeLocation = await _db.SignEnvelopes
+            .Where(e => e.EnvelopeId == id)
+            .Select(e => e.LocationCode)
+            .FirstOrDefaultAsync();
+
+        if (!await CanAccessLocationAsync(userId, envelopeLocation))
+        {
+            TempData["error"] = "You do not have access to envelopes from this branch.";
+            return RedirectToAction(nameof(Index));
+        }
+
         try
         {
-            var userId = GetCurrentUserId();
             await _svc.VoidEnvelopeAsync(id, userId, reason);
             TempData["msg"] = "Envelope has been voided.";
         }

@@ -5,11 +5,16 @@
     var scope = ViewBag.Scope?.ToString() ?? "all";
     var status = ViewBag.Status?.ToString() ?? "";
     var office = ViewBag.Office?.ToString() ?? "";
+    var currentLocationCode = ViewBag.CurrentLocationCode?.ToString() ?? "LAX";
     var roleId = (int)(ViewBag.RoleId ?? 0);
 
     // Determine which scopes are available based on role
     var canViewAll = roleId == 1 || roleId == 3 || roleId == 4 || roleId == 5 || roleId == 7 || roleId == 8;
     var canViewBranch = roleId == 5; // Office Manager
+
+    // Check if user has access to multiple locations
+    var userLocations = (Dictionary<int, (string Code, string Name)>?)ViewBag.Locations;
+    var hasMultipleLocations = userLocations != null && userLocations.Count > 1;
 }
 <div class="card mb-3 border-0 shadow-sm">
     <div class="card-header bg-warning text-dark fw-bold">E-Sign Hub</div>
@@ -63,10 +68,9 @@
             <div class="col-md-3">
                 <label class="form-label small">Filter by Branch:</label>
                 <select class="form-select form-select-sm" id="officeFilter" onchange="applyFilters()">
-                    <option value="">All Branches</option>
-                    @if (ViewBag.Locations != null)
+                    @if (userLocations != null)
                     {
-                        @foreach (var loc in (Dictionary<int, (string Code, string Name)>)ViewBag.Locations)
+                        @foreach (var loc in userLocations)
                         {
                             <option value="@loc.Value.Code" selected="@(office == loc.Value.Code ? "selected" : null)">
                                 @loc.Value.Code - @loc.Value.Name
@@ -76,7 +80,7 @@
                 </select>
             </div>
             <div class="col-md-2 d-flex align-items-end">
-                <a class="btn btn-sm btn-outline-secondary" asp-action="Index" asp-route-scope="@scope">Clear Filters</a>
+                <a class="btn btn-sm btn-outline-secondary" asp-action="Index" asp-route-scope="@scope" asp-route-office="@office">Clear Filters</a>
             </div>
         </div>
 
@@ -86,6 +90,7 @@
                     <tr>
                         <th>ID</th>
                         <th>Subject</th>
+                        <th>Branch</th>
                         <th>Property</th>
                         <th>Order#</th>
                         <th>Status</th>
@@ -101,6 +106,7 @@
                         <tr>
                             <td>@r.EnvelopeId</td>
                             <td>@r.Subject</td>
+                            <td><span class="badge bg-secondary">@(r.LocationCode ?? "—")</span></td>
                             <td><span class="text-muted small">@(r.PropertyName ?? "—")</span></td>
                             <td><span class="text-muted small">@(r.OrderNumber ?? "—")</span></td>
                             <td>

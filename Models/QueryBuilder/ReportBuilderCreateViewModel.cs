@@ -168,6 +168,7 @@ namespace SalesMetrics.Models.QueryBuilder
         public List<RelationshipDto> Relationships { get; set; } = new();
         public List<ColumnDto> Columns { get; set; } = new();
         public List<FilterDto> Filters { get; set; } = new();
+        public Dictionary<string, string>? ParameterValues { get; set; } // For SQL mode @Param values
     }
 
     /// <summary>
@@ -259,6 +260,10 @@ namespace SalesMetrics.Models.QueryBuilder
         public string? QueryDefinitionJson { get; set; }
         public List<ReportParameter> Parameters { get; set; } = new();
         public bool HasParameters => Parameters.Any();
+        /// <summary>
+        /// Parameter values that were used to generate the current results (for export).
+        /// </summary>
+        public Dictionary<string, string>? SubmittedParameterValues { get; set; }
     }
 
     /// <summary>

@@ -690,20 +690,28 @@
             <h2 class="wizard-title"><i class="fa fa-code"></i> SQL Query Editor</h2>
             <p class="wizard-subtitle">Write your custom SQL SELECT query below</p>
 
-            <textarea id="sqlQueryEditor" class="sql-editor" placeholder="SELECT
-    column1,
-    column2,
-    column3
-FROM [CompUFloorLA].[dbo].[TableName]
+            <textarea id="sqlQueryEditor" class="sql-editor" placeholder="-- Simple query:
+SELECT column1, column2
+FROM TableName
 WHERE condition = 'value'
 
--- Only SELECT statements are allowed
--- Use fully qualified table names: [DatabaseName].[schema].[TableName]"></textarea>
+-- CTE (WITH) is supported:
+WITH OrderTotals AS (
+    SELECT OrderId, SUM(Amount) AS Total
+    FROM ORDER_DETAIL
+    GROUP BY OrderId
+)
+SELECT o.OrderId, o.Total
+FROM OrderTotals o
+
+-- Use @@ParamName for reusable filters (e.g. @@StartDate, @@ProductClass)
+-- Table names resolve against your branch's ERP database automatically"></textarea>
 
             <div class="sql-editor-hint">
                 <i class="fa fa-info-circle"></i>
-                <strong>Security Note:</strong> Only SELECT queries are allowed. No DDL/DML operations (INSERT, UPDATE, DELETE, DROP, etc.).
-                Use fully qualified table names like <code>[CompUFloorLA].[dbo].[TableName]</code>
+                <strong>Supported:</strong> SELECT and WITH (CTE) queries. Use <code>@@ParamName</code> for reusable parameters.
+                No DDL/DML (INSERT, UPDATE, DELETE, DROP).
+                Queries run against your branch's ERP database. Use simple names like <code>INVOICE_HEADER</code> or qualified like <code>[CompUFloorLA].[dbo].[TableName]</code>.
             </div>
 
             <div class="sql-editor-actions">
@@ -1101,6 +1109,7 @@ WHERE condition = 'value'
             // ============================================
             let queryMode = 'wizard'; // 'wizard' or 'sql'
             let customSqlQuery = '';
+            let sqlParameterValues = {}; // Parameter values for SQL mode
 
             // Mode toggle buttons
             $('#wizardModeBtn').on('click', function() {
@@ -1132,19 +1141,33 @@ WHERE condition = 'value'
                 }
 
                 // Basic client-side validation
-                const upperSql = sql.toUpperCase();
-                if (!upperSql.startsWith('SELECT')) {
+                // Strip SQL comments before checking
+                const stripped = sql.replace(/--.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '').trim();
+                const upperSql = stripped.toUpperCase();
+                if (!upperSql.startsWith('SELECT') && !upperSql.startsWith('WITH')) {
                     Swal.fire({
                         icon: 'error',
                         title: 'Invalid Query',
-                        text: 'Query must start with SELECT'
+                        text: 'Query must start with SELECT or WITH (for CTEs)'
                     });
                     return;
                 }
 
-                const blockedKeywords = ['INSERT', 'UPDATE', 'DELETE', 'DROP', 'CREATE', 'ALTER', 'TRUNCATE', 'EXEC'];
+                // For CTEs, verify there's a final SELECT after the WITH...AS block
+                if (upperSql.startsWith('WITH') && !/\)\s*SELECT\b/.test(upperSql)) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Invalid CTE',
+                        text: 'CTE query must end with a SELECT statement after the WITH...AS block'
+                    });
+                    return;
+                }
+
+                // Use word-boundary matching to avoid false positives on column/table names
+                const blockedKeywords = ['INSERT', 'DELETE', 'DROP', 'ALTER', 'TRUNCATE', 'BACKUP', 'RESTORE', 'GRANT', 'REVOKE', 'DENY'];
                 for (let keyword of blockedKeywords) {
-                    if (upperSql.includes(keyword)) {
+                    const re = new RegExp('\\b' + keyword + '\\b');
+                    if (re.test(upperSql)) {
                         Swal.fire({
                             icon: 'error',
                             title: 'Blocked Keyword',
@@ -1154,12 +1177,44 @@ WHERE condition = 'value'
                     }
                 }
 
+                // Block UPDATE as a statement (not in column names like UPDATE_DATE)
+                if (/\bUPDATE\s+\w+\s+SET\b/.test(upperSql)) {
+                    Swal.fire({ icon: 'error', title: 'Blocked', text: 'UPDATE statements are not allowed' });
+                    return;
+                }
+                // Block EXEC/EXECUTE as procedure calls
+                if (/\bEXEC(UTE)?\s+(SP_|XP_|DBO\.|@@|\[)/.test(upperSql)) {
+                    Swal.fire({ icon: 'error', title: 'Blocked', text: 'EXEC/EXECUTE statements are not allowed' });
+                    return;
+                }
+
                 Swal.fire({
                     icon: 'success',
                     title: 'SQL Validated',
                     text: 'Query passed basic validation. Click "Preview Results" to execute it.'
                 });
             });
+
+            // Detect parameter patterns in SQL (skip system variables)
+            function detectSqlParameters(sql) {
+                const matches = sql.match(/(?<!@@)@@([A-Za-z_]\w*)/g);
+                if (!matches) return [];
+                // Deduplicate and strip the prefix
+                const unique = [...new Set(matches)];
+                return unique.map(m => {
+                    const name = m.substring(1); // strip the at-sign
+                    // Guess input type from parameter name
+                    const lower = name.toLowerCase();
+                    let type = 'text';
+                    if (lower.includes('date') || lower.includes('start') || lower.includes('end') || lower.includes('from') || lower.includes('to')) {
+                        type = 'date';
+                    }
+                    // Check if used in IN() clause
+                    const inRegex = new RegExp('IN\\s*\\(\\s*@@' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*\\)', 'i');
+                    const isInClause = inRegex.test(sql);
+                    return { name, type, isInClause };
+                });
+            }
 
             // Preview SQL button
             $('#btnPreviewSql').on('click', function() {
@@ -1174,7 +1229,59 @@ WHERE condition = 'value'
                 }
 
                 customSqlQuery = sql;
-                loadStep4SqlMode();
+
+                // Detect parameters in the SQL
+                const params = detectSqlParameters(sql);
+
+                if (params.length === 0) {
+                    // No parameters — execute directly
+                    sqlParameterValues = {};
+                    loadStep4SqlMode();
+                    return;
+                }
+
+                // Build a parameter input form using SweetAlert
+                let formHtml = '<div style="text-align:left;">';
+                params.forEach(p => {
+                    const inputType = p.type === 'date' ? 'date' : 'text';
+                    const hint = p.isInClause ? '<small class="text-muted">Comma-separated for multiple values</small>' : '';
+                    formHtml += `
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">@@${p.name}</label>
+                            ${hint}
+                            <input type="${inputType}" class="form-control swal-param-input"
+                                   data-param-name="${p.name}" placeholder="Enter value for @@${p.name}">
+                        </div>`;
+                });
+                formHtml += '</div>';
+
+                Swal.fire({
+                    title: 'Enter Parameter Values',
+                    html: formHtml,
+                    width: 500,
+                    showCancelButton: true,
+                    confirmButtonText: '<i class="fa fa-eye"></i> Preview Results',
+                    confirmButtonColor: '#28a745',
+                    preConfirm: () => {
+                        const values = {};
+                        let hasEmpty = false;
+                        document.querySelectorAll('.swal-param-input').forEach(input => {
+                            const val = input.value.trim();
+                            if (!val) hasEmpty = true;
+                            values[input.dataset.paramName] = val;
+                        });
+                        if (hasEmpty) {
+                            Swal.showValidationMessage('Please fill in all parameter values');
+                            return false;
+                        }
+                        return values;
+                    }
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        sqlParameterValues = result.value;
+                        loadStep4SqlMode();
+                    }
+                });
             });
 
             let selectedTables = [];
@@ -1293,12 +1400,6 @@ WHERE condition = 'value'
                         }
                     },
                     error: function(xhr, status, error) {
-                            status: xhr.status,
-                            statusText: xhr.statusText,
-                            responseText: xhr.responseText,
-                            error: error
-                        });
-
                         Swal.fire({
                             icon: 'error',
                             title: 'Error',
@@ -2085,7 +2186,8 @@ WHERE condition = 'value'
                     tables: [],
                     relationships: [],
                     columns: [],
-                    filters: []
+                    filters: [],
+                    parameterValues: sqlParameterValues
                 };
 
 
@@ -2140,6 +2242,18 @@ WHERE condition = 'value'
                 $('.wizard-step:nth-child(3)').addClass('completed');
                 $('.wizard-step:nth-child(4)').addClass('active');
 
+                // Build a stable alias map: tableName -> T1, T2, etc.
+                // This ensures every reference to the same table uses the same alias.
+                const aliasMap = {};
+                tablesWithColumns.forEach((t, index) => {
+                    const name = t.tableName || t.TableName;
+                    aliasMap[name] = `T${index + 1}`;
+                });
+
+                function getAlias(tableName) {
+                    return aliasMap[tableName] || 'T0';
+                }
+
                 // Build request payload
                 const payload = {
                     queryMode: 'wizard',
@@ -2149,18 +2263,22 @@ WHERE condition = 'value'
                         alias: `T${index + 1}`,
                         isBaseTable: index === 0
                     })),
-                    relationships: relationships.map(r => ({
-                        fromTable: r.leftTable || r.LeftTable,
-                        fromColumn: r.leftColumn || r.LeftColumn,
-                        fromAlias: `T${tablesWithColumns.findIndex(t => (t.tableName || t.TableName) === (r.leftTable || r.LeftTable)) + 1}`,
-                        toTable: r.rightTable || r.RightTable,
-                        toColumn: r.rightColumn || r.RightColumn,
-                        toAlias: `T${tablesWithColumns.findIndex(t => (t.tableName || t.TableName) === (r.rightTable || r.RightTable)) + 1}`,
-                        joinType: r.joinType || r.JoinType
-                    })),
+                    relationships: relationships.map(r => {
+                        const fromTable = r.leftTable || r.LeftTable;
+                        const toTable = r.rightTable || r.RightTable;
+                        return {
+                            fromTable: fromTable,
+                            fromColumn: r.leftColumn || r.LeftColumn,
+                            fromAlias: getAlias(fromTable),
+                            toTable: toTable,
+                            toColumn: r.rightColumn || r.RightColumn,
+                            toAlias: getAlias(toTable),
+                            joinType: r.joinType || r.JoinType
+                        };
+                    }),
                     columns: selectedColumns.map((col, index) => ({
                         tableName: col.tableName || col.TableName,
-                        tableAlias: `T${tablesWithColumns.findIndex(t => (t.tableName || t.TableName) === (col.tableName || col.TableName)) + 1}`,
+                        tableAlias: getAlias(col.tableName || col.TableName),
                         columnName: col.columnName || col.ColumnName,
                         displayName: col.displayName || col.DisplayName || col.columnName || col.ColumnName,
                         dataType: col.dataType || col.DataType,
@@ -2177,13 +2295,8 @@ WHERE condition = 'value'
                             return null;
                         }
 
-                        // Find the table alias
-                        const tableName = column.tableName || column.TableName;
-                        const tableIndex = tablesWithColumns.findIndex(t => (t.tableName || t.TableName) === tableName);
-                        const tableAlias = `T${tableIndex + 1}`;
-
                         return {
-                            tableAlias: tableAlias,
+                            tableAlias: getAlias(column.tableName || column.TableName),
                             columnName: column.columnName || column.ColumnName,
                             operator: f.operator || f.Operator,
                             value: f.value || f.Value,

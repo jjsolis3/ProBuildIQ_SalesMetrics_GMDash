@@ -72,16 +72,16 @@
 
 /* Ensure proper line height for all text */
 body {
-    line-height: 1.6;
+    line-height: 1.8;
 }
 
 /* Card spacing */
 .card-body {
-    padding: 1.5rem !important;
+    padding: 1.6rem !important;
 }
 
 .card-header {
-    padding: 0.875rem 1.25rem !important;
+    padding: 0.975rem 1.35rem !important;
 }
 
 /* Prevent text overlap in info boxes */

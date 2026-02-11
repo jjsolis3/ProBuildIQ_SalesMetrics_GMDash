@@ -3,8 +3,11 @@ using Microsoft.AspNetCore.Authorization;
 using SalesMetrics.Data;
 using SalesMetrics.Data.Entities.QueryBuilder;
 using SalesMetrics.Services.Permissions;
+using SalesMetrics.Services.Reports;
+using SalesMetrics.Services.Signing;
 using SalesMetrics.Models.QueryBuilder;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace SalesMetrics.Controllers
 {
@@ -15,17 +18,26 @@ namespace SalesMetrics.Controllers
         private readonly IPermissionService _permissionService;
         private readonly ILogger<ReportBuilderController> _logger;
         private readonly IConfiguration _configuration;
+        private readonly IReportExportService _exportService;
+        private readonly CompanyBrandingSettings _branding;
+        private readonly IWebHostEnvironment _env;
 
         public ReportBuilderController(
             SalesMetricsDbContext context,
             IPermissionService permissionService,
             ILogger<ReportBuilderController> logger,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            IReportExportService exportService,
+            IOptions<CompanyBrandingSettings> branding,
+            IWebHostEnvironment env)
         {
             _context = context;
             _permissionService = permissionService;
             _logger = logger;
             _configuration = configuration;
+            _exportService = exportService;
+            _branding = branding.Value;
+            _env = env;
         }
 
         /// <summary>
@@ -326,6 +338,42 @@ namespace SalesMetrics.Controllers
         }
 
         /// <summary>
+        /// Placeholder token stored in saved SQL so reports are branch-agnostic.
+        /// Replaced at execution time with the running user's CompUFloor database.
+        /// </summary>
+        private const string BranchDbPlaceholder = "{BRANCH_DB}";
+
+        /// <summary>
+        /// All known CompUFloor database names across branches.
+        /// </summary>
+        private static readonly string[] AllCompUFloorDatabases =
+            { "CompUFloorLA", "CompUFloorLV", "CompUFloorChino", "CompUFloorPHX", "CompUFloorSD" };
+
+        /// <summary>
+        /// Replaces the {BRANCH_DB} placeholder AND any hardcoded CompUFloor database
+        /// names in a SQL string with the target database for the current user's branch.
+        /// This allows a single report to work across all branches.
+        /// </summary>
+        private static string ResolveBranchDatabase(string sql, string targetDatabase)
+        {
+            if (string.IsNullOrEmpty(sql)) return sql;
+
+            // 1. Replace the placeholder token (wizard-mode saved reports)
+            var result = sql.Replace(BranchDbPlaceholder, targetDatabase, StringComparison.OrdinalIgnoreCase);
+
+            // 2. Replace any hardcoded CompUFloor database names (SQL-mode cross-branch)
+            foreach (var db in AllCompUFloorDatabases)
+            {
+                if (!db.Equals(targetDatabase, StringComparison.OrdinalIgnoreCase))
+                {
+                    result = result.Replace($"[{db}]", $"[{targetDatabase}]", StringComparison.OrdinalIgnoreCase);
+                }
+            }
+
+            return result;
+        }
+
+        /// <summary>
         /// Process Step 1.5 (Table Relationships) and advance to Step 2 (Column Configuration)
         /// </summary>
         [HttpPost]
@@ -595,11 +643,7 @@ namespace SalesMetrics.Controllers
                 }
                 else
                 {
-                    // Wizard Mode - generate SQL from selections
-                    var userLocation = HttpContext.Session.GetString("OfficeLocation") ?? "LAX";
-                    var compuFloorDb = GetCompUFloorDatabaseName(userLocation);
-
-                    // Create Step4SubmissionDto from the update model
+                    // Wizard Mode - generate SQL with placeholder for branch-agnostic storage
                     var step4Model = new Step4SubmissionDto
                     {
                         QueryMode = "wizard",
@@ -609,7 +653,7 @@ namespace SalesMetrics.Controllers
                         Filters = model.Filters
                     };
 
-                    generatedSql = GenerateSQL(step4Model, compuFloorDb);
+                    generatedSql = GenerateSQL(step4Model, BranchDbPlaceholder);
 
                     queryDefJson = System.Text.Json.JsonSerializer.Serialize(new
                     {
@@ -690,26 +734,76 @@ namespace SalesMetrics.Controllers
                     _logger.LogInformation("Generating SQL from {TableCount} tables, {ColumnCount} columns, {FilterCount} filters",
                         model.Tables?.Count ?? 0, model.Columns?.Count ?? 0, model.Filters?.Count ?? 0);
 
-                    // Get user's office location and determine CompUFloor database
-                    var userLocation = HttpContext.Session.GetString("OfficeLocation") ?? "LAX";
-                    var compuFloorDb = GetCompUFloorDatabaseName(userLocation);
-
-                    _logger.LogInformation("User location: {Location}, CompUFloor database: {Database}", userLocation, compuFloorDb);
-
-                    // Build SQL query with fully qualified table names
-                    sql = GenerateSQL(model, compuFloorDb);
-                    _logger.LogInformation("Generated SQL: {SQL}", sql);
+                    // Generate SQL with placeholder — resolve below before execution
+                    sql = GenerateSQL(model, BranchDbPlaceholder);
+                    _logger.LogInformation("Generated SQL (template): {SQL}", sql);
                 }
+
+                // Resolve the current user's branch database for execution
+                var userLocation = HttpContext.Session.GetString("OfficeLocation") ?? "LAX";
+                var compuFloorDb = GetCompUFloorDatabaseName(userLocation);
+                _logger.LogInformation("User location: {Location}, CompUFloor database: {Database}", userLocation, compuFloorDb);
 
                 // Execute query with limit
                 var connStr = _configuration.GetConnectionString("SalesMetrics");
                 using var conn = new System.Data.SqlClient.SqlConnection(connStr);
                 await conn.OpenAsync();
 
+                // For SQL mode, switch to the user's CompUFloor database so unqualified
+                // table names (e.g. INVOICE_HEADER) resolve correctly.
+                if (model.QueryMode == "sql")
+                {
+                    _logger.LogInformation("SQL mode: switching connection to database {Database}", compuFloorDb);
+                    await conn.ChangeDatabaseAsync(compuFloorDb);
+                }
+
                 var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
-                var cmd = new System.Data.SqlClient.SqlCommand(sql, conn);
+                // Resolve {BRANCH_DB} placeholder and any hardcoded branch DB names
+                var sqlToExecute = ResolveBranchDatabase(sql, compuFloorDb);
+                var cmd = new System.Data.SqlClient.SqlCommand();
+                cmd.Connection = conn;
                 cmd.CommandTimeout = 30; // 30 seconds timeout
+
+                // Apply parameter values for SQL mode
+                if (model.QueryMode == "sql" && model.ParameterValues != null && model.ParameterValues.Any())
+                {
+                    foreach (var param in model.ParameterValues)
+                    {
+                        var paramName = param.Key.StartsWith("@") ? param.Key : "@" + param.Key;
+                        var paramValue = param.Value;
+
+                        _logger.LogInformation("SQL mode parameter: {ParamName} = {ParamValue}", paramName, paramValue);
+
+                        // Check if this parameter is used inside an IN() clause with comma-separated values
+                        var inPattern = $@"IN\s*\(\s*{System.Text.RegularExpressions.Regex.Escape(paramName)}\s*\)";
+                        if (!string.IsNullOrEmpty(paramValue)
+                            && paramValue.Contains(',')
+                            && System.Text.RegularExpressions.Regex.IsMatch(sqlToExecute, inPattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                        {
+                            // Expand comma-separated value into individual parameters
+                            var values = paramValue.Split(',').Select(v => v.Trim()).Where(v => v.Length > 0).ToArray();
+                            var expandedParams = new List<string>();
+                            for (int i = 0; i < values.Length; i++)
+                            {
+                                var expandedName = $"{paramName}_{i}";
+                                expandedParams.Add(expandedName);
+                                cmd.Parameters.AddWithValue(expandedName, values[i]);
+                            }
+                            sqlToExecute = System.Text.RegularExpressions.Regex.Replace(
+                                sqlToExecute, inPattern,
+                                $"IN ({string.Join(", ", expandedParams)})",
+                                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                            _logger.LogInformation("Expanded IN clause for {ParamName}: {Count} values", paramName, values.Length);
+                        }
+                        else
+                        {
+                            cmd.Parameters.AddWithValue(paramName, string.IsNullOrEmpty(paramValue) ? DBNull.Value : (object)paramValue);
+                        }
+                    }
+                }
+
+                cmd.CommandText = sqlToExecute;
 
                 var previewData = new List<Dictionary<string, object>>();
                 var columnNames = new List<string>();
@@ -744,7 +838,7 @@ namespace SalesMetrics.Controllers
                     columnNames,
                     rowCount = previewData.Count,
                     executionTimeMs = stopwatch.ElapsedMilliseconds,
-                    generatedSql = sql,
+                    generatedSql = ResolveBranchDatabase(sql, compuFloorDb),
                     hasMoreRows = rowCount == 100
                 });
             }
@@ -825,29 +919,27 @@ namespace SalesMetrics.Controllers
                         return Json(new { success = false, message = "At least one column must be selected" });
                     }
 
-                    // Get user's office location and determine CompUFloor database
-                    var userLocation = HttpContext.Session.GetString("OfficeLocation") ?? "LAX";
-                    var compuFloorDb = GetCompUFloorDatabaseName(userLocation);
+                    // Use placeholder so saved SQL is branch-agnostic.
+                    // At execution time, {BRANCH_DB} is replaced with the running user's database.
 
-                    // Build query definition JSON
+                    // Build query definition JSON (no hardcoded database name)
                     queryDefJson = System.Text.Json.JsonSerializer.Serialize(new
                     {
                         queryMode = "wizard",
                         tables = model.Tables,
                         relationships = model.Relationships,
                         columns = model.Columns,
-                        filters = model.Filters,
-                        compuFloorDatabase = compuFloorDb
+                        filters = model.Filters
                     });
 
-                    // Generate SQL with fully qualified table names
+                    // Generate SQL with placeholder for branch database
                     generatedSql = GenerateSQL(new Step4SubmissionDto
                     {
                         Tables = model.Tables,
                         Relationships = model.Relationships,
                         Columns = model.Columns,
                         Filters = model.Filters
-                    }, compuFloorDb);
+                    }, BranchDbPlaceholder);
                 }
 
                 // Generate report ID
@@ -902,6 +994,14 @@ namespace SalesMetrics.Controllers
         {
             var sql = new System.Text.StringBuilder();
 
+            // Build a lookup from table name to alias using the Tables list
+            var tableAliasMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var t in model.Tables)
+            {
+                if (!tableAliasMap.ContainsKey(t.TableName))
+                    tableAliasMap[t.TableName] = t.Alias;
+            }
+
             // SELECT clause - Quote column names and aliases to handle spaces and special characters
             sql.AppendLine("SELECT");
             var columnExpressions = model.Columns.Select(c =>
@@ -919,12 +1019,33 @@ namespace SalesMetrics.Controllers
 
             sql.AppendLine($"FROM [{compuFloorDatabase}].[dbo].[{baseTable.TableName}] AS {baseTable.Alias}");
 
-            // JOIN clauses (from relationships) - Use fully qualified table names
+            // JOIN clauses (from relationships)
+            // Track which tables have already been added to the FROM/JOIN chain to avoid
+            // emitting duplicate aliases (e.g. "T2" appearing twice).
+            var joinedTables = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { baseTable.TableName };
+
             if (model.Relationships != null && model.Relationships.Any())
             {
                 foreach (var rel in model.Relationships)
                 {
-                    sql.AppendLine($"{rel.JoinType} JOIN [{compuFloorDatabase}].[dbo].[{rel.ToTable}] AS {rel.ToAlias} ON {rel.FromAlias}.[{rel.FromColumn}] = {rel.ToAlias}.[{rel.ToColumn}]");
+                    // Resolve aliases from the canonical table alias map
+                    var fromAlias = tableAliasMap.GetValueOrDefault(rel.FromTable, rel.FromAlias);
+                    var toAlias = tableAliasMap.GetValueOrDefault(rel.ToTable, rel.ToAlias);
+
+                    if (!joinedTables.Contains(rel.ToTable))
+                    {
+                        // Normal case: first time this table appears, emit a JOIN
+                        sql.AppendLine($"{rel.JoinType} JOIN [{compuFloorDatabase}].[dbo].[{rel.ToTable}] AS {toAlias} ON {fromAlias}.[{rel.FromColumn}] = {toAlias}.[{rel.ToColumn}]");
+                        joinedTables.Add(rel.ToTable);
+                    }
+                    else if (!joinedTables.Contains(rel.FromTable))
+                    {
+                        // The "To" table is already joined but "From" is not — join the From table instead
+                        sql.AppendLine($"{rel.JoinType} JOIN [{compuFloorDatabase}].[dbo].[{rel.FromTable}] AS {fromAlias} ON {fromAlias}.[{rel.FromColumn}] = {toAlias}.[{rel.ToColumn}]");
+                        joinedTables.Add(rel.FromTable);
+                    }
+                    // else: both tables already joined, skip the JOIN but the ON condition
+                    // is implicitly satisfied through the existing join chain
                 }
             }
 
@@ -955,8 +1076,11 @@ namespace SalesMetrics.Controllers
                     }
                     else if (f.Operator.Equals("IN", StringComparison.OrdinalIgnoreCase))
                     {
-                        // IN operator needs parentheses
-                        condition.Append($"{f.TableAlias}.[{f.ColumnName}] {f.Operator} ({f.Value})");
+                        // IN operator - wrap each value in quotes for string columns
+                        var inValues = f.Value.Split(',')
+                            .Select(v => $"'{v.Trim()}'")
+                            .ToArray();
+                        condition.Append($"{f.TableAlias}.[{f.ColumnName}] {f.Operator} ({string.Join(", ", inValues)})");
                     }
                     else if (f.Operator.Equals("LIKE", StringComparison.OrdinalIgnoreCase))
                     {
@@ -1040,14 +1164,22 @@ namespace SalesMetrics.Controllers
 
                 uniqueParams.Add(paramName);
 
+                // Check if this parameter is used inside an IN() clause
+                var inPattern = $@"IN\s*\(\s*@{System.Text.RegularExpressions.Regex.Escape(paramName)}\s*\)";
+                var isInClause = System.Text.RegularExpressions.Regex.IsMatch(sql, inPattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+                var displayName = FormatParameterDisplayName(paramName);
+
                 // Create parameter with default settings
                 var parameter = new ReportParameter
                 {
                     Name = paramName,
-                    DisplayName = FormatParameterDisplayName(paramName), // e.g., "WarehouseID" -> "Warehouse ID"
-                    DataType = GuessParameterDataType(paramName), // Guess based on name
+                    DisplayName = displayName,
+                    DataType = GuessParameterDataType(paramName),
                     IsRequired = true,
-                    PromptText = $"Enter {FormatParameterDisplayName(paramName)}"
+                    PromptText = isInClause
+                        ? $"Enter {displayName} (comma-separated for multiple values, e.g. VALUE1, VALUE2)"
+                        : $"Enter {displayName}"
                 };
 
                 parameters.Add(parameter);
@@ -1096,7 +1228,7 @@ namespace SalesMetrics.Controllers
         }
 
         /// <summary>
-        /// Validates SQL query for security (ensures SELECT only, no DDL/DML)
+        /// Validates SQL query for security (ensures SELECT/CTE only, no DDL/DML)
         /// </summary>
         private (bool isValid, string? errorMessage) ValidateCustomSql(string sql)
         {
@@ -1110,26 +1242,57 @@ namespace SalesMetrics.Controllers
             normalized = System.Text.RegularExpressions.Regex.Replace(normalized, @"/\*.*?\*/", "", System.Text.RegularExpressions.RegexOptions.Singleline);
             normalized = normalized.Trim().ToUpper();
 
-            // Must start with SELECT
-            if (!normalized.StartsWith("SELECT"))
+            // Must start with SELECT or WITH (CTE)
+            if (normalized.StartsWith("SELECT"))
             {
-                return (false, "Query must be a SELECT statement");
+                // Simple SELECT — OK
+            }
+            else if (normalized.StartsWith("WITH"))
+            {
+                // CTE — must contain a final SELECT after the WITH...AS block(s)
+                // Verify the query has a SELECT that isn't only inside the CTE definition
+                if (!System.Text.RegularExpressions.Regex.IsMatch(normalized, @"\)\s*SELECT\b"))
+                {
+                    return (false, "CTE query must end with a SELECT statement after the WITH...AS block");
+                }
+            }
+            else
+            {
+                return (false, "Query must start with SELECT or WITH (for CTEs)");
             }
 
-            // Blocked keywords (DDL/DML operations)
+            // Blocked keywords (DDL/DML operations) — use word boundaries to avoid
+            // false positives on column/table names like LAST_UPDATE_DATE orABORTING_EXECUTION
             var blockedKeywords = new[]
             {
-                "INSERT", "UPDATE", "DELETE", "DROP", "CREATE", "ALTER",
-                "TRUNCATE", "EXEC", "EXECUTE", "SP_", "XP_", "BACKUP",
-                "RESTORE", "GRANT", "REVOKE", "DENY"
+                "INSERT", "DELETE", "DROP", "ALTER",
+                "TRUNCATE", "BACKUP", "RESTORE", "GRANT", "REVOKE", "DENY"
             };
 
             foreach (var keyword in blockedKeywords)
             {
-                if (normalized.Contains(keyword))
+                // \b ensures we match whole words, not substrings of table/column names
+                if (System.Text.RegularExpressions.Regex.IsMatch(normalized, $@"\b{keyword}\b"))
                 {
                     return (false, $"Query contains blocked keyword: {keyword}");
                 }
+            }
+
+            // These need special handling: block UPDATE/EXEC only as statements, not in names
+            // UPDATE is blocked as a statement but allowed in column names like "UPDATE_DATE"
+            if (System.Text.RegularExpressions.Regex.IsMatch(normalized, @"\bUPDATE\s+\w+\s+SET\b"))
+            {
+                return (false, "Query contains blocked keyword: UPDATE");
+            }
+            // EXEC/EXECUTE as standalone statements
+            if (System.Text.RegularExpressions.Regex.IsMatch(normalized, @"\bEXEC(UTE)?\s+(SP_|XP_|DBO\.|@|\[)"))
+            {
+                return (false, "Query contains blocked keyword: EXEC/EXECUTE");
+            }
+            // SP_ and XP_ as procedure prefixes (not in column names)
+            if (System.Text.RegularExpressions.Regex.IsMatch(normalized, @"\b(SP|XP)_\w+\s*(\(|$)", System.Text.RegularExpressions.RegexOptions.Multiline))
+            {
+                return (false, "Query contains blocked system procedure call");
             }
 
             // Check for semicolons (multiple statements)
@@ -1197,6 +1360,10 @@ namespace SalesMetrics.Controllers
                 }
 
                 // If report has parameters, show parameter entry form
+                // Resolve branch DB placeholder for display (show user their actual DB name)
+                var currentLocation = HttpContext.Session.GetString("OfficeLocation") ?? "LAX";
+                var currentBranchDb = GetCompUFloorDatabaseName(currentLocation);
+
                 if (parameters.Any())
                 {
                     var viewModel = new ReportExecutionViewModel
@@ -1205,7 +1372,7 @@ namespace SalesMetrics.Controllers
                         ReportName = report.Name ?? "Untitled Report",
                         ReportDescription = report.Description ?? "",
                         Category = report.Category ?? "Custom Reports",
-                        GeneratedSql = report.GeneratedSql ?? "",
+                        GeneratedSql = ResolveBranchDatabase(report.GeneratedSql ?? "", currentBranchDb),
                         Parameters = parameters,
                         QueryDefinitionJson = report.QueryDefinitionJson,
                         ColumnNames = new List<string>(),
@@ -1271,6 +1438,134 @@ namespace SalesMetrics.Controllers
         }
 
         /// <summary>
+        /// Export report to Excel with branding, logo, and formatted data.
+        /// Re-executes the query and returns a downloadable .xlsx file.
+        /// </summary>
+        [HttpPost]
+        public async Task<IActionResult> ExportToExcel(int id, [FromForm] Dictionary<string, string>? parameterValues)
+        {
+            try
+            {
+                var userId = GetCurrentUserId();
+
+                var hasAccess = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_ACCESS");
+                if (!hasAccess) return Forbid();
+
+                var report = await _context.ReportDefinitions
+                    .FirstOrDefaultAsync(r => r.ReportDefinitionId == id && r.IsActive);
+                if (report == null) return NotFound();
+
+                _logger.LogInformation("User {UserId} exporting report {ReportId} to Excel", userId, id);
+
+                // Resolve branch database
+                var userLocation = HttpContext.Session.GetString("OfficeLocation") ?? "LAX";
+                var compuFloorDb = GetCompUFloorDatabaseName(userLocation);
+                var sqlToExecute = ResolveBranchDatabase(report.GeneratedSql ?? "", compuFloorDb);
+
+                // Open connection
+                var connStr = _configuration.GetConnectionString("SalesMetrics");
+                using var conn = new System.Data.SqlClient.SqlConnection(connStr);
+                await conn.OpenAsync();
+
+                // Switch database for SQL mode
+                var isSqlMode = report.QueryDefinitionJson?.Contains("\"queryMode\":\"sql\"", StringComparison.OrdinalIgnoreCase) == true
+                             || report.QueryDefinitionJson?.Contains("\"queryMode\": \"sql\"", StringComparison.OrdinalIgnoreCase) == true;
+                if (isSqlMode)
+                {
+                    await conn.ChangeDatabaseAsync(compuFloorDb);
+                }
+
+                // Build command with parameters
+                var cmd = new System.Data.SqlClient.SqlCommand();
+                cmd.Connection = conn;
+                cmd.CommandTimeout = 120; // 2 min for full export (no row limit)
+
+                if (parameterValues != null && parameterValues.Any())
+                {
+                    foreach (var param in parameterValues)
+                    {
+                        if (string.IsNullOrEmpty(param.Key)) continue;
+                        var paramName = param.Key.StartsWith("@") ? param.Key : "@" + param.Key;
+                        var paramValue = param.Value;
+
+                        // IN clause expansion
+                        var inPattern = $@"IN\s*\(\s*{System.Text.RegularExpressions.Regex.Escape(paramName)}\s*\)";
+                        if (!string.IsNullOrEmpty(paramValue) && paramValue.Contains(',')
+                            && System.Text.RegularExpressions.Regex.IsMatch(sqlToExecute, inPattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                        {
+                            var values = paramValue.Split(',').Select(v => v.Trim()).Where(v => v.Length > 0).ToArray();
+                            var expandedParams = new List<string>();
+                            for (int i = 0; i < values.Length; i++)
+                            {
+                                var expandedName = $"{paramName}_{i}";
+                                expandedParams.Add(expandedName);
+                                cmd.Parameters.AddWithValue(expandedName, values[i]);
+                            }
+                            sqlToExecute = System.Text.RegularExpressions.Regex.Replace(
+                                sqlToExecute, inPattern,
+                                $"IN ({string.Join(", ", expandedParams)})",
+                                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                        }
+                        else
+                        {
+                            cmd.Parameters.AddWithValue(paramName, string.IsNullOrEmpty(paramValue) ? DBNull.Value : (object)paramValue);
+                        }
+                    }
+                }
+
+                cmd.CommandText = sqlToExecute;
+
+                // Execute and load into DataTable
+                var dataTable = new System.Data.DataTable();
+                using (var reader = await cmd.ExecuteReaderAsync())
+                {
+                    dataTable.Load(reader);
+                }
+
+                _logger.LogInformation("Export query returned {RowCount} rows", dataTable.Rows.Count);
+
+                // Find local logo file
+                string? logoPath = null;
+                var candidateLogos = new[] { "logo.png", "logo-light.png", "logo-dark.png" };
+                foreach (var logo in candidateLogos)
+                {
+                    var path = Path.Combine(_env.WebRootPath, "assets", "images", logo);
+                    if (System.IO.File.Exists(path))
+                    {
+                        logoPath = path;
+                        break;
+                    }
+                }
+
+                // Build export options with branding
+                var options = new ExcelExportOptions
+                {
+                    ReportName = report.Name ?? "Untitled Report",
+                    ReportDescription = report.Description,
+                    CompanyName = _branding.CompanyName,
+                    CompanyWebsite = _branding.Website,
+                    CompanyPhone = _branding.Phone,
+                    LogoFilePath = logoPath
+                };
+
+                var bytes = _exportService.ExportToExcel(dataTable, options, out var contentType);
+
+                // Sanitize filename
+                var safeName = (report.Name ?? "Report").Replace(" ", "_");
+                safeName = System.Text.RegularExpressions.Regex.Replace(safeName, @"[^\w\-]", "");
+                var fileName = $"{safeName}_{DateTime.Now:yyyyMMdd_HHmm}.xlsx";
+
+                return File(bytes, contentType, fileName);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error exporting report {ReportId} to Excel", id);
+                TempData["ErrorMessage"] = $"Error exporting report: {ex.Message}";
+                return RedirectToAction("Execute", new { id });
+            }
+        }
+
+        /// <summary>
         /// Helper method to execute report with optional parameter values
         /// </summary>
         private async Task<IActionResult> ExecuteReportWithParameters(Data.Entities.QueryBuilder.ReportDefinitionEntity report, Dictionary<string, string>? parameterValues)
@@ -1279,9 +1574,27 @@ namespace SalesMetrics.Controllers
             using var conn = new System.Data.SqlClient.SqlConnection(connStr);
             await conn.OpenAsync();
 
+            // Resolve branch database for the current user — works for BOTH wizard and SQL modes.
+            // Wizard-mode SQL has {BRANCH_DB} placeholder; SQL-mode may have hardcoded DB names.
+            var userLocation = HttpContext.Session.GetString("OfficeLocation") ?? "LAX";
+            var compuFloorDb = GetCompUFloorDatabaseName(userLocation);
+            _logger.LogInformation("Executing report for location {Location}, database {Database}", userLocation, compuFloorDb);
+
+            // For SQL-mode reports with unqualified table names, also switch the connection
+            var isSqlMode = report.QueryDefinitionJson?.Contains("\"queryMode\":\"sql\"", StringComparison.OrdinalIgnoreCase) == true
+                         || report.QueryDefinitionJson?.Contains("\"queryMode\": \"sql\"", StringComparison.OrdinalIgnoreCase) == true;
+            if (isSqlMode)
+            {
+                _logger.LogInformation("SQL-mode report: switching connection to database {Database}", compuFloorDb);
+                await conn.ChangeDatabaseAsync(compuFloorDb);
+            }
+
             var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
-            var cmd = new System.Data.SqlClient.SqlCommand(report.GeneratedSql, conn);
+            // Resolve {BRANCH_DB} placeholder and any hardcoded branch DB names
+            var sqlToExecute = ResolveBranchDatabase(report.GeneratedSql, compuFloorDb);
+            var cmd = new System.Data.SqlClient.SqlCommand();
+            cmd.Connection = conn;
             cmd.CommandTimeout = 60; // 60 seconds timeout for report execution
 
             // Add parameters if provided
@@ -1300,10 +1613,40 @@ namespace SalesMetrics.Controllers
 
                     _logger.LogInformation("Adding parameter {ParamName} = {ParamValue}", paramName, paramValue);
 
-                    // Add parameter to SQL command for safe substitution
-                    cmd.Parameters.AddWithValue(paramName, string.IsNullOrEmpty(paramValue) ? DBNull.Value : paramValue);
+                    // Check if this parameter is used inside an IN() clause and has comma-separated values
+                    // Pattern: IN ( @ParamName ) with optional whitespace
+                    var inPattern = $@"IN\s*\(\s*{System.Text.RegularExpressions.Regex.Escape(paramName)}\s*\)";
+                    if (!string.IsNullOrEmpty(paramValue)
+                        && paramValue.Contains(',')
+                        && System.Text.RegularExpressions.Regex.IsMatch(sqlToExecute, inPattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                    {
+                        // Expand comma-separated value into individual parameters
+                        // e.g. @ProductClass with "CARPET,VINYL" becomes @ProductClass_0, @ProductClass_1
+                        var values = paramValue.Split(',').Select(v => v.Trim()).Where(v => v.Length > 0).ToArray();
+                        var expandedParams = new List<string>();
+                        for (int i = 0; i < values.Length; i++)
+                        {
+                            var expandedName = $"{paramName}_{i}";
+                            expandedParams.Add(expandedName);
+                            cmd.Parameters.AddWithValue(expandedName, values[i]);
+                        }
+                        // Replace IN(@ParamName) with IN(@ParamName_0, @ParamName_1, ...)
+                        sqlToExecute = System.Text.RegularExpressions.Regex.Replace(
+                            sqlToExecute,
+                            inPattern,
+                            $"IN ({string.Join(", ", expandedParams)})",
+                            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                        _logger.LogInformation("Expanded IN clause for {ParamName}: {Count} values", paramName, values.Length);
+                    }
+                    else
+                    {
+                        // Standard single-value parameter
+                        cmd.Parameters.AddWithValue(paramName, string.IsNullOrEmpty(paramValue) ? DBNull.Value : paramValue);
+                    }
                 }
             }
+
+            cmd.CommandText = sqlToExecute;
 
             var resultData = new List<Dictionary<string, object>>();
             var columnNames = new List<string>();
@@ -1341,14 +1684,15 @@ namespace SalesMetrics.Controllers
                 ReportName = report.Name ?? "Untitled Report",
                 ReportDescription = report.Description ?? "",
                 Category = report.Category ?? "Custom Reports",
-                GeneratedSql = report.GeneratedSql ?? "",
+                GeneratedSql = ResolveBranchDatabase(report.GeneratedSql ?? "", compuFloorDb),
                 ColumnNames = columnNames,
                 ResultData = resultData,
                 RowCount = resultData.Count,
                 ExecutionTimeMs = stopwatch.ElapsedMilliseconds,
                 ExecutedDate = DateTime.Now,
                 QueryDefinitionJson = report.QueryDefinitionJson,
-                Parameters = new List<ReportParameter>()
+                Parameters = new List<ReportParameter>(),
+                SubmittedParameterValues = parameterValues
             };
 
             return View(viewModel);

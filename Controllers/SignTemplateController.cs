@@ -2,21 +2,23 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.FileProviders;
 using SalesMetrics.Data;
 using SalesMetrics.Domain.Signing;
 using SalesMetrics.Models.Signing;
 
 namespace SalesMetrics.Controllers;
 
-//[Authorize(Roles = "Admin")]
 public class SignTemplatesController : Controller
 {
     private readonly SalesMetricsDbContext _db;
     private readonly IWebHostEnvironment _env;
+    private readonly ILogger<SignTemplatesController> _logger;
 
-    public SignTemplatesController(SalesMetricsDbContext db, IWebHostEnvironment env)
-    { _db = db; _env = env; }
+    public SignTemplatesController(SalesMetricsDbContext db, IWebHostEnvironment env, ILogger<SignTemplatesController> logger)
+    { _db = db; _env = env; _logger = logger; }
+
+    private int GetCurrentUserId()
+        => int.TryParse(User.FindFirst("Users_Id")?.Value, out var id) ? id : 0;
 
     // GET: /SignTemplates
     public async Task<IActionResult> Index()
@@ -65,10 +67,7 @@ public class SignTemplatesController : Controller
 
         model.CreatedDateUtc = DateTime.UtcNow;
 
-        //var userId = int.Parse(User.FindFirst("Users_ID").Value);
-        //model.CreatedByUsers_ID = userId;
-
-        model.CreatedByUsers_ID = 1; // TODO: current user id
+        model.CreatedByUsers_ID = GetCurrentUserId();
         _db.SignTemplates.Add(model);
         await _db.SaveChangesAsync();
         return RedirectToAction(nameof(Index));
@@ -105,7 +104,7 @@ public class SignTemplatesController : Controller
         t.MergeSpecJson = model.MergeSpecJson;
         t.IsActive = model.IsActive;
         t.ModifiedDateUtc = DateTime.UtcNow;
-        t.ModifiedByUsers_ID = 1; // TODO current user
+        t.ModifiedByUsers_ID = GetCurrentUserId();
 
         if (pdfFile is not null && pdfFile.Length > 0)
         {
@@ -146,7 +145,7 @@ public class SignTemplatesController : Controller
             RazorViewPath = original.RazorViewPath,
             MergeSpecJson = original.MergeSpecJson,
             IsActive = false, // Set to inactive by default
-            CreatedByUsers_ID = 1, // TODO: current user
+            CreatedByUsers_ID = GetCurrentUserId(),
             CreatedDateUtc = DateTime.UtcNow
         };
 
@@ -185,7 +184,7 @@ public class SignTemplatesController : Controller
                 catch (Exception ex)
                 {
                     // Log error but continue with deletion
-                    Console.WriteLine($"Error deleting PDF file: {ex.Message}");
+                    _logger.LogWarning(ex, "Error deleting PDF file for template");
                 }
             }
         }
@@ -201,49 +200,49 @@ public class SignTemplatesController : Controller
     public async Task<IActionResult> GetTemplatePdf(string id)
     {
         var templateKey = id; // Route parameter is 'id', but we use it as templateKey
-        Console.WriteLine($"[GetTemplatePdf] Called with templateKey: {templateKey}");
-        Console.WriteLine($"[GetTemplatePdf] ContentRootPath: {_env.ContentRootPath}");
+        _logger.LogDebug("[GetTemplatePdf] Called with templateKey: {TemplateKey}", templateKey);
+        _logger.LogDebug("[GetTemplatePdf] ContentRootPath: {ContentRootPath}", _env.ContentRootPath);
 
         var template = await _db.SignTemplates.AsNoTracking().FirstOrDefaultAsync(t => t.TemplateKey == templateKey);
 
         if (template == null)
         {
-            Console.WriteLine($"[GetTemplatePdf] Template not found for key: {templateKey}");
+            _logger.LogWarning("[GetTemplatePdf] Template not found for key: {TemplateKey}", templateKey);
             return NotFound("Template not found");
         }
 
-        Console.WriteLine($"[GetTemplatePdf] Template found: {template.DisplayName}");
-        Console.WriteLine($"[GetTemplatePdf] PdfFilePath from DB: {template.PdfFilePath}");
+        _logger.LogDebug("[GetTemplatePdf] Template found: {DisplayName}", template.DisplayName);
+        _logger.LogDebug("[GetTemplatePdf] PdfFilePath from DB: {PdfFilePath}", template.PdfFilePath);
 
         if (string.IsNullOrWhiteSpace(template.PdfFilePath))
         {
-            Console.WriteLine($"[GetTemplatePdf] PdfFilePath is empty");
+            _logger.LogWarning("[GetTemplatePdf] PdfFilePath is empty for template: {TemplateKey}", templateKey);
             return NotFound("PDF file path is empty");
         }
 
         var filePath = Path.Combine(_env.WebRootPath, "Files", "Templates", template.PdfFilePath);
-        Console.WriteLine($"[GetTemplatePdf] Full file path: {filePath}");
-        Console.WriteLine($"[GetTemplatePdf] File exists: {System.IO.File.Exists(filePath)}");
+        _logger.LogDebug("[GetTemplatePdf] Full file path: {FilePath}", filePath);
+        _logger.LogDebug("[GetTemplatePdf] File exists: {FileExists}", System.IO.File.Exists(filePath));
 
         if (!System.IO.File.Exists(filePath))
         {
-            Console.WriteLine($"[GetTemplatePdf] File not found at path: {filePath}");
+            _logger.LogWarning("[GetTemplatePdf] File not found at path: {FilePath}", filePath);
             // Try to list files in the directory to help diagnose
             var directory = Path.Combine(_env.WebRootPath, "Files", "Templates");
             if (Directory.Exists(directory))
             {
                 var files = Directory.GetFiles(directory);
-                Console.WriteLine($"[GetTemplatePdf] Files in Templates directory: {string.Join(", ", files.Select(Path.GetFileName))}");
+                _logger.LogWarning("[GetTemplatePdf] Files in Templates directory: {Files}", string.Join(", ", files.Select(Path.GetFileName)));
             }
             else
             {
-                Console.WriteLine($"[GetTemplatePdf] Templates directory doesn't exist: {directory}");
+                _logger.LogWarning("[GetTemplatePdf] Templates directory doesn't exist: {Directory}", directory);
             }
             return NotFound("PDF file not found on disk");
         }
 
         var fileBytes = await System.IO.File.ReadAllBytesAsync(filePath);
-        Console.WriteLine($"[GetTemplatePdf] File read successfully. Size: {fileBytes.Length} bytes");
+        _logger.LogDebug("[GetTemplatePdf] File read successfully. Size: {FileSize} bytes", fileBytes.Length);
 
         Response.Headers.Add("Content-Disposition", "inline");
         return File(fileBytes, "application/pdf");
@@ -284,7 +283,7 @@ public class SignTemplatesController : Controller
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[GetRazorViewPaths] Error scanning filesystem: {ex.Message}");
+                _logger.LogWarning(ex, "[GetRazorViewPaths] Error scanning filesystem");
             }
         }
 

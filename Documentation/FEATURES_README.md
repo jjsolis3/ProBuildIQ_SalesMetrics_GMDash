@@ -58,6 +58,7 @@ This guide explains **how each major feature works** in the current web app and 
 - `/SignTemplates/Index`
 - Controllers: `SignAdminController`, `SignTemplateController`, `SignPublicController`
 - Models/domain: `Models/Signing/*`, `Domain/Signing/*`
+- Office-role operations workflow: `Documentation/ENVELOPE_OFFICE_ROLE_WORKFLOW.md`
 
 ---
 

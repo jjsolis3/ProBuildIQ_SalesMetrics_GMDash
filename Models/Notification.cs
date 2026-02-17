@@ -189,6 +189,7 @@ namespace SalesMetrics.Models
     {
         public List<NotificationSettingsViewModel> NotificationSettings { get; set; } = new();
         public List<SecuritySettingViewModel> SecuritySettings { get; set; } = new();
+        public List<EnvelopeNotificationSettingViewModel> EnvelopeNotificationSettings { get; set; } = new();
         public string ActiveTab { get; set; } = "notifications";
     }
 
@@ -220,5 +221,26 @@ namespace SalesMetrics.Models
     {
         public int SecuritySettingsId { get; set; }
         public string SettingValue { get; set; } = null!;
+    }
+
+    // ======================================================================
+    // Envelope Notification Settings View Models
+    // ======================================================================
+
+    public class EnvelopeNotificationSettingViewModel
+    {
+        public int EnvelopeNotificationSettingsId { get; set; }
+        /// <summary>NULL = company-wide; otherwise the branch code, e.g. "LAX".</summary>
+        public string? LocationCode { get; set; }
+        public string LocationName { get; set; } = null!;
+        public string? NotificationEmail { get; set; }
+        public bool IsEnabled { get; set; }
+    }
+
+    public class SaveEnvelopeNotificationSettingRequest
+    {
+        public int EnvelopeNotificationSettingsId { get; set; }
+        public string? NotificationEmail { get; set; }
+        public bool IsEnabled { get; set; }
     }
 }

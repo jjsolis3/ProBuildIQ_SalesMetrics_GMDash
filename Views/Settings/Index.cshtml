@@ -45,6 +45,11 @@
             </button>
         </li>
         <li class="nav-item" role="presentation">
+            <button class="nav-link @(Model.ActiveTab == "envelope-notifications" ? "active" : "")" id="envelope-notifications-tab" data-bs-toggle="tab" data-bs-target="#envelope-notifications" type="button" role="tab">
+                <i class="fas fa-envelope"></i> Envelope Notifications
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
             <button class="nav-link @(Model.ActiveTab == "general" ? "active" : "")" id="general-tab" data-bs-toggle="tab" data-bs-target="#general" type="button" role="tab">
                 <i class="fas fa-cog"></i> General Settings
             </button>
@@ -274,6 +279,93 @@
             </div>
         </div>
 
+        <!-- Envelope Notifications Tab -->
+        <div class="tab-pane fade @(Model.ActiveTab == "envelope-notifications" ? "show active" : "")" id="envelope-notifications" role="tabpanel">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Envelope Completion Notifications</h5>
+                    <p class="mb-0 text-muted small">
+                        Configure email addresses that receive a notification (with PDF download link) when an envelope is completed by all signers.
+                        The <strong>Company</strong> row sends to every completed envelope regardless of branch.
+                        Each branch row only sends when an envelope matches that branch's location code.
+                    </p>
+                </div>
+                <div class="card-body p-0">
+                    @if (Model.EnvelopeNotificationSettings.Any())
+                    {
+                        <table class="table table-hover mb-0 align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width:220px;">Location</th>
+                                    <th>Notification Email</th>
+                                    <th style="width:110px;" class="text-center">Enabled</th>
+                                    <th style="width:90px;" class="text-center">Save</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var envSetting in Model.EnvelopeNotificationSettings)
+                                {
+                                    <tr class="envelope-notification-row" data-setting-id="@envSetting.EnvelopeNotificationSettingsId">
+                                        <td>
+                                            @if (envSetting.LocationCode == null)
+                                            {
+                                                <span class="badge bg-primary me-1">Company</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-secondary me-1">@envSetting.LocationCode</span>
+                                            }
+                                            <span class="fw-semibold">@envSetting.LocationName</span>
+                                        </td>
+                                        <td>
+                                            <input type="email"
+                                                   class="form-control form-control-sm env-notif-email"
+                                                   placeholder="Enter email address..."
+                                                   value="@(envSetting.NotificationEmail ?? "")" />
+                                        </td>
+                                        <td class="text-center">
+                                            <div class="form-check form-switch d-inline-block">
+                                                <input class="form-check-input env-notif-enabled"
+                                                       type="checkbox"
+                                                       @(envSetting.IsEnabled ? "checked" : "") />
+                                            </div>
+                                        </td>
+                                        <td class="text-center">
+                                            <button type="button"
+                                                    class="btn btn-sm btn-outline-primary env-notif-save-btn"
+                                                    title="Save this row">
+                                                <i class="fas fa-save"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                    else
+                    {
+                        <div class="p-4">
+                            <div class="alert alert-info mb-0">
+                                <i class="fas fa-info-circle me-2"></i>No envelope notification settings found.
+                                <form method="post" action="@Url.Action("InitializeDefaults", "Settings")" class="d-inline">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn btn-sm btn-outline-primary ms-2">Initialize Defaults</button>
+                                </form>
+                            </div>
+                        </div>
+                    }
+                </div>
+                @if (Model.EnvelopeNotificationSettings.Any())
+                {
+                    <div class="card-footer text-muted small">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Leave the email field blank to disable notifications for that row without turning off the toggle.
+                        Notifications are only sent when <strong>Enabled</strong> is on <em>and</em> an email is entered.
+                    </div>
+                }
+            </div>
+        </div>
+
         <!-- General Tab -->
         <div class="tab-pane fade @(Model.ActiveTab == "general" ? "show active" : "")" id="general" role="tabpanel">
             <div class="card shadow-sm">
@@ -348,6 +440,44 @@
                     .catch(function(error) {
                         toastr.error('Error saving notification settings');
                     });
+            });
+
+            // Save individual envelope notification setting
+            $(document).on('click', '.env-notif-save-btn', function() {
+                var $row = $(this).closest('.envelope-notification-row');
+                var settingId = parseInt($row.data('setting-id'));
+                var email = $row.find('.env-notif-email').val().trim();
+                var isEnabled = $row.find('.env-notif-enabled').is(':checked');
+
+                var $btn = $(this);
+                $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+
+                $.ajax({
+                    url: '@Url.Action("SaveEnvelopeNotificationSetting", "Settings")',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    headers: {
+                        'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                    },
+                    data: JSON.stringify({
+                        EnvelopeNotificationSettingsId: settingId,
+                        NotificationEmail: email || null,
+                        IsEnabled: isEnabled
+                    })
+                })
+                .done(function(result) {
+                    if (result.success) {
+                        toastr.success('Envelope notification setting saved!');
+                    } else {
+                        toastr.error(result.message || 'Error saving setting');
+                    }
+                })
+                .fail(function() {
+                    toastr.error('Request failed. Please try again.');
+                })
+                .always(function() {
+                    $btn.prop('disabled', false).html('<i class="fas fa-save"></i>');
+                });
             });
 
             // Save security settings

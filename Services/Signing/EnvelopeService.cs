@@ -786,6 +786,94 @@ public sealed class EnvelopeService : IEnvelopeService
                 null);
         }
 
+        // ---------------------------------------------------------------
+        // Send internal company / branch notification emails
+        // ---------------------------------------------------------------
+        var internalNotifSettings = await _db.EnvelopeNotificationSettings
+            .Where(s => s.IsEnabled
+                     && s.NotificationEmail != null
+                     && s.NotificationEmail != "")
+            .ToListAsync();
+
+        if (internalNotifSettings.Count > 0)
+        {
+            var absoluteInternalDownload = !string.IsNullOrWhiteSpace(downloadUrl)
+                ? (downloadUrl.StartsWith("/")
+                    ? $"{_appSettings.BaseUrl.TrimEnd('/')}{downloadUrl}"
+                    : downloadUrl)
+                : null;
+
+            var internalDownloadBtnHtml = absoluteInternalDownload != null
+                ? $@"<table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:24px 0;"">
+                  <tr>
+                    <td align=""center"" style=""background-color:#16a34a;border-radius:6px;"">
+                      <a href=""{absoluteInternalDownload}"" style=""display:inline-block;padding:12px 32px;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px;"">Download Completed PDF</a>
+                    </td>
+                  </tr>
+                </table>"
+                : "";
+
+            foreach (var notif in internalNotifSettings)
+            {
+                // Company-wide (LocationCode == null) → always send.
+                // Branch-specific → only send when the envelope's LocationCode matches.
+                bool shouldSend = notif.LocationCode == null
+                    || string.Equals(notif.LocationCode, env.LocationCode, StringComparison.OrdinalIgnoreCase);
+
+                if (!shouldSend)
+                    continue;
+
+                var branchLabel = notif.LocationCode == null
+                    ? "All Branches"
+                    : $"{notif.LocationName} ({notif.LocationCode})";
+
+                var completedAt = env.CompletedAtUtc.HasValue
+                    ? env.CompletedAtUtc.Value.ToString("f") + " UTC"
+                    : DateTime.UtcNow.ToString("f") + " UTC";
+
+                var innerHtml = $@"
+                    <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Envelope Completed</h2>
+                    <p style=""margin:0 0 16px 0;font-size:15px;color:#374151;"">
+                        An envelope has been completed by all signers. Please find the details below.
+                    </p>
+                    <table style=""width:100%;border-collapse:collapse;font-size:14px;color:#374151;margin-bottom:16px;"">
+                        <tr style=""border-bottom:1px solid #e5e7eb;"">
+                            <td style=""padding:8px 12px 8px 0;font-weight:600;white-space:nowrap;"">Subject</td>
+                            <td style=""padding:8px 0;"">{System.Net.WebUtility.HtmlEncode(env.Subject)}</td>
+                        </tr>
+                        <tr style=""border-bottom:1px solid #e5e7eb;"">
+                            <td style=""padding:8px 12px 8px 0;font-weight:600;white-space:nowrap;"">Order</td>
+                            <td style=""padding:8px 0;"">{System.Net.WebUtility.HtmlEncode(env.OrderNumber ?? "N/A")}</td>
+                        </tr>
+                        <tr style=""border-bottom:1px solid #e5e7eb;"">
+                            <td style=""padding:8px 12px 8px 0;font-weight:600;white-space:nowrap;"">Branch</td>
+                            <td style=""padding:8px 0;"">{System.Net.WebUtility.HtmlEncode(branchLabel)}</td>
+                        </tr>
+                        <tr>
+                            <td style=""padding:8px 12px 8px 0;font-weight:600;white-space:nowrap;"">Completed</td>
+                            <td style=""padding:8px 0;"">{completedAt}</td>
+                        </tr>
+                    </table>
+                    {internalDownloadBtnHtml}";
+
+                var notifHtml = _emailTemplate.WrapInBrandedTemplate(innerHtml);
+
+                try
+                {
+                    await _notify.SendEnvelopeEmailAsync(
+                        notif.NotificationEmail!,
+                        notif.LocationName,
+                        $"Envelope Completed: {env.Subject}",
+                        notifHtml);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to send internal envelope completion notification to {Email} for envelope {EnvelopeId}",
+                        notif.NotificationEmail, envelopeId);
+                }
+            }
+        }
+
         return (true, downloadUrl);
     }
 

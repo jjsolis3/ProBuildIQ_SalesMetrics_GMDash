@@ -43,6 +43,7 @@ public partial class SalesMetricsDbContext : DbContext
     public DbSet<BroadcastMessageEntity> BroadcastMessages { get; set; } = default!;
     public DbSet<NotificationSettingsEntity> NotificationSettings { get; set; } = default!;
     public DbSet<SecuritySettingsEntity> SecuritySettings { get; set; } = default!;
+    public DbSet<EnvelopeNotificationSettingsEntity> EnvelopeNotificationSettings { get; set; } = default!;
     public DbSet<FeatureEntity> Features { get; set; } = default!;
     public DbSet<UserFeaturePermissionEntity> UserFeaturePermissions { get; set; } = default!;
 
@@ -321,6 +322,19 @@ public partial class SalesMetricsDbContext : DbContext
 
             // Create unique index on SettingKey
             entity.HasIndex(e => e.SettingKey).IsUnique();
+        });
+
+        // Envelope Notification Settings Configuration
+        modelBuilder.Entity<EnvelopeNotificationSettingsEntity>(entity =>
+        {
+            entity.HasKey(e => e.EnvelopeNotificationSettingsId);
+            entity.ToTable("EnvelopeNotificationSettings");
+            entity.Property(e => e.LocationCode).HasMaxLength(10);
+            entity.Property(e => e.LocationName).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.NotificationEmail).HasMaxLength(255);
+            entity.Property(e => e.IsEnabled).HasDefaultValue(true);
+            entity.Property(e => e.LastModifiedDate).HasColumnType("datetime").HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.LastModifiedByUserId).HasColumnName("LastModifiedByUserId");
         });
 
         // Feature Permissions Configuration

@@ -21,5 +21,10 @@ namespace SalesMetrics.Services.Settings
         Task UpdateSecuritySettingAsync(UpdateSecuritySettingRequest request, int modifiedByUserId);
         Task<string?> GetSecuritySettingValueAsync(string settingKey);
         Task InitializeDefaultSecuritySettingsAsync();
+
+        // Envelope Notification Settings
+        Task<List<EnvelopeNotificationSettingViewModel>> GetEnvelopeNotificationSettingsAsync();
+        Task SaveEnvelopeNotificationSettingAsync(SaveEnvelopeNotificationSettingRequest request, int modifiedByUserId);
+        Task InitializeDefaultEnvelopeNotificationSettingsAsync();
     }
 }

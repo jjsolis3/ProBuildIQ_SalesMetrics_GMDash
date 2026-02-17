@@ -494,28 +494,68 @@ public sealed class PdfService : IPdfService
         // Supplement with ERP data for any missing fields
         // Property fields
         if (!data.ContainsKey("PropertyName"))
-        {
-            var propertyName = await _merge.GetPropertyNameAsync(env.PropertyID) ?? "";
-            data["PropertyName"] = propertyName;
-        }
+            data["PropertyName"] = await _merge.GetPropertyNameAsync(env.PropertyID) ?? "";
         if (!data.ContainsKey("PropertyAddress"))
-        {
-            var propertyAddress = await _merge.GetPropertyAddressAsync(env.PropertyID) ?? "";
-            data["PropertyAddress"] = propertyAddress;
-        }
+            data["PropertyAddress"] = await _merge.GetPropertyAddressAsync(env.PropertyID) ?? "";
         if (!data.ContainsKey("PropertyPhone"))
-            data["PropertyPhone"] = ""; // TODO: Get from ERP if needed
+            data["PropertyPhone"] = await _merge.GetCustomerPhoneAsync(env.PropertyID) ?? "";
+        if (!data.ContainsKey("PropertyCity"))
+            data["PropertyCity"] = await _merge.GetPropertyCityAsync(env.PropertyID) ?? "";
+        if (!data.ContainsKey("PropertyState"))
+            data["PropertyState"] = await _merge.GetPropertyStateAsync(env.PropertyID) ?? "";
+        if (!data.ContainsKey("PropertyZip"))
+            data["PropertyZip"] = await _merge.GetPropertyZipAsync(env.PropertyID) ?? "";
+
+        // Customer fields (sourced from property record in this ERP)
+        if (!data.ContainsKey("CustomerName"))
+            data["CustomerName"] = await _merge.GetCustomerNameAsync(env.PropertyID) ?? "";
+        if (!data.ContainsKey("CustomerPhone"))
+            data["CustomerPhone"] = await _merge.GetCustomerPhoneAsync(env.PropertyID) ?? "";
+        if (!data.ContainsKey("CustomerEmail"))
+            data["CustomerEmail"] = await _merge.GetCustomerEmailAsync(env.PropertyID) ?? "";
+        if (!data.ContainsKey("CustomerCompany"))
+            data["CustomerCompany"] = await _merge.GetCustomerCompanyAsync(env.PropertyID) ?? "";
 
         // Order fields
+        if (!data.ContainsKey("OrderNumber"))
+            data["OrderNumber"] = env.OrderNumber ?? "";
         if (!data.ContainsKey("UnitNumber"))
-        {
-            var unitNumber = await _merge.GetUnitNumberByOrderIdAsync(env.OrderId) ?? "";
-            data["UnitNumber"] = unitNumber;
-        }
+            data["UnitNumber"] = await _merge.GetUnitNumberByOrderIdAsync(env.OrderId) ?? "";
         if (!data.ContainsKey("InstallationDate"))
-            data["InstallationDate"] = DateTime.UtcNow.ToString("MM/dd/yyyy");
+        {
+            var start = await _merge.GetOrderStartDateAsync(env.OrderId);
+            data["InstallationDate"] = start?.ToString("MM/dd/yyyy") ?? DateTime.UtcNow.ToString("MM/dd/yyyy");
+        }
         if (!data.ContainsKey("DeliveryDate"))
-            data["DeliveryDate"] = ""; // TODO: Get from ERP if needed
+        {
+            var start = await _merge.GetOrderStartDateAsync(env.OrderId);
+            data["DeliveryDate"] = start?.ToString("MM/dd/yyyy") ?? "";
+        }
+        if (!data.ContainsKey("OrderStartDate"))
+        {
+            var start = await _merge.GetOrderStartDateAsync(env.OrderId);
+            data["OrderStartDate"] = start?.ToString("MM/dd/yyyy") ?? "";
+        }
+        if (!data.ContainsKey("OrderEndDate"))
+        {
+            var end = await _merge.GetOrderEndDateAsync(env.OrderId);
+            data["OrderEndDate"] = end?.ToString("MM/dd/yyyy") ?? "";
+        }
+        if (!data.ContainsKey("OrderSignedDate"))
+        {
+            var signed = await _merge.GetOrderSignedDateAsync(env.OrderId);
+            data["OrderSignedDate"] = signed?.ToString("MM/dd/yyyy") ?? "";
+        }
+        if (!data.ContainsKey("LeaseStartDate"))
+        {
+            var start = await _merge.GetOrderStartDateAsync(env.OrderId);
+            data["LeaseStartDate"] = start?.ToString("MM/dd/yyyy") ?? "";
+        }
+        if (!data.ContainsKey("LeaseEndDate"))
+        {
+            var end = await _merge.GetOrderEndDateAsync(env.OrderId);
+            data["LeaseEndDate"] = end?.ToString("MM/dd/yyyy") ?? "";
+        }
 
         // Property Staff (Manager) fields - always use fresh recipient data at PDF generation time
         data["PropertyStaffName"] = manager?.FullName ?? "Property Staff";

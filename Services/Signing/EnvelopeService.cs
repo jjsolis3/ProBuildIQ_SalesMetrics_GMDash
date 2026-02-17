@@ -202,9 +202,17 @@ public sealed class EnvelopeService : IEnvelopeService
             data["PropertyName"] = propertyName;
             data["PropertyAddress"] = propertyAddress;
             data["PropertyPhone"] = propertyPhone;
+            data["PropertyCity"] = await _merge.GetPropertyCityAsync(env.PropertyID) ?? "";
+            data["PropertyState"] = await _merge.GetPropertyStateAsync(env.PropertyID) ?? "";
+            data["PropertyZip"] = await _merge.GetPropertyZipAsync(env.PropertyID) ?? "";
+
             data["CustomerName"] = customerName;
             data["CustomerEmail"] = customerEmail;
             data["CustomerPhone"] = propertyPhone; // Same as property phone
+            data["CustomerCompany"] = customerName; // Company name is the customer name in this ERP
+
+            // Order number already resolved and stored on envelope during creation
+            data["OrderNumber"] = env.OrderNumber ?? "";
 
             // Order fields
             var unitNumber = await _merge.GetUnitNumberByOrderIdAsync(env.OrderId) ?? "";

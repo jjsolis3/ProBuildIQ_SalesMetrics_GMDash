@@ -32,6 +32,11 @@
         </div>
     }
 
+    @* Hidden form ensures the antiforgery token is always present for AJAX calls *@
+    <form id="antiforgery-form" style="display:none">
+        @Html.AntiForgeryToken()
+    </form>
+
     <!-- Tabs -->
     <ul class="nav nav-tabs nav-fill mb-4" id="settingsTabs" role="tablist">
         <li class="nav-item" role="presentation">

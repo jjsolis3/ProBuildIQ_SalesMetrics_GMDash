@@ -28,6 +28,21 @@ namespace SalesMetrics.Services.Reports
                         new() { Name = "FilterByMgmt", DisplayName = "Filter By Management", Type = "checkbox", IsRequired = false },
                         new() { Name = "WarehouseId", DisplayName = "Warehouse", Type = "number", IsRequired = true }
                     }
+                },
+                new ReportDefinition
+                {
+                    Id = "envelope-activity",
+                    Name = "Envelope Activity Report",
+                    Description = "Track and analyze e-signature envelope activity by date range, status, and branch. Includes completion metrics, recipient progress, and PDF export for sharing with management.",
+                    AllowedRoles = new List<string> { "1", "4", "5", "6", "7", "8" },
+                    AllowedLocations = new List<string> { "LAX", "LSV", "CHN", "PHX", "SND" },
+                    ParameterSchema = new List<ReportParameterDefinition>
+                    {
+                        new() { Name = "FromDate", DisplayName = "From Date", Type = "date", IsRequired = true },
+                        new() { Name = "ToDate", DisplayName = "To Date", Type = "date", IsRequired = true },
+                        new() { Name = "StatusFilter", DisplayName = "Status", Type = "text", IsRequired = false },
+                        new() { Name = "BranchFilter", DisplayName = "Branch", Type = "text", IsRequired = false }
+                    }
                 }
             };
         }

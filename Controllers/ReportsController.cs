@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System.Data;
 using System.Linq;
+using SalesMetrics.Data;
 using SalesMetrics.Models;
 using SalesMetrics.Models.Reports;
 using SalesMetrics.Services.Helpers;
@@ -19,6 +21,7 @@ namespace SalesMetrics.Controllers
         private readonly ILogger<ReportsController> _logger;
         private readonly ErpClientFactory _erpFactory;
         private readonly IConfiguration _configuration;
+        private readonly SalesMetricsDbContext _db;
 
         public ReportsController(
             IReportCatalog catalog,
@@ -27,7 +30,8 @@ namespace SalesMetrics.Controllers
             IReportExportService exportService,
             ILogger<ReportsController> logger,
             ErpClientFactory erpFactory,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            SalesMetricsDbContext db)
         {
             _catalog = catalog;
             _runner = runner;
@@ -36,6 +40,7 @@ namespace SalesMetrics.Controllers
             _logger = logger;
             _erpFactory = erpFactory;
             _configuration = configuration;
+            _db = db;
         }
 
         [HttpGet]
@@ -62,6 +67,10 @@ namespace SalesMetrics.Controllers
         [HttpGet]
         public IActionResult Run(string id)
         {
+            // The envelope activity report has its own dedicated view and action.
+            if (string.Equals(id, "envelope-activity", StringComparison.OrdinalIgnoreCase))
+                return RedirectToAction(nameof(EnvelopeReport));
+
             var definition = _catalog.GetById(id);
             var userContext = BuildUserContext();
             if (definition == null || userContext == null)
@@ -445,6 +454,164 @@ namespace SalesMetrics.Controllers
                 _logger.LogError(ex, "Failed to load order details for order {OrderId}", orderId);
                 return PartialView("~/Views/Orders/_WorkOrderDetailsPartial.cshtml", new WorkOrderDetailViewModel());
             }
+        }
+
+        // ======================================================================
+        // Envelope Activity Report
+        // ======================================================================
+
+        private static readonly int[] EnvelopeReportAllowedRoles = { 1, 4, 5, 6, 7, 8 };
+
+        private EnvelopeReportViewModel BuildEnvelopeReportBase(ReportUserContext userContext)
+        {
+            var roleId = int.Parse(userContext.RoleId ?? "0");
+            // Admin (1), GM (4), President (7), Regional Manager (8) can view any branch.
+            var canViewAll = roleId == 1 || roleId == 4 || roleId == 7 || roleId == 8;
+            return new EnvelopeReportViewModel
+            {
+                CanViewAllBranches = canViewAll,
+                Locations = LocationHelper.Locations,
+                CurrentLocationCode = userContext.OfficeLocation
+            };
+        }
+
+        [HttpGet]
+        public IActionResult EnvelopeReport()
+        {
+            var definition = _catalog.GetById("envelope-activity");
+            var userContext = BuildUserContext();
+            if (definition == null || userContext == null) return RedirectToAction("Index");
+            if (!_authorizationService.IsUserAuthorized(definition, userContext)) return Forbid();
+
+            var vm = BuildEnvelopeReportBase(userContext);
+            vm.FromDate = DateTime.Today.AddDays(-30);
+            vm.ToDate = DateTime.Today;
+            return View("RunEnvelope", vm);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> EnvelopeReport(EnvelopeReportViewModel input)
+        {
+            var definition = _catalog.GetById("envelope-activity");
+            var userContext = BuildUserContext();
+            if (definition == null || userContext == null) return RedirectToAction("Index");
+            if (!_authorizationService.IsUserAuthorized(definition, userContext)) return Forbid();
+
+            var vm = BuildEnvelopeReportBase(userContext);
+            vm.FromDate = input.FromDate;
+            vm.ToDate = input.ToDate;
+            vm.StatusFilter = input.StatusFilter;
+            vm.BranchFilter = input.BranchFilter;
+            vm.ShowResults = true;
+
+            // Validate dates
+            if (!vm.FromDate.HasValue || !vm.ToDate.HasValue)
+            {
+                vm.ErrorMessage = "Please select both a From and To date.";
+                vm.ShowResults = false;
+                return View("RunEnvelope", vm);
+            }
+            if (vm.FromDate > vm.ToDate)
+            {
+                vm.ErrorMessage = "From Date cannot be after To Date.";
+                vm.ShowResults = false;
+                return View("RunEnvelope", vm);
+            }
+            if ((vm.ToDate.Value - vm.FromDate.Value).TotalDays > 365)
+            {
+                vm.ErrorMessage = "Please limit the date range to 12 months.";
+                vm.ShowResults = false;
+                return View("RunEnvelope", vm);
+            }
+
+            // Determine location scope:
+            //   • Admins/GMs who explicitly picked a branch → use that branch.
+            //   • Admins/GMs with no branch selected       → show all branches.
+            //   • Office staff / managers                  → always their current location.
+            string? locationCode;
+            if (vm.CanViewAllBranches)
+                locationCode = string.IsNullOrWhiteSpace(input.BranchFilter) ? null : input.BranchFilter;
+            else
+                locationCode = userContext.OfficeLocation;
+
+            try
+            {
+                var fromUtc = vm.FromDate.Value.Date;
+                var toUtc = vm.ToDate.Value.Date.AddDays(1); // include the entire To date
+
+                var query = _db.SignEnvelopes
+                    .AsNoTracking()
+                    .Where(e => e.CreatedDateUtc >= fromUtc && e.CreatedDateUtc < toUtc);
+
+                if (!string.IsNullOrWhiteSpace(locationCode))
+                    query = query.Where(e => e.LocationCode == locationCode);
+
+                if (!string.IsNullOrWhiteSpace(input.StatusFilter))
+                    query = query.Where(e => e.Status == input.StatusFilter);
+
+                var envelopes = await query
+                    .OrderByDescending(e => e.SentAtUtc ?? e.CreatedDateUtc)
+                    .Select(e => new
+                    {
+                        e.EnvelopeId,
+                        e.Subject,
+                        e.OrderNumber,
+                        e.LocationCode,
+                        e.Status,
+                        e.CreatedDateUtc,
+                        e.SentAtUtc,
+                        e.CompletedAtUtc,
+                        RecipientCount = e.Recipients.Count(),
+                        SignedCount = e.Recipients.Count(r => r.SignedAtUtc != null)
+                    })
+                    .ToListAsync();
+
+                vm.Rows = envelopes.Select(e => new EnvelopeReportRow
+                {
+                    EnvelopeId = e.EnvelopeId,
+                    Subject = e.Subject,
+                    OrderNumber = e.OrderNumber,
+                    LocationCode = e.LocationCode,
+                    Status = e.Status,
+                    CreatedDateUtc = e.CreatedDateUtc,
+                    SentAtUtc = e.SentAtUtc,
+                    CompletedAtUtc = e.CompletedAtUtc,
+                    RecipientCount = e.RecipientCount,
+                    SignedCount = e.SignedCount,
+                    DaysToComplete = e.SentAtUtc.HasValue && e.CompletedAtUtc.HasValue
+                        ? Math.Round((e.CompletedAtUtc.Value - e.SentAtUtc.Value).TotalDays, 1)
+                        : null
+                }).ToList();
+
+                // KPI calculations
+                vm.TotalEnvelopes = vm.Rows.Count;
+                vm.CompletedCount = vm.Rows.Count(r => r.Status == "Completed");
+                vm.PendingCount = vm.Rows.Count(r => r.Status == "Sent" || r.Status == "Viewed");
+                vm.ExpiredVoidedCount = vm.Rows.Count(r =>
+                    r.Status == "Expired" || r.Status == "Voided" || r.Status == "Declined");
+
+                var sentRows = vm.Rows.Where(r => r.Status != "Draft").ToList();
+                vm.CompletionRate = sentRows.Count > 0
+                    ? Math.Round((double)vm.CompletedCount / sentRows.Count * 100, 1)
+                    : 0;
+
+                var completedTimes = vm.Rows
+                    .Where(r => r.DaysToComplete.HasValue)
+                    .Select(r => r.DaysToComplete!.Value)
+                    .ToList();
+                vm.AvgDaysToComplete = completedTimes.Any()
+                    ? Math.Round(completedTimes.Average(), 1)
+                    : 0;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to run envelope activity report");
+                vm.ErrorMessage = "Failed to load report data. Please try again.";
+                vm.ShowResults = false;
+            }
+
+            return View("RunEnvelope", vm);
         }
     }
 }

@@ -447,31 +447,26 @@ public sealed class EnvelopeService : IEnvelopeService
     {
         var q = _db.SignEnvelopes.AsNoTracking();
         if (!string.IsNullOrWhiteSpace(status)) q = q.Where(e => e.Status == status);
-        if (!string.IsNullOrWhiteSpace(office)) q = q.Where(e => e.LocationCode == office);
+        // The explicit office filter is only meaningful in the "all" scope where the user can browse
+        // across locations.  For "branch" and "mine" the location is already enforced below.
+        if (!string.IsNullOrWhiteSpace(office) && scope == "all")
+            q = q.Where(e => e.LocationCode == office);
 
-        // Role-based filtering
-        // Scope: "mine" = created by user, "branch" = same location, "all" = no filter (admin/GM only)
-        if (!string.IsNullOrWhiteSpace(scope) && scope == "mine" && createdByUserId.HasValue)
+        // Scope-based filtering:
+        //   "mine"   → only envelopes created by this user
+        //   "branch" → all envelopes for the user's current location (default for every role)
+        //   "all"    → no additional filter (admin / GM only, granted by the controller)
+        if (scope == "mine" && createdByUserId.HasValue)
         {
             q = q.Where(e => e.CreatedByUsers_ID == createdByUserId.Value);
         }
-        else if (!string.IsNullOrWhiteSpace(scope) && scope == "branch" && userLocationId.HasValue)
+        else if (scope == "branch" && userLocationId.HasValue)
         {
-            // For Office Managers: show all envelopes from their branch
             var locationCode = GetLocationCodeById(userLocationId.Value);
             if (!string.IsNullOrWhiteSpace(locationCode))
-            {
                 q = q.Where(e => e.LocationCode == locationCode);
-            }
         }
-        // For regular staff (Office, Sales) without explicit scope, default to "mine"
-        else if (userRoleId.HasValue && (userRoleId.Value == 2 || userRoleId.Value == 6) && createdByUserId.HasValue)
-        {
-            // RoleId 2 = Sales, RoleId 6 = Office Staff - see only their own envelopes by default
-            q = q.Where(e => e.CreatedByUsers_ID == createdByUserId.Value);
-        }
-        // Admin (1), General Manager (4), Sales Admin (3), Office Manager (5), Regional Manager (8), President (7) can see all by default
-        // No additional filtering needed for "all" scope
+        // scope == "all" → no additional filter
 
         var total = await q.CountAsync();
         var envelopes = await q

@@ -2,14 +2,24 @@
 @model IReadOnlyList<SalesMetrics.Models.Signing.EnvelopeListItemVm>
 @{
     ViewData["Title"] = "E-Sign Envelopes";
-    var scope = ViewBag.Scope?.ToString() ?? "all";
+    var scope = ViewBag.Scope?.ToString() ?? "branch";
     var status = ViewBag.Status?.ToString() ?? "";
     var office = ViewBag.Office?.ToString() ?? "";
     var roleId = (int)(ViewBag.RoleId ?? 0);
 
-    // Determine which scopes are available based on role
+    // Everyone can see their location's envelopes (branch scope).
+    // Only managers / admins can widen the view to all locations.
     var canViewAll = roleId == 1 || roleId == 3 || roleId == 4 || roleId == 5 || roleId == 7 || roleId == 8;
-    var canViewBranch = roleId == 5; // Office Manager
+
+    // Resolve the display name of the current active location for the branch button label
+    int currentLocationId = (int)(ViewBag.CurrentLocationId ?? 0);
+    string currentLocationLabel = "My Location";
+    if (ViewBag.Locations != null && currentLocationId > 0)
+    {
+        var locs = (Dictionary<int, (string Code, string Name)>)ViewBag.Locations;
+        if (locs.TryGetValue(currentLocationId, out var locInfo))
+            currentLocationLabel = $"{locInfo.Code} – {locInfo.Name}";
+    }
 }
 <div class="card mb-3 border-0 shadow-sm">
     <div class="card-header bg-warning text-dark fw-bold">E-Sign Hub</div>
@@ -22,24 +32,27 @@
         </div>
 
         @* Scope Filter Buttons *@
-        <div class="mb-3">
+        <div class="mb-3 d-flex align-items-center gap-3 flex-wrap">
             <div class="btn-group" role="group" aria-label="Envelope scope filter">
-                <a class="btn btn-sm @(scope == "mine" ? "btn-primary" : "btn-outline-primary")"
-                   asp-action="Index" asp-route-scope="mine" asp-route-status="@status" asp-route-office="@office">
-                    My Envelopes
+                @* "My Location" – default for every user; shows all envelopes for the currently selected branch *@
+                <a class="btn btn-sm @(scope == "branch" ? "btn-primary" : "btn-outline-primary")"
+                   asp-action="Index" asp-route-scope="branch" asp-route-status="@status" asp-route-office="@office"
+                   title="Show all envelopes for your currently selected branch">
+                    <i class="fas fa-building me-1"></i>@currentLocationLabel
                 </a>
-                @if (canViewBranch)
-                {
-                    <a class="btn btn-sm @(scope == "branch" ? "btn-primary" : "btn-outline-primary")"
-                       asp-action="Index" asp-route-scope="branch" asp-route-status="@status" asp-route-office="@office">
-                        Branch Envelopes
-                    </a>
-                }
+                @* "My Envelopes" – only envelopes this user created *@
+                <a class="btn btn-sm @(scope == "mine" ? "btn-primary" : "btn-outline-primary")"
+                   asp-action="Index" asp-route-scope="mine" asp-route-status="@status" asp-route-office="@office"
+                   title="Show only envelopes you created">
+                    <i class="fas fa-user me-1"></i>My Envelopes
+                </a>
+                @* "All Locations" – admin / manager only *@
                 @if (canViewAll)
                 {
                     <a class="btn btn-sm @(scope == "all" ? "btn-primary" : "btn-outline-primary")"
-                       asp-action="Index" asp-route-scope="all" asp-route-status="@status" asp-route-office="@office">
-                        All Envelopes
+                       asp-action="Index" asp-route-scope="all" asp-route-status="@status" asp-route-office="@office"
+                       title="Show envelopes from all branches (admin/manager)">
+                        <i class="fas fa-globe me-1"></i>All Locations
                     </a>
                 }
             </div>
@@ -60,21 +73,25 @@
                     <option value="Voided" selected="@(status == "Voided" ? "selected" : null)">Voided</option>
                 </select>
             </div>
-            <div class="col-md-3">
-                <label class="form-label small">Filter by Branch:</label>
-                <select class="form-select form-select-sm" id="officeFilter" onchange="applyFilters()">
-                    <option value="">All Branches</option>
-                    @if (ViewBag.Locations != null)
-                    {
-                        @foreach (var loc in (Dictionary<int, (string Code, string Name)>)ViewBag.Locations)
+            @* Branch filter is only relevant in "All Locations" mode — in branch/mine scope the location is fixed *@
+            @if (scope == "all" && canViewAll)
+            {
+                <div class="col-md-3">
+                    <label class="form-label small">Filter by Branch:</label>
+                    <select class="form-select form-select-sm" id="officeFilter" onchange="applyFilters()">
+                        <option value="">All Branches</option>
+                        @if (ViewBag.Locations != null)
                         {
-                            <option value="@loc.Value.Code" selected="@(office == loc.Value.Code ? "selected" : null)">
-                                @loc.Value.Code - @loc.Value.Name
-                            </option>
+                            @foreach (var loc in (Dictionary<int, (string Code, string Name)>)ViewBag.Locations)
+                            {
+                                <option value="@loc.Value.Code" selected="@(office == loc.Value.Code ? "selected" : null)">
+                                    @loc.Value.Code - @loc.Value.Name
+                                </option>
+                            }
                         }
-                    }
-                </select>
-            </div>
+                    </select>
+                </div>
+            }
             <div class="col-md-2 d-flex align-items-end">
                 <a class="btn btn-sm btn-outline-secondary" asp-action="Index" asp-route-scope="@scope">Clear Filters</a>
             </div>
@@ -122,7 +139,8 @@
     <script>
         function applyFilters() {
             const status = document.getElementById('statusFilter').value;
-            const office = document.getElementById('officeFilter').value;
+            const officeEl = document.getElementById('officeFilter');
+            const office = officeEl ? officeEl.value : '';
             const scope = '@scope';
 
             // Build query string

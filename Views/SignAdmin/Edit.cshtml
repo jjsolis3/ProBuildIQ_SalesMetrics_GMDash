@@ -5,67 +5,70 @@
 }
 
 <div class="card border-0 shadow-sm mb-4">
-    <div class="card-header bg-warning text-dark fw-bold">
-        Edit Envelope #@Model.EnvelopeId
+    <div class="card-header bg-warning text-dark fw-bold d-flex justify-content-between align-items-center">
+        <span>Edit Envelope #@Model.EnvelopeId</span>
+        <div class="d-flex gap-2 align-items-center">
+            @if (!string.IsNullOrWhiteSpace(Model.LocationCode))
+            {
+                <span class="badge bg-secondary">@Model.LocationCode</span>
+            }
+            <span class="badge rounded-pill
+                @(Model.Status == "Sent"   ? "bg-primary" :
+                  Model.Status == "Viewed" ? "bg-info text-dark" :
+                  "bg-warning text-dark")">@Model.Status</span>
+        </div>
     </div>
     <div class="card-body">
-        @* Read-only context card *@
-        <div class="card border-0 bg-light mb-4">
-            <div class="card-body py-2">
-                <div class="row g-2 small">
-                    @if (!string.IsNullOrWhiteSpace(Model.PropertyName))
-                    {
-                        <div class="col-md-4">
-                            <span class="text-muted">Property:</span>
-                            <strong>@Model.PropertyName</strong>
-                        </div>
-                    }
-                    @if (!string.IsNullOrWhiteSpace(Model.OrderNumber))
-                    {
-                        <div class="col-md-3">
-                            <span class="text-muted">Order #:</span>
-                            <strong>@Model.OrderNumber</strong>
-                        </div>
-                    }
-                    @if (!string.IsNullOrWhiteSpace(Model.LocationCode))
-                    {
-                        <div class="col-md-2">
-                            <span class="text-muted">Branch:</span>
-                            <strong>@Model.LocationCode</strong>
-                        </div>
-                    }
-                    <div class="col-md-3">
-                        <span class="text-muted">Status:</span>
-                        <span class="badge rounded-pill
-                            @(Model.Status == "Sent" ? "bg-primary" :
-                              Model.Status == "Viewed" ? "bg-info text-dark" :
-                              "bg-warning text-dark")">
-                            @Model.Status
-                        </span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <form asp-action="Edit" asp-route-id="@Model.EnvelopeId" method="post">
             @Html.AntiForgeryToken()
 
-            @* Envelope fields *@
-            <div class="row g-3 mb-4">
+            @* ── Subject & Message ───────────────────────────────────────────── *@
+            <div class="row g-3 mb-3">
                 <div class="col-md-12">
                     <label class="form-label fw-semibold">Subject</label>
                     <input asp-for="Subject" class="form-control" />
                     <span asp-validation-for="Subject" class="text-danger small"></span>
                 </div>
                 <div class="col-md-12">
-                    <label class="form-label fw-semibold">Message Body <span class="text-muted fw-normal">(Optional)</span></label>
-                    <textarea asp-for="MessageBody" class="form-control" rows="3"></textarea>
+                    <label class="form-label fw-semibold">Message <span class="text-muted fw-normal small">(Optional — shown to recipients)</span></label>
+                    <textarea asp-for="MessageBody" class="form-control" rows="3"
+                              placeholder="Enter a message for recipients..."></textarea>
+                </div>
+            </div>
+
+            @* ── Property / Order context ─────────────────────────────────────── *@
+            <div class="card border-0 bg-light mb-4">
+                <div class="card-header bg-light fw-semibold small text-muted py-2">
+                    Property &amp; Order Details
+                    <span class="fw-normal ms-1">(correct if entered incorrectly)</span>
+                </div>
+                <div class="card-body py-3">
+                    <div class="row g-3">
+                        <div class="col-md-5">
+                            <label class="form-label small fw-semibold">Property Name</label>
+                            <input asp-for="PropertyName" class="form-control form-control-sm"
+                                   placeholder="Property name (free text)" />
+                            <div class="form-text small">
+                                Used when no ERP match was found, or to correct a wrong entry.
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-semibold">Order Number</label>
+                            <input asp-for="OrderNumber" class="form-control form-control-sm"
+                                   placeholder="e.g. 90805.4" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-semibold">Unit Number</label>
+                            <input asp-for="UnitNumber" class="form-control form-control-sm"
+                                   placeholder="e.g. 101" />
+                        </div>
+                    </div>
                 </div>
             </div>
 
             <hr />
 
-            @* Recipients section *@
+            @* ── Recipients ──────────────────────────────────────────────────── *@
             <div class="fw-bold mb-3">Recipients</div>
 
             @for (int i = 0; i < Model.Recipients.Count; i++)
@@ -74,9 +77,9 @@
 
                 @* Hidden fields for binding *@
                 <input type="hidden" name="Recipients[@i].RecipientId" value="@r.RecipientId" />
-                <input type="hidden" name="Recipients[@i].Role" value="@r.Role" />
+                <input type="hidden" name="Recipients[@i].Role"        value="@r.Role" />
                 <input type="hidden" name="Recipients[@i].SignerOrder" value="@r.SignerOrder" />
-                <input type="hidden" name="Recipients[@i].HasSigned" value="@r.HasSigned.ToString().ToLower()" />
+                <input type="hidden" name="Recipients[@i].HasSigned"   value="@r.HasSigned.ToString().ToLower()" />
 
                 <div class="card border mb-3 @(r.HasSigned ? "border-success" : "border-secondary")">
                     <div class="card-header d-flex justify-content-between align-items-center py-2
@@ -97,7 +100,6 @@
                     <div class="card-body">
                         @if (r.HasSigned)
                         {
-                            @* Signed recipients: read-only display *@
                             <div class="row g-2 small text-muted">
                                 <div class="col-md-4"><strong>Name:</strong> @r.FullName</div>
                                 <div class="col-md-4"><strong>Email:</strong> @r.Email</div>
@@ -107,12 +109,11 @@
                                 }
                             </div>
                             <div class="small text-success mt-1">
-                                <i class="fas fa-lock me-1"></i>This recipient has already signed and cannot be modified.
+                                <i class="fas fa-lock me-1"></i>Already signed — cannot be modified.
                             </div>
                         }
                         else
                         {
-                            @* Unsigned recipients: editable *@
                             <div class="row g-2">
                                 <div class="col-md-4">
                                     <label class="form-label small fw-semibold">Full Name</label>
@@ -141,7 +142,7 @@
                                 </div>
                                 <div class="small text-muted mt-1">
                                     <i class="fas fa-info-circle me-1"></i>
-                                    Changing the email address will automatically regenerate the signing link and send a fresh invitation.
+                                    Changing the email address automatically regenerates the signing link and sends a fresh invitation.
                                 </div>
                             </div>
                         }
@@ -163,16 +164,14 @@
 
 @section Scripts {
 <script>
-    // When an email field changes, auto-check the "Re-send invite" checkbox for that recipient
-    document.querySelectorAll('input[type="email"][id^="email-"]').forEach(function(emailInput) {
+    // Auto-check "Re-send invite" when email changes
+    document.querySelectorAll('input[type="email"][id^="email-"]').forEach(function (emailInput) {
         const idx = emailInput.id.replace('email-', '');
         const resendCheckbox = document.getElementById('resend-' + idx);
         const originalEmail = emailInput.value;
-
         emailInput.addEventListener('change', function () {
-            if (resendCheckbox && emailInput.value.trim() !== originalEmail) {
+            if (resendCheckbox && emailInput.value.trim() !== originalEmail)
                 resendCheckbox.checked = true;
-            }
         });
     });
 </script>

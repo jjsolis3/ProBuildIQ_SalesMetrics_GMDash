@@ -364,6 +364,7 @@ public sealed class EnvelopeService : IEnvelopeService
     {
         var env = await _db.SignEnvelopes
             .Include(e => e.Recipients)
+            .Include(e => e.Fields)
             .FirstOrDefaultAsync(e => e.EnvelopeId == vm.EnvelopeId)
             ?? throw new InvalidOperationException($"Envelope {vm.EnvelopeId} not found");
 
@@ -384,6 +385,43 @@ public sealed class EnvelopeService : IEnvelopeService
         {
             env.MessageBody = vm.MessageBody;
             changes.Add("MessageBody");
+        }
+
+        // ── Context fields (correctable after send) ─────────────────────────
+        var newPropertyName = string.IsNullOrWhiteSpace(vm.PropertyName) ? null : vm.PropertyName.Trim();
+        if (env.PropertyName != newPropertyName)
+        {
+            env.PropertyName = newPropertyName;
+            changes.Add("PropertyName");
+        }
+
+        var newOrderNumber = string.IsNullOrWhiteSpace(vm.OrderNumber) ? null : vm.OrderNumber.Trim();
+        if (env.OrderNumber != newOrderNumber)
+        {
+            env.OrderNumber = newOrderNumber;
+            changes.Add("OrderNumber");
+        }
+
+        // UnitNumber lives in SignFields; upsert the row
+        var newUnitNumber = string.IsNullOrWhiteSpace(vm.UnitNumber) ? null : vm.UnitNumber.Trim();
+        var unitField = env.Fields?.FirstOrDefault(f => f.FieldKey == "UnitNumber");
+        if (unitField != null)
+        {
+            if (unitField.FieldValue != newUnitNumber)
+            {
+                unitField.FieldValue = newUnitNumber ?? "";
+                changes.Add("UnitNumber");
+            }
+        }
+        else if (!string.IsNullOrEmpty(newUnitNumber))
+        {
+            _db.SignFields.Add(new SignField
+            {
+                EnvelopeId  = env.EnvelopeId,
+                FieldKey    = "UnitNumber",
+                FieldValue  = newUnitNumber
+            });
+            changes.Add("UnitNumber");
         }
 
         env.ModifiedByUsers_ID = modifiedByUserId;

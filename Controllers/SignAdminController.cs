@@ -199,14 +199,27 @@ public class SignAdminController : Controller
             return RedirectToAction(nameof(Details), new { id });
         }
 
+        // Strip the old "Envelope for: ..." block that was auto-appended before Feb 2026.
+        // Regex matches from the first blank-line-then-"Envelope for:" to end of string.
+        var messageBody = details.MessageBody;
+        if (!string.IsNullOrWhiteSpace(messageBody))
+        {
+            messageBody = System.Text.RegularExpressions.Regex.Replace(
+                messageBody,
+                @"\n*Envelope for:\s*\n[\s\S]*$",
+                "").TrimEnd();
+            if (string.IsNullOrWhiteSpace(messageBody)) messageBody = null;
+        }
+
         var vm = new EditEnvelopeVm
         {
             EnvelopeId   = details.EnvelopeId,
             Subject      = details.Subject,
-            MessageBody  = details.MessageBody,
+            MessageBody  = messageBody,
             Status       = details.Status,
             PropertyName = details.PropertyName,
             OrderNumber  = details.OrderNumber,
+            UnitNumber   = details.UnitNumber,
             LocationCode = details.LocationCode,
             Recipients   = details.Recipients.Select(r => new EditRecipientVm
             {

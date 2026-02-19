@@ -12,13 +12,17 @@ public sealed class EditEnvelopeVm
 {
     public long EnvelopeId { get; set; }
 
+    // ── Editable envelope fields ─────────────────────────────────────────────
     public string Subject { get; set; } = default!;
     public string? MessageBody { get; set; }
 
-    // Read-only context (shown on the form, not editable)
-    public string Status { get; set; } = default!;
+    // Editable context — can be corrected if entered wrong at creation
     public string? PropertyName { get; set; }
     public string? OrderNumber { get; set; }
+    public string? UnitNumber { get; set; }
+
+    // ── Read-only display (cannot change after send) ─────────────────────────
+    public string Status { get; set; } = default!;
     public string? LocationCode { get; set; }
 
     public List<EditRecipientVm> Recipients { get; set; } = new();

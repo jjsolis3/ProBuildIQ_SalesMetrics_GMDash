@@ -10,6 +10,7 @@ public sealed class SignEnvelope
 
     // Business context
     public int? PropertyID { get; set; }
+    public string? PropertyName { get; set; } // Free-text fallback when no PropertyID match found in ERP
     public int? OrderId { get; set; }
     public string? OrderNumber { get; set; } // e.g., "90805.4" - display friendly order number
     public string? CustomerNumber { get; set; }

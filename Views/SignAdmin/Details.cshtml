@@ -43,6 +43,16 @@
                     </div>
                 }
 
+                @if (!string.IsNullOrWhiteSpace(Model.MessageBody))
+                {
+                    <div class="card border-0 mb-3">
+                        <div class="card-header bg-gradient" style="background:linear-gradient(90deg,#ff8c00,#ffb347)">Message</div>
+                        <div class="card-body">
+                            <p class="mb-0" style="white-space:pre-wrap;">@Model.MessageBody</p>
+                        </div>
+                    </div>
+                }
+
                 <div class="card border-0 mb-3">
                     <div class="card-header bg-gradient" style="background:linear-gradient(90deg,#ff8c00,#ffb347)">Recipients</div>
                     <ul class="list-group list-group-flush">

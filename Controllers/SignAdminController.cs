@@ -55,7 +55,7 @@ public class SignAdminController : Controller
     }
 
     // /SignAdmin
-    public async Task<IActionResult> Index(string? status, string? office, string? scope, int page = 1, int pageSize = 20)
+    public async Task<IActionResult> Index(string? status, string? office, string? scope, int page = 1, int pageSize = 2000)
     {
         var userId = GetCurrentUserId();
         var roleId = GetCurrentRoleId();
@@ -66,6 +66,8 @@ public class SignAdminController : Controller
         if (string.IsNullOrWhiteSpace(scope))
             scope = "branch";
 
+        // DataTables handles client-side pagination/search/sort so we load all rows for the
+        // current filter (status/scope/office).  The 2000 ceiling is a generous safety cap.
         var (rows, total) = await _svc.SearchAsync(status, office, page, pageSize, userId, scope, roleId, locationId);
 
         ViewBag.Total = total;

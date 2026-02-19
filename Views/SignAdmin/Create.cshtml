@@ -77,7 +77,11 @@
                     <label class="form-label">Property</label>
                     <input id="propSearch" class="form-control" placeholder="Search by property name..." autocomplete="off" />
                     <input type="hidden" asp-for="PropertyID" id="propId" />
+                    <input type="hidden" asp-for="CustomPropertyName" id="customPropertyName" />
                     <div id="propResults" class="list-group position-absolute w-100" style="z-index: 1050;"></div>
+                    <div class="form-text text-muted small">
+                        If no match found, the typed name will still be saved with the envelope.
+                    </div>
                 </div>
 
                 <div class="col-md-3">
@@ -375,6 +379,18 @@ Envelope for:
 
         // Register cleanup on page unload
         window.addEventListener('beforeunload', cleanupCreateEventListeners);
+    </script>
+
+    <script>
+        // On form submit: if no ERP property was selected but text was typed, capture it as CustomPropertyName
+        document.querySelector('form[method="post"]').addEventListener('submit', function () {
+            const propIdInput = document.getElementById('propId');
+            const propSearchInput = document.getElementById('propSearch');
+            const customPropertyName = document.getElementById('customPropertyName');
+            if (!propIdInput.value && propSearchInput.value.trim()) {
+                customPropertyName.value = propSearchInput.value.trim();
+            }
+        });
     </script>
 
 }

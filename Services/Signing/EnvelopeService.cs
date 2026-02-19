@@ -52,6 +52,7 @@ public sealed class EnvelopeService : IEnvelopeService
             Subject = vm.Subject,
             MessageBody = vm.MessageBody,
             PropertyID = vm.PropertyID,
+            PropertyName = !vm.PropertyID.HasValue ? vm.CustomPropertyName : null, // only store free-text when no ERP match
             OrderId = vm.OrderId,
             OrderNumber = orderNumber,
             CustomerNumber = vm.CustomerNumber,
@@ -526,12 +527,13 @@ public sealed class EnvelopeService : IEnvelopeService
             .FirstOrDefaultAsync(x => x.EnvelopeId == envelopeId);
         if (e is null) return null;
 
-        // Fetch property name if PropertyID is set
+        // Fetch property name from ERP; fall back to stored free-text name
         string? propertyName = null;
         if (e.PropertyID.HasValue)
         {
             propertyName = await _merge.GetPropertyNameAsync(e.PropertyID.Value);
         }
+        propertyName ??= e.PropertyName;
 
         // Get UnitNumber from fields
         var unitNumber = e.Fields?.FirstOrDefault(f => f.FieldKey == "UnitNumber")?.FieldValue;
@@ -615,13 +617,14 @@ public sealed class EnvelopeService : IEnvelopeService
                 e.CompletedAtUtc,
                 e.ExpiresAtUtc,
                 e.PropertyID,
+                e.PropertyName,
                 e.OrderNumber,
                 RecipientCount = e.Recipients.Count,
                 SignedCount = e.Recipients.Count(r => r.SignedAtUtc != null),
             })
             .ToListAsync();
 
-        // Populate PropertyName from ERP for each envelope (cached to avoid N+1 calls)
+        // Populate PropertyName from ERP (cached to avoid N+1 calls); fall back to stored free-text
         var propertyNameCache = new Dictionary<int, string?>();
         var rows = new List<EnvelopeListItemVm>();
         foreach (var e in envelopes)
@@ -635,6 +638,7 @@ public sealed class EnvelopeService : IEnvelopeService
                     propertyNameCache[e.PropertyID.Value] = propertyName;
                 }
             }
+            propertyName ??= e.PropertyName;
 
             rows.Add(new EnvelopeListItemVm
             {
@@ -667,18 +671,22 @@ public sealed class EnvelopeService : IEnvelopeService
         if (r is null || (r.AccessTokenExpiresAt is not null && r.AccessTokenExpiresAt < DateTime.UtcNow))
             return null;
 
-        // record "Opened"
+        // Record "Opened" only the first time (every page load calls this, so guard with null check)
+        bool firstOpen = r.ViewedAtUtc is null;
         r.ViewedAtUtc ??= DateTime.UtcNow;
         r.IPAddressViewed ??= ip;
         r.UserAgentViewed ??= userAgent;
 
-        _db.SignEvents.Add(new SignEvent
+        if (firstOpen)
         {
-            EnvelopeId = r.EnvelopeId,
-            RecipientId = r.RecipientId,
-            EventType = "Opened",
-            OccurredAtUtc = DateTime.UtcNow
-        });
+            _db.SignEvents.Add(new SignEvent
+            {
+                EnvelopeId = r.EnvelopeId,
+                RecipientId = r.RecipientId,
+                EventType = "Opened",
+                OccurredAtUtc = DateTime.UtcNow
+            });
+        }
         await _db.SaveChangesAsync();
 
         // find if a tenant recipient exists

@@ -13,6 +13,7 @@ public sealed class CreateEnvelopeVm
 
     // Context (optional)
     public int? PropertyID { get; set; }
+    public string? CustomPropertyName { get; set; } // Free-text name used when no ERP property is selected
     public int? OrderId { get; set; }
     public string? CustomerNumber { get; set; }
     public string? LocationCode { get; set; }

@@ -98,7 +98,7 @@
         </div>
 
         <div class="table-responsive">
-            <table class="table align-middle">
+            <table id="envelopesTable" class="table align-middle" style="width:100%">
                 <thead class="table-warning">
                     <tr>
                         <th>ID</th>
@@ -109,7 +109,7 @@
                         <th>Recipients</th>
                         <th>Sent</th>
                         <th>Completed</th>
-                        <th></th>
+                        <th class="no-sort"></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -121,11 +121,20 @@
                             <td><span class="text-muted small">@(r.PropertyName ?? "—")</span></td>
                             <td><span class="text-muted small">@(r.OrderNumber ?? "—")</span></td>
                             <td>
-                                <span class="badge rounded-pill @(r.Status == "Completed" ? "bg-success" : "bg-warning text-dark")">@r.Status</span>
+                                @{
+                                    var badgeClass = r.Status switch {
+                                        "Completed" => "bg-success",
+                                        "Voided"    => "bg-secondary",
+                                        "Declined"  => "bg-danger",
+                                        "Expired"   => "bg-dark",
+                                        _           => "bg-warning text-dark"
+                                    };
+                                }
+                                <span class="badge rounded-pill @badgeClass">@r.Status</span>
                             </td>
                             <td>@r.SignedCount / @r.RecipientCount</td>
-                            <td>@r.SentAtUtc?.ToLocalTime().ToString("g")</td>
-                            <td>@r.CompletedAtUtc?.ToLocalTime().ToString("g")</td>
+                            <td data-order="@(r.SentAtUtc?.Ticks ?? 0)">@r.SentAtUtc?.ToLocalTime().ToString("g")</td>
+                            <td data-order="@(r.CompletedAtUtc?.Ticks ?? 0)">@r.CompletedAtUtc?.ToLocalTime().ToString("g")</td>
                             <td><a class="btn btn-sm btn-outline-primary" asp-action="Details" asp-route-id="@r.EnvelopeId">Open</a></td>
                         </tr>
                     }
@@ -136,6 +145,10 @@
 </div>
 
 @section Scripts {
+    @* DataTables *@
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.5/css/jquery.dataTables.min.css" />
+    <script src="https://cdn.datatables.net/1.13.5/js/jquery.dataTables.min.js"></script>
+
     <script>
         function applyFilters() {
             const status = document.getElementById('statusFilter').value;
@@ -143,12 +156,31 @@
             const office = officeEl ? officeEl.value : '';
             const scope = '@scope';
 
-            // Build query string
             let url = '/SignAdmin?scope=' + encodeURIComponent(scope);
             if (status) url += '&status=' + encodeURIComponent(status);
             if (office) url += '&office=' + encodeURIComponent(office);
 
             window.location.href = url;
         }
+
+        $(document).ready(function () {
+            $('#envelopesTable').DataTable({
+                pageLength: 25,
+                lengthMenu: [10, 25, 50, 100],
+                order: [[6, 'desc']], // default sort: Sent date descending
+                columnDefs: [
+                    { orderable: false, targets: -1 } // disable sort on the action column
+                ],
+                dom: '<"d-flex justify-content-between align-items-center mb-2"lf>rtip',
+                language: {
+                    lengthMenu:  'Show _MENU_ envelopes',
+                    info:        'Showing _START_ to _END_ of _TOTAL_ envelopes',
+                    infoEmpty:   'No envelopes found',
+                    infoFiltered:'(filtered from _MAX_ total)',
+                    search:      'Search:',
+                    zeroRecords: 'No matching envelopes found'
+                }
+            });
+        });
     </script>
 }

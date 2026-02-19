@@ -75,9 +75,8 @@
 
                 <div class="col-md-3 position-relative">
                     <label class="form-label">Property</label>
-                    <input id="propSearch" class="form-control" placeholder="Search by property name..." autocomplete="off" />
+                    <input id="propSearch" name="CustomPropertyName" class="form-control" placeholder="Search by property name..." autocomplete="off" />
                     <input type="hidden" asp-for="PropertyID" id="propId" />
-                    <input type="hidden" asp-for="CustomPropertyName" id="customPropertyName" />
                     <div id="propResults" class="list-group position-absolute w-100" style="z-index: 1050;"></div>
                     <div class="form-text text-muted small">
                         Search ERP, or type a name and fill in Order&nbsp;# and Unit below.
@@ -332,16 +331,5 @@
         window.addEventListener('beforeunload', cleanupCreateEventListeners);
     </script>
 
-    <script>
-        // On submit: if no ERP property was selected but text was typed, capture it as CustomPropertyName
-        document.querySelector('form[method="post"]').addEventListener('submit', function () {
-            const propIdInput   = document.getElementById('propId');
-            const propSearchInput = document.getElementById('propSearch');
-            const customPropertyName = document.getElementById('customPropertyName');
-            if (!propIdInput.value && propSearchInput.value.trim()) {
-                customPropertyName.value = propSearchInput.value.trim();
-            }
-        });
-    </script>
-
 }
+

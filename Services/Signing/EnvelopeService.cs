@@ -293,12 +293,45 @@ public sealed class EnvelopeService : IEnvelopeService
         env.SentAtUtc = env.SentAtUtc ?? DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
+        // Fetch property context once before the recipient loop
+        string? sendPropertyName = null;
+        string? sendPropertyAddress = null;
+        if (env.PropertyID.HasValue)
+        {
+            try
+            {
+                sendPropertyName    = await _merge.GetPropertyNameAsync(env.PropertyID.Value);
+                sendPropertyAddress = await _merge.GetPropertyAddressAsync(env.PropertyID.Value);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not fetch property for invitation email (envelope {EnvelopeId})", envelopeId);
+            }
+        }
+        sendPropertyName ??= env.PropertyName; // fall back to stored free-text name
+
+        // Build property/order context block (shown in email, not part of MessageBody)
+        var contextRows = "";
+        if (!string.IsNullOrWhiteSpace(sendPropertyName))
+            contextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Property</td><td style=\"padding:4px 0;font-size:13px;\">{HtmlEncode(sendPropertyName)}</td></tr>";
+        if (!string.IsNullOrWhiteSpace(sendPropertyAddress))
+            contextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Address</td><td style=\"padding:4px 0;font-size:13px;\">{HtmlEncode(sendPropertyAddress)}</td></tr>";
+        if (!string.IsNullOrWhiteSpace(env.OrderNumber))
+            contextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Order #</td><td style=\"padding:4px 0;font-size:13px;\">{HtmlEncode(env.OrderNumber)}</td></tr>";
+        if (!string.IsNullOrWhiteSpace(env.LocationCode))
+            contextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Branch</td><td style=\"padding:4px 0;font-size:13px;\">{HtmlEncode(env.LocationCode)}</td></tr>";
+
+        var contextHtml = string.IsNullOrEmpty(contextRows) ? "" : $@"
+            <table cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:12px 0 16px 0;border-left:3px solid #f59e0b;padding-left:12px;"">
+                {contextRows}
+            </table>";
+
         foreach (var r in env.Recipients.OrderBy(x => x.SignerOrder))
         {
             var baseUrl = _appSettings.BaseUrl.TrimEnd('/');
             var link = $"{baseUrl}/sign/{r.AccessToken}";
 
-            // Build email body with optional custom message
+            // Optional staff message
             var messageHtml = !string.IsNullOrWhiteSpace(env.MessageBody)
                 ? $"<p style=\"margin:12px 0;font-size:14px;color:#374151;\">{env.MessageBody}</p>"
                 : "";
@@ -306,7 +339,8 @@ public sealed class EnvelopeService : IEnvelopeService
             var innerHtml = $@"
                 <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Document Signing Request</h2>
                 <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Hello {r.FullName},</p>
-                <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Please review and sign the document: <strong>{env.Subject}</strong>.</p>
+                <p style=""margin:0 0 8px 0;font-size:15px;color:#374151;"">Please review and sign the document: <strong>{env.Subject}</strong>.</p>
+                {contextHtml}
                 {messageHtml}
                 <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:24px 0;"">
                   <tr>
@@ -407,6 +441,27 @@ public sealed class EnvelopeService : IEnvelopeService
         await _db.SaveChangesAsync();
 
         // ── Re-send invitations to affected unsigned recipients ─────────────
+        // Build property context block once for all recipients
+        string? editResendPropertyName = null;
+        string? editResendPropertyAddress = null;
+        if (env.PropertyID.HasValue)
+        {
+            try { editResendPropertyName = await _merge.GetPropertyNameAsync(env.PropertyID.Value); editResendPropertyAddress = await _merge.GetPropertyAddressAsync(env.PropertyID.Value); }
+            catch { /* non-fatal */ }
+        }
+        editResendPropertyName ??= env.PropertyName;
+
+        var editContextRows = "";
+        if (!string.IsNullOrWhiteSpace(editResendPropertyName))
+            editContextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Property</td><td style=\"padding:4px 0;font-size:13px;\">{HtmlEncode(editResendPropertyName)}</td></tr>";
+        if (!string.IsNullOrWhiteSpace(editResendPropertyAddress))
+            editContextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Address</td><td style=\"padding:4px 0;font-size:13px;\">{HtmlEncode(editResendPropertyAddress)}</td></tr>";
+        if (!string.IsNullOrWhiteSpace(env.OrderNumber))
+            editContextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Order #</td><td style=\"padding:4px 0;font-size:13px;\">{HtmlEncode(env.OrderNumber)}</td></tr>";
+        if (!string.IsNullOrWhiteSpace(env.LocationCode))
+            editContextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Branch</td><td style=\"padding:4px 0;font-size:13px;\">{HtmlEncode(env.LocationCode)}</td></tr>";
+        var editContextHtml = string.IsNullOrEmpty(editContextRows) ? "" : $@"<table cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:12px 0 16px 0;border-left:3px solid #f59e0b;padding-left:12px;"">{editContextRows}</table>";
+
         foreach (var recipient in recipientsToResend)
         {
             try
@@ -421,10 +476,11 @@ public sealed class EnvelopeService : IEnvelopeService
                 var innerHtml = $@"
                     <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Updated Signing Request</h2>
                     <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Hello {recipient.FullName},</p>
-                    <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">
+                    <p style=""margin:0 0 8px 0;font-size:15px;color:#374151;"">
                         Your signing invitation for <strong>{env.Subject}</strong> has been updated.
                         Please use the new link below to review and sign the document.
                     </p>
+                    {editContextHtml}
                     {messageHtml}
                     <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:24px 0;"">
                       <tr>
@@ -693,9 +749,26 @@ public sealed class EnvelopeService : IEnvelopeService
         var hasTenant = await _db.SignRecipients
             .AnyAsync(x => x.EnvelopeId == r.EnvelopeId && x.Role == "Tenant");
 
-        // (optional) property summary; return null if you don't have this yet
+        // Populate property summary for the review page
         PropertyVm? prop = null;
-        // prop = await _merge.GetPropertySummaryAsync(r.Envelope.PropertyID); // if you implement it
+        if (r.Envelope.PropertyID.HasValue)
+        {
+            try
+            {
+                var pName    = await _merge.GetPropertyNameAsync(r.Envelope.PropertyID.Value);
+                var pAddress = await _merge.GetPropertyAddressAsync(r.Envelope.PropertyID.Value);
+                if (!string.IsNullOrEmpty(pName))
+                    prop = new PropertyVm { PropertyId = r.Envelope.PropertyID.Value, Name = pName, Address = pAddress ?? "" };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not fetch property for review page (envelope {EnvelopeId})", r.EnvelopeId);
+            }
+        }
+        // Fall back to stored free-text property name when no ERP match
+        prop ??= string.IsNullOrWhiteSpace(r.Envelope.PropertyName)
+            ? null
+            : new PropertyVm { Name = r.Envelope.PropertyName };
 
         return new ReviewVm
         {

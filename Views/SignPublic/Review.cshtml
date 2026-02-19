@@ -46,16 +46,30 @@
                 </div>
             }
 
-            <!-- Property Information -->
-            @if (Model.Property != null)
+            <!-- Property / Order Information -->
+            @if (Model.Property != null || !string.IsNullOrWhiteSpace(Model.Envelope.OrderNumber) || !string.IsNullOrWhiteSpace(Model.Envelope.LocationCode))
             {
                 <div class="mb-3">
-                    <h6 class="text-primary fw-bold mb-1">Property:</h6>
-                    <p class="mb-1">@Model.Property.Name</p>
-                    <p class="mb-0 text-muted">@Model.Property.Address, @Model.Property.City, @Model.Property.State @Model.Property.Zip</p>
-                    @if (!string.IsNullOrWhiteSpace(Model.Property.Unit))
+                    @if (Model.Property != null)
                     {
-                        <p class="mb-0"><strong>Unit:</strong> @Model.Property.Unit</p>
+                        <h6 class="text-primary fw-bold mb-1">Property:</h6>
+                        <p class="mb-0">@Model.Property.Name</p>
+                        @if (!string.IsNullOrWhiteSpace(Model.Property.Address))
+                        {
+                            <p class="mb-0 text-muted small">@Model.Property.Address</p>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(Model.Property.Unit))
+                        {
+                            <p class="mb-0 small"><strong>Unit:</strong> @Model.Property.Unit</p>
+                        }
+                    }
+                    @if (!string.IsNullOrWhiteSpace(Model.Envelope.OrderNumber))
+                    {
+                        <p class="mb-0 mt-1 small"><strong>Order #:</strong> @Model.Envelope.OrderNumber</p>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(Model.Envelope.LocationCode))
+                    {
+                        <p class="mb-0 small text-muted"><strong>Branch:</strong> @Model.Envelope.LocationCode</p>
                     }
                 </div>
             }

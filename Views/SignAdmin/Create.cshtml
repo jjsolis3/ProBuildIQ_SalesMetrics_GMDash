@@ -284,9 +284,6 @@
             orderSelect.innerHTML = '<option value="">Select an order (optional)</option>' +
               items.map(o => `<option value="${o.id}">${o.display}</option>`).join('');
             orderSelect.disabled = false;
-
-            // Auto-populate message body
-            updateMessageBody();
           } catch (error) {
             console.error('Order loading error:', error);
             orderSelect.innerHTML = '<option value="">Error loading orders - Please try again</option>';
@@ -297,55 +294,9 @@
 
         // Update message body when order is selected
         const orderSelectHandler = function() {
-          updateMessageBody();
+          // (order selection no longer auto-fills message body)
         };
         orderSelect.addEventListener('change', orderSelectHandler);
-
-        // Update message body when branch is changed
-        const branchSelect = document.getElementById('branchSelect');
-        let branchSelectHandler = null;
-        if (branchSelect) {
-          branchSelectHandler = function() {
-            updateMessageBody();
-          };
-          branchSelect.addEventListener('change', branchSelectHandler);
-        }
-
-        // Auto-update message body with property, order, and branch info
-        function updateMessageBody() {
-          const messageBody = document.getElementById('messageBody');
-          const propName = propSearch.value || '[Property Name]';
-          const orderDisplay = orderSelect.options[orderSelect.selectedIndex]?.text || '[Order Number]';
-          const branchCode = branchSelect?.value || '[Branch]';
-          const branchText = branchSelect?.options[branchSelect.selectedIndex]?.text || '[Branch]';
-          const branch = branchCode ? branchText : '[Branch]';
-
-          // Don't update if property hasn't been selected yet
-          if (!propName || propName === 'Search by property name...') {
-            return;
-          }
-
-          // Get current message, removing any previous envelope info
-          let currentMessage = messageBody.value.trim();
-
-          // Remove previous "Envelope for:" section if it exists
-          const envelopeRegex = /\n*Envelope for:\s*\n[\s\S]*?(?:Property:[\s\S]*?)?(?:Order#:[\s\S]*?)?(?:Branch:[\s\S]*)?$/;
-          currentMessage = currentMessage.replace(envelopeRegex, '').trim();
-
-          // Build the envelope info section
-          const envelopeInfo = `
-Envelope for:
-            Property: ${propName}
-            Order#: ${orderDisplay}
-            Branch: ${branch}`;
-
-          // Append envelope info to user's message
-          if (currentMessage) {
-            messageBody.value = currentMessage + '\n' + envelopeInfo;
-          } else {
-            messageBody.value = envelopeInfo;
-          }
-        }
 
         // dismiss suggestions if clicking elsewhere
         const documentClickHandler = function(e) {
@@ -356,24 +307,10 @@ Envelope for:
 
         // Cleanup function for Create.cshtml event listeners
         function cleanupCreateEventListeners() {
-          // Clear any pending timers
-          if (propTimer) {
-            clearTimeout(propTimer);
-          }
-
-          // Remove event listeners
-          if (propSearch) {
-            propSearch.removeEventListener('input', propSearchHandler);
-          }
-          if (propResults) {
-            propResults.removeEventListener('click', propResultsClickHandler);
-          }
-          if (orderSelect) {
-            orderSelect.removeEventListener('change', orderSelectHandler);
-          }
-          if (branchSelect && branchSelectHandler) {
-            branchSelect.removeEventListener('change', branchSelectHandler);
-          }
+          if (propTimer) clearTimeout(propTimer);
+          if (propSearch) propSearch.removeEventListener('input', propSearchHandler);
+          if (propResults) propResults.removeEventListener('click', propResultsClickHandler);
+          if (orderSelect) orderSelect.removeEventListener('change', orderSelectHandler);
           document.removeEventListener('click', documentClickHandler);
         }
 

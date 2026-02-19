@@ -833,7 +833,9 @@ public sealed class EnvelopeService : IEnvelopeService
                 var completedAt = env.CompletedAtUtc.HasValue
                     ? env.CompletedAtUtc.Value.ToString("f") + " UTC"
                     : DateTime.UtcNow.ToString("f") + " UTC";
-
+                //TODO:  need to add Property Name, which is currenly not being saved to the SignEnvelope Table Details. 
+                // a new column needs to be added to the table as PropertyName, which will allow for the Property Name
+                // to be saved and be included future emails about the completion of an email.  
                 var innerHtml = $@"
                     <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Envelope Completed</h2>
                     <p style=""margin:0 0 16px 0;font-size:15px;color:#374151;"">
@@ -844,6 +846,7 @@ public sealed class EnvelopeService : IEnvelopeService
                             <td style=""padding:8px 12px 8px 0;font-weight:600;white-space:nowrap;"">Subject</td>
                             <td style=""padding:8px 0;"">{System.Net.WebUtility.HtmlEncode(env.Subject)}</td>
                         </tr>
+
                         <tr style=""border-bottom:1px solid #e5e7eb;"">
                             <td style=""padding:8px 12px 8px 0;font-weight:600;white-space:nowrap;"">Order</td>
                             <td style=""padding:8px 0;"">{System.Net.WebUtility.HtmlEncode(env.OrderNumber ?? "N/A")}</td>

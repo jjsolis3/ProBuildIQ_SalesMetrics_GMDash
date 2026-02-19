@@ -10,21 +10,25 @@ using Microsoft.Extensions.Options;
 using SalesMetrics.Services.Signing; // for AppSettings
 using System.Text.Json;
 
+// Alias to disambiguate from the email INotificationService in this namespace
+using IAppNotificationService = SalesMetrics.Services.Notifications.INotificationService;
+
 namespace SalesMetrics.Services.Signing;
 
 public sealed class EnvelopeService : IEnvelopeService
 {
     private readonly SalesMetricsDbContext _db;
-    private readonly INotificationService _notify;
+    private readonly INotificationService _notify;          // email (SMTP) notification service
+    private readonly IAppNotificationService _appNotify;    // in-app + SignalR notification service
     private readonly IErpMergeService _merge;
     private readonly IPdfService _pdf;
     private readonly AppSettings _appSettings;
     private readonly IEmailTemplateService _emailTemplate;
     private readonly ILogger<EnvelopeService> _logger;
 
-    public EnvelopeService(SalesMetricsDbContext db, INotificationService notify, IErpMergeService merge, IPdfService pdf, IOptions<AppSettings> appSettings, IEmailTemplateService emailTemplate, ILogger<EnvelopeService> logger)
+    public EnvelopeService(SalesMetricsDbContext db, INotificationService notify, IAppNotificationService appNotify, IErpMergeService merge, IPdfService pdf, IOptions<AppSettings> appSettings, IEmailTemplateService emailTemplate, ILogger<EnvelopeService> logger)
     {
-        _db = db; _notify = notify; _merge = merge; _pdf = pdf; _appSettings = appSettings.Value; _emailTemplate = emailTemplate; _logger = logger;
+        _db = db; _notify = notify; _appNotify = appNotify; _merge = merge; _pdf = pdf; _appSettings = appSettings.Value; _emailTemplate = emailTemplate; _logger = logger;
     }
 
     public async Task<long> CreateAsync(int createdByUsersId, CreateEnvelopeVm vm)
@@ -1037,6 +1041,27 @@ public sealed class EnvelopeService : IEnvelopeService
 
         await _db.SaveChangesAsync();
 
+        // ── In-app notification to the envelope creator ──────────────────────
+        // Fires via SignalR so the bell icon lights up immediately (red dot)
+        // and appears in the creator's Notification Center.
+        try
+        {
+            await _appNotify.SendNotificationToUserAsync(
+                userId:            env.CreatedByUsers_ID,
+                type:              "DocumentSigning",
+                title:             "Envelope Completed",
+                message:           $"\"{env.Subject}\" has been signed by all parties and is ready to download.",
+                actionUrl:         $"/SignAdmin/Details/{env.EnvelopeId}",
+                relatedTaskId:     null,
+                relatedEnvelopeId: (int?)env.EnvelopeId
+            );
+        }
+        catch (Exception ex)
+        {
+            // Non-fatal — log and continue so the PDF/email flow is not interrupted
+            _logger.LogWarning(ex, "Failed to send in-app completion notification for envelope {EnvelopeId}", envelopeId);
+        }
+
         // Send completion emails to all recipients
         var downloadUrl = env.PdfStoragePath;
         foreach (var recipient in env.Recipients)
@@ -1269,7 +1294,8 @@ public sealed class EnvelopeService : IEnvelopeService
     {
         var setting = await _db.EnvelopeNotificationSettings
             .Where(s => s.IsEnabled
-                     && !string.IsNullOrEmpty(s.NotificationEmail)
+                     && s.NotificationEmail != null
+                     && s.NotificationEmail != ""
                      && (s.LocationCode == locationCode || s.LocationCode == null))
             .OrderByDescending(s => s.LocationCode != null) // branch-specific beats company-wide
             .FirstOrDefaultAsync();

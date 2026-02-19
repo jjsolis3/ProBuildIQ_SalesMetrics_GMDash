@@ -367,8 +367,8 @@ else
                             title: reportTitle,
                             messageTop: 'Date Range: ' + dateRange + '  Branch: ' + branchLabel,
                             filename: 'Envelope_Report_@(DateTime.Now.ToString("yyyyMMdd"))'
-                        },
-                        {
+                        }
+                        @* {
                             extend: 'pdfHtml5',
                             text: '<i class="fas fa-file-pdf me-1"></i> PDF',
                             className: 'btn btn-outline-danger btn-sm',
@@ -387,7 +387,7 @@ else
                                         });
                                     }
                                 });
-                            }
+                            } *@
                         }
                     ],
                     columnDefs: [

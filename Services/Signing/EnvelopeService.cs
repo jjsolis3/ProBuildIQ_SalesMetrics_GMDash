@@ -1013,6 +1013,7 @@ public sealed class EnvelopeService : IEnvelopeService
                             <td style=""padding:8px 12px 8px 0;font-weight:600;white-space:nowrap;"">Subject</td>
                             <td style=""padding:8px 0;"">{System.Net.WebUtility.HtmlEncode(env.Subject)}</td>
                         </tr>
+
                         <tr style=""border-bottom:1px solid #e5e7eb;"">
                             <td style=""padding:8px 12px 8px 0;font-weight:600;white-space:nowrap;"">Order</td>
                             <td style=""padding:8px 0;"">{System.Net.WebUtility.HtmlEncode(env.OrderNumber ?? "N/A")}</td>

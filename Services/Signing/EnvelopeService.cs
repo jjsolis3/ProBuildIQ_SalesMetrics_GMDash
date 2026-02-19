@@ -37,13 +37,17 @@ public sealed class EnvelopeService : IEnvelopeService
         if (template == null)
             throw new InvalidOperationException($"Template '{vm.TemplateKey}' not found");
 
-        // Fetch OrderNumber from ERP if OrderId is provided
+        // Fetch OrderNumber from ERP if OrderId is provided; fall back to manually-entered value
         string? orderNumber = null;
         if (vm.OrderId.HasValue)
         {
             var orders = await _merge.GetOrdersForPropertyAsync(vm.PropertyID ?? 0);
             var matchingOrder = orders.FirstOrDefault(o => o.OrderID == vm.OrderId.Value.ToString());
             orderNumber = matchingOrder?.OrderID; // OrderID contains the display number like "90805.4"
+        }
+        else if (!string.IsNullOrWhiteSpace(vm.CustomOrderNumber))
+        {
+            orderNumber = vm.CustomOrderNumber.Trim();
         }
 
         var env = new SignEnvelope
@@ -99,6 +103,16 @@ public sealed class EnvelopeService : IEnvelopeService
 
         // Create SignField records from template MergeSpec
         await CreateFieldsFromMergeSpecAsync(env, template, vm);
+
+        // When no ERP order was selected, store a manually-entered unit number as a SignField
+        if (!vm.OrderId.HasValue && !string.IsNullOrWhiteSpace(vm.CustomUnitNumber))
+        {
+            var existingUnitField = env.Fields?.FirstOrDefault(f => f.FieldKey == "UnitNumber");
+            if (existingUnitField != null)
+                existingUnitField.FieldValue = vm.CustomUnitNumber.Trim();
+            else
+                _db.SignFields.Add(new SignField { EnvelopeId = env.EnvelopeId, FieldKey = "UnitNumber", FieldValue = vm.CustomUnitNumber.Trim() });
+        }
 
         await _db.SaveChangesAsync();
         return env.EnvelopeId;
@@ -337,9 +351,16 @@ public sealed class EnvelopeService : IEnvelopeService
                 : "";
 
             var innerHtml = $@"
-                <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Document Signing Request</h2>
+                <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:0 0 14px 0;"">
+                  <tr>
+                    <td style=""background-color:#E87600;border-radius:4px;padding:4px 14px;"">
+                      <span style=""font-size:11px;color:#ffffff;font-weight:700;letter-spacing:1px;font-family:Arial,Helvetica,sans-serif;text-transform:uppercase;"">SalesMetrics &bull; Envelope</span>
+                    </td>
+                  </tr>
+                </table>
+                <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Envelope Signing Request</h2>
                 <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Hello {r.FullName},</p>
-                <p style=""margin:0 0 8px 0;font-size:15px;color:#374151;"">Please review and sign the document: <strong>{env.Subject}</strong>.</p>
+                <p style=""margin:0 0 8px 0;font-size:15px;color:#374151;"">Please review and sign the envelope: <strong>{env.Subject}</strong>.</p>
                 {contextHtml}
                 {messageHtml}
                 <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:24px 0;"">
@@ -512,11 +533,18 @@ public sealed class EnvelopeService : IEnvelopeService
                     : "";
 
                 var innerHtml = $@"
-                    <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Updated Signing Request</h2>
+                    <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:0 0 14px 0;"">
+                      <tr>
+                        <td style=""background-color:#E87600;border-radius:4px;padding:4px 14px;"">
+                          <span style=""font-size:11px;color:#ffffff;font-weight:700;letter-spacing:1px;font-family:Arial,Helvetica,sans-serif;text-transform:uppercase;"">SalesMetrics &bull; Envelope</span>
+                        </td>
+                      </tr>
+                    </table>
+                    <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Updated Envelope Signing Request</h2>
                     <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Hello {recipient.FullName},</p>
                     <p style=""margin:0 0 8px 0;font-size:15px;color:#374151;"">
-                        Your signing invitation for <strong>{env.Subject}</strong> has been updated.
-                        Please use the new link below to review and sign the document.
+                        Your envelope signing invitation for <strong>{env.Subject}</strong> has been updated.
+                        Please use the new link below to review and sign.
                     </p>
                     {editContextHtml}
                     {messageHtml}

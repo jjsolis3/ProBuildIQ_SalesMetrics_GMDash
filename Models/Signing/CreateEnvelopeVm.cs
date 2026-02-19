@@ -15,6 +15,8 @@ public sealed class CreateEnvelopeVm
     public int? PropertyID { get; set; }
     public string? CustomPropertyName { get; set; } // Free-text name used when no ERP property is selected
     public int? OrderId { get; set; }
+    public string? CustomOrderNumber { get; set; }  // Free-text order number when no ERP match
+    public string? CustomUnitNumber { get; set; }   // Free-text unit number when no ERP match
     public string? CustomerNumber { get; set; }
     public string? LocationCode { get; set; }
 

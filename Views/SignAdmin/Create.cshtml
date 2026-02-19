@@ -80,15 +80,27 @@
                     <input type="hidden" asp-for="CustomPropertyName" id="customPropertyName" />
                     <div id="propResults" class="list-group position-absolute w-100" style="z-index: 1050;"></div>
                     <div class="form-text text-muted small">
-                        If no match found, the typed name will still be saved with the envelope.
+                        Search ERP, or type a name and fill in Order&nbsp;# and Unit below.
                     </div>
                 </div>
 
-                <div class="col-md-3">
+                @* ERP order dropdown — only visible after an ERP property is selected *@
+                <div class="col-md-3" id="erpOrderSection" style="display:none;">
                     <label class="form-label">Order</label>
                     <select asp-for="OrderId" id="orderSelect" class="form-select" disabled>
                         <option value="">Select a property first</option>
                     </select>
+                </div>
+
+                @* Free-text order + unit — visible by default (no ERP match) *@
+                <div class="col-md-2" id="freeOrderSection">
+                    <label class="form-label">Order #</label>
+                    <input asp-for="CustomOrderNumber" id="freeOrderInput" class="form-control" placeholder="e.g. 90805.4" />
+                    <div class="form-text text-muted small">Manual entry</div>
+                </div>
+                <div class="col-md-1" id="freeUnitSection">
+                    <label class="form-label">Unit</label>
+                    <input asp-for="CustomUnitNumber" id="freeUnitInput" class="form-control" placeholder="e.g. 101" />
                 </div>
 
                 <div class="col-md-3">
@@ -110,7 +122,7 @@
                         <div class="col-md-2">
                             <label class="form-label">Role</label>
                             @* <input name="Recipients[@i].Role" class="form-control" value="@(Model.Recipients.ElementAtOrDefault(i)?.Role ?? "Manager")" /> *@
-                            <select name="Recipeints[@i].Role" class="form-select">
+                            <select name="Recipients[@i].Role" class="form-select">
                                 <option value="Manager" selected>Manager</option>
                                 <option value="Supervisor">Supervisor</option>
                                 <option value="Maintenance">Maintenance</option>
@@ -228,100 +240,102 @@
     </script>
 
     <script>
-        // --- Property search ---
+        // --- Property search with ERP/free-text mode switching ---
         let propTimer;
         const propSearch = document.getElementById('propSearch');
-        const propId = document.getElementById('propId');
+        const propId     = document.getElementById('propId');
         const propResults = document.getElementById('propResults');
         const orderSelect = document.getElementById('orderSelect');
 
-        const propSearchHandler = function() {
-          clearTimeout(propTimer);
-          const q = propSearch.value.trim();
-          if (!q) { propResults.innerHTML = ''; return; }
-          propTimer = setTimeout(async () => {
-            try {
-              // Get selected branch location code
-              const branchSelect = document.getElementById('branchSelect');
-              const locationCode = branchSelect?.value || '';
-              const url = `/api/properties/search?term=${encodeURIComponent(q)}${locationCode ? '&locationCode=' + encodeURIComponent(locationCode) : ''}`;
-              const res = await fetch(url);
-              if (!res.ok) {
-                throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-              }
-              const items = await res.json();
-              propResults.innerHTML = items.map(i =>
-                `<button type="button" class="list-group-item list-group-item-action" data-id="${i.id}" data-name="${i.name}">${i.name}</button>`
-              ).join('');
-            } catch (error) {
-              console.error('Property search error:', error);
-              propResults.innerHTML = '<div class="list-group-item text-danger">Error loading properties. Please try again.</div>';
+        // Switch between ERP mode (property found in ERP → show order dropdown)
+        // and free-text mode (no ERP match → show manual order# + unit fields).
+        function setPropertyMode(erp) {
+            document.getElementById('erpOrderSection').style.display  = erp ? '' : 'none';
+            document.getElementById('freeOrderSection').style.display = erp ? 'none' : '';
+            document.getElementById('freeUnitSection').style.display  = erp ? 'none' : '';
+            // Disable the ERP order select when hidden so it won't submit
+            orderSelect.disabled = !erp;
+        }
+        // Default: free-text mode (nothing selected from ERP yet)
+        setPropertyMode(false);
+
+        const propSearchHandler = function () {
+            clearTimeout(propTimer);
+            const q = propSearch.value.trim();
+            // If the user is re-typing after an ERP selection, drop back to free-text mode
+            if (propId.value) {
+                propId.value = '';
+                setPropertyMode(false);
             }
-          }, 250);
+            if (!q) { propResults.innerHTML = ''; return; }
+            propTimer = setTimeout(async () => {
+                try {
+                    const branchSelect = document.getElementById('branchSelect');
+                    const locationCode = branchSelect?.value || '';
+                    const url = `/api/properties/search?term=${encodeURIComponent(q)}${locationCode ? '&locationCode=' + encodeURIComponent(locationCode) : ''}`;
+                    const res = await fetch(url);
+                    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+                    const items = await res.json();
+                    propResults.innerHTML = items.map(i =>
+                        `<button type="button" class="list-group-item list-group-item-action" data-id="${i.id}" data-name="${i.name}">${i.name}</button>`
+                    ).join('');
+                } catch (error) {
+                    console.error('Property search error:', error);
+                    propResults.innerHTML = '<div class="list-group-item text-danger">Error loading properties. Please try again.</div>';
+                }
+            }, 250);
         };
         propSearch.addEventListener('input', propSearchHandler);
 
-        const propResultsClickHandler = async function(e) {
-          const btn = e.target.closest('button[data-id]');
-          if (!btn) return;
-          propId.value = btn.dataset.id;
-          propSearch.value = btn.dataset.name;
-          propResults.innerHTML = '';
-
-          // load orders for this property
-          orderSelect.innerHTML = '<option value="">Loading orders…</option>';
-          orderSelect.disabled = true;
-          try {
-            // Get selected branch location code
-            const branchSelect = document.getElementById('branchSelect');
-            const locationCode = branchSelect?.value || '';
-            const orderUrl = `/api/orders/by-property?propertyId=${encodeURIComponent(propId.value)}${locationCode ? '&locationCode=' + encodeURIComponent(locationCode) : ''}`;
-            const res = await fetch(orderUrl);
-            if (!res.ok) {
-              throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        const propResultsClickHandler = async function (e) {
+            const btn = e.target.closest('button[data-id]');
+            if (!btn) return;
+            propId.value    = btn.dataset.id;
+            propSearch.value = btn.dataset.name;
+            propResults.innerHTML = '';
+            // Switch to ERP mode: show order dropdown, hide free-text fields
+            setPropertyMode(true);
+            orderSelect.innerHTML = '<option value="">Loading orders…</option>';
+            orderSelect.disabled  = true;
+            try {
+                const branchSelect = document.getElementById('branchSelect');
+                const locationCode = branchSelect?.value || '';
+                const orderUrl = `/api/orders/by-property?propertyId=${encodeURIComponent(propId.value)}${locationCode ? '&locationCode=' + encodeURIComponent(locationCode) : ''}`;
+                const res = await fetch(orderUrl);
+                if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+                const items = await res.json();
+                orderSelect.innerHTML = '<option value="">Select an order (optional)</option>' +
+                    items.map(o => `<option value="${o.id}">${o.display}</option>`).join('');
+                orderSelect.disabled = false;
+            } catch (error) {
+                console.error('Order loading error:', error);
+                orderSelect.innerHTML = '<option value="">Error loading orders – please try again</option>';
+                orderSelect.disabled = false;
             }
-            const items = await res.json();
-            orderSelect.innerHTML = '<option value="">Select an order (optional)</option>' +
-              items.map(o => `<option value="${o.id}">${o.display}</option>`).join('');
-            orderSelect.disabled = false;
-          } catch (error) {
-            console.error('Order loading error:', error);
-            orderSelect.innerHTML = '<option value="">Error loading orders - Please try again</option>';
-            orderSelect.disabled = false;
-          }
         };
         propResults.addEventListener('click', propResultsClickHandler);
 
-        // Update message body when order is selected
-        const orderSelectHandler = function() {
-          // (order selection no longer auto-fills message body)
-        };
-        orderSelect.addEventListener('change', orderSelectHandler);
-
-        // dismiss suggestions if clicking elsewhere
-        const documentClickHandler = function(e) {
-          if (!propResults.contains(e.target) && e.target !== propSearch)
-            propResults.innerHTML = '';
+        // Dismiss suggestions when clicking elsewhere
+        const documentClickHandler = function (e) {
+            if (!propResults.contains(e.target) && e.target !== propSearch)
+                propResults.innerHTML = '';
         };
         document.addEventListener('click', documentClickHandler);
 
-        // Cleanup function for Create.cshtml event listeners
+        // Cleanup on page unload
         function cleanupCreateEventListeners() {
-          if (propTimer) clearTimeout(propTimer);
-          if (propSearch) propSearch.removeEventListener('input', propSearchHandler);
-          if (propResults) propResults.removeEventListener('click', propResultsClickHandler);
-          if (orderSelect) orderSelect.removeEventListener('change', orderSelectHandler);
-          document.removeEventListener('click', documentClickHandler);
+            if (propTimer) clearTimeout(propTimer);
+            propSearch?.removeEventListener('input', propSearchHandler);
+            propResults?.removeEventListener('click', propResultsClickHandler);
+            document.removeEventListener('click', documentClickHandler);
         }
-
-        // Register cleanup on page unload
         window.addEventListener('beforeunload', cleanupCreateEventListeners);
     </script>
 
     <script>
-        // On form submit: if no ERP property was selected but text was typed, capture it as CustomPropertyName
+        // On submit: if no ERP property was selected but text was typed, capture it as CustomPropertyName
         document.querySelector('form[method="post"]').addEventListener('submit', function () {
-            const propIdInput = document.getElementById('propId');
+            const propIdInput   = document.getElementById('propId');
             const propSearchInput = document.getElementById('propSearch');
             const customPropertyName = document.getElementById('customPropertyName');
             if (!propIdInput.value && propSearchInput.value.trim()) {

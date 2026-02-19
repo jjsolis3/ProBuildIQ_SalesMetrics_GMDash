@@ -18,6 +18,12 @@ public interface IErpMergeService
     Task<string?> GetCustomerPhoneAsync(int? propertyId);
     Task<string?> GetCustomerEmailAsync(int? propertyId);
     Task<string?> GetCustomerNameAsync(int? propertyId);
+    Task<string?> GetCustomerCompanyAsync(int? propertyId);
+
+    // Individual property address parts
+    Task<string?> GetPropertyCityAsync(int? propertyId);
+    Task<string?> GetPropertyStateAsync(int? propertyId);
+    Task<string?> GetPropertyZipAsync(int? propertyId);
 
     // Order/Lease dates
     Task<DateTime?> GetOrderStartDateAsync(int? orderId);

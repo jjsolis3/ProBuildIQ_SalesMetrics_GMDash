@@ -202,9 +202,17 @@ public sealed class EnvelopeService : IEnvelopeService
             data["PropertyName"] = propertyName;
             data["PropertyAddress"] = propertyAddress;
             data["PropertyPhone"] = propertyPhone;
+            data["PropertyCity"] = await _merge.GetPropertyCityAsync(env.PropertyID) ?? "";
+            data["PropertyState"] = await _merge.GetPropertyStateAsync(env.PropertyID) ?? "";
+            data["PropertyZip"] = await _merge.GetPropertyZipAsync(env.PropertyID) ?? "";
+
             data["CustomerName"] = customerName;
             data["CustomerEmail"] = customerEmail;
             data["CustomerPhone"] = propertyPhone; // Same as property phone
+            data["CustomerCompany"] = customerName; // Company name is the customer name in this ERP
+
+            // Order number already resolved and stored on envelope during creation
+            data["OrderNumber"] = env.OrderNumber ?? "";
 
             // Order fields
             var unitNumber = await _merge.GetUnitNumberByOrderIdAsync(env.OrderId) ?? "";
@@ -439,31 +447,26 @@ public sealed class EnvelopeService : IEnvelopeService
     {
         var q = _db.SignEnvelopes.AsNoTracking();
         if (!string.IsNullOrWhiteSpace(status)) q = q.Where(e => e.Status == status);
-        if (!string.IsNullOrWhiteSpace(office)) q = q.Where(e => e.LocationCode == office);
+        // The explicit office filter is only meaningful in the "all" scope where the user can browse
+        // across locations.  For "branch" and "mine" the location is already enforced below.
+        if (!string.IsNullOrWhiteSpace(office) && scope == "all")
+            q = q.Where(e => e.LocationCode == office);
 
-        // Role-based filtering
-        // Scope: "mine" = created by user, "branch" = same location, "all" = no filter (admin/GM only)
-        if (!string.IsNullOrWhiteSpace(scope) && scope == "mine" && createdByUserId.HasValue)
+        // Scope-based filtering:
+        //   "mine"   → only envelopes created by this user
+        //   "branch" → all envelopes for the user's current location (default for every role)
+        //   "all"    → no additional filter (admin / GM only, granted by the controller)
+        if (scope == "mine" && createdByUserId.HasValue)
         {
             q = q.Where(e => e.CreatedByUsers_ID == createdByUserId.Value);
         }
-        else if (!string.IsNullOrWhiteSpace(scope) && scope == "branch" && userLocationId.HasValue)
+        else if (scope == "branch" && userLocationId.HasValue)
         {
-            // For Office Managers: show all envelopes from their branch
             var locationCode = GetLocationCodeById(userLocationId.Value);
             if (!string.IsNullOrWhiteSpace(locationCode))
-            {
                 q = q.Where(e => e.LocationCode == locationCode);
-            }
         }
-        // For regular staff (Office, Sales) without explicit scope, default to "mine"
-        else if (userRoleId.HasValue && (userRoleId.Value == 2 || userRoleId.Value == 6) && createdByUserId.HasValue)
-        {
-            // RoleId 2 = Sales, RoleId 6 = Office Staff - see only their own envelopes by default
-            q = q.Where(e => e.CreatedByUsers_ID == createdByUserId.Value);
-        }
-        // Admin (1), General Manager (4), Sales Admin (3), Office Manager (5), Regional Manager (8), President (7) can see all by default
-        // No additional filtering needed for "all" scope
+        // scope == "all" → no additional filter
 
         var total = await q.CountAsync();
         var envelopes = await q
@@ -784,6 +787,94 @@ public sealed class EnvelopeService : IEnvelopeService
                 $"Completed: {env.Subject}",
                 completionHtml,
                 null);
+        }
+
+        // ---------------------------------------------------------------
+        // Send internal company / branch notification emails
+        // ---------------------------------------------------------------
+        var internalNotifSettings = await _db.EnvelopeNotificationSettings
+            .Where(s => s.IsEnabled
+                     && s.NotificationEmail != null
+                     && s.NotificationEmail != "")
+            .ToListAsync();
+
+        if (internalNotifSettings.Count > 0)
+        {
+            var absoluteInternalDownload = !string.IsNullOrWhiteSpace(downloadUrl)
+                ? (downloadUrl.StartsWith("/")
+                    ? $"{_appSettings.BaseUrl.TrimEnd('/')}{downloadUrl}"
+                    : downloadUrl)
+                : null;
+
+            var internalDownloadBtnHtml = absoluteInternalDownload != null
+                ? $@"<table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:24px 0;"">
+                  <tr>
+                    <td align=""center"" style=""background-color:#16a34a;border-radius:6px;"">
+                      <a href=""{absoluteInternalDownload}"" style=""display:inline-block;padding:12px 32px;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px;"">Download Completed PDF</a>
+                    </td>
+                  </tr>
+                </table>"
+                : "";
+
+            foreach (var notif in internalNotifSettings)
+            {
+                // Company-wide (LocationCode == null) → always send.
+                // Branch-specific → only send when the envelope's LocationCode matches.
+                bool shouldSend = notif.LocationCode == null
+                    || string.Equals(notif.LocationCode, env.LocationCode, StringComparison.OrdinalIgnoreCase);
+
+                if (!shouldSend)
+                    continue;
+
+                var branchLabel = notif.LocationCode == null
+                    ? "All Branches"
+                    : $"{notif.LocationName} ({notif.LocationCode})";
+
+                var completedAt = env.CompletedAtUtc.HasValue
+                    ? env.CompletedAtUtc.Value.ToString("f") + " UTC"
+                    : DateTime.UtcNow.ToString("f") + " UTC";
+
+                var innerHtml = $@"
+                    <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Envelope Completed</h2>
+                    <p style=""margin:0 0 16px 0;font-size:15px;color:#374151;"">
+                        An envelope has been completed by all signers. Please find the details below.
+                    </p>
+                    <table style=""width:100%;border-collapse:collapse;font-size:14px;color:#374151;margin-bottom:16px;"">
+                        <tr style=""border-bottom:1px solid #e5e7eb;"">
+                            <td style=""padding:8px 12px 8px 0;font-weight:600;white-space:nowrap;"">Subject</td>
+                            <td style=""padding:8px 0;"">{System.Net.WebUtility.HtmlEncode(env.Subject)}</td>
+                        </tr>
+                        <tr style=""border-bottom:1px solid #e5e7eb;"">
+                            <td style=""padding:8px 12px 8px 0;font-weight:600;white-space:nowrap;"">Order</td>
+                            <td style=""padding:8px 0;"">{System.Net.WebUtility.HtmlEncode(env.OrderNumber ?? "N/A")}</td>
+                        </tr>
+                        <tr style=""border-bottom:1px solid #e5e7eb;"">
+                            <td style=""padding:8px 12px 8px 0;font-weight:600;white-space:nowrap;"">Branch</td>
+                            <td style=""padding:8px 0;"">{System.Net.WebUtility.HtmlEncode(branchLabel)}</td>
+                        </tr>
+                        <tr>
+                            <td style=""padding:8px 12px 8px 0;font-weight:600;white-space:nowrap;"">Completed</td>
+                            <td style=""padding:8px 0;"">{completedAt}</td>
+                        </tr>
+                    </table>
+                    {internalDownloadBtnHtml}";
+
+                var notifHtml = _emailTemplate.WrapInBrandedTemplate(innerHtml);
+
+                try
+                {
+                    await _notify.SendEnvelopeEmailAsync(
+                        notif.NotificationEmail!,
+                        notif.LocationName,
+                        $"Envelope Completed: {env.Subject}",
+                        notifHtml);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to send internal envelope completion notification to {Email} for envelope {EnvelopeId}",
+                        notif.NotificationEmail, envelopeId);
+                }
+            }
         }
 
         return (true, downloadUrl);

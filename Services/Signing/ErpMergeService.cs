@@ -319,6 +319,51 @@ namespace SalesMetrics.Services.Signing
             }
         }
 
+        public async Task<string?> GetCustomerCompanyAsync(int? propertyId)
+        {
+            // In this ERP, the company name is the same as the customer name
+            return await GetCustomerNameAsync(propertyId);
+        }
+
+        public async Task<string?> GetPropertyCityAsync(int? propertyId)
+        {
+            if (!propertyId.HasValue) return null;
+            try
+            {
+                var context = GetErpContext();
+                var client = _erpFactory.GetClient(context);
+                var property = await client.GetPropertyByIdAsync(propertyId.Value, context);
+                return property?.City;
+            }
+            catch { return null; }
+        }
+
+        public async Task<string?> GetPropertyStateAsync(int? propertyId)
+        {
+            if (!propertyId.HasValue) return null;
+            try
+            {
+                var context = GetErpContext();
+                var client = _erpFactory.GetClient(context);
+                var property = await client.GetPropertyByIdAsync(propertyId.Value, context);
+                return property?.State;
+            }
+            catch { return null; }
+        }
+
+        public async Task<string?> GetPropertyZipAsync(int? propertyId)
+        {
+            if (!propertyId.HasValue) return null;
+            try
+            {
+                var context = GetErpContext();
+                var client = _erpFactory.GetClient(context);
+                var property = await client.GetPropertyByIdAsync(propertyId.Value, context);
+                return property?.Zip;
+            }
+            catch { return null; }
+        }
+
         // New methods for order/lease dates
         public async Task<DateTime?> GetOrderStartDateAsync(int? orderId)
         {

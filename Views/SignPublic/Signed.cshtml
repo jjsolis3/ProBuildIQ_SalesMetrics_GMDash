@@ -7,15 +7,17 @@
 
 <div class="card border-0 shadow-sm">
     <div class="card-header bg-success text-white fw-bold">
-        <i class="bi bi-check-circle-fill"></i> Thank You!
+        <i class="bi bi-check-circle-fill me-2"></i> Thank You!
     </div>
     <div class="card-body p-4">
         <!-- Signature Recorded Section -->
         <div class="alert alert-success mb-4" style="padding: 1.5rem;">
             <div class="d-flex align-items-start mb-3">
-                <i class="bi bi-check-circle fs-1 text-success me-3"></i>
                 <div class="flex-grow-1">
+                    <div class="row">
+                    <i class="bi bi-check-circle fs-1 text-white me-3"></i>
                     <h5 class="fw-bold mb-2">Signature Recorded Successfully</h5>
+                    </div>
                     <p class="mb-0">Your signature has been captured and saved to the document.</p>
                 </div>
             </div>
@@ -26,11 +28,14 @@
             <!-- Document Complete Section -->
             <div class="alert alert-success mb-0" style="padding: 1.5rem;">
                 <div class="d-flex align-items-start mb-3">
-                    <i class="bi bi-file-earmark-check-fill fs-1 text-success me-3"></i>
                     <div class="flex-grow-1">
-                        <h5 class="fw-bold mb-2">Document Complete</h5>
+                        <div class="row">
+                            <i class="bi bi-file-earmark-check-fill fs-1 text-success me-3"></i>
+                            <h5 class="fw-bold mb-2">Document Complete</h5>
+                        </div>
+                        
                         <p class="mb-3">All parties have signed! You can download the completed document below:</p>
-                        <a class="btn btn-success btn-lg" href="@downloadUrl" target="_blank">
+                        <a class="btn btn-light btn-lg" href="@downloadUrl" target="_blank">
                             <i class="bi bi-download"></i> Download Signed PDF
                         </a>
                     </div>

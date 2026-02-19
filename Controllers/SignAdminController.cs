@@ -42,10 +42,15 @@ public class SignAdminController : Controller
     }
 
     /// <summary>
-    /// Gets the current user's location ID from claims
+    /// Gets the current user's active location ID from session (updated when user switches branch).
+    /// Falls back to the claim value set at login.
     /// </summary>
     private int GetCurrentLocationId()
     {
+        // Session is updated whenever the user switches branch in the header dropdown.
+        // Claims are only set at login and never change, so session must be the source of truth here.
+        if (int.TryParse(HttpContext.Session.GetString("LocationId"), out var sessionId) && sessionId > 0)
+            return sessionId;
         return int.Parse(User.FindFirst("LocationId")?.Value ?? "0");
     }
 
@@ -54,15 +59,12 @@ public class SignAdminController : Controller
     {
         var userId = GetCurrentUserId();
         var roleId = GetCurrentRoleId();
-        var locationId = GetCurrentLocationId();
+        var locationId = GetCurrentLocationId(); // session-based, respects branch switches
 
-        // Determine default scope based on role if not explicitly provided
+        // Default: every user sees their currently selected location's envelopes.
+        // Users can explicitly choose "mine" or (if authorized) "all" via the filter buttons.
         if (string.IsNullOrWhiteSpace(scope))
-        {
-            // RoleId 2 = Sales, RoleId 6 = Office Staff - default to "mine"
-            // Others default to "all"
-            scope = (roleId == 2 || roleId == 6) ? "mine" : "all";
-        }
+            scope = "branch";
 
         var (rows, total) = await _svc.SearchAsync(status, office, page, pageSize, userId, scope, roleId, locationId);
 

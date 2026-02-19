@@ -107,6 +107,38 @@
                 margin-bottom: 1rem;
             }
         }
+
+        .text-orange {
+            color: #fd7e14 !important;
+        }
+        /* Bootstrap orange-ish */
+
+        .consent-box {
+            border: 1px solid #dee2e6;
+            background: #f8f9fa;
+        }
+
+            /* Until checked */
+            .consent-box.consent-missing {
+                border: 1px solid #fd7e14;
+                background: #fff4e6;
+                box-shadow: 0 0 0 .25rem rgba(253, 126, 20, .15);
+            }
+
+        .consent-badge {
+            background: #fd7e14;
+            color: #fff;
+        }
+
+        /* Make checkbox slightly larger */
+        .consent-input {
+            transform: scale(1.2);
+        }
+
+        /* Subtle pulse on the badge while missing */
+        .consent-box.consent-missing .consent-badge {
+            animation: consentPulse 1.4s ease-in-out infinite;
+        }
     </style>
 </head>
 <body>

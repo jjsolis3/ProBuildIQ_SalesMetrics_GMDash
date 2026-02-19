@@ -169,6 +169,7 @@ namespace SalesMetrics.Controllers
             {
                 await _settingsService.InitializeDefaultNotificationSettingsAsync();
                 await _settingsService.InitializeDefaultSecuritySettingsAsync();
+                await _settingsService.InitializeDefaultEnvelopeNotificationSettingsAsync();
 
                 TempData["SuccessMessage"] = "Default settings initialized successfully!";
             }
@@ -178,6 +179,41 @@ namespace SalesMetrics.Controllers
             }
 
             return RedirectToAction(nameof(Index));
+        }
+
+        // ======================================================================
+        // Envelope Notification Settings API
+        // ======================================================================
+
+        // GET: /Settings/GetEnvelopeNotificationSettings
+        [HttpGet]
+        public async Task<IActionResult> GetEnvelopeNotificationSettings()
+        {
+            if (!IsAdmin())
+                return Forbid();
+
+            var settings = await _settingsService.GetEnvelopeNotificationSettingsAsync();
+            return Json(settings);
+        }
+
+        // POST: /Settings/SaveEnvelopeNotificationSetting
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SaveEnvelopeNotificationSetting([FromBody] SaveEnvelopeNotificationSettingRequest request)
+        {
+            if (!IsAdmin())
+                return Forbid();
+
+            try
+            {
+                var userId = GetCurrentUserId();
+                await _settingsService.SaveEnvelopeNotificationSettingAsync(request, userId);
+                return Json(new { success = true, message = "Envelope notification setting saved successfully" });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = $"Error: {ex.Message}" });
+            }
         }
     }
 }

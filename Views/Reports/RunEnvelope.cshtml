@@ -1,0 +1,410 @@
+@* Views/Reports/RunEnvelope.cshtml — Envelope Activity Report *@
+@model SalesMetrics.Models.Reports.EnvelopeReportViewModel
+@{
+    ViewData["Title"] = "Envelope Activity Report";
+    var fromDateStr = Model.FromDate?.ToString("yyyy-MM-dd") ?? DateTime.Today.AddDays(-30).ToString("yyyy-MM-dd");
+    var toDateStr   = Model.ToDate?.ToString("yyyy-MM-dd")   ?? DateTime.Today.ToString("yyyy-MM-dd");
+
+    var branchLabel = string.IsNullOrWhiteSpace(Model.BranchFilter)
+        ? (Model.CanViewAllBranches ? "All Branches" : Model.CurrentLocationCode)
+        : Model.BranchFilter;
+
+    // Badge colour per status
+    string StatusBadgeClass(string status) => status switch
+    {
+        "Completed" => "bg-success",
+        "Sent"      => "bg-primary",
+        "Viewed"    => "bg-info text-dark",
+        "Draft"     => "bg-secondary",
+        "Expired"   => "bg-danger",
+        "Voided"    => "bg-danger",
+        "Declined"  => "bg-warning text-dark",
+        _           => "bg-secondary"
+    };
+}
+
+<style>
+    /* ── Page header ── */
+    .env-report-header {
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 55%, #0f3460 100%);
+        border-radius: 14px;
+        padding: 1.5rem 1.75rem;
+        margin-bottom: 1.75rem;
+        color: #fff;
+        box-shadow: 0 8px 32px rgba(15,52,96,.25);
+    }
+    .env-report-header h2 { font-size: 1.75rem; font-weight: 700; margin-bottom: .3rem; }
+    .env-report-header p  { opacity: .82; margin: 0; }
+
+    /* ── KPI cards ── */
+    .kpi-card {
+        border: none;
+        border-radius: 12px;
+        box-shadow: 0 2px 10px rgba(0,0,0,.08);
+        transition: transform .2s, box-shadow .2s;
+    }
+    .kpi-card:hover { transform: translateY(-3px); box-shadow: 0 6px 18px rgba(0,0,0,.12); }
+    .kpi-value  { font-size: 2rem; font-weight: 700; line-height: 1.1; }
+    .kpi-label  { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; opacity: .65; margin-top: .25rem; }
+
+    /* ── Parameters card ── */
+    .params-card { border: none; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+    .params-card .card-header {
+        background: linear-gradient(135deg,#f8f9fa,#e9ecef);
+        border-bottom: 2px solid #dee2e6;
+        font-weight: 700;
+        color: #495057;
+        border-radius: 12px 12px 0 0 !important;
+    }
+
+    /* ── Results card ── */
+    .results-card { border: none; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.08); overflow: hidden; }
+    .results-card .card-header {
+        background: linear-gradient(135deg,#1a1a2e,#0f3460);
+        color: #fff;
+        font-weight: 700;
+    }
+
+    /* ── DataTables buttons rounding ── */
+    .dt-buttons .btn { border-radius: 20px !important; font-size: .82rem; }
+
+    /* ── Envelope link icon ── */
+    .btn-xs { padding: .15rem .4rem; font-size: .75rem; }
+
+    /* Printing is handled by the dedicated PrintEnvelopeReport view (Layout=null),
+       opened in a new window by the Print button below. No print CSS needed here. */
+</style>
+
+@* ── Report header (screen only) ──────────────────────────────────────────── *@
+<div class="env-report-header">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+        <div>
+            <h2><i class="fas fa-file-signature me-2"></i>Envelope Activity Report</h2>
+            <p>Track e-signature envelope activity, completion rates, and follow-up needs by date range, status, and branch.</p>
+        </div>
+        <a href="@Url.Action("Index", "Reports")" class="btn btn-outline-light btn-sm no-print">
+            <i class="fas fa-arrow-left me-1"></i> Back to Reports
+        </a>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(Model.ErrorMessage))
+{
+    <div class="alert alert-danger alert-dismissible fade show mb-3" role="alert">
+        <i class="fas fa-exclamation-triangle me-2"></i>@Model.ErrorMessage
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+@* ── Filter / parameters card ─────────────────────────────────────────────── *@
+<div class="card params-card mb-4 no-print">
+    <div class="card-header py-3">
+        <i class="fas fa-sliders-h me-2"></i> Report Parameters
+    </div>
+    <div class="card-body py-3">
+        <form asp-action="EnvelopeReport" method="post">
+            @Html.AntiForgeryToken()
+            <div class="row g-3 align-items-end">
+                <div class="col-sm-6 col-md-3">
+                    <label class="form-label fw-semibold small">From Date</label>
+                    <input type="date" name="FromDate" class="form-control form-control-sm"
+                           value="@fromDateStr" required />
+                </div>
+                <div class="col-sm-6 col-md-3">
+                    <label class="form-label fw-semibold small">To Date</label>
+                    <input type="date" name="ToDate" class="form-control form-control-sm"
+                           value="@toDateStr" required />
+                </div>
+                <div class="col-sm-6 col-md-2">
+                    <label class="form-label fw-semibold small">Status</label>
+                    <select name="StatusFilter" class="form-select form-select-sm">
+                        <option value="">All Statuses</option>
+                        @foreach (var s in new[] { "Sent", "Viewed", "Completed", "Draft", "Expired", "Voided", "Declined" })
+                        {
+                            <option value="@s" selected="@(Model.StatusFilter == s ? "selected" : null)">@s</option>
+                        }
+                    </select>
+                </div>
+                @if (Model.CanViewAllBranches)
+                {
+                    <div class="col-sm-6 col-md-2">
+                        <label class="form-label fw-semibold small">Branch</label>
+                        <select name="BranchFilter" class="form-select form-select-sm">
+                            <option value="">All Branches</option>
+                            @foreach (var loc in Model.Locations)
+                            {
+                                <option value="@loc.Value.Code"
+                                        selected="@(Model.BranchFilter == loc.Value.Code ? "selected" : null)">
+                                    @loc.Value.Code – @loc.Value.Name
+                                </option>
+                            }
+                        </select>
+                    </div>
+                }
+                <div class="col-md-2 d-flex align-items-end gap-2">
+                    <button type="submit" class="btn btn-primary btn-sm px-3">
+                        <i class="fas fa-play me-1"></i> Run
+                    </button>
+                    @if (Model.ShowResults && Model.Rows.Any())
+                    {
+                        <a href="@Url.Action("PrintEnvelopeReport", "Reports")?fromDate=@Model.FromDate?.ToString("yyyy-MM-dd")&toDate=@Model.ToDate?.ToString("yyyy-MM-dd")&statusFilter=@Model.StatusFilter&branchFilter=@Model.BranchFilter"
+                           target="_blank"
+                           class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-print me-1"></i> Print / PDF
+                        </a>
+                    }
+                </div>
+            </div>
+            @if (!Model.CanViewAllBranches)
+            {
+                <p class="text-muted small mt-2 mb-0">
+                    <i class="fas fa-map-marker-alt me-1"></i>
+                    Results scoped to your branch: <strong>@Model.CurrentLocationCode</strong>
+                </p>
+            }
+        </form>
+    </div>
+</div>
+
+@if (Model.ShowResults)
+{
+    @* ── KPI Summary cards ──────────────────────────────────────────────────── *@
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-sm-4 col-xl-2">
+            <div class="card kpi-card text-center p-3 h-100" style="border-top:3px solid #0d6efd;">
+                <div class="kpi-value text-primary">@Model.TotalEnvelopes</div>
+                <div class="kpi-label text-muted">Total Envelopes</div>
+            </div>
+        </div>
+        <div class="col-6 col-sm-4 col-xl-2">
+            <div class="card kpi-card text-center p-3 h-100" style="border-top:3px solid #198754;">
+                <div class="kpi-value text-success">@Model.CompletedCount</div>
+                <div class="kpi-label text-muted">Completed</div>
+            </div>
+        </div>
+        <div class="col-6 col-sm-4 col-xl-2">
+            <div class="card kpi-card text-center p-3 h-100" style="border-top:3px solid #ffc107;">
+                <div class="kpi-value text-warning">@Model.PendingCount</div>
+                <div class="kpi-label text-muted">Pending Signatures</div>
+            </div>
+        </div>
+        <div class="col-6 col-sm-4 col-xl-2">
+            <div class="card kpi-card text-center p-3 h-100" style="border-top:3px solid #dc3545;">
+                <div class="kpi-value text-danger">@Model.ExpiredVoidedCount</div>
+                <div class="kpi-label text-muted">Expired / Voided</div>
+            </div>
+        </div>
+        <div class="col-6 col-sm-4 col-xl-2">
+            <div class="card kpi-card text-center p-3 h-100" style="border-top:3px solid #0dcaf0;">
+                <div class="kpi-value" style="color:#0dcaf0;">
+                    @Model.CompletionRate<span style="font-size:1.1rem;">%</span>
+                </div>
+                <div class="kpi-label text-muted">Completion Rate</div>
+            </div>
+        </div>
+        <div class="col-6 col-sm-4 col-xl-2">
+            <div class="card kpi-card text-center p-3 h-100" style="border-top:3px solid #fd7e14;">
+                <div class="kpi-value text-warning">
+                    @Model.AvgDaysToComplete<span style="font-size:1.1rem;">d</span>
+                </div>
+                <div class="kpi-label text-muted">Avg Days to Complete</div>
+            </div>
+        </div>
+    </div>
+
+    @* ── Detail table (screen — DataTables) ────────────────────────────────── *@
+    <div class="card results-card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center py-3">
+            <span>
+                <i class="fas fa-table me-2"></i>Envelope Detail
+                <span class="badge bg-light text-dark ms-2">@Model.TotalEnvelopes result(s)</span>
+            </span>
+            <span class="text-white-50 small d-none d-md-inline">
+                @Model.FromDate?.ToString("MM/dd/yyyy") – @Model.ToDate?.ToString("MM/dd/yyyy")
+                @if (!string.IsNullOrWhiteSpace(Model.StatusFilter))
+                {
+                    <text> · Status: @Model.StatusFilter</text>
+                }
+                @if (!string.IsNullOrWhiteSpace(Model.BranchFilter))
+                {
+                    <text> · Branch: @Model.BranchFilter</text>
+                }
+                else if (!Model.CanViewAllBranches)
+                {
+                    <text> · Branch: @Model.CurrentLocationCode</text>
+                }
+            </span>
+        </div>
+        <div class="card-body p-3">
+            @if (Model.Rows.Any())
+            {
+                <table id="envelopeReportTable" class="table table-bordered table-hover table-sm nowrap w-100">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Subject</th>
+                            <th>Order #</th>
+                            <th>Branch</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>Sent</th>
+                            <th>Completed</th>
+                            <th class="text-center">Days</th>
+                            <th class="text-center">Recipients</th>
+                            <th class="text-center"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in Model.Rows)
+                        {
+                            <tr>
+                                <td>@row.Subject</td>
+                                <td>@(row.OrderNumber ?? "—")</td>
+                                <td>
+                                    @if (!string.IsNullOrWhiteSpace(row.LocationCode))
+                                    {
+                                        <span class="badge bg-secondary">@row.LocationCode</span>
+                                    }
+                                    else
+                                    {
+                                        <text>—</text>
+                                    }
+                                </td>
+                                <td>
+                                    <span class="badge @StatusBadgeClass(row.Status)">@row.Status</span>
+                                </td>
+                                <td data-sort="@row.CreatedDateUtc.Ticks">
+                                    @row.CreatedDateUtc.ToLocalTime().ToString("MM/dd/yyyy")
+                                </td>
+                                <td data-sort="@(row.SentAtUtc?.Ticks ?? 0)">
+                                    @(row.SentAtUtc?.ToLocalTime().ToString("MM/dd/yyyy") ?? "—")
+                                </td>
+                                <td data-sort="@(row.CompletedAtUtc?.Ticks ?? 0)">
+                                    @(row.CompletedAtUtc?.ToLocalTime().ToString("MM/dd/yyyy") ?? "—")
+                                </td>
+                                <td class="text-center">
+                                    @(row.DaysToComplete.HasValue ? row.DaysToComplete.Value.ToString("0.#") : "—")
+                                </td>
+                                <td class="text-center">
+                                    @row.SignedCount / @row.RecipientCount
+                                </td>
+                                <td class="text-center">
+                                    <a href="@Url.Action("Details", "SignAdmin", new { id = row.EnvelopeId })"
+                                       class="btn btn-xs btn-outline-primary" target="_blank"
+                                       title="Open envelope">
+                                        <i class="fas fa-external-link-alt"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            else
+            {
+                <div class="text-center py-5 text-muted">
+                    <i class="fas fa-search fa-3x mb-3 opacity-25 d-block"></i>
+                    No envelopes found for the selected filters. Try widening the date range or changing the status filter.
+                </div>
+            }
+        </div>
+    </div>
+
+}
+else
+{
+    <div class="text-center py-5 text-muted">
+        <i class="fas fa-file-alt fa-3x mb-3 opacity-25 d-block"></i>
+        <p>Set your date range and click <strong>Run</strong> to generate the report.</p>
+    </div>
+}
+
+@section Scripts {
+    @* DataTables CSS *@
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.5/css/jquery.dataTables.min.css" />
+    <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.dataTables.min.css" />
+
+    @if (Model.ShowResults && Model.Rows.Any())
+    {
+        @* DataTables + export libs *@
+        <script src="https://cdn.datatables.net/1.13.5/js/jquery.dataTables.min.js"></script>
+        <script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
+        <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.colVis.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
+        <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
+        <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.print.min.js"></script>
+
+        <script>
+            $(document).ready(function () {
+
+                var reportTitle = 'Envelope Activity Report';
+                var dateRange   = '@(Model.FromDate?.ToString("MM/dd/yyyy")) – @(Model.ToDate?.ToString("MM/dd/yyyy"))';
+                var branchLabel = '@branchLabel';
+                var pdfTitle    = reportTitle + '\n' + dateRange + ' · ' + branchLabel;
+
+                $('#envelopeReportTable').DataTable({
+                    responsive: true,
+                    paging: true,
+                    pageLength: 25,
+                    searching: true,
+                    order: [[5, 'desc']],
+                    dom: `<"top d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2" lBf>
+                          rt
+                          <"bottom d-flex justify-content-between align-items-center mt-3" ip>`,
+                    scrollX: true,
+                    buttons: [
+                        {
+                            extend: 'colvis',
+                            text: '<i class="fas fa-eye me-1"></i> Columns',
+                            className: 'btn btn-outline-secondary btn-sm me-1'
+                        },
+                        {
+                            extend: 'excelHtml5',
+                            text: '<i class="fas fa-file-excel me-1"></i> Excel',
+                            className: 'btn btn-outline-success btn-sm me-1',
+                            exportOptions: { columns: ':visible:not(:last-child)' },
+                            title: reportTitle,
+                            messageTop: 'Date Range: ' + dateRange + '  Branch: ' + branchLabel,
+                            filename: 'Envelope_Report_@(DateTime.Now.ToString("yyyyMMdd"))'
+                        },
+                        {
+                            extend: 'pdfHtml5',
+                            text: '<i class="fas fa-file-pdf me-1"></i> PDF',
+                            className: 'btn btn-outline-danger btn-sm',
+                            exportOptions: { columns: ':visible:not(:last-child)' },
+                            title: pdfTitle,
+                            filename: 'Envelope_Report_@(DateTime.Now.ToString("yyyyMMdd"))',
+                            orientation: 'landscape',
+                            pageSize: 'LEGAL',
+                            customize: function (doc) {
+                                doc.styles.title = { fontSize: 13, bold: true, color: '#1a1a2e', alignment: 'left' };
+                                doc.defaultStyle = { fontSize: 9 };
+                                doc.content[1].table.body.forEach(function (row, idx) {
+                                    if (idx > 0 && idx % 2 === 0) {
+                                        row.forEach(function (cell) {
+                                            cell.fillColor = '#f0f4ff';
+                                        });
+                                    }
+                                });
+                            }
+                        }
+                    ],
+                    columnDefs: [
+                        { targets: -1, orderable: false, searchable: false },
+                        { targets: [4, 5, 6], type: 'num' }
+                    ],
+                    lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
+                    language: {
+                        search: "Search:",
+                        lengthMenu: "Show _MENU_",
+                        info: "Showing _START_–_END_ of _TOTAL_",
+                        infoEmpty: "No results found",
+                        infoFiltered: "(filtered from _MAX_ total)",
+                        paginate: { next: "›", previous: "‹", first: "«", last: "»" }
+                    }
+                });
+            });
+        </script>
+    }
+}

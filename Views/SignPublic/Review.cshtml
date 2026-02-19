@@ -125,9 +125,9 @@
             <div class="card-header d-flex justify-content-between align-items-center bg-light">
                 <h5 class="mb-0"><i class="bi bi-person-plus"></i> Add Tenant Information</h5>
                 <div class="form-check mb-0">
-                    <input class="form-check-input" type="checkbox" id="SkipTenant" name="SkipTenant" value="true">
+                    <input class="form-check-input" style="border-color:darkorange" type="checkbox" id="SkipTenant" name="SkipTenant" value="true">
                     <label class="form-check-label" for="SkipTenant">
-                        Skip tenant signature (manager only)
+                        Skip tenant signature
                     </label>
                 </div>
             </div>
@@ -157,12 +157,21 @@
         </div>
         <div class="card-body">
             <!-- Consent Checkbox -->
+            <span class="badge rounded-pill consent-badge">
+                <i class="bi bi-exclamation-triangle-fill me-1"></i> Required
+            </span>
             <div class="form-check mb-4 p-3 bg-light rounded">
-                <input class="form-check-input" type="checkbox" id="Accept" name="Accept" value="true">
-                <label class="form-check-label fw-bold" for="Accept">
+                <input class="form-check-input ms-0" style="border-color:darkorange" type="checkbox" id="Accept" name="Accept" value="true">
+                <label class="form-check-label fw-bold ms-2" for="Accept">
                     I have read and agree to the terms, and I adopt the signature below as my electronic signature.
                 </label>
+                
+                <small id="consentHint" class="d-block mt-1 fw-semibold text-orange">
+                    <i class="bi bi-check2-square me-1"></i>
+                    This box must be checked before you can sign.
+                </small>
             </div>
+            
 
             <!-- Signature Canvas -->
             <div class="mb-4">

@@ -18,11 +18,13 @@ namespace SalesMetrics.Services.Settings
         {
             var notificationSettings = await GetNotificationSettingsAsync();
             var securitySettings = await GetSecuritySettingsAsync();
+            var envelopeNotificationSettings = await GetEnvelopeNotificationSettingsAsync();
 
             return new SettingsDashboardViewModel
             {
                 NotificationSettings = notificationSettings,
                 SecuritySettings = securitySettings,
+                EnvelopeNotificationSettings = envelopeNotificationSettings,
                 ActiveTab = "notifications"
             };
         }
@@ -264,6 +266,77 @@ namespace SalesMetrics.Services.Settings
             };
 
             _context.SecuritySettings.AddRange(defaultSettings);
+            await _context.SaveChangesAsync();
+        }
+
+        // ======================================================================
+        // Envelope Notification Settings
+        // ======================================================================
+
+        public async Task<List<EnvelopeNotificationSettingViewModel>> GetEnvelopeNotificationSettingsAsync()
+        {
+            var settings = await _context.EnvelopeNotificationSettings
+                .OrderBy(e => e.EnvelopeNotificationSettingsId)
+                .ToListAsync();
+
+            return settings.Select(s => new EnvelopeNotificationSettingViewModel
+            {
+                EnvelopeNotificationSettingsId = s.EnvelopeNotificationSettingsId,
+                LocationCode = s.LocationCode,
+                LocationName = s.LocationName,
+                NotificationEmail = s.NotificationEmail,
+                IsEnabled = s.IsEnabled
+            }).ToList();
+        }
+
+        public async Task SaveEnvelopeNotificationSettingAsync(SaveEnvelopeNotificationSettingRequest request, int modifiedByUserId)
+        {
+            var setting = await _context.EnvelopeNotificationSettings.FindAsync(request.EnvelopeNotificationSettingsId);
+            if (setting == null)
+                throw new Exception("Envelope notification setting not found");
+
+            setting.NotificationEmail = string.IsNullOrWhiteSpace(request.NotificationEmail)
+                ? null
+                : request.NotificationEmail.Trim();
+            setting.IsEnabled = request.IsEnabled;
+            setting.LastModifiedDate = DateTime.Now;
+            setting.LastModifiedByUserId = modifiedByUserId;
+
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task InitializeDefaultEnvelopeNotificationSettingsAsync()
+        {
+            var defaultRows = new[]
+            {
+                new { LocationCode = (string?)null, LocationName = "Company (All Branches)" },
+                new { LocationCode = (string?)"LAX",  LocationName = "Los Angeles" },
+                new { LocationCode = (string?)"LSV",  LocationName = "Las Vegas" },
+                new { LocationCode = (string?)"CHN",  LocationName = "Chino" },
+                new { LocationCode = (string?)"PHX",  LocationName = "Phoenix" },
+                new { LocationCode = (string?)"SND",  LocationName = "San Diego" }
+            };
+
+            foreach (var row in defaultRows)
+            {
+                bool exists = row.LocationCode == null
+                    ? await _context.EnvelopeNotificationSettings.AnyAsync(e => e.LocationCode == null)
+                    : await _context.EnvelopeNotificationSettings.AnyAsync(e => e.LocationCode == row.LocationCode);
+
+                if (!exists)
+                {
+                    _context.EnvelopeNotificationSettings.Add(new EnvelopeNotificationSettingsEntity
+                    {
+                        LocationCode = row.LocationCode,
+                        LocationName = row.LocationName,
+                        NotificationEmail = null,
+                        IsEnabled = true,
+                        LastModifiedDate = DateTime.Now,
+                        LastModifiedByUserId = 1
+                    });
+                }
+            }
+
             await _context.SaveChangesAsync();
         }
 

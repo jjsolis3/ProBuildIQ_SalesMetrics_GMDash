@@ -20,37 +20,67 @@ var TemplateFieldSelector = (function () {
 
         // Property fields
 
-        'PropertyName': { source: 'Property', type: 'text', displayName: 'Property Name' },
+        'PropertyName':    { source: 'Property', type: 'text', displayName: 'Property Name' },
 
         'PropertyAddress': { source: 'Property', type: 'text', displayName: 'Property Address' },
 
-        'PropertyPhone': { source: 'Property', type: 'text', displayName: 'Property Phone' },
+        'PropertyPhone':   { source: 'Property', type: 'text', displayName: 'Property Phone' },
+
+        'PropertyCity':    { source: 'Property', type: 'text', displayName: 'Property City' },
+
+        'PropertyState':   { source: 'Property', type: 'text', displayName: 'Property State' },
+
+        'PropertyZip':     { source: 'Property', type: 'text', displayName: 'Property Zip Code' },
+
+
+
+        // Customer contact fields
+
+        'CustomerName':    { source: 'Customer', type: 'text', displayName: 'Customer Name' },
+
+        'CustomerPhone':   { source: 'Customer', type: 'text', displayName: 'Customer Phone' },
+
+        'CustomerEmail':   { source: 'Customer', type: 'text', displayName: 'Customer Email' },
+
+        'CustomerCompany': { source: 'Customer', type: 'text', displayName: 'Customer Company' },
 
 
 
         // Work Order fields
 
-        'InstallationDate': { source: 'Order', type: 'date', displayName: 'Installation Date' },
+        'OrderNumber':     { source: 'Order', type: 'text', displayName: 'Order Number' },
 
-        'UnitNumber': { source: 'Order', type: 'text', displayName: 'Unit Number' },
+        'InstallationDate':{ source: 'Order', type: 'date', displayName: 'Installation Date' },
 
-        'DeliveryDate': { source: 'Order', type: 'date', displayName: 'Delivery Date' },
+        'UnitNumber':      { source: 'Order', type: 'text', displayName: 'Unit Number' },
+
+        'DeliveryDate':    { source: 'Order', type: 'date', displayName: 'Delivery Date' },
+
+        'OrderStartDate':  { source: 'Order', type: 'date', displayName: 'Order Start Date' },
+
+        'OrderEndDate':    { source: 'Order', type: 'date', displayName: 'Order End Date' },
+
+        'OrderSignedDate': { source: 'Order', type: 'date', displayName: 'Order Signed Date' },
+
+        'LeaseStartDate':  { source: 'Order', type: 'date', displayName: 'Lease Start Date' },
+
+        'LeaseEndDate':    { source: 'Order', type: 'date', displayName: 'Lease End Date' },
 
 
 
         // Signature fields
 
-        'PropertyStaffName': { source: 'Recipient', type: 'text', displayName: 'Property Staff Name', role: 'Manager' },
+        'PropertyStaffName':      { source: 'Recipient', type: 'text',      displayName: 'Property Staff Name',      role: 'Manager' },
 
         'PropertyStaffSignature': { source: 'Recipient', type: 'signature', displayName: 'Property Staff Signature', role: 'Manager' },
 
-        'PropertyStaffDate': { source: 'Recipient', type: 'date', displayName: 'Property Staff Date', role: 'Manager' },
+        'PropertyStaffDate':      { source: 'Recipient', type: 'date',      displayName: 'Property Staff Date',      role: 'Manager' },
 
-        'ResidentName': { source: 'Recipient', type: 'text', displayName: 'Resident Name', role: 'Tenant' },
+        'ResidentName':           { source: 'Recipient', type: 'text',      displayName: 'Resident Name',            role: 'Tenant' },
 
-        'ResidentSignature': { source: 'Recipient', type: 'signature', displayName: 'Resident Signature', role: 'Tenant' },
+        'ResidentSignature':      { source: 'Recipient', type: 'signature', displayName: 'Resident Signature',       role: 'Tenant' },
 
-        'ResidentPhone': { source: 'Recipient', type: 'text', displayName: 'Resident Phone', role: 'Tenant' }
+        'ResidentPhone':          { source: 'Recipient', type: 'text',      displayName: 'Resident Phone',           role: 'Tenant' }
 
     };
 
@@ -220,7 +250,7 @@ var TemplateFieldSelector = (function () {
 
         // Initialize category checkboxes
 
-        ['property', 'order', 'signature'].forEach(category => {
+        ['property', 'customer', 'order', 'signature'].forEach(category => {
 
             updateCategoryCheckbox(category);
 
@@ -458,7 +488,9 @@ var TemplateFieldSelector = (function () {
 
     return {
 
-        init: init
+        init: init,
+
+        updateMergeSpec: generateMergeSpecJSON
 
     };
 

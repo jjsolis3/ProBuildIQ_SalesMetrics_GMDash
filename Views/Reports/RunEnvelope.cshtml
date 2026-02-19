@@ -5,6 +5,10 @@
     var fromDateStr = Model.FromDate?.ToString("yyyy-MM-dd") ?? DateTime.Today.AddDays(-30).ToString("yyyy-MM-dd");
     var toDateStr   = Model.ToDate?.ToString("yyyy-MM-dd")   ?? DateTime.Today.ToString("yyyy-MM-dd");
 
+    var branchLabel = string.IsNullOrWhiteSpace(Model.BranchFilter)
+        ? (Model.CanViewAllBranches ? "All Branches" : Model.CurrentLocationCode)
+        : Model.BranchFilter;
+
     // Badge colour per status
     string StatusBadgeClass(string status) => status switch
     {
@@ -67,19 +71,91 @@
     /* ── Envelope link icon ── */
     .btn-xs { padding: .15rem .4rem; font-size: .75rem; }
 
-    /* ── Print / PDF: hide action column and nav chrome ── */
-    @media print {
-        .no-print, .dataTables_wrapper .dataTables_filter,
-        .dataTables_wrapper .dataTables_length,
-        .dataTables_wrapper .dataTables_info,
-        .dataTables_wrapper .dataTables_paginate,
-        .dt-buttons { display: none !important; }
-        .env-report-header { color: #000 !important; background: none !important; border: 1px solid #ccc; }
-        table { font-size: 10px; }
+    /* ════════════════════════════════════════════════════════════════════
+       PRINT STYLES
+       @page { margin: 0 } removes the browser-rendered date/time/URL/title
+       chrome that appears in the margin area. Body padding replaces it with
+       clean content margins.
+       ════════════════════════════════════════════════════════════════════ */
+    @@page {
+        margin: 0;
+        size: landscape;
+    }
+
+    @@media print {
+        body {
+            padding: 8mm 14mm;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        /* ── Hide screen-only UI ── */
+        nav, aside, .navbar, .sidebar, .breadcrumb,
+        .no-print,
+        .env-report-header,
+        .params-card,
+        .results-card,
+        .alert { display: none !important; }
+
+        /* ── Show print-only content ── */
+        #printHeader { display: block !important; }
+        #printTable  { display: table !important; }
+
+        /* ── KPI cards: strip screen effects, force single row ── */
+        #kpiRow {
+            display: flex !important;
+            flex-wrap: nowrap !important;
+            gap: 4px !important;
+            margin-bottom: 8px !important;
+        }
+        #kpiRow > div {
+            flex: 1 1 0 !important;
+            width: auto !important;
+            padding: 0 !important;
+        }
+        .kpi-card {
+            box-shadow: none !important;
+            transform: none !important;
+            border: 1px solid #bbb !important;
+            border-radius: 4px !important;
+            page-break-inside: avoid;
+            padding: 6px 4px !important;
+            min-height: auto !important;
+        }
+        .kpi-value { font-size: 1rem !important; }
+        .kpi-label { font-size: .58rem !important; }
+
+        /* ── Print table ── */
+        #printTable {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 8pt;
+            margin-top: 8px;
+        }
+        #printTable th {
+            background-color: #1a1a2e !important;
+            color: #fff !important;
+            padding: 4px 5px;
+            font-size: 7.5pt;
+            text-transform: uppercase;
+            letter-spacing: .03em;
+            text-align: left;
+            border: 1px solid #444;
+        }
+        #printTable td {
+            border: 1px solid #ccc;
+            padding: 3px 5px;
+            text-align: left;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+        #printTable tbody tr:nth-child(even) td {
+            background-color: #f4f6fb !important;
+        }
     }
 </style>
 
-@* ── Report header ────────────────────────────────────────────────────────── *@
+@* ── Report header (screen only) ──────────────────────────────────────────── *@
 <div class="env-report-header">
     <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
         <div>
@@ -168,10 +244,34 @@
     </div>
 </div>
 
-@* ── KPI Summary cards (shown after run) ─────────────────────────────────── *@
 @if (Model.ShowResults)
 {
-    <div class="row g-3 mb-4">
+    @* ── Print-only report header ───────────────────────────────────────────── *@
+    <div id="printHeader" style="display:none; font-family:Arial,sans-serif;">
+        <div style="text-align:center; margin-bottom:6px;">
+            <div style="font-size:9pt; font-weight:bold; text-transform:uppercase; letter-spacing:.06em; color:#555;">
+                ProBuildIQ Sales Metrics
+            </div>
+            <div style="font-size:15pt; font-weight:bold; color:#1a1a2e; margin:3px 0;">
+                Envelope Activity Report
+            </div>
+            <div style="font-size:8.5pt; color:#555; margin-top:3px;">
+                Date Range: @Model.FromDate?.ToString("MM/dd/yyyy") – @Model.ToDate?.ToString("MM/dd/yyyy")
+                &nbsp;&nbsp;|&nbsp;&nbsp;
+                Branch: @branchLabel
+                @if (!string.IsNullOrWhiteSpace(Model.StatusFilter))
+                {
+                    <text>&nbsp;&nbsp;|&nbsp;&nbsp;Status: @Model.StatusFilter</text>
+                }
+                &nbsp;&nbsp;|&nbsp;&nbsp;
+                Generated: @DateTime.Now.ToString("MMM d, yyyy h:mm tt")
+            </div>
+        </div>
+        <hr style="border:none; border-top:2px solid #1a1a2e; margin:6px 0 8px;" />
+    </div>
+
+    @* ── KPI Summary cards ──────────────────────────────────────────────────── *@
+    <div class="row g-3 mb-4" id="kpiRow">
         <div class="col-6 col-sm-4 col-xl-2">
             <div class="card kpi-card text-center p-3 h-100" style="border-top:3px solid #0d6efd;">
                 <div class="kpi-value text-primary">@Model.TotalEnvelopes</div>
@@ -214,7 +314,7 @@
         </div>
     </div>
 
-    @* ── Detail table ─────────────────────────────────────────────────────── *@
+    @* ── Detail table (screen — DataTables) ────────────────────────────────── *@
     <div class="card results-card mb-4">
         <div class="card-header d-flex justify-content-between align-items-center py-3">
             <span>
@@ -252,7 +352,7 @@
                             <th>Completed</th>
                             <th class="text-center">Days</th>
                             <th class="text-center">Recipients</th>
-                            <th class="no-print text-center"></th>
+                            <th class="text-center"></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -289,7 +389,7 @@
                                 <td class="text-center">
                                     @row.SignedCount / @row.RecipientCount
                                 </td>
-                                <td class="text-center no-print">
+                                <td class="text-center">
                                     <a href="@Url.Action("Details", "SignAdmin", new { id = row.EnvelopeId })"
                                        class="btn btn-xs btn-outline-primary" target="_blank"
                                        title="Open envelope">
@@ -310,6 +410,42 @@
             }
         </div>
     </div>
+
+    @* ── Print-only plain table (bypasses DataTables scroll wrapper) ────────── *@
+    @if (Model.Rows.Any())
+    {
+        <table id="printTable" style="display:none">
+            <thead>
+                <tr>
+                    <th>Subject</th>
+                    <th>Order #</th>
+                    <th>Branch</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Sent</th>
+                    <th>Completed</th>
+                    <th>Days</th>
+                    <th>Recipients</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in Model.Rows)
+                {
+                    <tr>
+                        <td>@row.Subject</td>
+                        <td>@(row.OrderNumber ?? "—")</td>
+                        <td>@(row.LocationCode ?? "—")</td>
+                        <td>@row.Status</td>
+                        <td>@row.CreatedDateUtc.ToLocalTime().ToString("MM/dd/yyyy")</td>
+                        <td>@(row.SentAtUtc?.ToLocalTime().ToString("MM/dd/yyyy") ?? "—")</td>
+                        <td>@(row.CompletedAtUtc?.ToLocalTime().ToString("MM/dd/yyyy") ?? "—")</td>
+                        <td>@(row.DaysToComplete.HasValue ? row.DaysToComplete.Value.ToString("0.#") : "—")</td>
+                        <td>@row.SignedCount / @row.RecipientCount</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
 }
 else
 {
@@ -341,7 +477,7 @@ else
 
                 var reportTitle = 'Envelope Activity Report';
                 var dateRange   = '@(Model.FromDate?.ToString("MM/dd/yyyy")) – @(Model.ToDate?.ToString("MM/dd/yyyy"))';
-                var branchLabel = '@(string.IsNullOrWhiteSpace(Model.BranchFilter) ? (Model.CanViewAllBranches ? "All Branches" : Model.CurrentLocationCode) : Model.BranchFilter)';
+                var branchLabel = '@branchLabel';
                 var pdfTitle    = reportTitle + '\n' + dateRange + ' · ' + branchLabel;
 
                 $('#envelopeReportTable').DataTable({
@@ -349,7 +485,6 @@ else
                     paging: true,
                     pageLength: 25,
                     searching: true,
-                    // Default sort: Sent Date descending (column 5)
                     order: [[5, 'desc']],
                     dom: `<"top d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2" lBf>
                           rt
@@ -380,10 +515,8 @@ else
                             orientation: 'landscape',
                             pageSize: 'LEGAL',
                             customize: function (doc) {
-                                // Branded header styling
                                 doc.styles.title = { fontSize: 13, bold: true, color: '#1a1a2e', alignment: 'left' };
                                 doc.defaultStyle = { fontSize: 9 };
-                                // Alternate row shading
                                 doc.content[1].table.body.forEach(function (row, idx) {
                                     if (idx > 0 && idx % 2 === 0) {
                                         row.forEach(function (cell) {
@@ -395,14 +528,8 @@ else
                         }
                     ],
                     columnDefs: [
-                        // Last column (open link) — not exported, not sortable
-                        { targets: -1, orderable: false, searchable: false, className: 'no-print' },
-                        // Use the data-sort ticks for date columns
-                        { targets: [4, 5, 6], type: 'num', render: { _: 'display', sort: function (data, type, row, meta) {
-                            var cell = $($.parseHTML('<span>' + data + '</span>'));
-                            // Fall back to displayed value for sorting
-                            return data;
-                        }}},
+                        { targets: -1, orderable: false, searchable: false },
+                        { targets: [4, 5, 6], type: 'num' }
                     ],
                     lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
                     language: {

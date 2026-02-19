@@ -313,13 +313,13 @@ public sealed class EnvelopeService : IEnvelopeService
         // Build property/order context block (shown in email, not part of MessageBody)
         var contextRows = "";
         if (!string.IsNullOrWhiteSpace(sendPropertyName))
-            contextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Property</td><td style=\"padding:4px 0;font-size:13px;\">{HtmlEncode(sendPropertyName)}</td></tr>";
+            contextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Property</td><td style=\"padding:4px 0;font-size:13px;\">{System.Net.WebUtility.HtmlEncode(sendPropertyName)}</td></tr>";
         if (!string.IsNullOrWhiteSpace(sendPropertyAddress))
-            contextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Address</td><td style=\"padding:4px 0;font-size:13px;\">{HtmlEncode(sendPropertyAddress)}</td></tr>";
+            contextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Address</td><td style=\"padding:4px 0;font-size:13px;\">{System.Net.WebUtility.HtmlEncode(sendPropertyAddress)}</td></tr>";
         if (!string.IsNullOrWhiteSpace(env.OrderNumber))
-            contextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Order #</td><td style=\"padding:4px 0;font-size:13px;\">{HtmlEncode(env.OrderNumber)}</td></tr>";
+            contextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Order #</td><td style=\"padding:4px 0;font-size:13px;\">{System.Net.WebUtility.HtmlEncode(env.OrderNumber)}</td></tr>";
         if (!string.IsNullOrWhiteSpace(env.LocationCode))
-            contextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Branch</td><td style=\"padding:4px 0;font-size:13px;\">{HtmlEncode(env.LocationCode)}</td></tr>";
+            contextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Branch</td><td style=\"padding:4px 0;font-size:13px;\">{System.Net.WebUtility.HtmlEncode(env.LocationCode)}</td></tr>";
 
         var contextHtml = string.IsNullOrEmpty(contextRows) ? "" : $@"
             <table cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:12px 0 16px 0;border-left:3px solid #f59e0b;padding-left:12px;"">
@@ -491,13 +491,13 @@ public sealed class EnvelopeService : IEnvelopeService
 
         var editContextRows = "";
         if (!string.IsNullOrWhiteSpace(editResendPropertyName))
-            editContextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Property</td><td style=\"padding:4px 0;font-size:13px;\">{HtmlEncode(editResendPropertyName)}</td></tr>";
+            editContextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Property</td><td style=\"padding:4px 0;font-size:13px;\">{System.Net.WebUtility.HtmlEncode(editResendPropertyName)}</td></tr>";
         if (!string.IsNullOrWhiteSpace(editResendPropertyAddress))
-            editContextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Address</td><td style=\"padding:4px 0;font-size:13px;\">{HtmlEncode(editResendPropertyAddress)}</td></tr>";
+            editContextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Address</td><td style=\"padding:4px 0;font-size:13px;\">{System.Net.WebUtility.HtmlEncode(editResendPropertyAddress)}</td></tr>";
         if (!string.IsNullOrWhiteSpace(env.OrderNumber))
-            editContextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Order #</td><td style=\"padding:4px 0;font-size:13px;\">{HtmlEncode(env.OrderNumber)}</td></tr>";
+            editContextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Order #</td><td style=\"padding:4px 0;font-size:13px;\">{System.Net.WebUtility.HtmlEncode(env.OrderNumber)}</td></tr>";
         if (!string.IsNullOrWhiteSpace(env.LocationCode))
-            editContextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Branch</td><td style=\"padding:4px 0;font-size:13px;\">{HtmlEncode(env.LocationCode)}</td></tr>";
+            editContextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Branch</td><td style=\"padding:4px 0;font-size:13px;\">{System.Net.WebUtility.HtmlEncode(env.LocationCode)}</td></tr>";
         var editContextHtml = string.IsNullOrEmpty(editContextRows) ? "" : $@"<table cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:12px 0 16px 0;border-left:3px solid #f59e0b;padding-left:12px;"">{editContextRows}</table>";
 
         foreach (var recipient in recipientsToResend)

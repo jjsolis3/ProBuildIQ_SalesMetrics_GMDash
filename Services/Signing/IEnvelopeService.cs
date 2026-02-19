@@ -10,6 +10,14 @@ namespace SalesMetrics.Services.Signing
         Task<long> CreateAsync(int createdByUsersId, CreateEnvelopeVm vm);
         Task SendAsync(long envelopeId); // send emails & mark Sent
         Task VoidEnvelopeAsync(long envelopeId, int voidedByUserId, string? reason = null); // void/cancel envelope
+
+        /// <summary>
+        /// Edit subject, message body, and/or unsigned recipient details.
+        /// If a recipient's email is changed, their access token is regenerated and a
+        /// fresh invitation is sent automatically.  Signed recipients are never modified.
+        /// </summary>
+        Task EditEnvelopeAsync(EditEnvelopeVm vm, int modifiedByUserId);
+
         Task<EnvelopeDetailsVm?> GetDetailsAsync(long envelopeId);
         Task<(IReadOnlyList<EnvelopeListItemVm> Rows, int Total)> SearchAsync(string? status, string? office, int page, int pageSize, int? createdByUserId = null, string? scope = null, int? userRoleId = null, int? userLocationId = null);
 

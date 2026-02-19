@@ -1,0 +1,179 @@
+@* Views/SignAdmin/Edit.cshtml *@
+@model SalesMetrics.Models.Signing.EditEnvelopeVm
+@{
+    ViewData["Title"] = "Edit Envelope";
+}
+
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-warning text-dark fw-bold">
+        Edit Envelope #@Model.EnvelopeId
+    </div>
+    <div class="card-body">
+        @* Read-only context card *@
+        <div class="card border-0 bg-light mb-4">
+            <div class="card-body py-2">
+                <div class="row g-2 small">
+                    @if (!string.IsNullOrWhiteSpace(Model.PropertyName))
+                    {
+                        <div class="col-md-4">
+                            <span class="text-muted">Property:</span>
+                            <strong>@Model.PropertyName</strong>
+                        </div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(Model.OrderNumber))
+                    {
+                        <div class="col-md-3">
+                            <span class="text-muted">Order #:</span>
+                            <strong>@Model.OrderNumber</strong>
+                        </div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(Model.LocationCode))
+                    {
+                        <div class="col-md-2">
+                            <span class="text-muted">Branch:</span>
+                            <strong>@Model.LocationCode</strong>
+                        </div>
+                    }
+                    <div class="col-md-3">
+                        <span class="text-muted">Status:</span>
+                        <span class="badge rounded-pill
+                            @(Model.Status == "Sent" ? "bg-primary" :
+                              Model.Status == "Viewed" ? "bg-info text-dark" :
+                              "bg-warning text-dark")">
+                            @Model.Status
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <form asp-action="Edit" asp-route-id="@Model.EnvelopeId" method="post">
+            @Html.AntiForgeryToken()
+
+            @* Envelope fields *@
+            <div class="row g-3 mb-4">
+                <div class="col-md-12">
+                    <label class="form-label fw-semibold">Subject</label>
+                    <input asp-for="Subject" class="form-control" />
+                    <span asp-validation-for="Subject" class="text-danger small"></span>
+                </div>
+                <div class="col-md-12">
+                    <label class="form-label fw-semibold">Message Body <span class="text-muted fw-normal">(Optional)</span></label>
+                    <textarea asp-for="MessageBody" class="form-control" rows="3"></textarea>
+                </div>
+            </div>
+
+            <hr />
+
+            @* Recipients section *@
+            <div class="fw-bold mb-3">Recipients</div>
+
+            @for (int i = 0; i < Model.Recipients.Count; i++)
+            {
+                var r = Model.Recipients[i];
+
+                @* Hidden fields for binding *@
+                <input type="hidden" name="Recipients[@i].RecipientId" value="@r.RecipientId" />
+                <input type="hidden" name="Recipients[@i].Role" value="@r.Role" />
+                <input type="hidden" name="Recipients[@i].SignerOrder" value="@r.SignerOrder" />
+                <input type="hidden" name="Recipients[@i].HasSigned" value="@r.HasSigned.ToString().ToLower()" />
+
+                <div class="card border mb-3 @(r.HasSigned ? "border-success" : "border-secondary")">
+                    <div class="card-header d-flex justify-content-between align-items-center py-2
+                        @(r.HasSigned ? "bg-success bg-opacity-10" : "bg-light")">
+                        <div class="fw-semibold small">
+                            <span class="badge bg-secondary me-1">@r.SignerOrder</span>
+                            @r.Role
+                        </div>
+                        @if (r.HasSigned)
+                        {
+                            <span class="badge bg-success"><i class="fas fa-check me-1"></i>Signed</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-warning text-dark">Pending Signature</span>
+                        }
+                    </div>
+                    <div class="card-body">
+                        @if (r.HasSigned)
+                        {
+                            @* Signed recipients: read-only display *@
+                            <div class="row g-2 small text-muted">
+                                <div class="col-md-4"><strong>Name:</strong> @r.FullName</div>
+                                <div class="col-md-4"><strong>Email:</strong> @r.Email</div>
+                                @if (!string.IsNullOrWhiteSpace(r.Phone))
+                                {
+                                    <div class="col-md-4"><strong>Phone:</strong> @r.Phone</div>
+                                }
+                            </div>
+                            <div class="small text-success mt-1">
+                                <i class="fas fa-lock me-1"></i>This recipient has already signed and cannot be modified.
+                            </div>
+                        }
+                        else
+                        {
+                            @* Unsigned recipients: editable *@
+                            <div class="row g-2">
+                                <div class="col-md-4">
+                                    <label class="form-label small fw-semibold">Full Name</label>
+                                    <input name="Recipients[@i].FullName" class="form-control form-control-sm"
+                                           value="@r.FullName" required />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label small fw-semibold">Email</label>
+                                    <input name="Recipients[@i].Email" type="email" class="form-control form-control-sm"
+                                           value="@r.Email" required id="email-@i" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label small fw-semibold">Phone <span class="text-muted fw-normal">(Optional)</span></label>
+                                    <input name="Recipients[@i].Phone" class="form-control form-control-sm"
+                                           value="@(r.Phone ?? "")" />
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox"
+                                           name="Recipients[@i].ResendInvite"
+                                           id="resend-@i" value="true" />
+                                    <label class="form-check-label small" for="resend-@i">
+                                        Re-send invitation email to this recipient after saving
+                                    </label>
+                                </div>
+                                <div class="small text-muted mt-1">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Changing the email address will automatically regenerate the signing link and send a fresh invitation.
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            <div class="d-flex gap-2 mt-4">
+                <button type="submit" class="btn btn-warning fw-semibold">
+                    <i class="fas fa-save me-1"></i> Save Changes
+                </button>
+                <a asp-action="Details" asp-route-id="@Model.EnvelopeId" class="btn btn-outline-secondary">
+                    Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    // When an email field changes, auto-check the "Re-send invite" checkbox for that recipient
+    document.querySelectorAll('input[type="email"][id^="email-"]').forEach(function(emailInput) {
+        const idx = emailInput.id.replace('email-', '');
+        const resendCheckbox = document.getElementById('resend-' + idx);
+        const originalEmail = emailInput.value;
+
+        emailInput.addEventListener('change', function () {
+            if (resendCheckbox && emailInput.value.trim() !== originalEmail) {
+                resendCheckbox.checked = true;
+            }
+        });
+    });
+</script>
+}

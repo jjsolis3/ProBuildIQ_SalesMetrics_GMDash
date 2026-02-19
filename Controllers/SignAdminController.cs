@@ -184,6 +184,61 @@ public class SignAdminController : Controller
         return RedirectToAction(nameof(Details), new { id });
     }
 
+    // GET /SignAdmin/Edit/123
+    [HttpGet]
+    public async Task<IActionResult> Edit(long id)
+    {
+        var details = await _svc.GetDetailsAsync(id);
+        if (details == null) return NotFound();
+
+        if (details.Status == "Completed" || details.Status == "Voided")
+        {
+            TempData["error"] = "Completed or voided envelopes cannot be edited.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var vm = new EditEnvelopeVm
+        {
+            EnvelopeId   = details.EnvelopeId,
+            Subject      = details.Subject,
+            MessageBody  = details.MessageBody,
+            Status       = details.Status,
+            PropertyName = details.PropertyName,
+            OrderNumber  = details.OrderNumber,
+            LocationCode = details.LocationCode,
+            Recipients   = details.Recipients.Select(r => new EditRecipientVm
+            {
+                RecipientId = r.RecipientId,
+                Role        = r.Role,
+                SignerOrder  = r.SignerOrder,
+                FullName    = r.FullName,
+                Email       = r.Email,
+                Phone       = r.Phone,
+                HasSigned   = r.SignedAtUtc.HasValue
+            }).ToList()
+        };
+
+        return View(vm);
+    }
+
+    // POST /SignAdmin/Edit/123
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> Edit(long id, EditEnvelopeVm vm)
+    {
+        vm.EnvelopeId = id;
+        try
+        {
+            var userId = GetCurrentUserId();
+            await _svc.EditEnvelopeAsync(vm, userId);
+            TempData["msg"] = "Envelope updated successfully.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            TempData["error"] = ex.Message;
+        }
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
     // POST /SignAdmin/Resend/123
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Resend(long id)

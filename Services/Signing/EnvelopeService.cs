@@ -325,6 +325,136 @@ public sealed class EnvelopeService : IEnvelopeService
         await _db.SaveChangesAsync();
     }
 
+    public async Task EditEnvelopeAsync(EditEnvelopeVm vm, int modifiedByUserId)
+    {
+        var env = await _db.SignEnvelopes
+            .Include(e => e.Recipients)
+            .FirstOrDefaultAsync(e => e.EnvelopeId == vm.EnvelopeId)
+            ?? throw new InvalidOperationException($"Envelope {vm.EnvelopeId} not found");
+
+        if (env.Status == "Completed")
+            throw new InvalidOperationException("Completed envelopes cannot be edited.");
+        if (env.Status == "Voided")
+            throw new InvalidOperationException("Voided envelopes cannot be edited.");
+
+        var changes = new List<string>();
+
+        // ── Envelope header fields ──────────────────────────────────────────
+        if (env.Subject != vm.Subject)
+        {
+            env.Subject = vm.Subject;
+            changes.Add("Subject");
+        }
+        if (env.MessageBody != vm.MessageBody)
+        {
+            env.MessageBody = vm.MessageBody;
+            changes.Add("MessageBody");
+        }
+
+        env.ModifiedByUsers_ID = modifiedByUserId;
+        env.ModifiedDateUtc    = DateTime.UtcNow;
+
+        // ── Unsigned recipients ─────────────────────────────────────────────
+        var recipientsToResend = new List<SignRecipient>();
+
+        foreach (var editR in vm.Recipients)
+        {
+            var existing = env.Recipients.FirstOrDefault(r => r.RecipientId == editR.RecipientId);
+            // Never modify a recipient who has already signed
+            if (existing == null || existing.SignedAtUtc.HasValue)
+                continue;
+
+            bool emailChanged = !string.Equals(existing.Email, editR.Email, StringComparison.OrdinalIgnoreCase);
+            bool nameChanged  = existing.FullName != editR.FullName;
+            bool phoneChanged = existing.Phone    != editR.Phone;
+
+            if (emailChanged || nameChanged || phoneChanged)
+            {
+                existing.FullName = editR.FullName;
+                existing.Phone    = editR.Phone;
+                changes.Add($"Recipient:{existing.Role}");
+
+                if (emailChanged)
+                {
+                    existing.Email = editR.Email;
+                    // Invalidate old link — generate a fresh secure token
+                    existing.AccessToken     = Utilities.Security.TokenHelper.CreateSecureToken(32);
+                    // Clear view tracking so the new recipient starts fresh
+                    existing.ViewedAtUtc     = null;
+                    existing.IPAddressViewed = null;
+                    existing.UserAgentViewed = null;
+                    // An email change always triggers a resend
+                    editR.ResendInvite = true;
+                }
+
+                if (editR.ResendInvite)
+                    recipientsToResend.Add(existing);
+            }
+        }
+
+        if (changes.Count > 0)
+        {
+            _db.SignEvents.Add(new SignEvent
+            {
+                EnvelopeId    = env.EnvelopeId,
+                EventType     = "Edited",
+                OccurredAtUtc = DateTime.UtcNow,
+                MetaJson      = JsonSerializer.Serialize(new { modifiedByUserId, changes })
+            });
+        }
+
+        await _db.SaveChangesAsync();
+
+        // ── Re-send invitations to affected unsigned recipients ─────────────
+        foreach (var recipient in recipientsToResend)
+        {
+            try
+            {
+                var baseUrl = _appSettings.BaseUrl.TrimEnd('/');
+                var link    = $"{baseUrl}/sign/{recipient.AccessToken}";
+
+                var messageHtml = !string.IsNullOrWhiteSpace(env.MessageBody)
+                    ? $"<p style=\"margin:12px 0;font-size:14px;color:#374151;\">{env.MessageBody}</p>"
+                    : "";
+
+                var innerHtml = $@"
+                    <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Updated Signing Request</h2>
+                    <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Hello {recipient.FullName},</p>
+                    <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">
+                        Your signing invitation for <strong>{env.Subject}</strong> has been updated.
+                        Please use the new link below to review and sign the document.
+                    </p>
+                    {messageHtml}
+                    <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:24px 0;"">
+                      <tr>
+                        <td align=""center"" style=""background-color:#3b82f6;border-radius:6px;"">
+                          <a href=""{link}"" style=""display:inline-block;padding:12px 32px;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px;"">Open &amp; Sign</a>
+                        </td>
+                      </tr>
+                    </table>
+                    <p style=""margin:0;font-size:12px;color:#9ca3af;"">If the button above doesn't work, copy and paste this link into your browser:</p>
+                    <p style=""margin:4px 0 0 0;font-size:12px;color:#3b82f6;word-break:break-all;""><a href=""{link}"" style=""color:#3b82f6;"">{link}</a></p>";
+
+                var html = _emailTemplate.WrapInBrandedTemplate(innerHtml);
+                await _notify.SendEnvelopeEmailAsync(recipient.Email, recipient.FullName, env.Subject, html);
+
+                _db.SignEvents.Add(new SignEvent
+                {
+                    EnvelopeId    = env.EnvelopeId,
+                    RecipientId   = recipient.RecipientId,
+                    EventType     = "Sent",
+                    OccurredAtUtc = DateTime.UtcNow
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to re-send invite to recipient {RecipientId} after edit", recipient.RecipientId);
+            }
+        }
+
+        await _db.SaveChangesAsync();
+    }
+
     public async Task VoidEnvelopeAsync(long envelopeId, int voidedByUserId, string? reason = null)
     {
         var env = await _db.SignEnvelopes
@@ -424,13 +554,14 @@ public sealed class EnvelopeService : IEnvelopeService
             UnitNumber = unitNumber,
             Recipients = e.Recipients.OrderBy(r => r.SignerOrder).Select(r => new EnvelopeDetailsVm.RecipientVm
             {
-                RecipientId = r.RecipientId,
-                Role = r.Role,
-                SignerOrder = r.SignerOrder,
-                FullName = r.FullName,
-                Email = r.Email,
-                ViewedAtUtc = r.ViewedAtUtc,
-                SignedAtUtc = r.SignedAtUtc,
+                RecipientId   = r.RecipientId,
+                Role          = r.Role,
+                SignerOrder   = r.SignerOrder,
+                FullName      = r.FullName,
+                Email         = r.Email,
+                Phone         = r.Phone,
+                ViewedAtUtc   = r.ViewedAtUtc,
+                SignedAtUtc   = r.SignedAtUtc,
                 DeclinedAtUtc = r.DeclinedAtUtc
             }).ToList(),
             Events = e.Events.OrderByDescending(ev => ev.OccurredAtUtc).Select(ev => new EnvelopeDetailsVm.EventVm
@@ -790,6 +921,24 @@ public sealed class EnvelopeService : IEnvelopeService
         }
 
         // ---------------------------------------------------------------
+        // Fetch property name + address for notification emails
+        // ---------------------------------------------------------------
+        string? notifPropertyName    = null;
+        string? notifPropertyAddress = null;
+        if (env.PropertyID.HasValue)
+        {
+            try
+            {
+                notifPropertyName    = await _merge.GetPropertyNameAsync(env.PropertyID.Value);
+                notifPropertyAddress = await _merge.GetPropertyAddressAsync(env.PropertyID.Value);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not fetch property info for completion notification email (envelope {EnvelopeId})", envelopeId);
+            }
+        }
+
+        // ---------------------------------------------------------------
         // Send internal company / branch notification emails
         // ---------------------------------------------------------------
         var internalNotifSettings = await _db.EnvelopeNotificationSettings
@@ -834,12 +983,32 @@ public sealed class EnvelopeService : IEnvelopeService
                     ? env.CompletedAtUtc.Value.ToString("f") + " UTC"
                     : DateTime.UtcNow.ToString("f") + " UTC";
 
+                // Build optional property rows
+                var propertyRows = "";
+                if (!string.IsNullOrWhiteSpace(notifPropertyName))
+                {
+                    propertyRows += $@"
+                        <tr style=""border-bottom:1px solid #e5e7eb;"">
+                            <td style=""padding:8px 12px 8px 0;font-weight:600;white-space:nowrap;"">Property</td>
+                            <td style=""padding:8px 0;"">{System.Net.WebUtility.HtmlEncode(notifPropertyName)}</td>
+                        </tr>";
+                }
+                if (!string.IsNullOrWhiteSpace(notifPropertyAddress))
+                {
+                    propertyRows += $@"
+                        <tr style=""border-bottom:1px solid #e5e7eb;"">
+                            <td style=""padding:8px 12px 8px 0;font-weight:600;white-space:nowrap;"">Address</td>
+                            <td style=""padding:8px 0;"">{System.Net.WebUtility.HtmlEncode(notifPropertyAddress)}</td>
+                        </tr>";
+                }
+
                 var innerHtml = $@"
                     <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Envelope Completed</h2>
                     <p style=""margin:0 0 16px 0;font-size:15px;color:#374151;"">
                         An envelope has been completed by all signers. Please find the details below.
                     </p>
                     <table style=""width:100%;border-collapse:collapse;font-size:14px;color:#374151;margin-bottom:16px;"">
+                        {propertyRows}
                         <tr style=""border-bottom:1px solid #e5e7eb;"">
                             <td style=""padding:8px 12px 8px 0;font-weight:600;white-space:nowrap;"">Subject</td>
                             <td style=""padding:8px 0;"">{System.Net.WebUtility.HtmlEncode(env.Subject)}</td>

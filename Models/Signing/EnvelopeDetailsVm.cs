@@ -33,6 +33,7 @@ public sealed class EnvelopeDetailsVm
         public int SignerOrder { get; set; }
         public string FullName { get; set; } = default!;
         public string Email { get; set; } = default!;
+        public string? Phone { get; set; }
         public DateTime? ViewedAtUtc { get; set; }
         public DateTime? SignedAtUtc { get; set; }
         public DateTime? DeclinedAtUtc { get; set; }

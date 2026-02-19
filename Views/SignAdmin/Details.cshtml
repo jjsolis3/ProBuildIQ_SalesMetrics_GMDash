@@ -48,14 +48,37 @@
                     <ul class="list-group list-group-flush">
                         @foreach (var r in Model.Recipients)
                         {
-                            <li class="list-group-item d-flex justify-content-between">
+                            <li class="list-group-item d-flex justify-content-between align-items-start">
                                 <div>
                                     <div class="fw-semibold">@r.FullName (@r.Role) • <span class="text-muted">@r.Email</span></div>
-                                    <div class="small text-muted">Viewed: @r.ViewedAtUtc?.ToLocalTime().ToString("g") • Signed: @r.SignedAtUtc?.ToLocalTime().ToString("g")</div>
+                                    @if (!string.IsNullOrWhiteSpace(r.Phone))
+                                    {
+                                        <div class="small text-muted"><i class="fas fa-phone me-1"></i>@r.Phone</div>
+                                    }
+                                    <div class="small text-muted">
+                                        Viewed: @(r.ViewedAtUtc.HasValue ? r.ViewedAtUtc.Value.ToLocalTime().ToString("g") : "—")
+                                        @if (r.SignedAtUtc.HasValue)
+                                        {
+                                            <text> • Signed: @r.SignedAtUtc.Value.ToLocalTime().ToString("g")</text>
+                                        }
+                                        @if (r.DeclinedAtUtc.HasValue)
+                                        {
+                                            <text> • Declined: @r.DeclinedAtUtc.Value.ToLocalTime().ToString("g")</text>
+                                        }
+                                    </div>
                                 </div>
-                                <span class="badge rounded-pill @(r.SignedAtUtc != null ? "bg-success" : "bg-warning text-dark")">
-                                    @(r.SignedAtUtc != null ? "Signed" : "Pending")
-                                </span>
+                                @if (r.SignedAtUtc != null)
+                                {
+                                    <span class="badge rounded-pill bg-success">Signed</span>
+                                }
+                                else if (r.DeclinedAtUtc != null)
+                                {
+                                    <span class="badge rounded-pill bg-danger">Declined</span>
+                                }
+                                else
+                                {
+                                    <span class="badge rounded-pill bg-warning text-dark">Pending</span>
+                                }
                             </li>
                         }
                     </ul>
@@ -98,9 +121,13 @@
                             @Html.AntiForgeryToken()
                         </form>
 
-                        @* Only show Void button if envelope is not already completed or voided *@
+                        @* Edit and Void buttons — only when envelope is still active *@
                         @if (Model.Status != "Completed" && Model.Status != "Voided")
                         {
+                            <a asp-action="Edit" asp-route-id="@Model.EnvelopeId"
+                               class="btn btn-outline-warning w-100 mt-2">
+                                <i class="fas fa-edit me-1"></i> Edit Envelope
+                            </a>
                             <button type="button" class="btn btn-outline-danger w-100 mt-2" data-bs-toggle="modal" data-bs-target="#voidModal">
                                 Void / Cancel Envelope
                             </button>

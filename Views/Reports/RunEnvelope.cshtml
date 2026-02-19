@@ -71,88 +71,8 @@
     /* ── Envelope link icon ── */
     .btn-xs { padding: .15rem .4rem; font-size: .75rem; }
 
-    /* ════════════════════════════════════════════════════════════════════
-       PRINT STYLES
-       @page { margin: 0 } removes the browser-rendered date/time/URL/title
-       chrome that appears in the margin area. Body padding replaces it with
-       clean content margins.
-       ════════════════════════════════════════════════════════════════════ */
-    @@page {
-        margin: 0;
-        size: landscape;
-    }
-
-    @@media print {
-        body {
-            padding: 8mm 14mm;
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-        }
-
-        /* ── Hide screen-only UI ── */
-        nav, aside, .navbar, .sidebar, .breadcrumb,
-        .no-print,
-        .env-report-header,
-        .params-card,
-        .results-card,
-        .alert { display: none !important; }
-
-        /* ── Show print-only content ── */
-        #printHeader { display: block !important; }
-        #printTable  { display: table !important; }
-
-        /* ── KPI cards: strip screen effects, force single row ── */
-        #kpiRow {
-            display: flex !important;
-            flex-wrap: nowrap !important;
-            gap: 4px !important;
-            margin-bottom: 8px !important;
-        }
-        #kpiRow > div {
-            flex: 1 1 0 !important;
-            width: auto !important;
-            padding: 0 !important;
-        }
-        .kpi-card {
-            box-shadow: none !important;
-            transform: none !important;
-            border: 1px solid #bbb !important;
-            border-radius: 4px !important;
-            page-break-inside: avoid;
-            padding: 6px 4px !important;
-            min-height: auto !important;
-        }
-        .kpi-value { font-size: 1rem !important; }
-        .kpi-label { font-size: .58rem !important; }
-
-        /* ── Print table ── */
-        #printTable {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 8pt;
-            margin-top: 8px;
-        }
-        #printTable th {
-            background-color: #1a1a2e !important;
-            color: #fff !important;
-            padding: 4px 5px;
-            font-size: 7.5pt;
-            text-transform: uppercase;
-            letter-spacing: .03em;
-            text-align: left;
-            border: 1px solid #444;
-        }
-        #printTable td {
-            border: 1px solid #ccc;
-            padding: 3px 5px;
-            text-align: left;
-            word-wrap: break-word;
-            overflow-wrap: break-word;
-        }
-        #printTable tbody tr:nth-child(even) td {
-            background-color: #f4f6fb !important;
-        }
-    }
+    /* Printing is handled by the dedicated PrintEnvelopeReport view (Layout=null),
+       opened in a new window by the Print button below. No print CSS needed here. */
 </style>
 
 @* ── Report header (screen only) ──────────────────────────────────────────── *@
@@ -227,9 +147,11 @@
                     </button>
                     @if (Model.ShowResults && Model.Rows.Any())
                     {
-                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.print()">
-                            <i class="fas fa-print me-1"></i> Print
-                        </button>
+                        <a href="@Url.Action("PrintEnvelopeReport", "Reports")?fromDate=@Model.FromDate?.ToString("yyyy-MM-dd")&toDate=@Model.ToDate?.ToString("yyyy-MM-dd")&statusFilter=@Model.StatusFilter&branchFilter=@Model.BranchFilter"
+                           target="_blank"
+                           class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-print me-1"></i> Print / PDF
+                        </a>
                     }
                 </div>
             </div>
@@ -246,32 +168,8 @@
 
 @if (Model.ShowResults)
 {
-    @* ── Print-only report header ───────────────────────────────────────────── *@
-    <div id="printHeader" style="display:none; font-family:Arial,sans-serif;">
-        <div style="text-align:center; margin-bottom:6px;">
-            <div style="font-size:9pt; font-weight:bold; text-transform:uppercase; letter-spacing:.06em; color:#555;">
-                ProBuildIQ Sales Metrics
-            </div>
-            <div style="font-size:15pt; font-weight:bold; color:#1a1a2e; margin:3px 0;">
-                Envelope Activity Report
-            </div>
-            <div style="font-size:8.5pt; color:#555; margin-top:3px;">
-                Date Range: @Model.FromDate?.ToString("MM/dd/yyyy") – @Model.ToDate?.ToString("MM/dd/yyyy")
-                &nbsp;&nbsp;|&nbsp;&nbsp;
-                Branch: @branchLabel
-                @if (!string.IsNullOrWhiteSpace(Model.StatusFilter))
-                {
-                    <text>&nbsp;&nbsp;|&nbsp;&nbsp;Status: @Model.StatusFilter</text>
-                }
-                &nbsp;&nbsp;|&nbsp;&nbsp;
-                Generated: @DateTime.Now.ToString("MMM d, yyyy h:mm tt")
-            </div>
-        </div>
-        <hr style="border:none; border-top:2px solid #1a1a2e; margin:6px 0 8px;" />
-    </div>
-
     @* ── KPI Summary cards ──────────────────────────────────────────────────── *@
-    <div class="row g-3 mb-4" id="kpiRow">
+    <div class="row g-3 mb-4">
         <div class="col-6 col-sm-4 col-xl-2">
             <div class="card kpi-card text-center p-3 h-100" style="border-top:3px solid #0d6efd;">
                 <div class="kpi-value text-primary">@Model.TotalEnvelopes</div>
@@ -411,41 +309,6 @@
         </div>
     </div>
 
-    @* ── Print-only plain table (bypasses DataTables scroll wrapper) ────────── *@
-    @if (Model.Rows.Any())
-    {
-        <table id="printTable" style="display:none">
-            <thead>
-                <tr>
-                    <th>Subject</th>
-                    <th>Order #</th>
-                    <th>Branch</th>
-                    <th>Status</th>
-                    <th>Created</th>
-                    <th>Sent</th>
-                    <th>Completed</th>
-                    <th>Days</th>
-                    <th>Recipients</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var row in Model.Rows)
-                {
-                    <tr>
-                        <td>@row.Subject</td>
-                        <td>@(row.OrderNumber ?? "—")</td>
-                        <td>@(row.LocationCode ?? "—")</td>
-                        <td>@row.Status</td>
-                        <td>@row.CreatedDateUtc.ToLocalTime().ToString("MM/dd/yyyy")</td>
-                        <td>@(row.SentAtUtc?.ToLocalTime().ToString("MM/dd/yyyy") ?? "—")</td>
-                        <td>@(row.CompletedAtUtc?.ToLocalTime().ToString("MM/dd/yyyy") ?? "—")</td>
-                        <td>@(row.DaysToComplete.HasValue ? row.DaysToComplete.Value.ToString("0.#") : "—")</td>
-                        <td>@row.SignedCount / @row.RecipientCount</td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    }
 }
 else
 {

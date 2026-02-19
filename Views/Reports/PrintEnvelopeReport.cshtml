@@ -1,0 +1,311 @@
+@* Views/Reports/PrintEnvelopeReport.cshtml
+   Standalone print view — Layout=null, modeled after GS Cookie Tracker.
+   Opened in a new window by the Print button on RunEnvelope.cshtml.
+   window.print() here prints ONLY this page — no site nav, no sidebar, no clutter. *@
+@model SalesMetrics.Models.Reports.EnvelopeReportViewModel
+@{
+    Layout = null;
+
+    var branchLabel = string.IsNullOrWhiteSpace(Model.BranchFilter)
+        ? (Model.CanViewAllBranches ? "All Branches" : Model.CurrentLocationCode)
+        : Model.BranchFilter;
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Envelope Activity Report – @Model.FromDate?.ToString("MM/dd/yyyy") to @Model.ToDate?.ToString("MM/dd/yyyy")</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-size: 12px;
+            line-height: 1.4;
+            color: #333;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+
+        /* ── Outer report card (screen only — removed in print) ── */
+        .report {
+            max-width: 1100px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        /* ── Header ── */
+        .header {
+            border-bottom: 3px solid #1a1a2e;
+            padding-bottom: 14px;
+            margin-bottom: 18px;
+        }
+        .header .company-name {
+            font-size: 10px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            color: #888;
+            margin-bottom: 3px;
+        }
+        .header h1 {
+            font-size: 21px;
+            color: #1a1a2e;
+            margin-bottom: 4px;
+        }
+        .header .subtitle {
+            color: #666;
+            font-size: 12px;
+        }
+
+        /* ── KPI summary cards ── */
+        .summary-cards {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 18px;
+            flex-wrap: wrap;
+        }
+        .summary-card {
+            flex: 1;
+            min-width: 120px;
+            padding: 12px 8px;
+            border-radius: 6px;
+            text-align: center;
+            background: #f0f4ff;
+            border-top: 3px solid #1a1a2e;
+        }
+        .summary-card .value {
+            font-size: 22px;
+            font-weight: bold;
+            color: #1a1a2e;
+            line-height: 1.1;
+        }
+        .summary-card .label {
+            font-size: 10px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            margin-top: 3px;
+        }
+
+        /* ── Section title ── */
+        .section-title {
+            font-size: 13px;
+            font-weight: bold;
+            color: #333;
+            margin: 14px 0 8px 0;
+            padding-bottom: 4px;
+            border-bottom: 2px solid #1a1a2e;
+        }
+
+        /* ── Data table ── */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+        }
+        th {
+            background: #1a1a2e;
+            color: white;
+            padding: 7px 8px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: .03em;
+        }
+        td {
+            padding: 6px 8px;
+            border-bottom: 1px solid #eee;
+        }
+        tr:nth-child(even) td { background: #f7f8fb; }
+        tr:hover td { background: #eef2ff; }
+
+        /* ── Footer ── */
+        .footer {
+            text-align: center;
+            margin-top: 24px;
+            padding-top: 12px;
+            border-top: 1px solid #ddd;
+            color: #999;
+            font-size: 10px;
+        }
+
+        /* ── Print buttons (screen only) ── */
+        .print-buttons {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .print-buttons button {
+            padding: 10px 22px;
+            margin: 0 5px;
+            font-size: 13px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            color: white;
+        }
+        .btn-print { background: #1a1a2e; }
+        .btn-print:hover { background: #0f3460; }
+        .btn-close-win { background: #555; }
+        .btn-close-win:hover { background: #333; }
+
+        /* ════════════════════════════════════════════════════════════════════
+           PRINT STYLES
+           @page { margin: 0 } removes the browser date/time, page title, and
+           URL chrome that would otherwise appear in the printed margin area.
+           Body padding gives us clean content margins on the page.
+           Because Layout=null, there is NO site nav/sidebar to hide — every
+           element on this page is intended for print.
+           ════════════════════════════════════════════════════════════════════ */
+        @@page {
+            margin: 0;
+            size: landscape;
+        }
+
+        @@media print {
+            body {
+                background: white;
+                padding: 8mm 12mm;
+            }
+            .report {
+                box-shadow: none;
+                padding: 0;
+                max-width: 100%;
+            }
+            .print-buttons {
+                display: none;
+            }
+            /* Preserve background colours for cards and table header */
+            .summary-card,
+            th {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            tr:nth-child(even) td {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            /* Prevent rows splitting across pages */
+            tr { page-break-inside: avoid; }
+        }
+    </style>
+</head>
+<body>
+
+    @* ── Print / Close buttons (hidden on print) ── *@
+    <div class="print-buttons">
+        <button class="btn-print" onclick="window.print()">
+            &#128438; Print / Save as PDF
+        </button>
+        <button class="btn-close-win" onclick="window.close()">Close</button>
+    </div>
+
+    <div class="report">
+
+        @* ── Report header ── *@
+        <div class="header">
+            <div class="company-name">ProBuildIQ Sales Metrics</div>
+            <h1>Envelope Activity Report</h1>
+            <div class="subtitle">
+                @Model.FromDate?.ToString("MM/dd/yyyy") &ndash; @Model.ToDate?.ToString("MM/dd/yyyy")
+                &nbsp;|&nbsp;
+                Branch: @branchLabel
+                @if (!string.IsNullOrWhiteSpace(Model.StatusFilter))
+                {
+                    <text>&nbsp;|&nbsp;Status: @Model.StatusFilter</text>
+                }
+                &nbsp;|&nbsp;
+                Generated @DateTime.Now.ToString("MMMM d, yyyy 'at' h:mm tt")
+            </div>
+        </div>
+
+        @* ── KPI summary cards ── *@
+        <div class="summary-cards">
+            <div class="summary-card">
+                <div class="value">@Model.TotalEnvelopes</div>
+                <div class="label">Total</div>
+            </div>
+            <div class="summary-card" style="border-top-color:#198754;">
+                <div class="value" style="color:#198754;">@Model.CompletedCount</div>
+                <div class="label">Completed</div>
+            </div>
+            <div class="summary-card" style="border-top-color:#b08000;">
+                <div class="value" style="color:#b08000;">@Model.PendingCount</div>
+                <div class="label">Pending</div>
+            </div>
+            <div class="summary-card" style="border-top-color:#dc3545;">
+                <div class="value" style="color:#dc3545;">@Model.ExpiredVoidedCount</div>
+                <div class="label">Expired / Voided</div>
+            </div>
+            <div class="summary-card" style="border-top-color:#0885a3;">
+                <div class="value" style="color:#0885a3;">@Model.CompletionRate<span style="font-size:.75em;">%</span></div>
+                <div class="label">Completion Rate</div>
+            </div>
+            <div class="summary-card" style="border-top-color:#fd7e14;">
+                <div class="value" style="color:#fd7e14;">@Model.AvgDaysToComplete<span style="font-size:.75em;">d</span></div>
+                <div class="label">Avg Days</div>
+            </div>
+        </div>
+
+        @* ── Detail table ── *@
+        @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+        {
+            <p style="color:#dc3545; font-weight:bold; margin-bottom:10px;">
+                Error: @Model.ErrorMessage
+            </p>
+        }
+
+        <div class="section-title">Envelope Detail &mdash; @Model.TotalEnvelopes record(s)</div>
+
+        @if (Model.Rows.Any())
+        {
+            <table>
+                <thead>
+                    <tr>
+                        <th>Subject</th>
+                        <th>Order #</th>
+                        <th>Branch</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th>Sent</th>
+                        <th>Completed</th>
+                        <th>Days</th>
+                        <th>Recipients</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in Model.Rows)
+                    {
+                        <tr>
+                            <td>@row.Subject</td>
+                            <td>@(row.OrderNumber ?? "—")</td>
+                            <td>@(row.LocationCode ?? "—")</td>
+                            <td>@row.Status</td>
+                            <td>@row.CreatedDateUtc.ToLocalTime().ToString("MM/dd/yyyy")</td>
+                            <td>@(row.SentAtUtc?.ToLocalTime().ToString("MM/dd/yyyy") ?? "—")</td>
+                            <td>@(row.CompletedAtUtc?.ToLocalTime().ToString("MM/dd/yyyy") ?? "—")</td>
+                            <td>@(row.DaysToComplete.HasValue ? row.DaysToComplete.Value.ToString("0.#") : "—")</td>
+                            <td>@row.SignedCount / @row.RecipientCount</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+        else
+        {
+            <p style="text-align:center; color:#999; padding:20px;">
+                No envelopes found for the selected filters.
+            </p>
+        }
+
+        <div class="footer">
+            <p>ProBuildIQ Sales Metrics &mdash; Envelope Activity Report</p>
+        </div>
+
+    </div>
+</body>
+</html>

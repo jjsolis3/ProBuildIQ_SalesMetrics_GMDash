@@ -20,8 +20,8 @@ public sealed class NotificationService : INotificationService
         _logger = logger;
     }
 
-    public async Task SendEnvelopeEmailAsync(string toEmail, string toName, string subject, string bodyHtml)
-        => await SendAsync(toEmail, toName, subject, bodyHtml);
+    public async Task SendEnvelopeEmailAsync(string toEmail, string toName, string subject, string bodyHtml, string? replyToEmail = null)
+        => await SendAsync(toEmail, toName, subject, bodyHtml, replyToEmail);
 
     public async Task SendCompletedReceiptAsync(string toEmail, string toName, string subject, string bodyHtml, string downloadUrl)
     {
@@ -33,7 +33,7 @@ public sealed class NotificationService : INotificationService
         await SendAsync(toEmail, toName, subject, bodyHtml);
     }
 
-    private async Task SendAsync(string toEmail, string toName, string subject, string bodyHtml)
+    private async Task SendAsync(string toEmail, string toName, string subject, string bodyHtml, string? replyToEmail = null)
     {
         using var message = new MailMessage
         {
@@ -43,6 +43,11 @@ public sealed class NotificationService : INotificationService
             IsBodyHtml = true
         };
         message.To.Add(new MailAddress(toEmail, toName));
+
+        // Set Reply-To so that customers who reply (e.g. to send back a signed/printed
+        // document) reach the correct branch inbox rather than the generic sending account.
+        if (!string.IsNullOrWhiteSpace(replyToEmail))
+            message.ReplyToList.Add(new MailAddress(replyToEmail));
 
         using var client = new SmtpClient(_smtp.Host, _smtp.Port)
         {
@@ -58,7 +63,7 @@ public sealed class NotificationService : INotificationService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to send email to {Email}", toEmail);
-            throw; // bubble up so you see failures in dev; or swallow/log in prod
+            throw;
         }
     }
 }

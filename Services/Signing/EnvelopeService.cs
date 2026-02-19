@@ -340,6 +340,11 @@ public sealed class EnvelopeService : IEnvelopeService
                 {contextRows}
             </table>";
 
+        // Resolve Reply-To once — branch-specific email takes priority; falls back to company-wide.
+        // This lets customers who print and reply by email reach the correct branch inbox
+        // rather than the generic sending account.
+        var replyToEmail = await GetReplyToEmailAsync(env.LocationCode);
+
         foreach (var r in env.Recipients.OrderBy(x => x.SignerOrder))
         {
             var baseUrl = _appSettings.BaseUrl.TrimEnd('/');
@@ -374,7 +379,7 @@ public sealed class EnvelopeService : IEnvelopeService
                 <p style=""margin:4px 0 0 0;font-size:12px;color:#3b82f6;word-break:break-all;""><a href=""{link}"" style=""color:#3b82f6;"">{link}</a></p>";
 
             var html = _emailTemplate.WrapInBrandedTemplate(innerHtml);
-            await _notify.SendEnvelopeEmailAsync(r.Email, r.FullName, env.Subject, html);
+            await _notify.SendEnvelopeEmailAsync(r.Email, r.FullName, env.Subject, html, replyToEmail);
 
             _db.SignEvents.Add(new SignEvent { EnvelopeId = env.EnvelopeId, RecipientId = r.RecipientId, EventType = "Sent", OccurredAtUtc = DateTime.UtcNow });
         }
@@ -521,6 +526,8 @@ public sealed class EnvelopeService : IEnvelopeService
             editContextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Branch</td><td style=\"padding:4px 0;font-size:13px;\">{System.Net.WebUtility.HtmlEncode(env.LocationCode)}</td></tr>";
         var editContextHtml = string.IsNullOrEmpty(editContextRows) ? "" : $@"<table cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:12px 0 16px 0;border-left:3px solid #f59e0b;padding-left:12px;"">{editContextRows}</table>";
 
+        var editReplyToEmail = await GetReplyToEmailAsync(env.LocationCode);
+
         foreach (var recipient in recipientsToResend)
         {
             try
@@ -559,7 +566,7 @@ public sealed class EnvelopeService : IEnvelopeService
                     <p style=""margin:4px 0 0 0;font-size:12px;color:#3b82f6;word-break:break-all;""><a href=""{link}"" style=""color:#3b82f6;"">{link}</a></p>";
 
                 var html = _emailTemplate.WrapInBrandedTemplate(innerHtml);
-                await _notify.SendEnvelopeEmailAsync(recipient.Email, recipient.FullName, env.Subject, html);
+                await _notify.SendEnvelopeEmailAsync(recipient.Email, recipient.FullName, env.Subject, html, editReplyToEmail);
 
                 _db.SignEvents.Add(new SignEvent
                 {
@@ -1231,7 +1238,8 @@ public sealed class EnvelopeService : IEnvelopeService
             <p style=""margin:0;font-size:12px;color:#9ca3af;"">If the button above doesn't work, copy and paste this link into your browser:</p>
             <p style=""margin:4px 0 0 0;font-size:12px;color:#3b82f6;word-break:break-all;""><a href=""{link}"" style=""color:#3b82f6;"">{link}</a></p>";
         var html = _emailTemplate.WrapInBrandedTemplate(innerHtml);
-        await _notify.SendEnvelopeEmailAsync(next.Email, next.FullName, env.Subject, html);
+        var progressReplyTo = await GetReplyToEmailAsync(env.LocationCode);
+        await _notify.SendEnvelopeEmailAsync(next.Email, next.FullName, env.Subject, html, progressReplyTo);
 
         _db.SignEvents.Add(new SignEvent
         {
@@ -1249,6 +1257,24 @@ public sealed class EnvelopeService : IEnvelopeService
         return await _db.SignTemplates
             .AsNoTracking()
             .FirstOrDefaultAsync(t => t.TemplateKey == templateKey);
+    }
+
+    /// <summary>
+    /// Returns the Reply-To email address for outbound signer emails.
+    /// Prefers the branch-specific setting (matching locationCode); falls back to the
+    /// company-wide row (LocationCode == null) when no branch email is configured.
+    /// Returns null when neither is set, which means no Reply-To header is added.
+    /// </summary>
+    private async Task<string?> GetReplyToEmailAsync(string? locationCode)
+    {
+        var setting = await _db.EnvelopeNotificationSettings
+            .Where(s => s.IsEnabled
+                     && !string.IsNullOrEmpty(s.NotificationEmail)
+                     && (s.LocationCode == locationCode || s.LocationCode == null))
+            .OrderByDescending(s => s.LocationCode != null) // branch-specific beats company-wide
+            .FirstOrDefaultAsync();
+
+        return setting?.NotificationEmail;
     }
 
     /// <summary>

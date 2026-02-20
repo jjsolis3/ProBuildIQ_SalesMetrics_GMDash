@@ -105,6 +105,7 @@
                         <th>Subject</th>
                         <th>Property</th>
                         <th>Order#</th>
+                        <th>Branch</th>
                         <th>Status</th>
                         <th>Recipients</th>
                         <th>Sent</th>
@@ -120,6 +121,16 @@
                             <td>@r.Subject</td>
                             <td><span class="text-muted small">@(r.PropertyName ?? "—")</span></td>
                             <td><span class="text-muted small">@(r.OrderNumber ?? "—")</span></td>
+                            <td>
+                                @if (!string.IsNullOrEmpty(r.LocationCode))
+                                {
+                                    <span class="badge bg-secondary">@r.LocationCode</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted small">—</span>
+                                }
+                            </td>
                             <td>
                                 @{
                                     var badgeClass = r.Status switch {
@@ -167,7 +178,7 @@
             $('#envelopesTable').DataTable({
                 pageLength: 25,
                 lengthMenu: [10, 25, 50, 100],
-                order: [[6, 'desc']], // default sort: Sent date descending
+                order: [[7, 'desc']], // default sort: Sent date descending
                 columnDefs: [
                     { orderable: false, targets: -1 } // disable sort on the action column
                 ],

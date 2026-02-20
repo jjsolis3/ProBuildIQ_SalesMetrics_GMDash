@@ -1237,6 +1237,218 @@ public sealed class EnvelopeService : IEnvelopeService
         return (true, downloadUrl);
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // Offline / Manual Completion
+    // ─────────────────────────────────────────────────────────────────────────
+
+    public async Task MarkOfflineCompleteAsync(
+        long envelopeId,
+        Microsoft.AspNetCore.Http.IFormFile signedPdf,
+        string? staffNote,
+        int staffUserId,
+        string staffName)
+    {
+        var env = await _db.SignEnvelopes
+            .Include(e => e.Recipients)
+            .FirstOrDefaultAsync(e => e.EnvelopeId == envelopeId)
+            ?? throw new InvalidOperationException($"Envelope {envelopeId} not found.");
+
+        if (env.Status is "Completed" or "Voided" or "Declined")
+            throw new InvalidOperationException($"Envelope is already {env.Status} and cannot be marked offline complete.");
+
+        // ── Mark any unsigned recipients as offline-signed ───────────────────
+        var offlineMetaJson = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            method    = "offline",
+            markedBy  = staffName,
+            note      = staffNote ?? ""
+        });
+
+        foreach (var r in env.Recipients.Where(r => r.SignedAtUtc == null))
+        {
+            r.SignedAtUtc         = DateTime.UtcNow;
+            r.TypedFullName       = r.FullName;           // physical signature attested by name
+            r.SignatureMetaJson   = offlineMetaJson;
+
+            _db.SignEvents.Add(new SignEvent
+            {
+                EnvelopeId  = envelopeId,
+                RecipientId = r.RecipientId,
+                EventType   = "Signed",
+                OccurredAtUtc = DateTime.UtcNow,
+                MetaJson    = offlineMetaJson
+            });
+        }
+
+        // ── Store the uploaded PDF ───────────────────────────────────────────
+        var dir = Path.Combine("wwwroot", "Files", "Sign",
+            DateTime.UtcNow.ToString("yyyy"), DateTime.UtcNow.ToString("MM"));
+        Directory.CreateDirectory(dir);
+        var fsPath = Path.Combine(dir, $"envelope-{envelopeId}.pdf");
+
+        byte[] pdfBytes;
+        await using (var ms = new System.IO.MemoryStream())
+        {
+            await signedPdf.CopyToAsync(ms);
+            pdfBytes = ms.ToArray();
+        }
+        await File.WriteAllBytesAsync(fsPath, pdfBytes);
+
+        var webPath    = $"/Files/Sign/{DateTime.UtcNow:yyyy}/{DateTime.UtcNow:MM}/envelope-{envelopeId}.pdf";
+        var sha256Hash = System.Security.Cryptography.SHA256.HashData(pdfBytes);
+
+        // ── Finalise the envelope ────────────────────────────────────────────
+        env.PdfStoragePath  = webPath;
+        env.PdfSha256       = sha256Hash;
+        env.Status          = "Completed";
+        env.CompletedAtUtc  = DateTime.UtcNow;
+
+        var completionMetaJson = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            method     = "offline",
+            uploadedBy = staffName,
+            note       = staffNote ?? ""
+        });
+
+        _db.SignEvents.Add(new SignEvent
+        {
+            EnvelopeId    = envelopeId,
+            EventType     = "Completed",
+            OccurredAtUtc = DateTime.UtcNow,
+            MetaJson      = completionMetaJson
+        });
+
+        await _db.SaveChangesAsync();
+
+        // ── In-app notification to creator ───────────────────────────────────
+        try
+        {
+            await _appNotify.SendNotificationToUserAsync(
+                userId:            env.CreatedByUsers_ID,
+                type:              "DocumentSigning",
+                title:             "Envelope Completed (Offline)",
+                message:           $"\"{env.Subject}\" was marked as offline-signed by {staffName} and is ready to download.",
+                actionUrl:         $"/SignAdmin/Details/{env.EnvelopeId}",
+                relatedTaskId:     null,
+                relatedEnvelopeId: (int?)env.EnvelopeId
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send in-app offline completion notification for envelope {EnvelopeId}", envelopeId);
+        }
+
+        // ── Completion emails to all recipients ──────────────────────────────
+        var absoluteDownload = webPath.StartsWith("/")
+            ? $"{_appSettings.BaseUrl.TrimEnd('/')}{webPath}"
+            : webPath;
+
+        var downloadBtnHtml = $@"
+            <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:24px 0;"">
+              <tr>
+                <td align=""center"" style=""background-color:#16a34a;border-radius:6px;"">
+                  <a href=""{absoluteDownload}"" style=""display:inline-block;padding:12px 32px;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px;"">Download Completed PDF</a>
+                </td>
+              </tr>
+            </table>";
+
+        foreach (var recipient in env.Recipients)
+        {
+            var inner = $@"
+                <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Document Completed</h2>
+                <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Hello {recipient.FullName},</p>
+                <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">The document <strong>{env.Subject}</strong> has been completed and is available to download.</p>
+                {downloadBtnHtml}";
+            var html = _emailTemplate.WrapInBrandedTemplate(inner);
+            await _notify.SendCompletedReceiptAsync(recipient.Email, recipient.FullName,
+                $"Completed: {env.Subject}", html, null);
+        }
+
+        // ── Internal branch / company notification emails ────────────────────
+        var internalSettings = await _db.EnvelopeNotificationSettings
+            .Where(s => s.IsEnabled && s.NotificationEmail != null && s.NotificationEmail != "")
+            .ToListAsync();
+
+        if (internalSettings.Count > 0)
+        {
+            string? notifPropertyName    = null;
+            string? notifPropertyAddress = null;
+            if (env.PropertyID.HasValue)
+            {
+                try
+                {
+                    notifPropertyName    = await _merge.GetPropertyNameAsync(env.PropertyID.Value, env.LocationCode);
+                    notifPropertyAddress = await _merge.GetPropertyAddressAsync(env.PropertyID.Value, env.LocationCode);
+                }
+                catch { /* non-fatal */ }
+            }
+            notifPropertyName ??= env.PropertyName;
+
+            var propertyRows = "";
+            if (!string.IsNullOrWhiteSpace(notifPropertyName))
+                propertyRows += $@"<tr style=""border-bottom:1px solid #e5e7eb;""><td style=""padding:8px 12px 8px 0;font-weight:600;white-space:nowrap;"">Property</td><td style=""padding:8px 0;"">{System.Net.WebUtility.HtmlEncode(notifPropertyName)}</td></tr>";
+            if (!string.IsNullOrWhiteSpace(notifPropertyAddress))
+                propertyRows += $@"<tr style=""border-bottom:1px solid #e5e7eb;""><td style=""padding:8px 12px 8px 0;font-weight:600;white-space:nowrap;"">Address</td><td style=""padding:8px 0;"">{System.Net.WebUtility.HtmlEncode(notifPropertyAddress)}</td></tr>";
+
+            foreach (var notif in internalSettings)
+            {
+                bool shouldSend = notif.LocationCode == null
+                    || string.Equals(notif.LocationCode, env.LocationCode, StringComparison.OrdinalIgnoreCase);
+                if (!shouldSend) continue;
+
+                var branchLabel = notif.LocationCode == null
+                    ? "All Branches" : $"{notif.LocationName} ({notif.LocationCode})";
+                var completedAt = env.CompletedAtUtc?.ToString("f") + " UTC";
+
+                var innerHtml = $@"
+                    <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Envelope Completed (Offline)</h2>
+                    <p style=""margin:0 0 16px 0;font-size:15px;color:#374151;"">
+                        An envelope was marked as completed via offline/manual signing by <strong>{System.Net.WebUtility.HtmlEncode(staffName)}</strong>.
+                    </p>
+                    <table style=""width:100%;border-collapse:collapse;font-size:14px;color:#374151;margin-bottom:16px;"">
+                        <tr style=""border-bottom:1px solid #e5e7eb;"">
+                            <td style=""padding:8px 12px 8px 0;font-weight:600;white-space:nowrap;"">Envelope #</td>
+                            <td style=""padding:8px 0;"">{env.EnvelopeId}</td>
+                        </tr>
+                        {propertyRows}
+                        <tr style=""border-bottom:1px solid #e5e7eb;"">
+                            <td style=""padding:8px 12px 8px 0;font-weight:600;white-space:nowrap;"">Subject</td>
+                            <td style=""padding:8px 0;"">{System.Net.WebUtility.HtmlEncode(env.Subject)}</td>
+                        </tr>
+                        <tr style=""border-bottom:1px solid #e5e7eb;"">
+                            <td style=""padding:8px 12px 8px 0;font-weight:600;white-space:nowrap;"">Order</td>
+                            <td style=""padding:8px 0;"">{System.Net.WebUtility.HtmlEncode(env.OrderNumber ?? "N/A")}</td>
+                        </tr>
+                        <tr style=""border-bottom:1px solid #e5e7eb;"">
+                            <td style=""padding:8px 12px 8px 0;font-weight:600;white-space:nowrap;"">Branch</td>
+                            <td style=""padding:8px 0;"">{System.Net.WebUtility.HtmlEncode(branchLabel)}</td>
+                        </tr>
+                        <tr style=""border-bottom:1px solid #e5e7eb;"">
+                            <td style=""padding:8px 12px 8px 0;font-weight:600;white-space:nowrap;"">Completed By</td>
+                            <td style=""padding:8px 0;"">{System.Net.WebUtility.HtmlEncode(staffName)} (offline)</td>
+                        </tr>
+                        <tr>
+                            <td style=""padding:8px 12px 8px 0;font-weight:600;white-space:nowrap;"">Completed</td>
+                            <td style=""padding:8px 0;"">{completedAt}</td>
+                        </tr>
+                    </table>
+                    {downloadBtnHtml}";
+
+                try
+                {
+                    await _notify.SendEnvelopeEmailAsync(notif.NotificationEmail!, notif.LocationName,
+                        $"Envelope Completed (Offline): {env.Subject}",
+                        _emailTemplate.WrapInBrandedTemplate(innerHtml));
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to send offline completion notification to {Email} for envelope {EnvelopeId}",
+                        notif.NotificationEmail, envelopeId);
+                }
+            }
+        }
+    }
+
     public async Task ProgressToNextAsync(long envelopeId)
     {
         var env = await _db.SignEnvelopes.Include(e => e.Recipients)

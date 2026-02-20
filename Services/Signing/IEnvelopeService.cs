@@ -35,5 +35,12 @@ namespace SalesMetrics.Services.Signing
         // Template access
         Task<SignTemplate?> GetTemplateByKeyAsync(string templateKey);
 
+        /// <summary>
+        /// Marks an envelope as complete using a staff-uploaded scanned PDF (offline signing).
+        /// Any recipients who have not yet signed digitally are marked as signed with offline metadata.
+        /// The uploaded PDF is stored in place of the auto-generated one and the envelope is set to Completed.
+        /// </summary>
+        Task MarkOfflineCompleteAsync(long envelopeId, Microsoft.AspNetCore.Http.IFormFile signedPdf, string? staffNote, int staffUserId, string staffName);
+
     }
 }

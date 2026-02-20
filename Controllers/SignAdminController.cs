@@ -279,4 +279,49 @@ public class SignAdminController : Controller
         }
         return RedirectToAction(nameof(Details), new { id });
     }
+
+    // POST /SignAdmin/MarkOffline/123
+    // Staff uploads the physically-signed/scanned PDF and marks the envelope as complete.
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> MarkOffline(long id, IFormFile? signedPdf, string? staffNote)
+    {
+        if (signedPdf == null || signedPdf.Length == 0)
+        {
+            TempData["error"] = "Please select a PDF file to upload.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        // Validate file type (basic content-type check; rely on extension too)
+        var ct = signedPdf.ContentType ?? "";
+        var ext = Path.GetExtension(signedPdf.FileName).ToLowerInvariant();
+        if (!ct.Contains("pdf", StringComparison.OrdinalIgnoreCase) && ext != ".pdf")
+        {
+            TempData["error"] = "Only PDF files are accepted.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        // 25 MB safety cap
+        if (signedPdf.Length > 25 * 1024 * 1024)
+        {
+            TempData["error"] = "The uploaded file exceeds the 25 MB limit.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        try
+        {
+            var userId    = GetCurrentUserId();
+            var staffName = User.FindFirst("FullName")?.Value
+                         ?? User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value
+                         ?? $"User #{userId}";
+
+            await _svc.MarkOfflineCompleteAsync(id, signedPdf, staffNote, userId, staffName);
+            TempData["msg"] = "Envelope has been marked as completed with the uploaded signed PDF.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            TempData["error"] = ex.Message;
+        }
+
+        return RedirectToAction(nameof(Details), new { id });
+    }
 }

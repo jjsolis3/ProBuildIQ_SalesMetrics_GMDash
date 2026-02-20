@@ -123,6 +123,8 @@ The feature uses the following tables:
 
 ## Usage Workflow
 
+For Office-role operations and day-to-day process guidance, see: `Documentation/ENVELOPE_OFFICE_ROLE_WORKFLOW.md`.
+
 ### Creating and Sending an Envelope
 
 1. Navigate to **Sign & Send > Send Document**

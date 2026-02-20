@@ -55,6 +55,11 @@
             </button>
         </li>
         <li class="nav-item" role="presentation">
+            <button class="nav-link @(Model.ActiveTab == "branding" ? "active" : "")" id="branding-tab" data-bs-toggle="tab" data-bs-target="#branding" type="button" role="tab">
+                <i class="fas fa-palette"></i> Company Branding
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
             <button class="nav-link @(Model.ActiveTab == "general" ? "active" : "")" id="general-tab" data-bs-toggle="tab" data-bs-target="#general" type="button" role="tab">
                 <i class="fas fa-cog"></i> General Settings
             </button>
@@ -371,6 +376,75 @@
             </div>
         </div>
 
+        <!-- Company Branding Tab -->
+        <div class="tab-pane fade @(Model.ActiveTab == "branding" ? "show active" : "")" id="branding" role="tabpanel">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-0"><i class="fas fa-palette me-2"></i>Company Branding</h5>
+                        <p class="mb-0 text-muted small">Customize logos, company name, and contact info used in emails and throughout the app. DB values override appsettings.json.</p>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <form method="post" asp-action="SaveAllBrandingSettings" asp-controller="Settings">
+                        @Html.AntiForgeryToken()
+                        <div class="row g-3">
+                            @foreach (var s in Model.BrandingSettings)
+                            {
+                                <div class="col-12">
+                                    <label class="form-label fw-semibold" for="Branding_@s.SettingKey">@s.DisplayName</label>
+                                    @if (!string.IsNullOrWhiteSpace(s.Description))
+                                    {
+                                        <div class="text-muted small mb-1">@s.Description</div>
+                                    }
+                                    <div class="input-group">
+                                        @if (s.InputType == "url")
+                                        {
+                                            <span class="input-group-text"><i class="fas fa-link"></i></span>
+                                        }
+                                        else
+                                        {
+                                            <span class="input-group-text"><i class="fas fa-font"></i></span>
+                                        }
+                                        <input type="text" class="form-control branding-field"
+                                               id="Branding_@s.SettingKey"
+                                               name="Branding_@s.SettingKey"
+                                               value="@(s.SettingValue ?? "")"
+                                               placeholder="@(s.InputType == "url" ? "https://..." : "")"
+                                               data-key="@s.SettingKey"
+                                               data-type="@s.InputType" />
+                                        @if (s.InputType == "url")
+                                        {
+                                            <button type="button" class="btn btn-outline-secondary branding-preview-btn"
+                                                    data-target="Branding_@s.SettingKey" title="Preview image">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                        }
+                                    </div>
+                                    @if (s.InputType == "url")
+                                    {
+                                        <div id="preview_@s.SettingKey" class="mt-2" style="display:none;">
+                                            <img src="" alt="Preview" class="img-thumbnail"
+                                                 style="max-height:80px;max-width:320px;background:#DBDBDB;" />
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                        <hr class="my-4" />
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-warning">
+                                <i class="fas fa-save me-1"></i> Save Branding Settings
+                            </button>
+                            <a asp-action="Index" asp-route-tab="branding" class="btn btn-outline-secondary">
+                                <i class="fas fa-undo me-1"></i> Reset
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
         <!-- General Tab -->
         <div class="tab-pane fade @(Model.ActiveTab == "general" ? "show active" : "")" id="general" role="tabpanel">
             <div class="card shadow-sm">
@@ -483,6 +557,19 @@
                 .always(function() {
                     $btn.prop('disabled', false).html('<i class="fas fa-save"></i>');
                 });
+            });
+
+            // Branding URL preview buttons
+            $(document).on('click', '.branding-preview-btn', function() {
+                var targetId = $(this).data('target');
+                var url = $('#' + targetId).val().trim();
+                var $preview = $('#preview_' + targetId.replace('Branding_', ''));
+                if (url) {
+                    $preview.find('img').attr('src', url);
+                    $preview.show();
+                } else {
+                    $preview.hide();
+                }
             });
 
             // Save security settings

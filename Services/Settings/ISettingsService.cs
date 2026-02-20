@@ -26,5 +26,10 @@ namespace SalesMetrics.Services.Settings
         Task<List<EnvelopeNotificationSettingViewModel>> GetEnvelopeNotificationSettingsAsync();
         Task SaveEnvelopeNotificationSettingAsync(SaveEnvelopeNotificationSettingRequest request, int modifiedByUserId);
         Task InitializeDefaultEnvelopeNotificationSettingsAsync();
+
+        // Branding Settings
+        Task<List<BrandingSettingViewModel>> GetBrandingSettingsAsync();
+        Task SaveBrandingSettingAsync(SaveBrandingSettingRequest request, int modifiedByUserId);
+        Task InitializeDefaultBrandingSettingsAsync();
     }
 }

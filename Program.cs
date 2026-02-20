@@ -118,6 +118,7 @@ builder.Services.AddScoped<IRazorViewToStringRenderer, RazorViewToStringRenderer
 builder.Services.AddScoped<IErpMergeService, ErpMergeService>();
 builder.Services.AddScoped<IPdfService, PdfService>();
 builder.Services.AddScoped<SalesMetrics.Services.Signing.INotificationService, SalesMetrics.Services.Signing.NotificationService>(); // Email notification service
+builder.Services.AddScoped<SalesMetrics.Services.Signing.IBrandingSettingsProvider, SalesMetrics.Services.Signing.BrandingSettingsProvider>(); // DB-first branding settings
 builder.Services.AddScoped<IEmailTemplateService, EmailTemplateService>(); // Branded email template wrapper
 builder.Services.AddScoped<SalesMetrics.Services.Notifications.INotificationService, SalesMetrics.Services.Notifications.NotificationService>(); // In-app notification service
 builder.Services.AddScoped<IEnvelopeService, EnvelopeService>();

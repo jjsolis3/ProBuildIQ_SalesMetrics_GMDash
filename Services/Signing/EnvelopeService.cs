@@ -382,7 +382,7 @@ public sealed class EnvelopeService : IEnvelopeService
                 <p style=""margin:0;font-size:12px;color:#9ca3af;"">If the button above doesn't work, copy and paste this link into your browser:</p>
                 <p style=""margin:4px 0 0 0;font-size:12px;color:#3b82f6;word-break:break-all;""><a href=""{link}"" style=""color:#3b82f6;"">{link}</a></p>";
 
-            var html = _emailTemplate.WrapInBrandedTemplate(innerHtml);
+            var html = await _emailTemplate.WrapInBrandedTemplateAsync(innerHtml);
             await _notify.SendEnvelopeEmailAsync(r.Email, r.FullName, env.Subject, html, replyToEmail);
 
             _db.SignEvents.Add(new SignEvent { EnvelopeId = env.EnvelopeId, RecipientId = r.RecipientId, EventType = "Sent", OccurredAtUtc = DateTime.UtcNow });
@@ -569,7 +569,7 @@ public sealed class EnvelopeService : IEnvelopeService
                     <p style=""margin:0;font-size:12px;color:#9ca3af;"">If the button above doesn't work, copy and paste this link into your browser:</p>
                     <p style=""margin:4px 0 0 0;font-size:12px;color:#3b82f6;word-break:break-all;""><a href=""{link}"" style=""color:#3b82f6;"">{link}</a></p>";
 
-                var html = _emailTemplate.WrapInBrandedTemplate(innerHtml);
+                var html = await _emailTemplate.WrapInBrandedTemplateAsync(innerHtml);
                 await _notify.SendEnvelopeEmailAsync(recipient.Email, recipient.FullName, env.Subject, html, editReplyToEmail);
 
                 _db.SignEvents.Add(new SignEvent
@@ -639,7 +639,7 @@ public sealed class EnvelopeService : IEnvelopeService
                         <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">The signature request for <strong>{env.Subject}</strong> has been cancelled.</p>
                         {reasonHtml}
                         <p style=""margin:12px 0 0 0;font-size:15px;color:#374151;"">No further action is required.</p>";
-                    var html = _emailTemplate.WrapInBrandedTemplate(innerHtml);
+                    var html = await _emailTemplate.WrapInBrandedTemplateAsync(innerHtml);
                     await _notify.SendEnvelopeEmailAsync(recipient.Email, recipient.FullName, $"Cancelled: {env.Subject}", html);
                 }
                 catch
@@ -911,7 +911,7 @@ public sealed class EnvelopeService : IEnvelopeService
                     <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">The signature request for <strong>{envelope.Subject}</strong> has been declined by {recipient.FullName}.</p>
                     {reasonHtml}
                     <p style=""margin:12px 0 0 0;font-size:15px;color:#374151;"">No further action is required.</p>";
-                var html = _emailTemplate.WrapInBrandedTemplate(innerHtml);
+                var html = await _emailTemplate.WrapInBrandedTemplateAsync(innerHtml);
                 await _notify.SendEnvelopeEmailAsync(otherRecipient.Email, otherRecipient.FullName, $"Declined: {envelope.Subject}", html);
             }
         }
@@ -1089,7 +1089,7 @@ public sealed class EnvelopeService : IEnvelopeService
                 <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Thank you for signing. The document <strong>{env.Subject}</strong> has been completed by all parties.</p>
                 {downloadBtnHtml}";
 
-            var completionHtml = _emailTemplate.WrapInBrandedTemplate(completionInner);
+            var completionHtml = await _emailTemplate.WrapInBrandedTemplateAsync(completionInner);
             // Pass null for downloadUrl since it's already included in the branded template
             await _notify.SendCompletedReceiptAsync(
                 recipient.Email,
@@ -1216,7 +1216,7 @@ public sealed class EnvelopeService : IEnvelopeService
                     </table>
                     {internalDownloadBtnHtml}";
 
-                var notifHtml = _emailTemplate.WrapInBrandedTemplate(innerHtml);
+                var notifHtml = await _emailTemplate.WrapInBrandedTemplateAsync(innerHtml);
 
                 try
                 {
@@ -1359,7 +1359,7 @@ public sealed class EnvelopeService : IEnvelopeService
                 <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Hello {recipient.FullName},</p>
                 <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">The document <strong>{env.Subject}</strong> has been completed and is available to download.</p>
                 {downloadBtnHtml}";
-            var html = _emailTemplate.WrapInBrandedTemplate(inner);
+            var html = await _emailTemplate.WrapInBrandedTemplateAsync(inner);
             await _notify.SendCompletedReceiptAsync(recipient.Email, recipient.FullName,
                 $"Completed: {env.Subject}", html, null);
         }
@@ -1438,7 +1438,7 @@ public sealed class EnvelopeService : IEnvelopeService
                 {
                     await _notify.SendEnvelopeEmailAsync(notif.NotificationEmail!, notif.LocationName,
                         $"Envelope Completed (Offline): {env.Subject}",
-                        _emailTemplate.WrapInBrandedTemplate(innerHtml));
+                        await _emailTemplate.WrapInBrandedTemplateAsync(innerHtml));
                 }
                 catch (Exception ex)
                 {
@@ -1482,7 +1482,7 @@ public sealed class EnvelopeService : IEnvelopeService
             </table>
             <p style=""margin:0;font-size:12px;color:#9ca3af;"">If the button above doesn't work, copy and paste this link into your browser:</p>
             <p style=""margin:4px 0 0 0;font-size:12px;color:#3b82f6;word-break:break-all;""><a href=""{link}"" style=""color:#3b82f6;"">{link}</a></p>";
-        var html = _emailTemplate.WrapInBrandedTemplate(innerHtml);
+        var html = await _emailTemplate.WrapInBrandedTemplateAsync(innerHtml);
         var progressReplyTo = await GetReplyToEmailAsync(env.LocationCode);
         await _notify.SendEnvelopeEmailAsync(next.Email, next.FullName, env.Subject, html, progressReplyTo);
 

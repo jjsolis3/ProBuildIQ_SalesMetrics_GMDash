@@ -170,6 +170,7 @@ namespace SalesMetrics.Controllers
                 await _settingsService.InitializeDefaultNotificationSettingsAsync();
                 await _settingsService.InitializeDefaultSecuritySettingsAsync();
                 await _settingsService.InitializeDefaultEnvelopeNotificationSettingsAsync();
+                await _settingsService.InitializeDefaultBrandingSettingsAsync();
 
                 TempData["SuccessMessage"] = "Default settings initialized successfully!";
             }
@@ -214,6 +215,61 @@ namespace SalesMetrics.Controllers
             {
                 return Json(new { success = false, message = $"Error: {ex.Message}" });
             }
+        }
+
+        // ======================================================================
+        // Branding Settings API
+        // ======================================================================
+
+        // POST: /Settings/SaveBrandingSetting
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SaveBrandingSetting([FromBody] SaveBrandingSettingRequest request)
+        {
+            if (!IsAdmin())
+                return Forbid();
+
+            try
+            {
+                var userId = GetCurrentUserId();
+                await _settingsService.SaveBrandingSettingAsync(request, userId);
+                return Json(new { success = true, message = "Branding setting saved successfully" });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = $"Error: {ex.Message}" });
+            }
+        }
+
+        // POST: /Settings/SaveAllBrandingSettings  (saves the whole Branding form at once)
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SaveAllBrandingSettings(IFormCollection form)
+        {
+            if (!IsAdmin())
+                return Forbid();
+
+            try
+            {
+                var userId = GetCurrentUserId();
+                var keys = new[] { "CompanyName", "LogoUrl", "EnvelopeLogoUrl", "Website", "Phone" };
+                foreach (var key in keys)
+                {
+                    if (form.TryGetValue($"Branding_{key}", out var val))
+                    {
+                        await _settingsService.SaveBrandingSettingAsync(
+                            new SaveBrandingSettingRequest { SettingKey = key, SettingValue = val.ToString() },
+                            userId);
+                    }
+                }
+                TempData["SuccessMessage"] = "Branding settings saved successfully!";
+            }
+            catch (Exception ex)
+            {
+                TempData["ErrorMessage"] = $"Error saving branding settings: {ex.Message}";
+            }
+
+            return RedirectToAction(nameof(Index), new { tab = "branding" });
         }
     }
 }

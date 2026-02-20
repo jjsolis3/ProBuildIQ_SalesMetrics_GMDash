@@ -1,23 +1,23 @@
-using Microsoft.Extensions.Options;
-
 namespace SalesMetrics.Services.Signing;
 
 public sealed class EmailTemplateService : IEmailTemplateService
 {
-    private readonly CompanyBrandingSettings _branding;
+    private readonly IBrandingSettingsProvider _branding;
 
-    public EmailTemplateService(IOptions<CompanyBrandingSettings> branding)
+    public EmailTemplateService(IBrandingSettingsProvider branding)
     {
-        _branding = branding.Value;
+        _branding = branding;
     }
 
-    public string WrapInBrandedTemplate(string innerHtml)
+    public async Task<string> WrapInBrandedTemplateAsync(string innerHtml)
     {
-        var companyName     = _branding.CompanyName;
-        var logoUrl         = _branding.LogoUrl;
-        var envelopeLogoUrl = _branding.EnvelopeLogoUrl;
-        var website         = _branding.Website;
-        var phone           = _branding.Phone;
+        var b = await _branding.GetAsync();
+
+        var companyName     = b.CompanyName;
+        var logoUrl         = b.LogoUrl;
+        var envelopeLogoUrl = b.EnvelopeLogoUrl;
+        var website         = b.Website;
+        var phone           = b.Phone;
         var year = DateTime.Now.Year;
 
         // Build footer contact line

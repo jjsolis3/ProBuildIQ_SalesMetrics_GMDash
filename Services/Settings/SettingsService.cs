@@ -19,12 +19,14 @@ namespace SalesMetrics.Services.Settings
             var notificationSettings = await GetNotificationSettingsAsync();
             var securitySettings = await GetSecuritySettingsAsync();
             var envelopeNotificationSettings = await GetEnvelopeNotificationSettingsAsync();
+            var brandingSettings = await GetBrandingSettingsAsync();
 
             return new SettingsDashboardViewModel
             {
                 NotificationSettings = notificationSettings,
                 SecuritySettings = securitySettings,
                 EnvelopeNotificationSettings = envelopeNotificationSettings,
+                BrandingSettings = brandingSettings,
                 ActiveTab = "notifications"
             };
         }
@@ -337,6 +339,92 @@ namespace SalesMetrics.Services.Settings
                 }
             }
 
+            await _context.SaveChangesAsync();
+        }
+
+        // ======================================================================
+        // Branding Settings
+        // ======================================================================
+
+        // Canonical list of branding keys exposed in the UI, in display order.
+        private static readonly (string Key, string DisplayName, string? Description, string InputType)[] BrandingKeys =
+        {
+            ("CompanyName",     "Company Name",        "Your company's display name used in emails and footers.",           "text"),
+            ("LogoUrl",         "Company Logo URL",    "Absolute URL to the company logo shown in email headers.",          "url"),
+            ("EnvelopeLogoUrl", "Envelope Logo URL",   "Absolute URL for the E-Sign logo shown inside envelope emails. Leave blank to hide.", "url"),
+            ("Website",         "Website",             "Company website URL shown in the email footer.",                    "url"),
+            ("Phone",           "Phone",               "Company phone number shown in the email footer.",                   "text"),
+        };
+
+        public async Task<List<BrandingSettingViewModel>> GetBrandingSettingsAsync()
+        {
+            var dbRows = await _context.SecuritySettings
+                .Where(s => s.Category == "Branding")
+                .ToListAsync();
+
+            var result = new List<BrandingSettingViewModel>();
+            foreach (var (key, displayName, description, inputType) in BrandingKeys)
+            {
+                var row = dbRows.FirstOrDefault(r => r.SettingKey == key);
+                result.Add(new BrandingSettingViewModel
+                {
+                    SettingKey   = key,
+                    DisplayName  = displayName,
+                    Description  = description,
+                    SettingValue = row?.SettingValue,
+                    InputType    = inputType
+                });
+            }
+            return result;
+        }
+
+        public async Task SaveBrandingSettingAsync(SaveBrandingSettingRequest request, int modifiedByUserId)
+        {
+            var existing = await _context.SecuritySettings
+                .FirstOrDefaultAsync(s => s.Category == "Branding" && s.SettingKey == request.SettingKey);
+
+            if (existing != null)
+            {
+                existing.SettingValue        = request.SettingValue?.Trim() ?? "";
+                existing.LastModifiedDate    = DateTime.Now;
+                existing.LastModifiedByUserId = modifiedByUserId;
+            }
+            else
+            {
+                var def = BrandingKeys.FirstOrDefault(b => b.Key == request.SettingKey);
+                _context.SecuritySettings.Add(new SecuritySettingsEntity
+                {
+                    SettingKey            = request.SettingKey,
+                    SettingValue          = request.SettingValue?.Trim() ?? "",
+                    Description           = def.Description,
+                    Category              = "Branding",
+                    LastModifiedDate      = DateTime.Now,
+                    LastModifiedByUserId  = modifiedByUserId
+                });
+            }
+
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task InitializeDefaultBrandingSettingsAsync()
+        {
+            foreach (var (key, _, description, _) in BrandingKeys)
+            {
+                bool exists = await _context.SecuritySettings
+                    .AnyAsync(s => s.Category == "Branding" && s.SettingKey == key);
+                if (!exists)
+                {
+                    _context.SecuritySettings.Add(new SecuritySettingsEntity
+                    {
+                        SettingKey           = key,
+                        SettingValue         = "",
+                        Description          = description,
+                        Category             = "Branding",
+                        LastModifiedDate     = DateTime.Now,
+                        LastModifiedByUserId = 1
+                    });
+                }
+            }
             await _context.SaveChangesAsync();
         }
 

@@ -10,8 +10,8 @@ namespace SalesMetrics.Services.Signing;
 public interface IErpMergeService
 {
     Task<string> RenderHtmlAsync(string templateKey, long envelopeId, long? recipientId = null);
-    Task<string?> GetPropertyNameAsync(int? propertyId);
-    Task<string?> GetPropertyAddressAsync(int? propertyId);
+    Task<string?> GetPropertyNameAsync(int? propertyId, string? locationCode = null);
+    Task<string?> GetPropertyAddressAsync(int? propertyId, string? locationCode = null);
     Task<string?> GetUnitNumberByOrderIdAsync(int? orderId);
 
     // Customer contact info

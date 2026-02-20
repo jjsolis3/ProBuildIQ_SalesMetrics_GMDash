@@ -42,12 +42,14 @@ namespace SalesMetrics.Services.Signing
         }
 
         /// <summary>
-        /// Helper to create ErpContext from current session location
+        /// Helper to create ErpContext. When locationCode is provided it is used directly
+        /// (important for background/anonymous calls such as TryFinalizeEnvelopeAsync where
+        /// there is no authenticated session). Falls back to the session value when null.
         /// </summary>
-        private ErpContext GetErpContext()
+        private ErpContext GetErpContext(string? locationCode = null)
         {
-            var locationCode = _http.HttpContext?.Session.GetString("OfficeLocation") ?? "LAX";
-            return new ErpContext { LocationCode = locationCode };
+            var code = locationCode ?? _http.HttpContext?.Session.GetString("OfficeLocation") ?? "LAX";
+            return new ErpContext { LocationCode = code };
         }
 
         public async Task<string> RenderHtmlAsync(string templateKey, long envelopeId, long? recipientId = null)
@@ -138,24 +140,24 @@ namespace SalesMetrics.Services.Signing
             return await _renderer.RenderAsync(controllerContext, tmpl.RazorViewPath, viewModel);
         }
 
-        public async Task<string?> GetPropertyNameAsync(int? propertyId)
+        public async Task<string?> GetPropertyNameAsync(int? propertyId, string? locationCode = null)
         {
             if (!propertyId.HasValue) return null;
 
             // Use ERP abstraction layer instead of direct SQL
-            var context = GetErpContext();
+            var context = GetErpContext(locationCode);
             var client = _erpFactory.GetClient(context);
 
             var property = await client.GetPropertyByIdAsync(propertyId.Value, context);
             return property?.CustomerName;
         }
 
-        public async Task<string?> GetPropertyAddressAsync(int? propertyId)
+        public async Task<string?> GetPropertyAddressAsync(int? propertyId, string? locationCode = null)
         {
             if (!propertyId.HasValue) return null;
 
             // Use ERP abstraction layer instead of direct SQL
-            var context = GetErpContext();
+            var context = GetErpContext(locationCode);
             var client = _erpFactory.GetClient(context);
 
             var property = await client.GetPropertyByIdAsync(propertyId.Value, context);

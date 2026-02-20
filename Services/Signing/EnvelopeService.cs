@@ -318,8 +318,8 @@ public sealed class EnvelopeService : IEnvelopeService
         {
             try
             {
-                sendPropertyName    = await _merge.GetPropertyNameAsync(env.PropertyID.Value);
-                sendPropertyAddress = await _merge.GetPropertyAddressAsync(env.PropertyID.Value);
+                sendPropertyName    = await _merge.GetPropertyNameAsync(env.PropertyID.Value, env.LocationCode);
+                sendPropertyAddress = await _merge.GetPropertyAddressAsync(env.PropertyID.Value, env.LocationCode);
             }
             catch (Exception ex)
             {
@@ -514,7 +514,7 @@ public sealed class EnvelopeService : IEnvelopeService
         string? editResendPropertyAddress = null;
         if (env.PropertyID.HasValue)
         {
-            try { editResendPropertyName = await _merge.GetPropertyNameAsync(env.PropertyID.Value); editResendPropertyAddress = await _merge.GetPropertyAddressAsync(env.PropertyID.Value); }
+            try { editResendPropertyName = await _merge.GetPropertyNameAsync(env.PropertyID.Value, env.LocationCode); editResendPropertyAddress = await _merge.GetPropertyAddressAsync(env.PropertyID.Value, env.LocationCode); }
             catch { /* non-fatal */ }
         }
         editResendPropertyName ??= env.PropertyName;
@@ -1108,14 +1108,18 @@ public sealed class EnvelopeService : IEnvelopeService
         {
             try
             {
-                notifPropertyName    = await _merge.GetPropertyNameAsync(env.PropertyID.Value);
-                notifPropertyAddress = await _merge.GetPropertyAddressAsync(env.PropertyID.Value);
+                // Pass env.LocationCode so the correct branch ERP database is queried.
+                // Without this, GetErpContext() would read from the HTTP session which is
+                // absent (or wrong) during anonymous signing — causing cross-branch data leakage.
+                notifPropertyName    = await _merge.GetPropertyNameAsync(env.PropertyID.Value, env.LocationCode);
+                notifPropertyAddress = await _merge.GetPropertyAddressAsync(env.PropertyID.Value, env.LocationCode);
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Could not fetch property info for completion notification email (envelope {EnvelopeId})", envelopeId);
             }
         }
+        notifPropertyName ??= env.PropertyName; // fall back to stored free-text name
 
         // ---------------------------------------------------------------
         // Send internal company / branch notification emails
@@ -1187,6 +1191,10 @@ public sealed class EnvelopeService : IEnvelopeService
                         An envelope has been completed by all signers. Please find the details below.
                     </p>
                     <table style=""width:100%;border-collapse:collapse;font-size:14px;color:#374151;margin-bottom:16px;"">
+                        <tr style=""border-bottom:1px solid #e5e7eb;"">
+                            <td style=""padding:8px 12px 8px 0;font-weight:600;white-space:nowrap;"">Envelope #</td>
+                            <td style=""padding:8px 0;"">{env.EnvelopeId}</td>
+                        </tr>
                         {propertyRows}
                         <tr style=""border-bottom:1px solid #e5e7eb;"">
                             <td style=""padding:8px 12px 8px 0;font-weight:600;white-space:nowrap;"">Subject</td>

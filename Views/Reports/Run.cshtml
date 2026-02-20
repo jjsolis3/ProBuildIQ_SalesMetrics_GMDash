@@ -1,6 +1,8 @@
 ﻿@model SalesMetrics.Models.Reports.ReportRunViewModel
 @{
     ViewData["Title"] = Model.Definition?.Name ?? "Report";
+    ViewBag.PTitle = "Reports";
+    ViewBag.PLink = "/Reports";
 }
 
 <style>

@@ -1,6 +1,8 @@
 @model SalesMetrics.Models.AnnouncementCreateEditViewModel
 @{
     ViewData["Title"] = Model.BroadcastMessageId.HasValue ? "Edit Announcement" : (Model.IsTemplate ? "Create Template" : "Create Announcement");
+    ViewBag.PTitle = "Announcements";
+    ViewBag.PLink = "/Announcements";
     var locations = ViewBag.Locations as List<SalesMetrics.Models.EFCore.LocationEntity>;
     var roles = ViewBag.Roles as List<SalesMetrics.Models.EFCore.RoleEntity>;
 }

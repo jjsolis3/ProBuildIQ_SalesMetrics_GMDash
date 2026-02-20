@@ -13,10 +13,11 @@ public sealed class EmailTemplateService : IEmailTemplateService
 
     public string WrapInBrandedTemplate(string innerHtml)
     {
-        var companyName = _branding.CompanyName;
-        var logoUrl = _branding.LogoUrl;
-        var website = _branding.Website;
-        var phone = _branding.Phone;
+        var companyName     = _branding.CompanyName;
+        var logoUrl         = _branding.LogoUrl;
+        var envelopeLogoUrl = _branding.EnvelopeLogoUrl;
+        var website         = _branding.Website;
+        var phone           = _branding.Phone;
         var year = DateTime.Now.Year;
 
         // Build footer contact line
@@ -64,6 +65,14 @@ public sealed class EmailTemplateService : IEmailTemplateService
   <tr>
     <td style=""background-color:#E87600;height:4px;font-size:0;line-height:0;"">&nbsp;</td>
   </tr>
+{(string.IsNullOrWhiteSpace(envelopeLogoUrl) ? "" : $@"
+  <!-- Envelope feature logo — sits between the orange bar and the body content -->
+  <tr>
+    <td style=""padding:24px 32px 0 32px;text-align:center;"">
+      <img src=""{envelopeLogoUrl}"" alt=""SalesMetrics Envelope""
+           style=""width:140px;height:auto;display:block;margin:0 auto;"" />
+    </td>
+  </tr>")}
 
   <!-- Body content -->
   <tr>

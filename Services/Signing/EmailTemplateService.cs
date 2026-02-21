@@ -68,11 +68,13 @@ public sealed class EmailTemplateService : IEmailTemplateService
 {(string.IsNullOrWhiteSpace(envelopeLogoUrl) ? "" : $@"
   <!-- Envelope feature logo — sits between the orange bar and the body content -->
   <tr>
-    <td style=""padding:24px 32px 0 32px;text-align:center;"">
+    <td style=""padding:24px 24px 0 24px;text-align:center;"">
       <img src=""{envelopeLogoUrl}"" alt=""SalesMetrics Envelope""
-           style=""width:140px;height:auto;display:block;margin:0 auto;"" />
+           style=""width:100px;height:auto;display:block;margin:0 auto;"" />
     </td>
-  </tr>")}
+  </tr>
+  <!-- Envelope Orange Banner -->
+  ")}
 
   <!-- Body content -->
   <tr>

@@ -360,13 +360,6 @@ public sealed class EnvelopeService : IEnvelopeService
                 : "";
 
             var innerHtml = $@"
-                <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:0 0 14px 0;"">
-                  <tr>
-                    <td style=""background-color:#E87600;border-radius:4px;padding:4px 14px;"">
-                      <span style=""font-size:11px;color:#ffffff;font-weight:700;letter-spacing:1px;font-family:Arial,Helvetica,sans-serif;text-transform:uppercase;"">SalesMetrics &bull; Envelope</span>
-                    </td>
-                  </tr>
-                </table>
                 <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Envelope Signing Request</h2>
                 <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Hello {r.FullName},</p>
                 <p style=""margin:0 0 8px 0;font-size:15px;color:#374151;"">Please review and sign the envelope: <strong>{env.Subject}</strong>.</p>
@@ -544,13 +537,6 @@ public sealed class EnvelopeService : IEnvelopeService
                     : "";
 
                 var innerHtml = $@"
-                    <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:0 0 14px 0;"">
-                      <tr>
-                        <td style=""background-color:#E87600;border-radius:4px;padding:4px 14px;"">
-                          <span style=""font-size:11px;color:#ffffff;font-weight:700;letter-spacing:1px;font-family:Arial,Helvetica,sans-serif;text-transform:uppercase;"">SalesMetrics &bull; Envelope</span>
-                        </td>
-                      </tr>
-                    </table>
                     <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Updated Envelope Signing Request</h2>
                     <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Hello {recipient.FullName},</p>
                     <p style=""margin:0 0 8px 0;font-size:15px;color:#374151;"">

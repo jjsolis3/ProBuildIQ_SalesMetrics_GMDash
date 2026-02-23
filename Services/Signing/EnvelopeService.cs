@@ -620,7 +620,7 @@ public sealed class EnvelopeService : IEnvelopeService
                         ? $"<p style=\"margin:12px 0;font-size:14px;color:#374151;\"><strong>Reason:</strong> {reason}</p>"
                         : "";
                     var innerHtml = $@"
-                        <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Signing Request Cancelled</h2>
+                        <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Envelope Signing Request Cancelled</h2>
                         <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Hello {recipient.FullName},</p>
                         <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">The signature request for <strong>{env.Subject}</strong> has been cancelled.</p>
                         {reasonHtml}
@@ -892,7 +892,7 @@ public sealed class EnvelopeService : IEnvelopeService
                     ? $"<p style=\"margin:12px 0;font-size:14px;color:#374151;\"><strong>Reason:</strong> {reason}</p>"
                     : "";
                 var innerHtml = $@"
-                    <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Signing Request Declined</h2>
+                    <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Envelope Signing Request Declined</h2>
                     <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Hello {otherRecipient.FullName},</p>
                     <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">The signature request for <strong>{envelope.Subject}</strong> has been declined by {recipient.FullName}.</p>
                     {reasonHtml}
@@ -1456,7 +1456,7 @@ public sealed class EnvelopeService : IEnvelopeService
         var baseUrl = _appSettings.BaseUrl.TrimEnd('/');
         var link = $"{baseUrl}/sign/{next.AccessToken}";
         var innerHtml = $@"
-            <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Document Signing Request</h2>
+            <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Envelope Document Signing Request</h2>
             <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Hello {next.FullName},</p>
             <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Please review and sign the document: <strong>{env.Subject}</strong>.</p>
             <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:24px 0;"">

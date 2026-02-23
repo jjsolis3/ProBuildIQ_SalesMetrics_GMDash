@@ -70,7 +70,7 @@ public sealed class EmailTemplateService : IEmailTemplateService
   <tr>
     <td style=""padding:24px 24px 0 24px;text-align:center;"">
       <img src=""{envelopeLogoUrl}"" alt=""SalesMetrics Envelope""
-           style=""width:100px;height:auto;display:block;margin:0 auto;"" />
+           style=""height:120px;width:auto;display:block;margin:0 auto;"" />
     </td>
   </tr>
   <!-- Envelope Orange Banner -->

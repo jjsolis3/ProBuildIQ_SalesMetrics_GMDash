@@ -215,15 +215,49 @@
         </div>
 
         <div class="mb-3">
-            <label class="form-label">Razor View Path (for Review page)</label>
+            <label class="form-label">Razor View Path <small class="text-muted">(legacy — used only when HTML Body below is empty)</small></label>
             <select asp-for="RazorViewPath" class="form-select">
-                <option value="">-- choose --</option>
+                <option value="">-- none --</option>
                 @foreach (var p in viewPaths)
                 {
                     <option value="@p">@p</option>
                 }
             </select>
         </div>
+
+        <!-- ── HTML Body Content (DB-stored, overrides Razor View) ───────────── -->
+        <div class="mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <label class="form-label mb-0 fw-semibold">
+                    HTML Body Content
+                    <span class="badge bg-success ms-2">Overrides Razor View</span>
+                </label>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="toggleTokenPanel">
+                    <i class="bi bi-code-square"></i> Insert Token
+                </button>
+            </div>
+
+            <!-- Token panel -->
+            <div id="tokenPanel" class="mb-3 border rounded p-3 bg-light" style="display:none;">
+                <p class="mb-2 small fw-semibold">Click a token to insert it at the cursor position in the editor:</p>
+                <div class="d-flex flex-wrap gap-2">
+                    @foreach (var (token, desc) in SalesMetrics.Services.Signing.ErpMergeService.AvailableTokens)
+                    {
+                        <button type="button" class="btn btn-sm btn-outline-primary token-insert-btn"
+                                data-token="@token" title="@desc">
+                            @token
+                        </button>
+                    }
+                </div>
+                <small class="text-muted mt-2 d-block">Tokens are replaced with live data when a signer opens the document.</small>
+            </div>
+
+            <textarea asp-for="HtmlBodyContent" id="htmlBodyContent" class="form-control"
+                      rows="18" style="font-family:monospace;font-size:0.85rem;"
+                      placeholder="Leave blank to use the Razor View above. Enter HTML here to create a fully custom consent form body."></textarea>
+            <small class="text-muted">When set, this HTML is displayed to the signer instead of the Razor view. Use <code>{{TokenName}}</code> placeholders for dynamic data.</small>
+        </div>
+        <!-- ──────────────────────────────────────────────────────────────────── -->
 
         <div class="mb-3">
             <label class="form-label">Default Subject</label>
@@ -522,6 +556,61 @@
 </div>
 
 @section Scripts {
+    <!-- TinyMCE (no API key required for self-hosted / community use) -->
+    <script src="https://cdn.jsdelivr.net/npm/tinymce@6/tinymce.min.js" referrerpolicy="origin"></script>
+    <script>
+        tinymce.init({
+            selector: '#htmlBodyContent',
+            height: 500,
+            menubar: 'file edit view insert format tools',
+            plugins: [
+                'advlist', 'autolink', 'lists', 'link', 'image', 'charmap',
+                'preview', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
+                'insertdatetime', 'table', 'wordcount', 'help'
+            ],
+            toolbar:
+                'undo redo | styles | bold italic underline | ' +
+                'alignleft aligncenter alignright alignjustify | ' +
+                'bullist numlist outdent indent | link image table | ' +
+                'removeformat code fullscreen | help',
+            content_style: 'body { font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; }',
+            // Sync back to the hidden textarea on any change
+            setup: function (editor) {
+                editor.on('change', function () { editor.save(); });
+            }
+        });
+
+        // Token panel toggle
+        document.getElementById('toggleTokenPanel').addEventListener('click', function () {
+            var panel = document.getElementById('tokenPanel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        });
+
+        // Insert token into TinyMCE at cursor
+        document.querySelectorAll('.token-insert-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var token = this.dataset.token;
+                var ed = tinymce.get('htmlBodyContent');
+                if (ed) {
+                    ed.insertContent(token);
+                    ed.focus();
+                } else {
+                    // Fallback: plain textarea insert
+                    var ta = document.getElementById('htmlBodyContent');
+                    var pos = ta.selectionStart;
+                    ta.value = ta.value.substring(0, pos) + token + ta.value.substring(ta.selectionEnd);
+                    ta.selectionStart = ta.selectionEnd = pos + token.length;
+                    ta.focus();
+                }
+            });
+        });
+
+        // Before form submit, ensure TinyMCE content is saved to textarea
+        document.getElementById('templateForm').addEventListener('submit', function () {
+            tinymce.triggerSave();
+        });
+    </script>
+
     <!-- PDF.js Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script>

@@ -5,7 +5,20 @@ public sealed class SignTemplate
 {
     public string TemplateKey { get; set; } = default!;
     public string DisplayName { get; set; } = default!;
-    public string RazorViewPath { get; set; } = default!;
+
+    /// <summary>
+    /// Legacy: path to a compiled Razor view that renders the signing review page.
+    /// Used as fallback when HtmlBodyContent is null.
+    /// </summary>
+    public string? RazorViewPath { get; set; }
+
+    /// <summary>
+    /// DB-stored HTML body for the signing review page.
+    /// Supports {{TokenName}} replacement at runtime (see HtmlBodyTokens for available tokens).
+    /// When set, takes precedence over RazorViewPath.
+    /// </summary>
+    public string? HtmlBodyContent { get; set; }
+
     public string? MergeSpecJson { get; set; }
     public string? PdfFilePath { get; set; }  // Path to uploaded base PDF for stamping
     public string? DefaultSubject { get; set; }

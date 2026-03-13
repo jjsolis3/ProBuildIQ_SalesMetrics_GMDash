@@ -22,8 +22,8 @@ public class TemplateMetadata
                 ViewPath = "/Views/SignTemplates/OccupiedRelease.cshtml",
                 DisplayName = "Occupied Release Form",
                 Icon = "🏠",
-                Description = "Release form for installations in occupied units",
-                UseCase = "Use when: Installing in a unit currently occupied by a tenant. Requires property staff and resident signatures.",
+                Description = "Installation-release language for occupied units with property and tenant context",
+                UseCase = "Use when: Flooring/work is being performed in an occupied unit and you need an installation-specific release acknowledgment.",
                 Category = "Installation Release"
             },
             ["TenantConsent"] = new()
@@ -31,8 +31,8 @@ public class TemplateMetadata
                 ViewPath = "/Views/SignTemplates/TenantConsent.cshtml",
                 DisplayName = "Tenant Consent Form",
                 Icon = "✅",
-                Description = "General consent form for tenant agreements",
-                UseCase = "Use when: Obtaining tenant consent for general property activities or modifications.",
+                Description = "General-purpose tenant consent language for non-installation scenarios",
+                UseCase = "Use when: You need broad tenant consent for property activities/modifications that are not installation-release specific.",
                 Category = "Consent"
             }
             // ADD MORE TEMPLATES HERE AS NEEDED:

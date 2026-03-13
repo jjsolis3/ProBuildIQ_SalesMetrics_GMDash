@@ -471,6 +471,20 @@
                 <h5 class="mb-3">Select Document Template</h5>
                 <p class="text-muted">Choose the template type that best fits your needs</p>
 
+                <div class="alert alert-info d-flex justify-content-between align-items-start gap-3">
+                    <div>
+                        <div class="fw-semibold mb-1">What is the difference?</div>
+                        <ul class="mb-0 ps-3 small">
+                            <li><strong>Occupied Release Form</strong>: installation-release wording for occupied units.</li>
+                            <li><strong>Tenant Consent Form</strong>: general tenant consent wording for broader scenarios.</li>
+                            <li>This choice sets the <strong>starting document content</strong>; in Step 3 you can still configure fields/PDF.</li>
+                        </ul>
+                    </div>
+                    <a class="btn btn-sm btn-outline-primary text-nowrap" asp-action="Index">
+                        Manage Templates
+                    </a>
+                </div>
+
                 <div class="template-cards">
                     @{
                         var templateMetadata = ViewBag.TemplateMetadata as Dictionary<string, SalesMetrics.Models.Signing.TemplateMetadata>;

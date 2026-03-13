@@ -38,6 +38,41 @@
                 </div>
             </div>
 
+            @* ── Expiry Date ──────────────────────────────────────────────────── *@
+            @if (Model.Status == "Expired")
+            {
+                <div class="alert alert-danger d-flex gap-2 mb-3">
+                    <i class="fas fa-clock mt-1 flex-shrink-0"></i>
+                    <div>
+                        <strong>This envelope has expired.</strong>
+                        Update the expiration date below and save — the envelope will be reactivated
+                        to <em>Sent</em> and you can then click <strong>Resend Emails</strong> on the Details page.
+                    </div>
+                </div>
+            }
+            <div class="card border-0 bg-light mb-4">
+                <div class="card-header bg-light fw-semibold small text-muted py-2">
+                    Expiration Date
+                    <span class="fw-normal ms-1">(recipients cannot sign after this date)</span>
+                </div>
+                <div class="card-body py-3">
+                    <div class="row g-3 align-items-center">
+                        <div class="col-md-5">
+                            <label class="form-label small fw-semibold">
+                                Expires On @(Model.Status == "Expired" ? "<span class=\"text-danger\">(required to reactivate)</span>" : "")
+                            </label>
+                            <input name="ExpiresAtUtc"
+                                   type="datetime-local"
+                                   class="form-control form-control-sm @(Model.Status == "Expired" ? "border-danger" : "")"
+                                   value="@(Model.ExpiresAtUtc.HasValue ? Model.ExpiresAtUtc.Value.ToLocalTime().ToString("yyyy-MM-ddTHH:mm") : "")" />
+                            <div class="form-text small">
+                                Current: @(Model.ExpiresAtUtc.HasValue ? Model.ExpiresAtUtc.Value.ToLocalTime().ToString("MMM d, yyyy h:mm tt") : "—")
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             @* ── Property / Order context ─────────────────────────────────────── *@
             <div class="card border-0 bg-light mb-4">
                 <div class="card-header bg-light fw-semibold small text-muted py-2">

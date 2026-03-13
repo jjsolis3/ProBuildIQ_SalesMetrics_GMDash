@@ -21,6 +21,9 @@ public sealed class EditEnvelopeVm
     public string? OrderNumber { get; set; }
     public string? UnitNumber { get; set; }
 
+    // ── Expiry — editable; extending also reactivates an Expired envelope ─────
+    public DateTime? ExpiresAtUtc { get; set; }
+
     // ── Read-only display (cannot change after send) ─────────────────────────
     public string Status { get; set; } = default!;
     public string? LocationCode { get; set; }

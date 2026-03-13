@@ -398,6 +398,26 @@ public sealed class EnvelopeService : IEnvelopeService
 
         var changes = new List<string>();
 
+        // ── Expiry extension (also reactivates Expired envelopes) ───────────
+        if (vm.ExpiresAtUtc.HasValue && vm.ExpiresAtUtc != env.ExpiresAtUtc)
+        {
+            var newExpiry = vm.ExpiresAtUtc.Value.Kind == DateTimeKind.Utc
+                ? vm.ExpiresAtUtc.Value
+                : vm.ExpiresAtUtc.Value.ToUniversalTime();
+
+            env.ExpiresAtUtc = newExpiry;
+
+            // Extend unsigned recipients' token expiry so existing links become valid again
+            foreach (var r in env.Recipients.Where(r => r.SignedAtUtc == null))
+                r.AccessTokenExpiresAt = newExpiry;
+
+            // Reactivate: Expired → Sent so staff can resend invitations
+            if (env.Status == "Expired")
+                env.Status = "Sent";
+
+            changes.Add("ExpiresAtUtc");
+        }
+
         // ── Envelope header fields ──────────────────────────────────────────
         if (env.Subject != vm.Subject)
         {
@@ -673,6 +693,9 @@ public sealed class EnvelopeService : IEnvelopeService
             PropertyName = propertyName,
             OrderNumber = e.OrderNumber,
             UnitNumber = unitNumber,
+            TenantSkipped = e.TenantSkipped,
+            TenantSkippedByName = e.TenantSkippedByName,
+            TenantSkippedAtUtc = e.TenantSkippedAtUtc,
             Recipients = e.Recipients.OrderBy(r => r.SignerOrder).Select(r => new EnvelopeDetailsVm.RecipientVm
             {
                 RecipientId   = r.RecipientId,

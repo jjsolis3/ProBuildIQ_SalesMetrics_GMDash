@@ -217,6 +217,7 @@ public class SignAdminController : Controller
             Subject      = details.Subject,
             MessageBody  = messageBody,
             Status       = details.Status,
+            ExpiresAtUtc = details.ExpiresAtUtc,
             PropertyName = details.PropertyName,
             OrderNumber  = details.OrderNumber,
             UnitNumber   = details.UnitNumber,
@@ -258,8 +259,66 @@ public class SignAdminController : Controller
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Resend(long id)
     {
+        // If the envelope is Expired, auto-extend expiry by 14 days before resending
+        var details = await _svc.GetDetailsAsync(id);
+        if (details?.Status == "Expired")
+        {
+            var userId = GetCurrentUserId();
+            var newExpiry = DateTime.UtcNow.AddDays(14);
+            await _svc.EditEnvelopeAsync(new EditEnvelopeVm
+            {
+                EnvelopeId   = id,
+                Subject      = details.Subject,
+                MessageBody  = details.MessageBody,
+                PropertyName = details.PropertyName,
+                OrderNumber  = details.OrderNumber,
+                UnitNumber   = details.UnitNumber,
+                ExpiresAtUtc = newExpiry,
+                Status       = details.Status,
+                Recipients   = details.Recipients.Select(r => new EditRecipientVm
+                {
+                    RecipientId = r.RecipientId,
+                    Role        = r.Role,
+                    SignerOrder  = r.SignerOrder,
+                    FullName    = r.FullName,
+                    Email       = r.Email,
+                    Phone       = r.Phone,
+                    HasSigned   = r.SignedAtUtc.HasValue
+                }).ToList()
+            }, userId);
+            TempData["msg"] = $"Envelope was expired. Expiry extended to {newExpiry.ToLocalTime():MMM d, yyyy} and emails have been resent.";
+        }
+        else
+        {
+            TempData["msg"] = "Envelope resent.";
+        }
+
         await _svc.SendAsync(id);
-        TempData["msg"] = "Envelope resent.";
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    // POST /SignAdmin/AdminSkipTenant/123
+    // Allows a staff admin to skip the tenant signature from the Details page,
+    // but only after at least one Property Staff/Manager has already signed.
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> AdminSkipTenant(long id)
+    {
+        try
+        {
+            var staffName = User.FindFirst("FullName")?.Value
+                         ?? User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value
+                         ?? "Staff";
+
+            await _svc.MarkTenantSkippedAsync(id, staffName);
+            var (isComplete, _) = await _svc.TryFinalizeEnvelopeAsync(id);
+            TempData["msg"] = isComplete
+                ? "Tenant skipped. Envelope is now complete and notifications have been sent."
+                : "Tenant skipped. Envelope will complete once all other recipients have signed.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            TempData["error"] = ex.Message;
+        }
         return RedirectToAction(nameof(Details), new { id });
     }
 

@@ -139,25 +139,42 @@
             <div class="card-header d-flex justify-content-between align-items-center bg-light">
                 <h5 class="mb-0"><i class="bi bi-person-plus"></i> Add Tenant Information</h5>
                 <div class="form-check mb-0">
-                    <input class="form-check-input" style="border-color:darkorange" type="checkbox" id="SkipTenant" name="SkipTenant" value="true">
-                    <label class="form-check-label" for="SkipTenant">
+                    {{!-- Default: Skip is CHECKED. Staff must uncheck to include tenant. --}}
+                    <input class="form-check-input" style="border-color:darkorange" type="checkbox"
+                           id="SkipTenant" name="SkipTenant" value="true" checked>
+                    <label class="form-check-label fw-semibold" for="SkipTenant" style="color:#E87600;">
                         Skip tenant signature
                     </label>
                 </div>
             </div>
-            <div class="card-body" id="tenantFields">
+
+            {{!-- Disclaimer shown ONLY when staff unchecks Skip (i.e. wants to add tenant) --}}
+            <div id="tenantDisclaimer" class="alert alert-info d-flex gap-2 mx-3 mt-3 mb-0" style="display:none!important;">
+                <i class="fas fa-info-circle mt-1 flex-shrink-0"></i>
+                <div class="small">
+                    <strong>Important:</strong> By entering tenant information, a signing invitation will be
+                    sent to the tenant. <strong>This consent form will not be marked as complete until
+                    the tenant also signs.</strong> If the tenant is not available or has already consented
+                    verbally, leave "Skip tenant signature" checked.
+                </div>
+            </div>
+
+            <div class="card-body" id="tenantFields" style="opacity:0.4;pointer-events:none;">
                 <div class="row g-3">
                     <div class="col-md-6">
                         <label class="form-label fw-bold">Tenant Full Name <span class="text-danger">*</span></label>
-                        <input name="TenantFullName" id="TenantFullName" class="form-control" placeholder="Enter tenant's full name" />
+                        <input name="TenantFullName" id="TenantFullName" class="form-control"
+                               placeholder="Enter tenant's full name" disabled />
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-bold">Tenant Email <span class="text-danger">*</span></label>
-                        <input name="TenantEmail" id="TenantEmail" type="email" class="form-control" placeholder="tenant@example.com" />
+                        <input name="TenantEmail" id="TenantEmail" type="email" class="form-control"
+                               placeholder="tenant@example.com" disabled />
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-bold">Tenant Phone</label>
-                        <input name="TenantPhone" id="TenantPhone" type="tel" class="form-control" placeholder="(555) 123-4567" />
+                        <input name="TenantPhone" id="TenantPhone" type="tel" class="form-control"
+                               placeholder="(555) 123-4567" disabled />
                     </div>
                 </div>
             </div>
@@ -374,26 +391,38 @@
         // Skip Tenant Checkbox Handler
         const skipTenantCheckbox = document.getElementById('SkipTenant');
         if (skipTenantCheckbox) {
-            skipTenantCheckbox.addEventListener('change', function() {
-                const tenantFields = document.getElementById('tenantFields');
-                const tenantNameInput = document.getElementById('TenantFullName');
-                const tenantEmailInput = document.getElementById('TenantEmail');
-                const tenantPhoneInput = document.getElementById('TenantPhone');
+            function applySkipTenantState(isSkipped) {
+                const tenantFields   = document.getElementById('tenantFields');
+                const tenantName     = document.getElementById('TenantFullName');
+                const tenantEmail    = document.getElementById('TenantEmail');
+                const tenantPhone    = document.getElementById('TenantPhone');
+                const disclaimer     = document.getElementById('tenantDisclaimer');
 
-                if (this.checked) {
-                    tenantFields.style.opacity = '0.5';
-                    tenantNameInput.disabled = true;
-                    tenantEmailInput.disabled = true;
-                    tenantPhoneInput.disabled = true;
-                    tenantNameInput.value = '';
-                    tenantEmailInput.value = '';
-                    tenantPhoneInput.value = '';
+                if (isSkipped) {
+                    tenantFields.style.opacity = '0.4';
+                    tenantFields.style.pointerEvents = 'none';
+                    tenantName.disabled  = true;
+                    tenantEmail.disabled = true;
+                    tenantPhone.disabled = true;
+                    tenantName.value  = '';
+                    tenantEmail.value = '';
+                    tenantPhone.value = '';
+                    if (disclaimer) disclaimer.style.setProperty('display', 'none', 'important');
                 } else {
                     tenantFields.style.opacity = '1';
-                    tenantNameInput.disabled = false;
-                    tenantEmailInput.disabled = false;
-                    tenantPhoneInput.disabled = false;
+                    tenantFields.style.pointerEvents = '';
+                    tenantName.disabled  = false;
+                    tenantEmail.disabled = false;
+                    tenantPhone.disabled = false;
+                    if (disclaimer) disclaimer.style.setProperty('display', 'flex', 'important');
                 }
+            }
+
+            // Apply correct initial state on page load (default: checked → skip is on)
+            applySkipTenantState(skipTenantCheckbox.checked);
+
+            skipTenantCheckbox.addEventListener('change', function() {
+                applySkipTenantState(this.checked);
             });
         }
 

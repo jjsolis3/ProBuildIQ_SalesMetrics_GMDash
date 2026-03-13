@@ -140,6 +140,39 @@
                             @Html.AntiForgeryToken()
                         </form>
 
+                        @* Admin Skip Tenant — visible only when:
+                           • Envelope is Sent/Viewed (still in-flight)
+                           • At least one Manager/staff has signed
+                           • There is still an unsigned Tenant recipient
+                           • Tenant has not already been skipped
+                        *@
+                        @{
+                            var anyManagerSigned = Model.Recipients.Any(r =>
+                                (r.Role == "Manager" || r.Role == "Staff") && r.SignedAtUtc.HasValue);
+                            var hasUnsignedTenant = Model.Recipients.Any(r =>
+                                r.Role == "Tenant" && !r.SignedAtUtc.HasValue && !r.DeclinedAtUtc.HasValue);
+                        }
+                        @if (!Model.TenantSkipped && anyManagerSigned && hasUnsignedTenant
+                             && (Model.Status == "Sent" || Model.Status == "Viewed"))
+                        {
+                            <hr class="my-3" />
+                            <button type="button" class="btn btn-outline-warning w-100"
+                                    data-bs-toggle="modal" data-bs-target="#skipTenantModal">
+                                <i class="fas fa-user-slash me-1"></i> Skip Tenant &amp; Complete
+                            </button>
+                            <div class="small text-muted mt-1 text-center">
+                                Property Staff has signed. Skip tenant to complete the envelope.
+                            </div>
+                        }
+                        @if (Model.TenantSkipped)
+                        {
+                            <div class="alert alert-warning mt-3 small mb-0">
+                                <i class="fas fa-user-slash me-1"></i>
+                                Tenant signature waived by <strong>@Model.TenantSkippedByName</strong>
+                                on @Model.TenantSkippedAtUtc?.ToLocalTime().ToString("g")
+                            </div>
+                        }
+
                         @* Edit and Void buttons — only when envelope is still active *@
                         @if (Model.Status != "Completed" && Model.Status != "Voided")
                         {
@@ -261,6 +294,59 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="submit" class="btn btn-danger">Void Envelope</button>
+                </div>
+                @Html.AntiForgeryToken()
+            </form>
+        </div>
+    </div>
+</div>
+
+@* Admin Skip Tenant Modal *@
+<div class="modal fade" id="skipTenantModal" tabindex="-1" aria-labelledby="skipTenantModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header" style="background:linear-gradient(90deg,#ff8c00,#ffb347);">
+                <h5 class="modal-title text-dark fw-bold" id="skipTenantModalLabel">
+                    <i class="fas fa-user-slash me-2"></i>Skip Tenant &amp; Complete Envelope
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form asp-action="AdminSkipTenant" asp-route-id="@Model.EnvelopeId" method="post">
+                <div class="modal-body">
+                    <div class="alert alert-warning d-flex gap-2 mb-3">
+                        <i class="fas fa-exclamation-triangle mt-1 flex-shrink-0"></i>
+                        <div>
+                            This will <strong>waive the tenant's signature</strong> on this envelope.
+                            A <em>"Tenant Signature Waived"</em> stamp will be applied to the signed PDF
+                            and completion notifications will be sent automatically.
+                            <strong>This action cannot be undone.</strong>
+                        </div>
+                    </div>
+                    <div class="mb-2">
+                        <strong>Envelope:</strong> #@Model.EnvelopeId — @Model.Subject
+                    </div>
+                    @{
+                        var unsignedTenants = Model.Recipients
+                            .Where(r => r.Role == "Tenant" && !r.SignedAtUtc.HasValue).ToList();
+                    }
+                    @if (unsignedTenants.Any())
+                    {
+                        <div class="small text-muted mt-2">
+                            The following tenant(s) will be skipped:
+                            <ul class="mb-0 mt-1">
+                                @foreach (var t in unsignedTenants)
+                                {
+                                    <li>@t.FullName (@t.Email)</li>
+                                }
+                            </ul>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning fw-semibold">
+                        <i class="fas fa-user-slash me-1"></i>Yes, Skip Tenant &amp; Complete
+                    </button>
                 </div>
                 @Html.AntiForgeryToken()
             </form>

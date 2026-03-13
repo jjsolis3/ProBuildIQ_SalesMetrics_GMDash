@@ -23,6 +23,11 @@ public sealed class EnvelopeDetailsVm
     public string? OrderNumber { get; set; }
     public string? UnitNumber { get; set; }
 
+    // Tenant skip tracking
+    public bool TenantSkipped { get; set; }
+    public string? TenantSkippedByName { get; set; }
+    public DateTime? TenantSkippedAtUtc { get; set; }
+
     public List<RecipientVm> Recipients { get; set; } = new();
     public List<EventVm> Events { get; set; } = new();
 

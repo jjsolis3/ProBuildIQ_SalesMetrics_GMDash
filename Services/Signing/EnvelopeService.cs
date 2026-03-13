@@ -965,6 +965,25 @@ public sealed class EnvelopeService : IEnvelopeService
 
         // Remove any existing unsigned Tenant recipients so they don't block envelope finalization
         var unsignedTenants = env.Recipients.Where(r => r.Role == "Tenant" && r.SignedAtUtc == null).ToList();
+
+        // Preserve historical SignEvent rows that reference these recipients by detaching
+        // the FK before deleting recipients (FK_SignEvent_Recipient uses NoAction).
+        var unsignedTenantIds = unsignedTenants.Select(t => t.RecipientId).ToList();
+        var detachedEventCount = 0;
+        if (unsignedTenantIds.Count > 0)
+        {
+            var relatedEvents = await _db.SignEvents
+                .Where(ev => ev.EnvelopeId == envelopeId
+                          && ev.RecipientId.HasValue
+                          && unsignedTenantIds.Contains(ev.RecipientId.Value))
+                .ToListAsync();
+
+            foreach (var ev in relatedEvents)
+                ev.RecipientId = null;
+
+            detachedEventCount = relatedEvents.Count;
+        }
+
         foreach (var t in unsignedTenants)
             _db.SignRecipients.Remove(t);
 
@@ -981,6 +1000,7 @@ public sealed class EnvelopeService : IEnvelopeService
                 skippedByName,
                 skippedByUserId,
                 source,
+                detachedEventCount,
                 removedRecipients = unsignedTenants.Select(t => new { t.RecipientId, t.Email })
             })
         });

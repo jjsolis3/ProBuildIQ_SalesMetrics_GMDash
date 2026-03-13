@@ -348,6 +348,20 @@ public class SignAdminController : Controller
         return RedirectToAction(nameof(Details), new { id });
     }
 
+    // POST /SignAdmin/UpdateFields/123
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateFields(long id, [FromForm] Dictionary<string, string> fields)
+    {
+        if (fields != null && fields.Count > 0)
+        {
+            // Strip the hidden envelopeId entry that the form submits alongside the field values
+            fields.Remove("envelopeId");
+            await _svc.UpdateFieldsAsync(id, fields);
+            TempData["msg"] = "Document fields updated.";
+        }
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
     // POST /SignAdmin/MarkOffline/123
     // Staff uploads the physically-signed/scanned PDF and marks the envelope as complete.
     [HttpPost, ValidateAntiForgeryToken]

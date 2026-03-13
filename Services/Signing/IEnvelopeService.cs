@@ -31,6 +31,12 @@ namespace SalesMetrics.Services.Signing
         Task UpsertTenantRecipientAsync(long envelopeId, string fullName, string email, string? phone = null);
         Task MarkTenantSkippedAsync(long envelopeId, string skippedByName);
         Task SaveCustomFieldsAsync(long envelopeId, long recipientId, Dictionary<string, string> fields);
+
+        /// <summary>
+        /// Staff update of field values from the Details page (any status, any field).
+        /// Only overwrites fields that currently have no value.
+        /// </summary>
+        Task UpdateFieldsAsync(long envelopeId, Dictionary<string, string> fields);
         Task CaptureSignatureAsync(long envelopeId, long recipientId, string typedFullName, string sigDataBase64);
         Task ProgressToNextAsync(long envelopeId);
 

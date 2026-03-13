@@ -213,18 +213,30 @@ public sealed class EnvelopeService : IEnvelopeService
         try
         {
             // Property fields
-            var propertyName = await _merge.GetPropertyNameAsync(env.PropertyID) ?? "";
-            var propertyAddress = await _merge.GetPropertyAddressAsync(env.PropertyID) ?? "";
-            var propertyPhone = await _merge.GetCustomerPhoneAsync(env.PropertyID) ?? "";
-            var customerEmail = await _merge.GetCustomerEmailAsync(env.PropertyID) ?? "";
-            var customerName = await _merge.GetCustomerNameAsync(env.PropertyID) ?? propertyName;
+            // When no ERP property is linked (PropertyID is null), fall back to the free-text
+            // property name stored on the envelope (entered manually during envelope creation).
+            var propertyName = (env.PropertyID.HasValue
+                ? await _merge.GetPropertyNameAsync(env.PropertyID)
+                : null) ?? env.PropertyName ?? "";
+            var propertyAddress = (env.PropertyID.HasValue
+                ? await _merge.GetPropertyAddressAsync(env.PropertyID)
+                : null) ?? "";
+            var propertyPhone = (env.PropertyID.HasValue
+                ? await _merge.GetCustomerPhoneAsync(env.PropertyID)
+                : null) ?? "";
+            var customerEmail = (env.PropertyID.HasValue
+                ? await _merge.GetCustomerEmailAsync(env.PropertyID)
+                : null) ?? "";
+            var customerName = (env.PropertyID.HasValue
+                ? await _merge.GetCustomerNameAsync(env.PropertyID)
+                : null) ?? propertyName;
 
             data["PropertyName"] = propertyName;
             data["PropertyAddress"] = propertyAddress;
             data["PropertyPhone"] = propertyPhone;
-            data["PropertyCity"] = await _merge.GetPropertyCityAsync(env.PropertyID) ?? "";
-            data["PropertyState"] = await _merge.GetPropertyStateAsync(env.PropertyID) ?? "";
-            data["PropertyZip"] = await _merge.GetPropertyZipAsync(env.PropertyID) ?? "";
+            data["PropertyCity"] = (env.PropertyID.HasValue ? await _merge.GetPropertyCityAsync(env.PropertyID) : null) ?? "";
+            data["PropertyState"] = (env.PropertyID.HasValue ? await _merge.GetPropertyStateAsync(env.PropertyID) : null) ?? "";
+            data["PropertyZip"] = (env.PropertyID.HasValue ? await _merge.GetPropertyZipAsync(env.PropertyID) : null) ?? "";
 
             data["CustomerName"] = customerName;
             data["CustomerEmail"] = customerEmail;
@@ -716,7 +728,24 @@ public sealed class EnvelopeService : IEnvelopeService
                 OccurredAtUtc = ev.OccurredAtUtc,
                 Recipient = e.Recipients.FirstOrDefault(r => r.RecipientId == ev.RecipientId)?.FullName,
                 Meta = ev.MetaJson
-            }).ToList()
+            }).ToList(),
+            FieldValues = (e.Fields ?? new List<SignField>())
+                .Where(f => f.FieldType != "signature" && f.FieldType != "initials"
+                         && !string.Equals(f.FieldKey, "PropertyStaffSignature", StringComparison.OrdinalIgnoreCase)
+                         && !string.Equals(f.FieldKey, "ResidentSignature", StringComparison.OrdinalIgnoreCase)
+                         && !string.Equals(f.FieldKey, "PropertyStaffDate", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(f => f.FieldKey)
+                .Select(f => new EnvelopeDetailsVm.FieldValueVm
+                {
+                    FieldId       = f.FieldId,
+                    FieldKey      = f.FieldKey,
+                    FieldType     = f.FieldType,
+                    FieldValue    = f.FieldValue,
+                    RecipientId   = f.RecipientId,
+                    RecipientRole = f.RecipientId.HasValue
+                        ? e.Recipients.FirstOrDefault(r => r.RecipientId == f.RecipientId)?.Role
+                        : null
+                }).ToList()
         };
     }
 
@@ -1050,6 +1079,25 @@ public sealed class EnvelopeService : IEnvelopeService
             if (string.IsNullOrWhiteSpace(value)) continue;
             var field = dbFields.FirstOrDefault(f => f.FieldKey.Equals(key, StringComparison.OrdinalIgnoreCase));
             if (field != null && string.IsNullOrEmpty(field.FieldValue))
+                field.FieldValue = value.Trim();
+        }
+
+        await _db.SaveChangesAsync();
+    }
+
+    public async Task UpdateFieldsAsync(long envelopeId, Dictionary<string, string> fields)
+    {
+        if (fields == null || fields.Count == 0) return;
+
+        var dbFields = await _db.SignFields
+            .Where(f => f.EnvelopeId == envelopeId)
+            .ToListAsync();
+
+        foreach (var (key, value) in fields)
+        {
+            if (string.IsNullOrWhiteSpace(value)) continue;
+            var field = dbFields.FirstOrDefault(f => f.FieldKey.Equals(key, StringComparison.OrdinalIgnoreCase));
+            if (field != null)
                 field.FieldValue = value.Trim();
         }
 

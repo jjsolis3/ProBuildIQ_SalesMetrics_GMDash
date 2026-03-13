@@ -32,6 +32,9 @@ public sealed class EnvelopeDetailsVm
     public List<RecipientVm> Recipients { get; set; } = new();
     public List<EventVm> Events { get; set; } = new();
 
+    /// <summary>All non-signature SignField records for this envelope, for the staff "Document Fields" card.</summary>
+    public List<FieldValueVm> FieldValues { get; set; } = new();
+
     public sealed class RecipientVm
     {
         public long RecipientId { get; set; }
@@ -51,5 +54,15 @@ public sealed class EnvelopeDetailsVm
         public DateTime OccurredAtUtc { get; set; }
         public string? Recipient { get; set; }
         public string? Meta { get; set; }
+    }
+
+    public sealed class FieldValueVm
+    {
+        public long FieldId { get; set; }
+        public string FieldKey { get; set; } = default!;
+        public string FieldType { get; set; } = "text";
+        public string? FieldValue { get; set; }
+        public long? RecipientId { get; set; }
+        public string? RecipientRole { get; set; }
     }
 }

@@ -491,30 +491,37 @@ public sealed class PdfService : IPdfService
             _logger.LogDebug("No SignField records found, using legacy ERP data gathering");
         }
 
-        // Supplement with ERP data for any missing fields
+        // Supplement with ERP data for any missing fields.
+        // When no ERP PropertyID is linked, fall back to the free-text name stored on the envelope.
         // Property fields
         if (!data.ContainsKey("PropertyName"))
-            data["PropertyName"] = await _merge.GetPropertyNameAsync(env.PropertyID) ?? "";
+            data["PropertyName"] = (env.PropertyID.HasValue
+                ? await _merge.GetPropertyNameAsync(env.PropertyID)
+                : null) ?? env.PropertyName ?? "";
         if (!data.ContainsKey("PropertyAddress"))
-            data["PropertyAddress"] = await _merge.GetPropertyAddressAsync(env.PropertyID) ?? "";
+            data["PropertyAddress"] = (env.PropertyID.HasValue
+                ? await _merge.GetPropertyAddressAsync(env.PropertyID)
+                : null) ?? "";
         if (!data.ContainsKey("PropertyPhone"))
-            data["PropertyPhone"] = await _merge.GetCustomerPhoneAsync(env.PropertyID) ?? "";
+            data["PropertyPhone"] = (env.PropertyID.HasValue
+                ? await _merge.GetCustomerPhoneAsync(env.PropertyID)
+                : null) ?? "";
         if (!data.ContainsKey("PropertyCity"))
-            data["PropertyCity"] = await _merge.GetPropertyCityAsync(env.PropertyID) ?? "";
+            data["PropertyCity"] = (env.PropertyID.HasValue ? await _merge.GetPropertyCityAsync(env.PropertyID) : null) ?? "";
         if (!data.ContainsKey("PropertyState"))
-            data["PropertyState"] = await _merge.GetPropertyStateAsync(env.PropertyID) ?? "";
+            data["PropertyState"] = (env.PropertyID.HasValue ? await _merge.GetPropertyStateAsync(env.PropertyID) : null) ?? "";
         if (!data.ContainsKey("PropertyZip"))
-            data["PropertyZip"] = await _merge.GetPropertyZipAsync(env.PropertyID) ?? "";
+            data["PropertyZip"] = (env.PropertyID.HasValue ? await _merge.GetPropertyZipAsync(env.PropertyID) : null) ?? "";
 
         // Customer fields (sourced from property record in this ERP)
         if (!data.ContainsKey("CustomerName"))
-            data["CustomerName"] = await _merge.GetCustomerNameAsync(env.PropertyID) ?? "";
+            data["CustomerName"] = (env.PropertyID.HasValue ? await _merge.GetCustomerNameAsync(env.PropertyID) : null) ?? env.PropertyName ?? "";
         if (!data.ContainsKey("CustomerPhone"))
-            data["CustomerPhone"] = await _merge.GetCustomerPhoneAsync(env.PropertyID) ?? "";
+            data["CustomerPhone"] = (env.PropertyID.HasValue ? await _merge.GetCustomerPhoneAsync(env.PropertyID) : null) ?? "";
         if (!data.ContainsKey("CustomerEmail"))
-            data["CustomerEmail"] = await _merge.GetCustomerEmailAsync(env.PropertyID) ?? "";
+            data["CustomerEmail"] = (env.PropertyID.HasValue ? await _merge.GetCustomerEmailAsync(env.PropertyID) : null) ?? "";
         if (!data.ContainsKey("CustomerCompany"))
-            data["CustomerCompany"] = await _merge.GetCustomerCompanyAsync(env.PropertyID) ?? "";
+            data["CustomerCompany"] = (env.PropertyID.HasValue ? await _merge.GetCustomerCompanyAsync(env.PropertyID) : null) ?? env.PropertyName ?? "";
 
         // Order fields
         if (!data.ContainsKey("OrderNumber"))

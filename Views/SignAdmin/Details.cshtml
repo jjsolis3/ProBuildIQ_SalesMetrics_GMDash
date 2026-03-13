@@ -103,6 +103,91 @@
                     </ul>
                 </div>
 
+                @if (Model.FieldValues.Count > 0)
+                {
+                    <div class="card border-0 mb-3">
+                        <div class="card-header bg-gradient d-flex justify-content-between align-items-center"
+                             style="background:linear-gradient(90deg,#ff8c00,#ffb347)">
+                            <span>Document Fields</span>
+                            @{
+                                var emptyCount = Model.FieldValues.Count(f => string.IsNullOrWhiteSpace(f.FieldValue));
+                            }
+                            @if (emptyCount > 0)
+                            {
+                                <span class="badge bg-danger rounded-pill">@emptyCount empty</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-success rounded-pill">All filled</span>
+                            }
+                        </div>
+                        <div class="card-body p-0">
+                            <form asp-action="UpdateFields" asp-route-id="@Model.EnvelopeId" method="post">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="envelopeId" value="@Model.EnvelopeId" />
+                                <table class="table table-sm table-hover mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th class="ps-3" style="width:35%">Field</th>
+                                            <th>Value</th>
+                                            @if (Model.Status != "Completed" && Model.Status != "Voided")
+                                            {
+                                                <th style="width:5%"></th>
+                                            }
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var f in Model.FieldValues)
+                                        {
+                                            var isEmpty = string.IsNullOrWhiteSpace(f.FieldValue);
+                                            <tr class="@(isEmpty ? "table-warning" : "")">
+                                                <td class="ps-3 align-middle">
+                                                    <code class="small">@f.FieldKey</code>
+                                                    @if (!string.IsNullOrWhiteSpace(f.RecipientRole))
+                                                    {
+                                                        <span class="badge bg-secondary ms-1 small">@f.RecipientRole</span>
+                                                    }
+                                                </td>
+                                                <td class="align-middle">
+                                                    @if (Model.Status != "Completed" && Model.Status != "Voided")
+                                                    {
+                                                        <input type="text"
+                                                               name="fields[@f.FieldKey]"
+                                                               value="@f.FieldValue"
+                                                               class="form-control form-control-sm @(isEmpty ? "border-warning" : "")"
+                                                               placeholder="@(isEmpty ? "Empty — enter a value" : "")" />
+                                                    }
+                                                    else if (!isEmpty)
+                                                    {
+                                                        <span>@f.FieldValue</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted fst-italic small">empty</span>
+                                                    }
+                                                </td>
+                                                @if (Model.Status != "Completed" && Model.Status != "Voided")
+                                                {
+                                                    <td></td>
+                                                }
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                                @if (Model.Status != "Completed" && Model.Status != "Voided")
+                                {
+                                    <div class="p-2 border-top">
+                                        <button type="submit" class="btn btn-sm btn-warning fw-semibold">
+                                            <i class="fas fa-save me-1"></i> Save Field Values
+                                        </button>
+                                        <small class="text-muted ms-2">These values are stamped onto the final PDF.</small>
+                                    </div>
+                                }
+                            </form>
+                        </div>
+                    </div>
+                }
+
                 <div class="card border-0">
                     <div class="card-header bg-gradient" style="background:linear-gradient(90deg,#ff8c00,#ffb347)">Timeline</div>
                     <div class="list-group list-group-flush">

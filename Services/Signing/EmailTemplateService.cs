@@ -54,7 +54,7 @@ public sealed class EmailTemplateService : IEmailTemplateService
       <table role=""presentation"" width=""100%"" cellpadding=""0"" cellspacing=""0"" border=""0"">
         <tr>
           <td align=""center"">
-            <img src=""{logoUrl}"" alt=""{companyName}"" style=""max-height:50px;max-width:260px;width:auto;display:block;margin:0 auto;"" />
+            <img src=""{logoUrl}"" alt=""{companyName}"" style=""max-height:60px;max-width:260px;width:auto;display:block;margin:0 auto;"" />
           </td>
         </tr>
       </table>
@@ -70,7 +70,7 @@ public sealed class EmailTemplateService : IEmailTemplateService
   <tr>
     <td style=""padding:24px 24px 0 24px;text-align:center;"">
       <img src=""{envelopeLogoUrl}"" alt=""SalesMetrics Envelope""
-           style=""height:120px;width:auto;display:block;margin:0 auto;"" />
+           style=""height:100px;width:auto;display:block;margin:0 auto;"" />
     </td>
   </tr>
   <!-- Envelope Orange Banner -->

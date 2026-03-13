@@ -311,7 +311,14 @@ public class SignAdminController : Controller
                          ?? $"User #{userId}";
 
             await _svc.MarkTenantSkippedAsync(id, staffName, source: "AdminDetailsPage", skippedByUserId: userId);
-            TempData["msg"] = "Tenant signature requirement was skipped and recorded in the audit timeline.";
+
+            // If skipping tenant leaves no remaining unsigned recipients, finalize now so
+            // status/pdfs/notifications follow the same completion flow as normal signing.
+            var (isComplete, _) = await _svc.TryFinalizeEnvelopeAsync(id);
+
+            TempData["msg"] = isComplete
+                ? "Tenant signature was skipped, envelope completed, and completion notifications were sent."
+                : "Tenant signature requirement was skipped and recorded in the audit timeline.";
         }
         catch (InvalidOperationException ex)
         {

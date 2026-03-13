@@ -36,6 +36,11 @@
                     <textarea asp-for="MessageBody" class="form-control" rows="3"
                               placeholder="Enter a message for recipients..."></textarea>
                 </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">Expiration</label>
+                    <input asp-for="ExpiresAtUtc" type="datetime-local" class="form-control" />
+                    <div class="form-text small">Extend or shorten the signing deadline.</div>
+                </div>
             </div>
 
             @* ── Property / Order context ─────────────────────────────────────── *@

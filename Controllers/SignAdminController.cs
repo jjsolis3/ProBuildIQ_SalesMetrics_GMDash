@@ -216,6 +216,7 @@ public class SignAdminController : Controller
             EnvelopeId   = details.EnvelopeId,
             Subject      = details.Subject,
             MessageBody  = messageBody,
+            ExpiresAtUtc = details.ExpiresAtUtc,
             Status       = details.Status,
             PropertyName = details.PropertyName,
             OrderNumber  = details.OrderNumber,
@@ -258,8 +259,15 @@ public class SignAdminController : Controller
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Resend(long id)
     {
-        await _svc.SendAsync(id);
-        TempData["msg"] = "Envelope resent.";
+        try
+        {
+            await _svc.SendAsync(id);
+            TempData["msg"] = "Envelope resent.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            TempData["error"] = ex.Message;
+        }
         return RedirectToAction(nameof(Details), new { id });
     }
 

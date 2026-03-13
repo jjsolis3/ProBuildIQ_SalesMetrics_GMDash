@@ -308,8 +308,18 @@ public sealed class EnvelopeService : IEnvelopeService
     {
         var env = await _db.SignEnvelopes.Include(e => e.Recipients).FirstOrDefaultAsync(e => e.EnvelopeId == envelopeId)
             ?? throw new InvalidOperationException($"Envelope {envelopeId} not found");
-        if (env.Status == "Draft") env.Status = "Sent";
+
+        if (env.Status == "Completed" || env.Status == "Voided" || env.Status == "Declined")
+            throw new InvalidOperationException($"Envelope in status '{env.Status}' cannot be resent.");
+
+        // Re-sending should reactivate active signing workflows (Draft/Expired/Viewed/Sent).
+        env.Status = "Sent";
         env.SentAtUtc = env.SentAtUtc ?? DateTime.UtcNow;
+
+        // Ensure unsigned recipients use the envelope's current expiration date.
+        foreach (var r in env.Recipients.Where(r => r.SignedAtUtc == null))
+            r.AccessTokenExpiresAt = env.ExpiresAtUtc;
+
         await _db.SaveChangesAsync();
 
         // Fetch property context once before the recipient loop
@@ -411,6 +421,12 @@ public sealed class EnvelopeService : IEnvelopeService
             changes.Add("MessageBody");
         }
 
+        if (env.ExpiresAtUtc != vm.ExpiresAtUtc)
+        {
+            env.ExpiresAtUtc = vm.ExpiresAtUtc;
+            changes.Add("ExpiresAtUtc");
+        }
+
         // ── Context fields (correctable after send) ─────────────────────────
         var newPropertyName = string.IsNullOrWhiteSpace(vm.PropertyName) ? null : vm.PropertyName.Trim();
         if (env.PropertyName != newPropertyName)
@@ -487,6 +503,10 @@ public sealed class EnvelopeService : IEnvelopeService
                 if (editR.ResendInvite)
                     recipientsToResend.Add(existing);
             }
+
+            // Keep unsigned recipient token expiration in sync with envelope expiration edits.
+            if (existing.AccessTokenExpiresAt != env.ExpiresAtUtc)
+                existing.AccessTokenExpiresAt = env.ExpiresAtUtc;
         }
 
         if (changes.Count > 0)

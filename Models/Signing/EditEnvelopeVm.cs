@@ -15,6 +15,7 @@ public sealed class EditEnvelopeVm
     // ── Editable envelope fields ─────────────────────────────────────────────
     public string Subject { get; set; } = default!;
     public string? MessageBody { get; set; }
+    public DateTime? ExpiresAtUtc { get; set; }
 
     // Editable context — can be corrected if entered wrong at creation
     public string? PropertyName { get; set; }

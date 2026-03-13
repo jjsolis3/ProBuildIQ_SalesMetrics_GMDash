@@ -28,7 +28,7 @@ namespace SalesMetrics.Services.Signing
 
         // NEW (used by your POST Review action)
         Task UpsertTenantRecipientAsync(long envelopeId, string fullName, string email, string? phone = null);
-        Task MarkTenantSkippedAsync(long envelopeId, string skippedByName);
+        Task MarkTenantSkippedAsync(long envelopeId, string skippedByName, string source = "ManagerReview", int? skippedByUserId = null);
         Task CaptureSignatureAsync(long envelopeId, long recipientId, string typedFullName, string sigDataBase64);
         Task ProgressToNextAsync(long envelopeId);
 

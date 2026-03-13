@@ -65,6 +65,7 @@ public sealed class EnvelopeService : IEnvelopeService
             OrderNumber = orderNumber,
             CustomerNumber = vm.CustomerNumber,
             LocationCode = vm.LocationCode,
+            TenantSkipped = vm.PreselectSkipTenant,
             Status = "Draft",
             ExpiresAtUtc = vm.ExpiresAtUtc,
             CreatedByUsers_ID = createdByUsersId,
@@ -913,6 +914,12 @@ public sealed class EnvelopeService : IEnvelopeService
     {
         var env = await _db.SignEnvelopes.Include(e => e.Recipients).FirstOrDefaultAsync(e => e.EnvelopeId == envelopeId)
             ?? throw new InvalidOperationException($"Envelope {envelopeId} not found");
+
+        // If tenant data is being captured, clear any pre-selected skip state.
+        env.TenantSkipped = false;
+        env.TenantSkippedByName = null;
+        env.TenantSkippedAtUtc = null;
+
         var existing = env.Recipients.FirstOrDefault(r => r.Role == "Tenant");
 
         if (existing == null)
@@ -944,7 +951,7 @@ public sealed class EnvelopeService : IEnvelopeService
         }
     }
 
-    public async Task MarkTenantSkippedAsync(long envelopeId, string skippedByName)
+    public async Task MarkTenantSkippedAsync(long envelopeId, string skippedByName, string source = "ManagerReview", int? skippedByUserId = null)
     {
         var env = await _db.SignEnvelopes.Include(e => e.Recipients).FirstOrDefaultAsync(e => e.EnvelopeId == envelopeId)
             ?? throw new InvalidOperationException($"Envelope {envelopeId} not found");
@@ -957,6 +964,20 @@ public sealed class EnvelopeService : IEnvelopeService
         var unsignedTenants = env.Recipients.Where(r => r.Role == "Tenant" && r.SignedAtUtc == null).ToList();
         foreach (var t in unsignedTenants)
             _db.SignRecipients.Remove(t);
+
+        _db.SignEvents.Add(new SignEvent
+        {
+            EnvelopeId = env.EnvelopeId,
+            EventType = "TenantSkipped",
+            OccurredAtUtc = DateTime.UtcNow,
+            MetaJson = JsonSerializer.Serialize(new
+            {
+                skippedByName,
+                skippedByUserId,
+                source,
+                removedRecipients = unsignedTenants.Select(t => new { t.RecipientId, t.Email })
+            })
+        });
 
         await _db.SaveChangesAsync();
     }

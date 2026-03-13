@@ -22,6 +22,9 @@ public sealed class CreateEnvelopeVm
 
     public DateTime? ExpiresAtUtc { get; set; }
 
+    // If true, pre-check "Skip tenant signature" when property staff opens signing page.
+    public bool PreselectSkipTenant { get; set; }
+
     // Recipients
     public List<RecipientInput> Recipients { get; set; } = new();
 

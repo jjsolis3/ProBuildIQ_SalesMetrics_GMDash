@@ -139,11 +139,15 @@
             <div class="card-header d-flex justify-content-between align-items-center bg-light">
                 <h5 class="mb-0"><i class="bi bi-person-plus"></i> Add Tenant Information</h5>
                 <div class="form-check mb-0">
-                    <input class="form-check-input" style="border-color:darkorange" type="checkbox" id="SkipTenant" name="SkipTenant" value="true">
+                    <input class="form-check-input" style="border-color:darkorange" type="checkbox" id="SkipTenant" name="SkipTenant" value="true" @(Model.Envelope.TenantSkipped ? "checked" : "")>
                     <label class="form-check-label" for="SkipTenant">
                         Skip tenant signature
                     </label>
                 </div>
+            </div>
+            <div class="alert alert-warning rounded-0 border-0 border-bottom mb-0 small">
+                <i class="bi bi-info-circle me-1"></i>
+                If tenant information is entered, the consent form is not complete until all parties sign.
             </div>
             <div class="card-body" id="tenantFields">
                 <div class="row g-3">
@@ -374,13 +378,13 @@
         // Skip Tenant Checkbox Handler
         const skipTenantCheckbox = document.getElementById('SkipTenant');
         if (skipTenantCheckbox) {
-            skipTenantCheckbox.addEventListener('change', function() {
+            const syncTenantInputs = function() {
                 const tenantFields = document.getElementById('tenantFields');
                 const tenantNameInput = document.getElementById('TenantFullName');
                 const tenantEmailInput = document.getElementById('TenantEmail');
                 const tenantPhoneInput = document.getElementById('TenantPhone');
 
-                if (this.checked) {
+                if (skipTenantCheckbox.checked) {
                     tenantFields.style.opacity = '0.5';
                     tenantNameInput.disabled = true;
                     tenantEmailInput.disabled = true;
@@ -394,7 +398,10 @@
                     tenantEmailInput.disabled = false;
                     tenantPhoneInput.disabled = false;
                 }
-            });
+            };
+
+            skipTenantCheckbox.addEventListener('change', syncTenantInputs);
+            syncTenantInputs();
         }
 
         // Signature Pad Setup

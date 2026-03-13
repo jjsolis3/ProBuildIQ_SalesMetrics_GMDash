@@ -108,6 +108,19 @@
                     <label class="form-label">Expires</label>
                     <input asp-for="ExpiresAtUtc" type="datetime-local" class="form-control" />
                 </div>
+
+                <div class="col-md-6">
+                    <div class="form-check mt-4 pt-2">
+                        <input asp-for="PreselectSkipTenant" class="form-check-input" type="checkbox" />
+                        <label asp-for="PreselectSkipTenant" class="form-check-label fw-semibold">
+                            Preselect "Skip tenant signature" on the signer page
+                        </label>
+                        <div class="form-text">
+                            Property Staff can uncheck this and enter tenant details. If tenant details are entered,
+                            the consent form remains pending until all required signers complete.
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <hr />
@@ -334,4 +347,3 @@
     </script>
 
 }
-

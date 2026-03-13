@@ -280,6 +280,47 @@ public class SignAdminController : Controller
         return RedirectToAction(nameof(Details), new { id });
     }
 
+    // POST /SignAdmin/MarkTenantSkipped/123
+    // Admin override: after property staff signs, allow skipping any remaining tenant signature.
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> MarkTenantSkipped(long id)
+    {
+        try
+        {
+            var details = await _svc.GetDetailsAsync(id);
+            if (details == null)
+                return NotFound();
+
+            if (details.Status == "Completed" || details.Status == "Voided" || details.Status == "Declined")
+                throw new InvalidOperationException("Tenant skip is only available for active envelopes.");
+
+            var hasSignedPropertyStaff = details.Recipients.Any(r =>
+                (r.Role == "Manager" || r.Role == "Supervisor" || r.Role == "Maintenance") &&
+                r.SignedAtUtc.HasValue);
+
+            if (!hasSignedPropertyStaff)
+                throw new InvalidOperationException("A signed Property Staff recipient is required before skipping tenant.");
+
+            var hasPendingTenant = details.Recipients.Any(r => r.Role == "Tenant" && !r.SignedAtUtc.HasValue);
+            if (!hasPendingTenant)
+                throw new InvalidOperationException("No pending tenant signature was found to skip.");
+
+            var userId = GetCurrentUserId();
+            var staffName = User.FindFirst("FullName")?.Value
+                         ?? User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value
+                         ?? $"User #{userId}";
+
+            await _svc.MarkTenantSkippedAsync(id, staffName, source: "AdminDetailsPage", skippedByUserId: userId);
+            TempData["msg"] = "Tenant signature requirement was skipped and recorded in the audit timeline.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            TempData["error"] = ex.Message;
+        }
+
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
     // POST /SignAdmin/MarkOffline/123
     // Staff uploads the physically-signed/scanned PDF and marks the envelope as complete.
     [HttpPost, ValidateAntiForgeryToken]

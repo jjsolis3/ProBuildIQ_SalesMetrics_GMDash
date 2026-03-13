@@ -976,10 +976,20 @@ public sealed class EnvelopeService : IEnvelopeService
         env.TenantSkippedByName = skippedByName;
         env.TenantSkippedAtUtc = DateTime.UtcNow;
 
-        // Remove any existing unsigned Tenant recipients so they don't block envelope finalization
+        // Remove any existing unsigned Tenant recipients so they don't block envelope finalization.
+        // SignEvent rows reference RecipientId via FK — null them out first to avoid a FK violation.
         var unsignedTenants = env.Recipients.Where(r => r.Role == "Tenant" && r.SignedAtUtc == null).ToList();
         foreach (var t in unsignedTenants)
+        {
+            // Detach the FK on any sign-events that reference this recipient
+            var relatedEvents = await _db.SignEvents
+                .Where(e => e.RecipientId == t.RecipientId)
+                .ToListAsync();
+            foreach (var ev in relatedEvents)
+                ev.RecipientId = null;
+
             _db.SignRecipients.Remove(t);
+        }
 
         await _db.SaveChangesAsync();
     }

@@ -12,7 +12,7 @@ public sealed class SignEventConfiguration : IEntityTypeConfiguration<SignEvent>
         b.ToTable("SignEvent", null, t =>
         {
             t.HasCheckConstraint("CK_SignEvent_Type",
-                "[EventType] IN ('Sent','Opened','Consented','Signed','Edited','Completed','Voided','Declined','Expired','Downloaded','Reminded')");
+                "[EventType] IN ('Sent','Opened','Consented','Signed','Edited','Completed','Voided','Declined','Expired','Downloaded','Reminded','TenantSkipped')");
         });
         b.HasKey(x => x.EventId);
         b.Property(x => x.EventType).HasMaxLength(30).IsRequired();

@@ -108,14 +108,44 @@
                     <div class="list-group list-group-flush">
                         @foreach (var e in Model.Events)
                         {
-                            <div class="list-group-item">
-                                <div class="fw-semibold">@e.EventType</div>
-                                <div class="small text-muted">@e.OccurredAtUtc.ToLocalTime().ToString("g") • @e.Recipient</div>
-                                @if (!string.IsNullOrWhiteSpace(e.Meta))
+                            @if (e.EventType == "TenantSkipped")
+                            {
+                                // Parse the meta to show a friendly summary
+                                string? skippedBy = null;
+                                string? skippedNamesList = null;
+                                if (!string.IsNullOrWhiteSpace(e.Meta))
                                 {
-                                    <pre class="small text-muted mb-0">@e.Meta</pre>
+                                    try
+                                    {
+                                        var doc = System.Text.Json.JsonDocument.Parse(e.Meta);
+                                        skippedBy = doc.RootElement.TryGetProperty("skippedBy", out var sb) ? sb.GetString() : null;
+                                        if (doc.RootElement.TryGetProperty("skippedNames", out var sn) && sn.ValueKind == System.Text.Json.JsonValueKind.Array)
+                                            skippedNamesList = string.Join(", ", sn.EnumerateArray().Select(x => x.GetString()));
+                                    }
+                                    catch { }
                                 }
-                            </div>
+                                <div class="list-group-item border-start border-4 border-warning">
+                                    <div class="fw-semibold text-warning-emphasis">
+                                        <i class="bi bi-person-x-fill me-1"></i> Tenant Signature Waived
+                                    </div>
+                                    <div class="small text-muted">@e.OccurredAtUtc.ToLocalTime().ToString("g") • Waived by @(skippedBy ?? "Staff")</div>
+                                    @if (!string.IsNullOrWhiteSpace(skippedNamesList))
+                                    {
+                                        <div class="small text-muted">Skipped: @skippedNamesList</div>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="list-group-item">
+                                    <div class="fw-semibold">@e.EventType</div>
+                                    <div class="small text-muted">@e.OccurredAtUtc.ToLocalTime().ToString("g") • @e.Recipient</div>
+                                    @if (!string.IsNullOrWhiteSpace(e.Meta))
+                                    {
+                                        <pre class="small text-muted mb-0">@e.Meta</pre>
+                                    }
+                                </div>
+                            }
                         }
                     </div>
                 </div>

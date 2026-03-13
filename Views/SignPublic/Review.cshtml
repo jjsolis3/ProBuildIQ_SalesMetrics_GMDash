@@ -132,8 +132,8 @@
         </div>
     </div>
 
-    <!-- Manager: Capture Tenant Info -->
-    @if (Model.Recipient.Role == "Manager" && !Model.HasTenantRecipient)
+    <!-- Manager: Capture Tenant Info (only when template requires it and envelope type is Consent) -->
+    @if (Model.Recipient.Role == "Manager" && !Model.HasTenantRecipient && Model.RequiresTenantSection && Model.EnvelopeType != "Communication")
     {
         <div class="card border-0 shadow-sm mb-4">
             <div class="card-header d-flex justify-content-between align-items-center bg-light">
@@ -181,56 +181,136 @@
         </div>
     }
 
-    <!-- Signature Section -->
-    <div class="card border-0 shadow-sm mb-4">
-        <div class="card-header bg-light">
-            <h5 class="mb-0"><i class="bi bi-pen"></i> Your Signature</h5>
-        </div>
-        <div class="card-body">
-            <!-- Consent Checkbox -->
-            <span class="badge rounded-pill consent-badge">
-                <i class="bi bi-exclamation-triangle-fill me-1"></i> Required
-            </span>
-            <div class="form-check mb-4 p-3 bg-light rounded">
-                <input class="form-check-input ms-0" style="border-color:darkorange" type="checkbox" id="Accept" name="Accept" value="true">
-                <label class="form-check-label fw-bold ms-2" for="Accept">
-                    I have read and agree to the terms, and I adopt the signature below as my electronic signature.
-                </label>
-                
-                <small id="consentHint" class="d-block mt-1 fw-semibold text-orange">
-                    <i class="bi bi-check2-square me-1"></i>
-                    This box must be checked before you can sign.
-                </small>
+    <!-- Phase 2: Signer-fillable custom fields from template MergeSpec -->
+    @if (Model.RecipientFields.Count > 0 && Model.EnvelopeType != "Communication")
+    {
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-light">
+                <h5 class="mb-0"><i class="bi bi-ui-checks"></i> Document Fields</h5>
+                <small class="text-muted">Please fill in the following information required by this document.</small>
             </div>
-            
-
-            <!-- Signature Canvas -->
-            <div class="mb-4">
-                <label class="form-label fw-bold">Draw your signature <span class="text-danger">*</span></label>
-                <div class="border rounded p-2 bg-white">
-                    <canvas id="sigPad" style="width:100%;height:150px;border:2px dashed #dee2e6;border-radius:4px;"></canvas>
-                    <input type="hidden" id="SigData" name="SigData" />
+            <div class="card-body">
+                <div class="row g-3">
+                    @foreach (var field in Model.RecipientFields)
+                    {
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">
+                                @(field.FieldKey switch {
+                                    "ResidentName"    => "Resident Full Name",
+                                    "ResidentEmail"   => "Resident Email",
+                                    "ResidentPhone"   => "Resident Phone",
+                                    "CustomerName"    => "Customer Name",
+                                    "CustomerEmail"   => "Customer Email",
+                                    "CustomerPhone"   => "Customer Phone",
+                                    "UnitNumber"      => "Unit Number",
+                                    "OrderNumber"     => "Order Number",
+                                    _                 => field.FieldKey
+                                })
+                            </label>
+                            @if (field.FieldType == "checkbox")
+                            {
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox"
+                                           name="CustomFields[@field.FieldKey]" value="true" id="cf_@field.FieldKey" />
+                                    <label class="form-check-label" for="cf_@field.FieldKey">Yes</label>
+                                </div>
+                            }
+                            else if (field.FieldType == "date")
+                            {
+                                <input type="date" class="form-control"
+                                       name="CustomFields[@field.FieldKey]" />
+                            }
+                            else
+                            {
+                                <input type="@(field.FieldKey.Contains("Email") ? "email" : field.FieldKey.Contains("Phone") ? "tel" : "text")"
+                                       class="form-control"
+                                       name="CustomFields[@field.FieldKey]"
+                                       placeholder="Enter @field.FieldKey.ToLower()" />
+                            }
+                        </div>
+                    }
                 </div>
-                <button type="button" class="btn btn-sm btn-outline-secondary mt-2" id="clearSig">
-                    <i class="bi bi-x-circle"></i> Clear Signature
+            </div>
+        </div>
+    }
+
+    @if (Model.EnvelopeType == "Communication")
+    {
+        <!-- Phase 3: Communication-only acknowledge section (no signature) -->
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-light">
+                <h5 class="mb-0"><i class="bi bi-envelope-check"></i> Acknowledge Receipt</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info mb-3">
+                    <i class="bi bi-info-circle-fill me-2"></i>
+                    This is an informational document. No signature is required — just confirm you have read it.
+                </div>
+                <div class="form-check mb-4 p-3 bg-light rounded">
+                    <input class="form-check-input ms-0" style="border-color:darkorange" type="checkbox" id="Accept" name="Accept" value="true">
+                    <label class="form-check-label fw-bold ms-2" for="Accept">
+                        I confirm that I have read and received this document.
+                    </label>
+                </div>
+                <input type="hidden" name="TypedFullName" value="@Model.Recipient.FullName" />
+                <input type="hidden" name="SigData" value="" />
+                <button class="btn btn-primary btn-lg w-100" type="submit" id="submitBtn">
+                    <i class="bi bi-check-circle-fill"></i> Acknowledge &amp; Continue
                 </button>
             </div>
-
-            <!-- Typed Name -->
-            <div class="mb-4">
-                <label class="form-label fw-bold">Type your full name <span class="text-danger">*</span></label>
-                <input class="form-control" id="TypedFullName" name="TypedFullName" placeholder="Enter your full legal name" />
-            </div>
-
-            <button class="btn btn-success btn-lg w-100" type="submit" id="submitBtn">
-                <i class="bi bi-check-circle-fill"></i> Sign & Finish
-            </button>
-
-            <button type="button" class="btn btn-outline-danger w-100 mt-3" data-bs-toggle="modal" data-bs-target="#declineModal">
-                <i class="bi bi-x-circle"></i> Decline to Sign
-            </button>
         </div>
-    </div>
+    }
+    else
+    {
+        <!-- Standard Signature Section (Consent envelopes) -->
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-light">
+                <h5 class="mb-0"><i class="bi bi-pen"></i> Your Signature</h5>
+            </div>
+            <div class="card-body">
+                <!-- Consent Checkbox -->
+                <span class="badge rounded-pill consent-badge">
+                    <i class="bi bi-exclamation-triangle-fill me-1"></i> Required
+                </span>
+                <div class="form-check mb-4 p-3 bg-light rounded">
+                    <input class="form-check-input ms-0" style="border-color:darkorange" type="checkbox" id="Accept" name="Accept" value="true">
+                    <label class="form-check-label fw-bold ms-2" for="Accept">
+                        I have read and agree to the terms, and I adopt the signature below as my electronic signature.
+                    </label>
+                    <small id="consentHint" class="d-block mt-1 fw-semibold text-orange">
+                        <i class="bi bi-check2-square me-1"></i>
+                        This box must be checked before you can sign.
+                    </small>
+                </div>
+
+                <!-- Signature Canvas -->
+                <div class="mb-4">
+                    <label class="form-label fw-bold">Draw your signature <span class="text-danger">*</span></label>
+                    <div class="border rounded p-2 bg-white">
+                        <canvas id="sigPad" style="width:100%;height:150px;border:2px dashed #dee2e6;border-radius:4px;"></canvas>
+                        <input type="hidden" id="SigData" name="SigData" />
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-secondary mt-2" id="clearSig">
+                        <i class="bi bi-x-circle"></i> Clear Signature
+                    </button>
+                </div>
+
+                <!-- Typed Name -->
+                <div class="mb-4">
+                    <label class="form-label fw-bold">Type your full name <span class="text-danger">*</span></label>
+                    <input class="form-control" id="TypedFullName" name="TypedFullName" placeholder="Enter your full legal name" />
+                </div>
+
+                <button class="btn btn-success btn-lg w-100" type="submit" id="submitBtn">
+                    <i class="bi bi-check-circle-fill"></i> Sign &amp; Finish
+                </button>
+
+                <button type="button" class="btn btn-outline-danger w-100 mt-3" data-bs-toggle="modal" data-bs-target="#declineModal">
+                    <i class="bi bi-x-circle"></i> Decline to Sign
+                </button>
+            </div>
+        </div>
+    }
 </form>
 
 <!-- Decline Modal -->
@@ -426,113 +506,98 @@
             });
         }
 
-        // Signature Pad Setup
+        // Signature Pad Setup (only present for Consent envelopes)
         let drawing = false, hasInk = false;
-
-        function resize() {
-          const r = canvas.getBoundingClientRect();
-          const ratio = window.devicePixelRatio || 1;
-          canvas.width = r.width * ratio;
-          canvas.height = r.height * ratio;
-          ctx.scale(ratio, ratio);
-          ctx.lineWidth = 2;
-          ctx.lineCap = 'round';
-          ctx.strokeStyle = '#000';
-        }
-
         const sigCanvas = document.getElementById('sigPad');
-        const sigCtx = sigCanvas.getContext('2d');
+        let sigCtx = null;
+        let clearSigHandler = null;
 
-        function resizeSigPad() {
-          const r = sigCanvas.getBoundingClientRect();
-          const ratio = window.devicePixelRatio || 1;
-          sigCanvas.width = r.width * ratio;
-          sigCanvas.height = r.height * ratio;
-          sigCtx.scale(ratio, ratio);
-          sigCtx.lineWidth = 2;
-          sigCtx.lineCap = 'round';
-          sigCtx.strokeStyle = '#000';
-        }
-        resizeSigPad();
-        window.addEventListener('resize', resizeSigPad);
+        function cleanupSignatureCanvas() {}  // default no-op
 
-        function pos(e, targetCanvas) {
-          const rect = targetCanvas.getBoundingClientRect();
-          const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
-          const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
-          return {x,y};
-        }
+        if (sigCanvas) {
+            sigCtx = sigCanvas.getContext('2d');
 
-        function start(e){
-          e.preventDefault();
-          drawing = true;
-          hasInk = true;
-          const p = pos(e, sigCanvas);
-          sigCtx.beginPath();
-          sigCtx.moveTo(p.x, p.y);
-        }
+            function resizeSigPad() {
+              const r = sigCanvas.getBoundingClientRect();
+              const ratio = window.devicePixelRatio || 1;
+              sigCanvas.width = r.width * ratio;
+              sigCanvas.height = r.height * ratio;
+              sigCtx.scale(ratio, ratio);
+              sigCtx.lineWidth = 2;
+              sigCtx.lineCap = 'round';
+              sigCtx.strokeStyle = '#000';
+            }
+            resizeSigPad();
+            window.addEventListener('resize', resizeSigPad);
 
-        function move(e){
-          if(!drawing) return;
-          e.preventDefault();
-          const p = pos(e, sigCanvas);
-          sigCtx.lineTo(p.x, p.y);
-          sigCtx.stroke();
-        }
+            function pos(e, targetCanvas) {
+              const rect = targetCanvas.getBoundingClientRect();
+              const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+              const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+              return {x,y};
+            }
 
-        function end(e){
-          if(!drawing) return;
-          e.preventDefault();
-          drawing = false;
-          const dataUrl = sigCanvas.toDataURL('image/png');
-          document.getElementById('SigData').value = dataUrl;
-        }
+            function start(e){
+              e.preventDefault();
+              drawing = true;
+              hasInk = true;
+              const p = pos(e, sigCanvas);
+              sigCtx.beginPath();
+              sigCtx.moveTo(p.x, p.y);
+            }
 
-        // Attach event listeners
-        sigCanvas.addEventListener('mousedown', start);
-        sigCanvas.addEventListener('mousemove', move);
-        sigCanvas.addEventListener('mouseup', end);
-        sigCanvas.addEventListener('mouseleave', end);
+            function move(e){
+              if(!drawing) return;
+              e.preventDefault();
+              const p = pos(e, sigCanvas);
+              sigCtx.lineTo(p.x, p.y);
+              sigCtx.stroke();
+            }
 
-        sigCanvas.addEventListener('touchstart', start);
-        sigCanvas.addEventListener('touchmove', move);
-        sigCanvas.addEventListener('touchend', end);
-        sigCanvas.addEventListener('touchcancel', end);
+            function end(e){
+              if(!drawing) return;
+              e.preventDefault();
+              drawing = false;
+              const dataUrl = sigCanvas.toDataURL('image/png');
+              document.getElementById('SigData').value = dataUrl;
+            }
 
-        const clearSigHandler = function() {
-          sigCtx.clearRect(0, 0, sigCanvas.width, sigCanvas.height);
-          document.getElementById('SigData').value = '';
-          hasInk = false;
-        };
-        document.getElementById('clearSig').addEventListener('click', clearSigHandler);
+            sigCanvas.addEventListener('mousedown', start);
+            sigCanvas.addEventListener('mousemove', move);
+            sigCanvas.addEventListener('mouseup', end);
+            sigCanvas.addEventListener('mouseleave', end);
+            sigCanvas.addEventListener('touchstart', start);
+            sigCanvas.addEventListener('touchmove', move);
+            sigCanvas.addEventListener('touchend', end);
+            sigCanvas.addEventListener('touchcancel', end);
 
-        // Cleanup function for signature canvas
-        function cleanupSignatureCanvas() {
-          // Remove event listeners
-          sigCanvas.removeEventListener('mousedown', start);
-          sigCanvas.removeEventListener('mousemove', move);
-          sigCanvas.removeEventListener('mouseup', end);
-          sigCanvas.removeEventListener('mouseleave', end);
-          sigCanvas.removeEventListener('touchstart', start);
-          sigCanvas.removeEventListener('touchmove', move);
-          sigCanvas.removeEventListener('touchend', end);
-          sigCanvas.removeEventListener('touchcancel', end);
+            clearSigHandler = function() {
+              sigCtx.clearRect(0, 0, sigCanvas.width, sigCanvas.height);
+              document.getElementById('SigData').value = '';
+              hasInk = false;
+            };
+            const clearBtn = document.getElementById('clearSig');
+            if (clearBtn) clearBtn.addEventListener('click', clearSigHandler);
 
-          // Remove resize listener
-          window.removeEventListener('resize', resizeSigPad);
-
-          // Remove clear button listener
-          const clearBtn = document.getElementById('clearSig');
-          if (clearBtn) {
-            clearBtn.removeEventListener('click', clearSigHandler);
-          }
+            // Override cleanup to remove listeners
+            cleanupSignatureCanvas = function() {
+              sigCanvas.removeEventListener('mousedown', start);
+              sigCanvas.removeEventListener('mousemove', move);
+              sigCanvas.removeEventListener('mouseup', end);
+              sigCanvas.removeEventListener('mouseleave', end);
+              sigCanvas.removeEventListener('touchstart', start);
+              sigCanvas.removeEventListener('touchmove', move);
+              sigCanvas.removeEventListener('touchend', end);
+              sigCanvas.removeEventListener('touchcancel', end);
+              window.removeEventListener('resize', resizeSigPad);
+              if (clearBtn && clearSigHandler) clearBtn.removeEventListener('click', clearSigHandler);
+            };
         }
 
         // Form Submission Validation
         document.getElementById('signForm').addEventListener('submit', function(e){
           const accept = document.getElementById('Accept').checked;
-          const name = document.getElementById('TypedFullName').value.trim();
-          const sig = document.getElementById('SigData').value;
+          const isConsentForm = !!sigCanvas; // sigPad only rendered for Consent envelopes
 
           // Check if manager needs to add tenant
           const skipTenantCheckbox = document.getElementById('SkipTenant');
@@ -541,7 +606,6 @@
             const skipTenant = skipTenantCheckbox && skipTenantCheckbox.checked;
             const tenantName = document.getElementById('TenantFullName').value.trim();
             const tenantEmail = document.getElementById('TenantEmail').value.trim();
-
             if (!skipTenant && (!tenantName || !tenantEmail)) {
               e.preventDefault();
               alert('Please enter the tenant name and email, or check "Skip tenant signature".');
@@ -555,16 +619,19 @@
             return false;
           }
 
-          if (!name) {
-            e.preventDefault();
-            alert('Please type your full name.');
-            return false;
-          }
-
-          if (!sig || sig.length < 100) {
-            e.preventDefault();
-            alert('Please draw your signature.');
-            return false;
+          if (isConsentForm) {
+            const name = document.getElementById('TypedFullName')?.value.trim();
+            const sig = document.getElementById('SigData')?.value;
+            if (!name) {
+              e.preventDefault();
+              alert('Please type your full name.');
+              return false;
+            }
+            if (!sig || sig.length < 100) {
+              e.preventDefault();
+              alert('Please draw your signature.');
+              return false;
+            }
           }
 
           document.getElementById('submitBtn').disabled = true;

@@ -8,6 +8,10 @@ namespace SalesMetrics.Models.Signing;
 public sealed class CreateEnvelopeVm
 {
     [Required] public string TemplateKey { get; set; } = default!;
+
+    /// <summary>Consent = signature required. Communication = tracked delivery only.</summary>
+    public string EnvelopeType { get; set; } = "Consent";
+
     [Required, StringLength(200)] public string Subject { get; set; } = default!;
     [StringLength(int.MaxValue)] public string? MessageBody { get; set; }
 

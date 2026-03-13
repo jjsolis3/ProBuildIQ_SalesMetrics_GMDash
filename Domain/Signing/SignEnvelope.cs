@@ -21,6 +21,12 @@ public sealed class SignEnvelope
     public string? TenantSkippedByName { get; set; } // Name of staff member who skipped tenant
     public DateTime? TenantSkippedAtUtc { get; set; } // When tenant was skipped
 
+    /// <summary>
+    /// Consent = standard signature-required envelope (default).
+    /// Communication = tracked delivery only; no signature is collected.
+    /// </summary>
+    public string EnvelopeType { get; set; } = "Consent"; // Consent|Communication
+
     public string Status { get; set; } = "Draft"; // Draft|Sent|Viewed|Completed|Expired|Declined|Voided
     public DateTime? ExpiresAtUtc { get; set; }
     public DateTime? SentAtUtc { get; set; }

@@ -11,6 +11,7 @@ public sealed class EnvelopeDetailsVm
     public string Subject { get; set; } = default!;
     public string? MessageBody { get; set; }
     public string Status { get; set; } = default!;
+    public string EnvelopeType { get; set; } = "Consent"; // Consent|Communication
     public string? LocationCode { get; set; }
     public DateTime? SentAtUtc { get; set; }
     public DateTime? CompletedAtUtc { get; set; }

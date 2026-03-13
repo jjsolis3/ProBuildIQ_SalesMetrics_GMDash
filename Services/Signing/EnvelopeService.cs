@@ -57,6 +57,7 @@ public sealed class EnvelopeService : IEnvelopeService
         var env = new SignEnvelope
         {
             TemplateKey = vm.TemplateKey,
+            EnvelopeType = vm.EnvelopeType ?? "Consent",
             Subject = vm.Subject,
             MessageBody = vm.MessageBody,
             PropertyID = vm.PropertyID,
@@ -684,6 +685,7 @@ public sealed class EnvelopeService : IEnvelopeService
             Subject = e.Subject,
             MessageBody = e.MessageBody,
             Status = e.Status,
+            EnvelopeType = e.EnvelopeType ?? "Consent",
             LocationCode = e.LocationCode,
             SentAtUtc = e.SentAtUtc,
             CompletedAtUtc = e.CompletedAtUtc,
@@ -754,6 +756,7 @@ public sealed class EnvelopeService : IEnvelopeService
                 e.Subject,
                 e.TemplateKey,
                 e.Status,
+                e.EnvelopeType,
                 e.LocationCode,
                 e.SentAtUtc,
                 e.CompletedAtUtc,
@@ -788,6 +791,7 @@ public sealed class EnvelopeService : IEnvelopeService
                 Subject = e.Subject,
                 TemplateKey = e.TemplateKey,
                 Status = e.Status,
+                EnvelopeType = e.EnvelopeType ?? "Consent",
                 LocationCode = e.LocationCode,
                 SentAtUtc = e.SentAtUtc,
                 CompletedAtUtc = e.CompletedAtUtc,
@@ -835,6 +839,23 @@ public sealed class EnvelopeService : IEnvelopeService
         var hasTenant = await _db.SignRecipients
             .AnyAsync(x => x.EnvelopeId == r.EnvelopeId && x.Role == "Tenant");
 
+        // Load template for RequiresTenantSection + EnvelopeType
+        var template = await _db.SignTemplates.AsNoTracking()
+            .FirstOrDefaultAsync(t => t.TemplateKey == r.Envelope.TemplateKey);
+
+        // Phase 2: load signer-fillable fields for this recipient (empty/null values only)
+        // Excludes auto-captured signature/date fields
+        var skipFieldKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "PropertyStaffSignature", "ResidentSignature", "PropertyStaffDate"
+        };
+        var recipientFields = await _db.SignFields
+            .Where(f => f.EnvelopeId == r.EnvelopeId
+                     && f.RecipientId == r.RecipientId
+                     && (f.FieldValue == null || f.FieldValue == "")
+                     && !skipFieldKeys.Contains(f.FieldKey))
+            .ToListAsync();
+
         // Populate property summary for the review page
         PropertyVm? prop = null;
         if (r.Envelope.PropertyID.HasValue)
@@ -862,7 +883,10 @@ public sealed class EnvelopeService : IEnvelopeService
             Envelope = r.Envelope,
             Recipient = r,
             HasTenantRecipient = hasTenant,
-            Property = prop
+            Property = prop,
+            RequiresTenantSection = template?.RequiresTenantSection ?? true,
+            RecipientFields = recipientFields,
+            EnvelopeType = r.Envelope.EnvelopeType ?? "Consent"
         };
     }
 
@@ -1009,9 +1033,34 @@ public sealed class EnvelopeService : IEnvelopeService
         await _db.SaveChangesAsync();
     }
 
+    /// <summary>
+    /// Phase 2: Save values for signer-filled custom fields.
+    /// Only updates fields with an empty/null current value to prevent overwriting ERP data.
+    /// </summary>
+    public async Task SaveCustomFieldsAsync(long envelopeId, long recipientId, Dictionary<string, string> fields)
+    {
+        if (fields == null || fields.Count == 0) return;
+
+        var dbFields = await _db.SignFields
+            .Where(f => f.EnvelopeId == envelopeId && f.RecipientId == recipientId)
+            .ToListAsync();
+
+        foreach (var (key, value) in fields)
+        {
+            if (string.IsNullOrWhiteSpace(value)) continue;
+            var field = dbFields.FirstOrDefault(f => f.FieldKey.Equals(key, StringComparison.OrdinalIgnoreCase));
+            if (field != null && string.IsNullOrEmpty(field.FieldValue))
+                field.FieldValue = value.Trim();
+        }
+
+        await _db.SaveChangesAsync();
+    }
+
     public async Task CaptureSignatureAsync(long envelopeId, long recipientId, string typedFullName, string sigDataBase64)
     {
-        var rec = await _db.SignRecipients.FirstOrDefaultAsync(r => r.RecipientId == recipientId && r.EnvelopeId == envelopeId)
+        var rec = await _db.SignRecipients
+            .Include(r => r.Envelope)
+            .FirstOrDefaultAsync(r => r.RecipientId == recipientId && r.EnvelopeId == envelopeId)
             ?? throw new InvalidOperationException($"Recipient {recipientId} not found for envelope {envelopeId}");
 
         if (rec.SignedAtUtc != null)
@@ -1020,8 +1069,16 @@ public sealed class EnvelopeService : IEnvelopeService
         if (rec.AccessTokenExpiresAt != null && rec.AccessTokenExpiresAt < DateTime.UtcNow)
             throw new InvalidOperationException("Signing token has expired");
 
-        // save typed name
+        // save typed name (may be empty for Communication envelopes)
         rec.TypedFullName = typedFullName;
+
+        // Communication envelopes: acknowledge without a drawn signature
+        if (rec.Envelope?.EnvelopeType == "Communication" || string.IsNullOrWhiteSpace(sigDataBase64))
+        {
+            rec.SignedAtUtc = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+            return;
+        }
 
         // save drawn signature image
         var dir = Path.Combine("wwwroot", "Files", "Sign", DateTime.UtcNow.ToString("yyyy"), DateTime.UtcNow.ToString("MM"));
@@ -1052,25 +1109,31 @@ public sealed class EnvelopeService : IEnvelopeService
             return (false, null);
         }
 
-        // All signed! Now load the envelope for updating (use a fresh query)
+        // All signed/acknowledged! Now load the envelope for updating (use a fresh query)
         var env = await _db.SignEnvelopes
             .Include(e => e.Recipients)
             .FirstOrDefaultAsync(e => e.EnvelopeId == envelopeId)
             ?? throw new InvalidOperationException($"Envelope {envelopeId} not found");
 
-        // Generate PDF and finalize
-        var pdf = await _pdf.RenderAndSealAsync(env.EnvelopeId);
-        env.PdfStoragePath = pdf.storagePath.Replace("\\", "/");
-        env.PdfSha256 = pdf.sha256;
         env.Status = "Completed";
         env.CompletedAtUtc = DateTime.UtcNow;
+
+        // Communication envelopes skip PDF generation — no signature to embed
+        if (env.EnvelopeType != "Communication")
+        {
+            var pdf = await _pdf.RenderAndSealAsync(env.EnvelopeId);
+            env.PdfStoragePath = pdf.storagePath.Replace("\\", "/");
+            env.PdfSha256 = pdf.sha256;
+        }
 
         _db.SignEvents.Add(new SignEvent
         {
             EnvelopeId = env.EnvelopeId,
             EventType = "Completed",
             OccurredAtUtc = DateTime.UtcNow,
-            MetaJson = "{\"auto\":\"finalized\",\"allSigned\":true}"
+            MetaJson = env.EnvelopeType == "Communication"
+                ? "{\"auto\":\"finalized\",\"type\":\"Communication\",\"allAcknowledged\":true}"
+                : "{\"auto\":\"finalized\",\"allSigned\":true}"
         });
 
         await _db.SaveChangesAsync();

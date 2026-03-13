@@ -25,6 +25,13 @@ public sealed class SignTemplate
     public string? DefaultMessage { get; set; }
     public bool IsActive { get; set; } = true;
 
+    /// <summary>
+    /// When true (default), the signing page shows the Tenant Information capture block
+    /// so the Manager can add or skip a tenant. Set to false for templates that never
+    /// involve a tenant (e.g. communication-only or staff-only consent forms).
+    /// </summary>
+    public bool RequiresTenantSection { get; set; } = true;
+
     public int CreatedByUsers_ID { get; set; }
     public DateTime CreatedDateUtc { get; set; }
     public int? ModifiedByUsers_ID { get; set; }

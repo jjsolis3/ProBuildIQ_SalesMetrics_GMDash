@@ -13,7 +13,18 @@
             @Html.AntiForgeryToken()
 
             <div class="row g-3">
-                <div class="col-md-4">
+                <div class="col-md-3">
+                    <label class="form-label">Envelope Type</label>
+                    <select asp-for="EnvelopeType" class="form-select" id="envelopeTypeSelect">
+                        <option value="Consent">✍️ Consent (Signature Required)</option>
+                        <option value="Communication">📧 Communication (Tracked Delivery)</option>
+                    </select>
+                    <small class="form-text text-muted">
+                        <span id="typeHintConsent">Recipient must review and sign the document.</span>
+                        <span id="typeHintComm" style="display:none;">Recipient receives and acknowledges the document — no signature collected.</span>
+                    </small>
+                </div>
+                <div class="col-md-3">
                     <label class="form-label">Template</label>
                     <select asp-for="TemplateKey" class="form-select">
                         @foreach (var t in Model.Templates)
@@ -22,7 +33,7 @@
                         }
                     </select>
                 </div>
-                <div class="col-md-8">
+                <div class="col-md-6">
                     <label class="form-label">Subject</label>
                     <input asp-for="Subject" class="form-control" />
                     <span asp-validation-for="Subject" class="text-danger"></span>
@@ -333,5 +344,18 @@
         window.addEventListener('beforeunload', cleanupCreateEventListeners);
     </script>
 
+    <script>
+        // Envelope type hint toggle
+        const typeSelect = document.getElementById('envelopeTypeSelect');
+        function updateTypeHint() {
+            const isComm = typeSelect && typeSelect.value === 'Communication';
+            document.getElementById('typeHintConsent').style.display = isComm ? 'none' : '';
+            document.getElementById('typeHintComm').style.display    = isComm ? '' : 'none';
+        }
+        if (typeSelect) {
+            typeSelect.addEventListener('change', updateTypeHint);
+            updateTypeHint();
+        }
+    </script>
 }
 

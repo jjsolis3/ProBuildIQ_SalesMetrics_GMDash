@@ -154,7 +154,15 @@
             <div class="col-md-4">
                 <div class="card border-0 mb-3">
                     <div class="card-body">
-                        <div>Status: <span class="badge rounded-pill @(Model.Status == "Completed" ? "bg-success" : "bg-warning text-dark")">@Model.Status</span></div>
+                        <div>
+                            Status: <span class="badge rounded-pill @(Model.Status == "Completed" ? "bg-success" : "bg-warning text-dark")">@Model.Status</span>
+                            @if (Model.EnvelopeType == "Communication")
+                            {
+                                <span class="badge rounded-pill bg-info text-dark ms-1" title="Tracked delivery — no signature required">
+                                    <i class="bi bi-envelope"></i> Communication
+                                </span>
+                            }
+                        </div>
                         <div class="small text-muted mt-2">Sent: @Model.SentAtUtc?.ToLocalTime().ToString("g")</div>
                         <div class="small text-muted">Completed: @Model.CompletedAtUtc?.ToLocalTime().ToString("g")</div>
                         <div class="small text-muted">Expires: @Model.ExpiresAtUtc?.ToLocalTime().ToString("g")</div>

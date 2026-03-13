@@ -1,4 +1,5 @@
 ﻿// Services/Signing/IEnvelopeService.cs
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using SalesMetrics.Domain.Signing;
 using SalesMetrics.Models.Signing;
@@ -29,6 +30,7 @@ namespace SalesMetrics.Services.Signing
         // NEW (used by your POST Review action)
         Task UpsertTenantRecipientAsync(long envelopeId, string fullName, string email, string? phone = null);
         Task MarkTenantSkippedAsync(long envelopeId, string skippedByName);
+        Task SaveCustomFieldsAsync(long envelopeId, long recipientId, Dictionary<string, string> fields);
         Task CaptureSignatureAsync(long envelopeId, long recipientId, string typedFullName, string sigDataBase64);
         Task ProgressToNextAsync(long envelopeId);
 

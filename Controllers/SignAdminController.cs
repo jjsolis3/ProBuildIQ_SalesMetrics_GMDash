@@ -319,6 +319,15 @@ public class SignAdminController : Controller
         {
             TempData["error"] = ex.Message;
         }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
+        {
+            var inner = ex.InnerException?.Message ?? ex.Message;
+            TempData["error"] = $"Database error while skipping tenant: {inner}";
+        }
+        catch (Exception ex)
+        {
+            TempData["error"] = $"An unexpected error occurred: {ex.Message}";
+        }
         return RedirectToAction(nameof(Details), new { id });
     }
 

@@ -172,6 +172,45 @@ builder.Services.ConfigureApplicationCookie(options =>
 
 var app = builder.Build();
 
+// ── Apply idempotent SQL migrations on every startup ─────────────────────────
+// All scripts in the Migrations folder use IF NOT EXISTS guards so re-running
+// them is safe. This ensures new columns/tables are always present without
+// requiring a manual DBA step.
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<SalesMetrics.Data.SalesMetricsDbContext>();
+    var migrationsPath = Path.Combine(app.Environment.ContentRootPath, "Migrations");
+    if (Directory.Exists(migrationsPath))
+    {
+        var goSplitter = new System.Text.RegularExpressions.Regex(
+            @"^\s*GO\s*$",
+            System.Text.RegularExpressions.RegexOptions.Multiline |
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+        foreach (var file in Directory.GetFiles(migrationsPath, "*.sql")
+                                      .OrderBy(Path.GetFileName))
+        {
+            try
+            {
+                var sql = File.ReadAllText(file);
+                foreach (var batch in goSplitter.Split(sql))
+                {
+                    var trimmed = batch.Trim();
+                    if (!string.IsNullOrWhiteSpace(trimmed))
+                        db.Database.ExecuteSqlRaw(trimmed);
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log but don't crash startup — a failed migration should be
+                // investigated, not prevent the app from starting.
+                Console.WriteLine($"[Migration] Warning in {Path.GetFileName(file)}: {ex.Message}");
+            }
+        }
+    }
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Read config (if needed elsewhere)
 var configuration = new ConfigurationBuilder()
     .SetBasePath(Directory.GetCurrentDirectory())

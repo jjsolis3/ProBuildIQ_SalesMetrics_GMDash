@@ -643,6 +643,7 @@ public sealed class EnvelopeService : IEnvelopeService
             .Include(x => x.Recipients)
             .Include(x => x.Events)
             .Include(x => x.Fields)
+            .AsSplitQuery()
             .AsNoTracking()
             .FirstOrDefaultAsync(x => x.EnvelopeId == envelopeId);
         if (e is null) return null;
@@ -688,7 +689,9 @@ public sealed class EnvelopeService : IEnvelopeService
             }).ToList(),
             Events = e.Events.OrderByDescending(ev => ev.OccurredAtUtc).Select(ev => new EnvelopeDetailsVm.EventVm
             {
-                EventType = ev.EventType,
+                EventType = ev.EventType == "Edited" && (ev.MetaJson ?? "").Contains("\"action\":\"TenantSkipped\"", StringComparison.OrdinalIgnoreCase)
+                    ? "TenantSkipped"
+                    : ev.EventType,
                 OccurredAtUtc = ev.OccurredAtUtc,
                 Recipient = e.Recipients.FirstOrDefault(r => r.RecipientId == ev.RecipientId)?.FullName,
                 Meta = ev.MetaJson
@@ -968,10 +971,13 @@ public sealed class EnvelopeService : IEnvelopeService
         _db.SignEvents.Add(new SignEvent
         {
             EnvelopeId = env.EnvelopeId,
-            EventType = "TenantSkipped",
+            // DB check constraint does not include custom types like TenantSkipped.
+            // Persist as Edited and capture specific action in metadata.
+            EventType = "Edited",
             OccurredAtUtc = DateTime.UtcNow,
             MetaJson = JsonSerializer.Serialize(new
             {
+                action = "TenantSkipped",
                 skippedByName,
                 skippedByUserId,
                 source,

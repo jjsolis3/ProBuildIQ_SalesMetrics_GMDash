@@ -317,6 +317,10 @@ public class SignAdminController : Controller
         {
             TempData["error"] = ex.Message;
         }
+        catch (DbUpdateException)
+        {
+            TempData["error"] = "Unable to mark tenant as skipped due to a database validation issue. Please try again or contact support.";
+        }
 
         return RedirectToAction(nameof(Details), new { id });
     }

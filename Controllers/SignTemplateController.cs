@@ -97,14 +97,16 @@ public class SignTemplatesController : Controller
         var t = await _db.SignTemplates.FirstAsync(x => x.TemplateKey == id);
 
         // basic fields you want editable:
-        t.DisplayName = model.DisplayName;
-        t.DefaultSubject = model.DefaultSubject;
-        t.DefaultMessage = model.DefaultMessage;
-        t.RazorViewPath = model.RazorViewPath;
-        t.MergeSpecJson = model.MergeSpecJson;
-        t.IsActive = model.IsActive;
-        t.ModifiedDateUtc = DateTime.UtcNow;
-        t.ModifiedByUsers_ID = GetCurrentUserId();
+        t.DisplayName            = model.DisplayName;
+        t.DefaultSubject         = model.DefaultSubject;
+        t.DefaultMessage         = model.DefaultMessage;
+        t.RazorViewPath          = model.RazorViewPath;
+        t.HtmlBodyContent        = model.HtmlBodyContent;
+        t.MergeSpecJson          = model.MergeSpecJson;
+        t.IsActive               = model.IsActive;
+        t.RequiresTenantSection  = model.RequiresTenantSection;
+        t.ModifiedDateUtc        = DateTime.UtcNow;
+        t.ModifiedByUsers_ID     = GetCurrentUserId();
 
         if (pdfFile is not null && pdfFile.Length > 0)
         {

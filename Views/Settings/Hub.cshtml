@@ -1,0 +1,164 @@
+@model SalesMetrics.Models.SettingsHubViewModel
+@{
+    ViewData["Title"] = "Settings Hub";
+}
+
+@section Styles {
+    <style>
+        .hub-item {
+            display: flex;
+            align-items: flex-start;
+            padding: 20px 22px;
+            text-decoration: none;
+            color: inherit;
+            border: 1px solid #e9ecef;
+            transition: border-color 0.15s ease, background-color 0.15s ease;
+            height: 100%;
+        }
+        .hub-item:hover {
+            border-color: #c85c5c;
+            background-color: #fff8f8;
+            text-decoration: none;
+            color: inherit;
+        }
+        .hub-item:hover .hub-item-title {
+            color: #c85c5c;
+        }
+        .hub-icon-box {
+            flex-shrink: 0;
+            width: 52px;
+            height: 52px;
+            background-color: #f2f3f5;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 16px;
+            font-size: 1.35rem;
+            color: #6c757d;
+        }
+        .hub-item-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #2e6da4;
+            margin-bottom: 4px;
+            line-height: 1.3;
+        }
+        .hub-item-desc {
+            font-size: 0.835rem;
+            color: #6c757d;
+            line-height: 1.45;
+            margin: 0;
+        }
+        .hub-grid-wrapper {
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #fff;
+        }
+        .hub-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+        }
+        .hub-row + .hub-row .hub-cell {
+            border-top: 1px solid #e9ecef;
+        }
+        .hub-cell {
+            border-right: 1px solid #e9ecef;
+        }
+        .hub-cell:last-child {
+            border-right: none;
+        }
+        /* 2-col on tablets */
+        @@media (max-width: 991px) {
+            .hub-row {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .hub-cell:nth-child(2) {
+                border-right: none;
+            }
+        }
+        /* 1-col on mobile */
+        @@media (max-width: 575px) {
+            .hub-row {
+                grid-template-columns: 1fr;
+            }
+            .hub-cell {
+                border-right: none;
+                border-top: 1px solid #e9ecef;
+            }
+            .hub-row:first-child .hub-cell:first-child {
+                border-top: none;
+            }
+        }
+    </style>
+}
+
+<div class="container-fluid">
+
+    <!-- Page Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex align-items-center gap-3">
+                <div style="width:42px;height:42px;background:#e8f0fb;border-radius:8px;display:flex;align-items:center;justify-content:center;">
+                    <i class="fas fa-th" style="font-size:1.1rem;color:#3b6cc5;"></i>
+                </div>
+                <div>
+                    <h1 class="h3 mb-0 fw-bold">Settings Hub</h1>
+                    <p class="text-muted mb-0" style="font-size:.875rem;">Manage app configuration, users, data imports, and system diagnostics.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hub Card Grid -->
+    <div class="row">
+        <div class="col-12">
+            <div class="hub-grid-wrapper">
+
+                @{
+                    // Build visible items list so we can chunk into rows of 3
+                    var items = new List<(string Icon, string Title, string Desc, string Url, bool Show)>
+                    {
+                        ("fa-bullhorn",           "Announcements",    "Post and manage organization-wide announcements visible to all users.",                    "/Announcements/Index", Model.CanAccessAnnouncements),
+                        ("fa-cog",                "System Settings",  "Configure notification rules, security policies, and app branding.",                      "/Settings/Index",      Model.CanAccessSystemSettings),
+                        ("fa-user-shield",        "Access Control",   "Create users, assign roles, and manage feature-level permissions.",                        "/Accounts/Index",      Model.CanAccessAccessControl),
+                        ("fa-file-upload",        "Yardi Upload",     "Import property and unit pricing data from Yardi Excel matrix exports.",                   "/Yardi/Upload",        Model.CanAccessYardiUpload),
+                        ("fa-tachometer-alt",     "Error Dashboard",  "View aggregated error counts and trends by severity with resolution tracking.",            "/ErrorLog/Dashboard",  Model.CanAccessErrorLogs),
+                        ("fa-list-alt",           "Error Logs",       "Browse the full paginated log of application errors with stack traces and status filters.", "/ErrorLog/Index",      Model.CanAccessErrorLogs),
+                    };
+
+                    var visible = items.Where(i => i.Show).ToList();
+                    var chunkSize = 3;
+                    for (int r = 0; r < visible.Count; r += chunkSize)
+                    {
+                        var chunk = visible.Skip(r).Take(chunkSize).ToList();
+                        <div class="hub-row">
+                            @foreach (var item in chunk)
+                            {
+                                <div class="hub-cell">
+                                    <a href="@item.Url" class="hub-item">
+                                        <div class="hub-icon-box">
+                                            <i class="fas @item.Icon"></i>
+                                        </div>
+                                        <div>
+                                            <div class="hub-item-title">@item.Title</div>
+                                            <p class="hub-item-desc">@item.Desc</p>
+                                        </div>
+                                    </a>
+                                </div>
+                            }
+                            @* Pad incomplete last row so borders look right *@
+                            @for (int p = chunk.Count; p < chunkSize; p++)
+                            {
+                                <div class="hub-cell" style="min-height:90px;"></div>
+                            }
+                        </div>
+                    }
+                }
+
+            </div>
+        </div>
+    </div>
+
+</div>

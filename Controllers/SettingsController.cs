@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using SalesMetrics.Data;
 using SalesMetrics.Models;
+using SalesMetrics.Services.Permissions;
 using SalesMetrics.Services.Settings;
 
 namespace SalesMetrics.Controllers
@@ -9,11 +10,13 @@ namespace SalesMetrics.Controllers
     {
         private readonly ISettingsService _settingsService;
         private readonly SalesMetricsDbContext _context;
+        private readonly IPermissionService _permissionService;
 
-        public SettingsController(ISettingsService settingsService, SalesMetricsDbContext context)
+        public SettingsController(ISettingsService settingsService, SalesMetricsDbContext context, IPermissionService permissionService)
         {
             _settingsService = settingsService;
             _context = context;
+            _permissionService = permissionService;
         }
 
         private int GetCurrentUserId()
@@ -32,6 +35,32 @@ namespace SalesMetrics.Controllers
         {
             var roleId = GetCurrentRoleId();
             return roleId == 1; // Admin only
+        }
+
+        // ======================================================================
+        // Settings Hub
+        // ======================================================================
+
+        // GET: /Settings/Hub
+        [HttpGet]
+        public async Task<IActionResult> Hub()
+        {
+            var userId = GetCurrentUserId();
+
+            var vm = new SettingsHubViewModel
+            {
+                CanAccessAnnouncements  = userId > 0 && await _permissionService.HasFeatureAccessAsync(userId, "Announcements"),
+                CanAccessSystemSettings = userId > 0 && await _permissionService.HasFeatureAccessAsync(userId, "Settings"),
+                CanAccessAccessControl  = userId > 0 && await _permissionService.HasFeatureAccessAsync(userId, "Users"),
+                CanAccessYardiUpload    = userId > 0 && await _permissionService.HasFeatureAccessAsync(userId, "YardiUpload"),
+                CanAccessErrorLogs      = userId > 0 && await _permissionService.HasFeatureAccessAsync(userId, "ErrorLogs"),
+            };
+
+            if (!vm.CanAccessAnnouncements && !vm.CanAccessSystemSettings &&
+                !vm.CanAccessAccessControl  && !vm.CanAccessYardiUpload  && !vm.CanAccessErrorLogs)
+                return Forbid();
+
+            return View(vm);
         }
 
         // ======================================================================

@@ -20,6 +20,7 @@ namespace SalesMetrics.Services.Settings
             var securitySettings = await GetSecuritySettingsAsync();
             var envelopeNotificationSettings = await GetEnvelopeNotificationSettingsAsync();
             var brandingSettings = await GetBrandingSettingsAsync();
+            var generalSettings = await GetGeneralSettingsAsync();
 
             return new SettingsDashboardViewModel
             {
@@ -27,6 +28,7 @@ namespace SalesMetrics.Services.Settings
                 SecuritySettings = securitySettings,
                 EnvelopeNotificationSettings = envelopeNotificationSettings,
                 BrandingSettings = brandingSettings,
+                GeneralSettings = generalSettings,
                 ActiveTab = "notifications"
             };
         }
@@ -159,6 +161,7 @@ namespace SalesMetrics.Services.Settings
         public async Task<List<SecuritySettingViewModel>> GetSecuritySettingsAsync()
         {
             var settings = await _context.SecuritySettings
+                .Where(ss => ss.Category != "Branding" && ss.Category != "General")
                 .OrderBy(ss => ss.Category)
                 .ThenBy(ss => ss.SettingKey)
                 .ToListAsync();
@@ -479,6 +482,71 @@ namespace SalesMetrics.Services.Settings
             }
 
             return viewModel;
+        }
+
+        // ======================================================================
+        // General Settings
+        // ======================================================================
+
+        // Key → (DisplayName, Description, DefaultValue, InputType, Options[])
+        private static readonly (string Key, string Display, string Desc, string Default, string InputType, string[] Options)[] GeneralKeys =
+        {
+            ("AppTheme",          "App Theme",            "Visual theme applied across the application.",                             "light",             "select",  new[] { "light", "dark", "system" }),
+            ("DefaultTimezone",   "Default Timezone",     "Timezone used when displaying dates and times across the app.",           "America/New_York",  "select",  new[] {
+                "America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles",
+                "America/Phoenix",  "America/Anchorage", "Pacific/Honolulu", "UTC"
+            }),
+            ("DateFormat",        "Date Format",          "How dates are displayed throughout the app.",                             "MM/dd/yyyy",        "select",  new[] { "MM/dd/yyyy", "dd/MM/yyyy", "yyyy-MM-dd", "MMMM d, yyyy" }),
+            ("TimeFormat",        "Time Format",          "12-hour (AM/PM) or 24-hour clock display.",                              "12h",               "select",  new[] { "12h", "24h" }),
+            ("DefaultLandingPage","Default Landing Page", "Page users land on after signing in (if they have access).",             "Home",              "select",  new[] { "Home", "GMDash", "Dashboard", "Tasks" }),
+            ("ItemsPerPage",      "Items Per Page",       "Default number of rows shown in paginated lists.",                       "25",                "select",  new[] { "10", "25", "50", "100" }),
+            ("MaintenanceMode",   "Maintenance Mode",     "When enabled, only Admins can log in. All other users see a hold page.", "false",             "boolean", Array.Empty<string>()),
+        };
+
+        public async Task<List<SecuritySettingViewModel>> GetGeneralSettingsAsync()
+        {
+            var dbRows = await _context.SecuritySettings
+                .Where(s => s.Category == "General")
+                .ToListAsync();
+
+            var result = new List<SecuritySettingViewModel>();
+            foreach (var (key, display, desc, defaultVal, inputType, options) in GeneralKeys)
+            {
+                var row = dbRows.FirstOrDefault(r => r.SettingKey == key);
+                result.Add(new SecuritySettingViewModel
+                {
+                    SecuritySettingsId = row?.SecuritySettingsId ?? 0,
+                    SettingKey         = key,
+                    SettingValue       = row?.SettingValue ?? defaultVal,
+                    Description        = desc,
+                    Category           = "General",
+                    InputType          = inputType,
+                    AvailableOptions   = options.Length > 0 ? options.ToList() : null,
+                });
+            }
+            return result;
+        }
+
+        public async Task InitializeDefaultGeneralSettingsAsync()
+        {
+            foreach (var (key, _, desc, defaultVal, _, _) in GeneralKeys)
+            {
+                bool exists = await _context.SecuritySettings
+                    .AnyAsync(s => s.Category == "General" && s.SettingKey == key);
+                if (!exists)
+                {
+                    _context.SecuritySettings.Add(new SecuritySettingsEntity
+                    {
+                        SettingKey           = key,
+                        SettingValue         = defaultVal,
+                        Description          = desc,
+                        Category             = "General",
+                        LastModifiedDate     = DateTime.Now,
+                        LastModifiedByUserId = 1
+                    });
+                }
+            }
+            await _context.SaveChangesAsync();
         }
 
         private string GetCategoryDisplayName(string categoryName)

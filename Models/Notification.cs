@@ -191,6 +191,7 @@ namespace SalesMetrics.Models
         public List<SecuritySettingViewModel> SecuritySettings { get; set; } = new();
         public List<EnvelopeNotificationSettingViewModel> EnvelopeNotificationSettings { get; set; } = new();
         public List<BrandingSettingViewModel> BrandingSettings { get; set; } = new();
+        public List<SecuritySettingViewModel> GeneralSettings { get; set; } = new();
         public string ActiveTab { get; set; } = "notifications";
     }
 

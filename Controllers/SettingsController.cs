@@ -200,6 +200,7 @@ namespace SalesMetrics.Controllers
                 await _settingsService.InitializeDefaultSecuritySettingsAsync();
                 await _settingsService.InitializeDefaultEnvelopeNotificationSettingsAsync();
                 await _settingsService.InitializeDefaultBrandingSettingsAsync();
+                await _settingsService.InitializeDefaultGeneralSettingsAsync();
 
                 TempData["SuccessMessage"] = "Default settings initialized successfully!";
             }

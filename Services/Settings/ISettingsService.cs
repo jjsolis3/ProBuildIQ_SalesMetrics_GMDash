@@ -31,5 +31,9 @@ namespace SalesMetrics.Services.Settings
         Task<List<BrandingSettingViewModel>> GetBrandingSettingsAsync();
         Task SaveBrandingSettingAsync(SaveBrandingSettingRequest request, int modifiedByUserId);
         Task InitializeDefaultBrandingSettingsAsync();
+
+        // General Settings
+        Task<List<SecuritySettingViewModel>> GetGeneralSettingsAsync();
+        Task InitializeDefaultGeneralSettingsAsync();
     }
 }

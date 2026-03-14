@@ -453,14 +453,94 @@
 
         <!-- General Tab -->
         <div class="tab-pane fade @(Model.ActiveTab == "general" ? "show active" : "")" id="general" role="tabpanel">
-            <div class="card shadow-sm">
-                <div class="card-header bg-light">
-                    <h5 class="mb-0">General Application Settings</h5>
+            @if (Model.GeneralSettings.Any())
+            {
+                <div class="row g-3">
+                    @foreach (var setting in Model.GeneralSettings)
+                    {
+                        <div class="col-md-6">
+                            <div class="card shadow-sm h-100">
+                                <div class="card-body">
+                                    <label class="form-label fw-semibold" for="gen_@setting.SecuritySettingsId">
+                                        @{
+                                            var genDisplayName = setting.SettingKey switch
+                                            {
+                                                "AppTheme"           => "App Theme",
+                                                "DefaultTimezone"    => "Default Timezone",
+                                                "DateFormat"         => "Date Format",
+                                                "TimeFormat"         => "Time Format",
+                                                "DefaultLandingPage" => "Default Landing Page",
+                                                "ItemsPerPage"       => "Items Per Page",
+                                                "MaintenanceMode"    => "Maintenance Mode",
+                                                _                    => setting.SettingKey
+                                            };
+                                        }
+                                        @genDisplayName
+                                        @if (!string.IsNullOrEmpty(setting.Description))
+                                        {
+                                            <i class="fas fa-info-circle text-muted ms-1"
+                                               title="@setting.Description"
+                                               data-bs-toggle="tooltip"></i>
+                                        }
+                                    </label>
+                                    <small class="d-block text-muted mb-2">@setting.Description</small>
+
+                                    @if (setting.InputType == "boolean")
+                                    {
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input general-setting"
+                                                   type="checkbox"
+                                                   id="gen_@setting.SecuritySettingsId"
+                                                   data-setting-id="@setting.SecuritySettingsId"
+                                                   data-setting-key="@setting.SettingKey"
+                                                   @(setting.SettingValue.ToLower() == "true" ? "checked" : "") />
+                                            <label class="form-check-label" for="gen_@setting.SecuritySettingsId">
+                                                @(setting.SettingValue.ToLower() == "true" ? "Enabled" : "Disabled")
+                                            </label>
+                                        </div>
+                                    }
+                                    else if (setting.InputType == "select" && setting.AvailableOptions != null)
+                                    {
+                                        <select class="form-select general-setting"
+                                                id="gen_@setting.SecuritySettingsId"
+                                                data-setting-id="@setting.SecuritySettingsId"
+                                                data-setting-key="@setting.SettingKey">
+                                            @foreach (var opt in setting.AvailableOptions)
+                                            {
+                                                <option value="@opt" @(setting.SettingValue == opt ? "selected" : "")>@opt</option>
+                                            }
+                                        </select>
+                                    }
+                                    else
+                                    {
+                                        <input type="text"
+                                               class="form-control general-setting"
+                                               id="gen_@setting.SecuritySettingsId"
+                                               data-setting-id="@setting.SecuritySettingsId"
+                                               data-setting-key="@setting.SettingKey"
+                                               value="@setting.SettingValue" />
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
                 </div>
-                <div class="card-body">
-                    <p class="text-muted">General settings coming soon. This section will include app-wide configurations such as branding, date/time formats, and default preferences.</p>
+                <div class="text-end mt-4">
+                    <button type="button" class="btn btn-primary" id="saveGeneralSettings">
+                        <i class="fas fa-save me-1"></i> Save General Settings
+                    </button>
                 </div>
-            </div>
+            }
+            else
+            {
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>No general settings found.
+                    <form method="post" action="@Url.Action("InitializeDefaults", "Settings")" class="d-inline">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="btn btn-sm btn-outline-primary ms-2">Initialize Defaults</button>
+                    </form>
+                </div>
+            }
         </div>
     </div>
 </div>
@@ -619,6 +699,49 @@
                         toastr.error('Error saving security settings');
                         console.error(error);
                     });
+            });
+
+            // Save general settings — reuse the same UpdateSecuritySetting endpoint
+            $('#saveGeneralSettings').on('click', function() {
+                var settings = [];
+                $('.general-setting').each(function() {
+                    var $input = $(this);
+                    var settingId = parseInt($input.data('setting-id'));
+                    if (!settingId) return; // skip uninitialized (id=0 means not yet in DB)
+                    var value = $input.attr('type') === 'checkbox'
+                        ? ($input.is(':checked') ? 'true' : 'false')
+                        : $input.val();
+                    settings.push({ SecuritySettingsId: settingId, SettingValue: value });
+                });
+
+                // Update label on maintenance mode toggle live
+                $('.general-setting[type="checkbox"]').on('change', function() {
+                    $(this).next('label').text($(this).is(':checked') ? 'Enabled' : 'Disabled');
+                });
+
+                if (settings.length === 0) {
+                    toastr.warning('No settings to save. Click "Initialize Defaults" first.');
+                    return;
+                }
+
+                var promises = settings.map(function(s) {
+                    return $.ajax({
+                        url: '@Url.Action("UpdateSecuritySetting", "Settings")',
+                        type: 'POST',
+                        contentType: 'application/json',
+                        headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() },
+                        data: JSON.stringify(s)
+                    });
+                });
+
+                Promise.all(promises)
+                    .then(function() { toastr.success('General settings saved successfully!'); })
+                    .catch(function() { toastr.error('Error saving general settings'); });
+            });
+
+            // Live label update for General Settings boolean toggles
+            $(document).on('change', '.general-setting[type="checkbox"]', function() {
+                $(this).next('label').text($(this).is(':checked') ? 'Enabled' : 'Disabled');
             });
         });
     </script>

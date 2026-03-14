@@ -1027,6 +1027,30 @@ public sealed class EnvelopeService : IEnvelopeService
             existing.Phone = phone;  // NEW: Update phone if provided
             await _db.SaveChangesAsync();
         }
+
+        // Keep ResidentName / ResidentPhone / ResidentEmail SignField records in sync with
+        // the tenant recipient so the Details page shows accurate values (not empty strings
+        // from envelope-creation time when no tenant existed yet).
+        var residentFieldMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["ResidentName"]  = fullName,
+            ["ResidentEmail"] = email,
+            ["ResidentPhone"] = phone ?? "",
+        };
+
+        var fields = await _db.SignFields
+            .Where(f => f.EnvelopeId == envelopeId
+                     && (f.FieldKey == "ResidentName" || f.FieldKey == "ResidentEmail" || f.FieldKey == "ResidentPhone"))
+            .ToListAsync();
+
+        foreach (var field in fields)
+        {
+            if (residentFieldMap.TryGetValue(field.FieldKey, out var val))
+                field.FieldValue = val;
+        }
+
+        if (fields.Any())
+            await _db.SaveChangesAsync();
     }
 
     public async Task MarkTenantSkippedAsync(long envelopeId, string skippedByName)

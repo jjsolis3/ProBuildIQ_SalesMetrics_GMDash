@@ -167,21 +167,14 @@
                         <div class="small text-muted">Completed: @Model.CompletedAtUtc?.ToLocalTime().ToString("g")</div>
                         <div class="small text-muted">Expires: @Model.ExpiresAtUtc?.ToLocalTime().ToString("g")</div>
 
-                        @if (Model.FieldValues.Count > 0)
+                        @if (Model.FieldValues.Any(f => string.IsNullOrWhiteSpace(f.FieldValue)))
                         {
                             var emptyCount = Model.FieldValues.Count(f => string.IsNullOrWhiteSpace(f.FieldValue));
                             <div class="mt-2">
-                                <button type="button" class="btn btn-sm w-100 @(emptyCount > 0 ? "btn-outline-warning" : "btn-outline-secondary")"
+                                <button type="button" class="btn btn-sm w-100 btn-outline-warning"
                                         data-bs-toggle="modal" data-bs-target="#docFieldsModal">
-                                    <i class="fas fa-table-list me-1"></i> Document Fields
-                                    @if (emptyCount > 0)
-                                    {
-                                        <span class="badge bg-warning text-dark ms-1">@emptyCount empty</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="badge bg-success ms-1">All filled</span>
-                                    }
+                                    <i class="fas fa-exclamation-triangle me-1"></i> Document Fields
+                                    <span class="badge bg-warning text-dark ms-1">@emptyCount empty</span>
                                 </button>
                             </div>
                         }
@@ -359,8 +352,8 @@
     </div>
 </div>
 
-@* Document Fields Modal *@
-@if (Model.FieldValues.Count > 0)
+@* Document Fields Modal — only rendered when there are fields that need manual input *@
+@if (Model.FieldValues.Any(f => string.IsNullOrWhiteSpace(f.FieldValue)))
 {
     <div class="modal fade" id="docFieldsModal" tabindex="-1" aria-labelledby="docFieldsModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-lg">

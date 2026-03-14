@@ -127,7 +127,7 @@ public class SignAdminController : Controller
             Templates = await _db.SignTemplates
                 .Where(t => t.IsActive)
                 .OrderBy(t => t.DisplayName)
-                .Select(t => new ValueTuple<string, string>(t.TemplateKey, t.DisplayName))
+                .Select(t => new ValueTuple<string, string, string>(t.TemplateKey, t.DisplayName, t.TemplateType))
                 .ToListAsync()
         };
 
@@ -178,7 +178,7 @@ public class SignAdminController : Controller
             vm.Templates = await _db.SignTemplates
                 .Where(t => t.IsActive)
                 .OrderBy(t => t.DisplayName)
-                .Select(t => new ValueTuple<string, string>(t.TemplateKey, t.DisplayName))
+                .Select(t => new ValueTuple<string, string, string>(t.TemplateKey, t.DisplayName, t.TemplateType))
                 .ToListAsync();
 
             // Repopulate filtered branch locations for dropdown

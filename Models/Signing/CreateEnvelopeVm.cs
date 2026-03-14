@@ -39,6 +39,6 @@ public sealed class CreateEnvelopeVm
         public string? Phone { get; set; }
     }
 
-    // For dropdowns
-    public List<(string Key, string Display)> Templates { get; set; } = new();
+    // For dropdowns — Type is "Consent" or "Communication" (used for client-side filtering)
+    public List<(string Key, string Display, string Type)> Templates { get; set; } = new();
 }

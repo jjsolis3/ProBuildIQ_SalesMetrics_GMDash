@@ -30,9 +30,12 @@
                         <option value="">-- Select a template --</option>
                         @foreach (var t in Model.Templates)
                         {
-                            <option value="@t.Key">@t.Display</option>
+                            <option value="@t.Key" data-type="@t.Type">@t.Display</option>
                         }
                     </select>
+                    <div id="noTemplatesMsg" class="form-text text-warning" style="display:none;">
+                        No templates available for this envelope type. <a asp-controller="SignTemplates" asp-action="Create">Create one.</a>
+                    </div>
                     <span asp-validation-for="TemplateKey" class="text-danger small"></span>
                 </div>
                 <div class="col-md-6" id="subjectGroup">
@@ -358,6 +361,7 @@
 
         function updateEnvelopeTypeUi() {
             const isComm = typeSelect && typeSelect.value === 'Communication';
+            const selectedType = isComm ? 'Communication' : 'Consent';
 
             // Hint text
             document.getElementById('typeHintConsent').style.display = isComm ? 'none' : '';
@@ -366,6 +370,20 @@
             // Template field: required for Consent, hidden for Communication
             if (templateGroup) templateGroup.style.display = isComm ? 'none' : '';
             if (templateKeySelect) templateKeySelect.required = !isComm;
+
+            // Filter template options to only show those matching the selected envelope type
+            if (templateKeySelect) {
+                let visibleCount = 0;
+                templateKeySelect.querySelectorAll('option[data-type]').forEach(opt => {
+                    const show = opt.dataset.type === selectedType;
+                    opt.style.display = show ? '' : 'none';
+                    if (show) visibleCount++;
+                    // Deselect hidden options
+                    if (!show && opt.selected) opt.selected = false;
+                });
+                const noMsg = document.getElementById('noTemplatesMsg');
+                if (noMsg) noMsg.style.display = visibleCount === 0 ? '' : 'none';
+            }
 
             // Subject: wider when no template col
             if (subjectGroup) {

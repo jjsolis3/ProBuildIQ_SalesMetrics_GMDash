@@ -32,6 +32,13 @@ public sealed class SignTemplate
     /// </summary>
     public bool RequiresTenantSection { get; set; } = true;
 
+    /// <summary>
+    /// Classifies the template's intended use: "Consent" (requires a signature) or
+    /// "Communication" (tracked delivery, no signature). Controls which templates
+    /// appear in the dropdown when creating an envelope of a given type.
+    /// </summary>
+    public string TemplateType { get; set; } = "Consent";
+
     public int CreatedByUsers_ID { get; set; }
     public DateTime CreatedDateUtc { get; set; }
     public int? ModifiedByUsers_ID { get; set; }

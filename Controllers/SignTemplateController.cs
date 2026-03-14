@@ -105,6 +105,7 @@ public class SignTemplatesController : Controller
         t.MergeSpecJson          = model.MergeSpecJson;
         t.IsActive               = model.IsActive;
         t.RequiresTenantSection  = model.RequiresTenantSection;
+        t.TemplateType           = model.TemplateType;
         t.ModifiedDateUtc        = DateTime.UtcNow;
         t.ModifiedByUsers_ID     = GetCurrentUserId();
 

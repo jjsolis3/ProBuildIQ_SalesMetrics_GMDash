@@ -7,7 +7,8 @@ namespace SalesMetrics.Models.Signing;
 
 public sealed class CreateEnvelopeVm
 {
-    [Required] public string TemplateKey { get; set; } = default!;
+    /// <summary>Required for Consent envelopes. Optional for Communication (free-form body used instead).</summary>
+    [StringLength(200)] public string? TemplateKey { get; set; }
 
     /// <summary>Consent = signature required. Communication = tracked delivery only.</summary>
     public string EnvelopeType { get; set; } = "Consent";

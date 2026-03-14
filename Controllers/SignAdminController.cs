@@ -144,6 +144,14 @@ public class SignAdminController : Controller
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(CreateEnvelopeVm vm)
     {
+        // Communication envelopes don't need a template — remove the spurious ModelState error
+        if (vm.EnvelopeType == "Communication" && string.IsNullOrWhiteSpace(vm.TemplateKey))
+            ModelState.Remove(nameof(vm.TemplateKey));
+
+        // Communication envelopes require a message body since that IS the communication
+        if (vm.EnvelopeType == "Communication" && string.IsNullOrWhiteSpace(vm.MessageBody))
+            ModelState.AddModelError(nameof(vm.MessageBody), "A message body is required for Communication envelopes.");
+
         if (!ModelState.IsValid)
         {
             var userId = GetCurrentUserId();

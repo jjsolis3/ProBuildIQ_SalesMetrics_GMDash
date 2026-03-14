@@ -24,24 +24,26 @@
                         <span id="typeHintComm" style="display:none;">Recipient receives and acknowledges the document — no signature collected.</span>
                     </small>
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label">Template</label>
-                    <select asp-for="TemplateKey" class="form-select">
+                <div class="col-md-3" id="templateGroup">
+                    <label class="form-label">Template <span id="templateRequired" class="text-danger">*</span></label>
+                    <select asp-for="TemplateKey" id="templateKeySelect" class="form-select">
+                        <option value="">-- Select a template --</option>
                         @foreach (var t in Model.Templates)
                         {
                             <option value="@t.Key">@t.Display</option>
                         }
                     </select>
+                    <span asp-validation-for="TemplateKey" class="text-danger small"></span>
                 </div>
-                <div class="col-md-6">
-                    <label class="form-label">Subject</label>
+                <div class="col-md-6" id="subjectGroup">
+                    <label class="form-label">Subject <span class="text-danger">*</span></label>
                     <input asp-for="Subject" class="form-control" />
                     <span asp-validation-for="Subject" class="text-danger"></span>
                 </div>
                 <div class="col-md-12">
-                    <label class="form-label">Message <span class="text-muted small">(Optional)</span></label>
+                    <label class="form-label" id="messageLabel">Message <span class="text-muted small">(Optional)</span></label>
                     <textarea asp-for="MessageBody" id="messageBody" class="form-control" rows="3" placeholder="Enter your message here..."></textarea>
-                    <div class="form-text">
+                    <div class="form-text" id="messageHint">
                         <small class="text-muted">Property, Order, and Branch details will be automatically appended when you make selections below</small>
                     </div>
                 </div>
@@ -345,16 +347,49 @@
     </script>
 
     <script>
-        // Envelope type hint toggle
+        // Envelope type: adapt form layout based on Consent vs Communication
         const typeSelect = document.getElementById('envelopeTypeSelect');
-        function updateTypeHint() {
+        const templateGroup = document.getElementById('templateGroup');
+        const templateKeySelect = document.getElementById('templateKeySelect');
+        const subjectGroup = document.getElementById('subjectGroup');
+        const messageBody = document.getElementById('messageBody');
+        const messageLabel = document.getElementById('messageLabel');
+        const messageHint = document.getElementById('messageHint');
+
+        function updateEnvelopeTypeUi() {
             const isComm = typeSelect && typeSelect.value === 'Communication';
+
+            // Hint text
             document.getElementById('typeHintConsent').style.display = isComm ? 'none' : '';
             document.getElementById('typeHintComm').style.display    = isComm ? '' : 'none';
+
+            // Template field: required for Consent, hidden for Communication
+            if (templateGroup) templateGroup.style.display = isComm ? 'none' : '';
+            if (templateKeySelect) templateKeySelect.required = !isComm;
+
+            // Subject: wider when no template col
+            if (subjectGroup) {
+                subjectGroup.className = isComm
+                    ? 'col-md-9'   // Communication: Subject takes the space freed by Template
+                    : 'col-md-6';  // Consent: Template + Subject side-by-side
+            }
+
+            // Message: more prominent for Communication (the body IS the communication)
+            if (messageBody) {
+                messageBody.rows = isComm ? 6 : 3;
+                messageBody.placeholder = isComm
+                    ? 'Enter the communication message to send to the recipient...'
+                    : 'Enter your message here...';
+            }
+            if (messageLabel) messageLabel.innerHTML = isComm
+                ? 'Message Body <span class="text-danger">*</span>'
+                : 'Message <span class="text-muted small">(Optional)</span>';
+            if (messageHint) messageHint.style.display = isComm ? 'none' : '';
         }
+
         if (typeSelect) {
-            typeSelect.addEventListener('change', updateTypeHint);
-            updateTypeHint();
+            typeSelect.addEventListener('change', updateEnvelopeTypeUi);
+            updateEnvelopeTypeUi();
         }
     </script>
 }

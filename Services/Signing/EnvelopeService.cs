@@ -33,13 +33,21 @@ public sealed class EnvelopeService : IEnvelopeService
 
     public async Task<long> CreateAsync(int createdByUsersId, CreateEnvelopeVm vm)
     {
-        // Load the template to access MergeSpec and PDF path
-        var template = await _db.SignTemplates
-            .AsNoTracking()
-            .FirstOrDefaultAsync(t => t.TemplateKey == vm.TemplateKey);
+        // Communication envelopes may omit a template (free-form body only)
+        SignTemplate? template = null;
+        if (!string.IsNullOrWhiteSpace(vm.TemplateKey))
+        {
+            template = await _db.SignTemplates
+                .AsNoTracking()
+                .FirstOrDefaultAsync(t => t.TemplateKey == vm.TemplateKey);
 
-        if (template == null)
-            throw new InvalidOperationException($"Template '{vm.TemplateKey}' not found");
+            if (template == null)
+                throw new InvalidOperationException($"Template '{vm.TemplateKey}' not found");
+        }
+        else if (vm.EnvelopeType != "Communication")
+        {
+            throw new InvalidOperationException("A template is required for Consent envelopes.");
+        }
 
         // Fetch OrderNumber from ERP if OrderId is provided; fall back to manually-entered value
         string? orderNumber = null;
@@ -89,8 +97,8 @@ public sealed class EnvelopeService : IEnvelopeService
         _db.SignEnvelopes.Add(env);
         await _db.SaveChangesAsync(); // Save to get EnvelopeId
 
-        // Create SignAttachment record for template PDF
-        if (!string.IsNullOrWhiteSpace(template.PdfFilePath))
+        // Create SignAttachment record for template PDF (only when a template is used)
+        if (template != null && !string.IsNullOrWhiteSpace(template.PdfFilePath))
         {
             env.Attachments = new List<SignAttachment>
             {
@@ -106,8 +114,9 @@ public sealed class EnvelopeService : IEnvelopeService
             };
         }
 
-        // Create SignField records from template MergeSpec
-        await CreateFieldsFromMergeSpecAsync(env, template, vm);
+        // Create SignField records from template MergeSpec (only when a template is used)
+        if (template != null)
+            await CreateFieldsFromMergeSpecAsync(env, template, vm);
 
         // When no ERP order was selected, store a manually-entered unit number as a SignField
         if (!vm.OrderId.HasValue && !string.IsNullOrWhiteSpace(vm.CustomUnitNumber))

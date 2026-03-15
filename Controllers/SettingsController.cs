@@ -3,6 +3,7 @@ using SalesMetrics.Data;
 using SalesMetrics.Models;
 using SalesMetrics.Services.Permissions;
 using SalesMetrics.Services.Settings;
+using SalesMetrics.Models.Settings;
 
 namespace SalesMetrics.Controllers
 {
@@ -11,12 +12,15 @@ namespace SalesMetrics.Controllers
         private readonly ISettingsService _settingsService;
         private readonly SalesMetricsDbContext _context;
         private readonly IPermissionService _permissionService;
+        private readonly IAppCredentialsProvider _appCredentials;
 
-        public SettingsController(ISettingsService settingsService, SalesMetricsDbContext context, IPermissionService permissionService)
+        public SettingsController(ISettingsService settingsService, SalesMetricsDbContext context,
+            IPermissionService permissionService, IAppCredentialsProvider appCredentials)
         {
             _settingsService = settingsService;
-            _context = context;
+            _context         = context;
             _permissionService = permissionService;
+            _appCredentials  = appCredentials;
         }
 
         private int GetCurrentUserId()
@@ -300,6 +304,97 @@ namespace SalesMetrics.Controllers
             }
 
             return RedirectToAction(nameof(Index), new { tab = "branding" });
+        }
+
+        // ======================================================================
+        // App Credentials (encrypted Google OAuth + SMTP credentials)
+        // ======================================================================
+
+        // GET: /Settings/Credentials
+        [HttpGet]
+        public async Task<IActionResult> Credentials()
+        {
+            if (!await _permissionService.HasFeatureAccessAsync(GetCurrentUserId(), "Settings"))
+                return Forbid();
+
+            var google = await _appCredentials.GetAllByCategoryAsync("Google");
+            var smtp   = await _appCredentials.GetAllByCategoryAsync("Smtp");
+
+            // Merge any keys that are not yet in the DB so the UI always shows all rows
+            var googleKeys = new[]
+            {
+                new CredentialViewModel { CredentialKey = "Google_ClientId",     Category = "Google", Description = "Google OAuth Client ID" },
+                new CredentialViewModel { CredentialKey = "Google_ClientSecret", Category = "Google", Description = "Google OAuth Client Secret" },
+            };
+            var smtpKeys = new[]
+            {
+                new CredentialViewModel { CredentialKey = "Smtp_Host",      Category = "Smtp", Description = "SMTP server hostname" },
+                new CredentialViewModel { CredentialKey = "Smtp_Port",      Category = "Smtp", Description = "SMTP port (e.g. 587)" },
+                new CredentialViewModel { CredentialKey = "Smtp_User",      Category = "Smtp", Description = "SMTP username / email address" },
+                new CredentialViewModel { CredentialKey = "Smtp_Pass",      Category = "Smtp", Description = "SMTP password or app password" },
+                new CredentialViewModel { CredentialKey = "Smtp_FromEmail", Category = "Smtp", Description = "From address shown to recipients" },
+                new CredentialViewModel { CredentialKey = "Smtp_FromName",  Category = "Smtp", Description = "From display name shown to recipients" },
+            };
+
+            // Overlay DB HasValue flags onto the canonical key list
+            static List<CredentialViewModel> Merge(CredentialViewModel[] canonical, List<CredentialViewModel> db)
+            {
+                return canonical.Select(c =>
+                {
+                    var dbRow = db.FirstOrDefault(d => d.CredentialKey == c.CredentialKey);
+                    return new CredentialViewModel
+                    {
+                        CredentialKey = c.CredentialKey,
+                        Category      = c.Category,
+                        Description   = c.Description,
+                        HasValue      = dbRow?.HasValue ?? false,
+                    };
+                }).ToList();
+            }
+
+            var vm = new CredentialsViewModel
+            {
+                GoogleCredentials = Merge(googleKeys, google),
+                SmtpCredentials   = Merge(smtpKeys,   smtp),
+            };
+
+            return View(vm);
+        }
+
+        // POST: /Settings/Credentials/Save
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SaveCredential(string credentialKey, string plainValue, string category)
+        {
+            if (!await _permissionService.HasFeatureAccessAsync(GetCurrentUserId(), "Settings"))
+                return Forbid();
+
+            if (string.IsNullOrWhiteSpace(credentialKey) || string.IsNullOrWhiteSpace(plainValue))
+            {
+                TempData["ErrorMessage"] = "Credential key and value are required.";
+                return RedirectToAction(nameof(Credentials));
+            }
+
+            // Only allow known categories to prevent arbitrary key injection
+            if (category != "Google" && category != "Smtp")
+            {
+                TempData["ErrorMessage"] = "Unknown credential category.";
+                return RedirectToAction(nameof(Credentials));
+            }
+
+            try
+            {
+                var userId = GetCurrentUserId();
+                await _appCredentials.UpsertAsync(credentialKey, plainValue, category,
+                    description: "", modifiedByUserId: userId);
+                TempData["SuccessMessage"] = $"{credentialKey} saved successfully.";
+            }
+            catch (Exception ex)
+            {
+                TempData["ErrorMessage"] = $"Error saving credential: {ex.Message}";
+            }
+
+            return RedirectToAction(nameof(Credentials));
         }
     }
 }

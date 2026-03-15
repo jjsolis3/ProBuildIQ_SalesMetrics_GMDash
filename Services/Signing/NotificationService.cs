@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using System.Net.Mail;
 using Microsoft.Extensions.Options;
 
@@ -6,18 +6,18 @@ namespace SalesMetrics.Services.Signing;
 
 public sealed class NotificationService : INotificationService
 {
-    private readonly SmtpSettings _smtp;
+    private readonly ISmtpSettingsProvider _smtpProvider;
     private readonly AppSettings _app;
     private readonly ILogger<NotificationService> _logger;
 
     public NotificationService(
-        IOptions<SmtpSettings> smtp,
+        ISmtpSettingsProvider smtpProvider,
         IOptions<AppSettings> app,
         ILogger<NotificationService> logger)
     {
-        _smtp = smtp.Value;
-        _app = app.Value;
-        _logger = logger;
+        _smtpProvider = smtpProvider;
+        _app          = app.Value;
+        _logger       = logger;
     }
 
     public async Task SendEnvelopeEmailAsync(string toEmail, string toName, string subject, string bodyHtml, string? replyToEmail = null)
@@ -35,9 +35,11 @@ public sealed class NotificationService : INotificationService
 
     private async Task SendAsync(string toEmail, string toName, string subject, string bodyHtml, string? replyToEmail = null)
     {
+        var smtp = await _smtpProvider.GetAsync();
+
         using var message = new MailMessage
         {
-            From = new MailAddress(_smtp.FromEmail, _smtp.FromName),
+            From = new MailAddress(smtp.FromEmail, smtp.FromName),
             Subject = subject,
             Body = bodyHtml,
             IsBodyHtml = true
@@ -49,11 +51,11 @@ public sealed class NotificationService : INotificationService
         if (!string.IsNullOrWhiteSpace(replyToEmail))
             message.ReplyToList.Add(new MailAddress(replyToEmail));
 
-        using var client = new SmtpClient(_smtp.Host, _smtp.Port)
+        using var client = new SmtpClient(smtp.Host, smtp.Port)
         {
-            EnableSsl = _smtp.EnableSsl,
+            EnableSsl = smtp.EnableSsl,
             UseDefaultCredentials = false,
-            Credentials = new NetworkCredential(_smtp.User, _smtp.Pass)
+            Credentials = new NetworkCredential(smtp.User, smtp.Pass)
         };
 
         try

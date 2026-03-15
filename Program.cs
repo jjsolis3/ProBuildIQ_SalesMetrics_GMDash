@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Authentication.Cookies;
+﻿using System.Data.SqlClient;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.Extensions.DependencyInjection;
 using SalesMetrics.Data;
@@ -9,6 +10,7 @@ using SalesMetrics.Services.Erp.Clients;
 using SalesMetrics.Services;
 using SalesMetrics.Services.Reports;
 using SalesMetrics.Services.Mvc;
+using SalesMetrics.Services.Settings;
 using SalesMetrics.Services.Signing;
 using SalesMetrics.Services.Notifications;
 using SalesMetrics.Hubs;
@@ -119,6 +121,8 @@ builder.Services.AddScoped<IErpMergeService, ErpMergeService>();
 builder.Services.AddScoped<IPdfService, PdfService>();
 builder.Services.AddScoped<SalesMetrics.Services.Signing.INotificationService, SalesMetrics.Services.Signing.NotificationService>(); // Email notification service
 builder.Services.AddScoped<SalesMetrics.Services.Signing.IBrandingSettingsProvider, SalesMetrics.Services.Signing.BrandingSettingsProvider>(); // DB-first branding settings
+builder.Services.AddScoped<SalesMetrics.Services.Settings.IAppCredentialsProvider, SalesMetrics.Services.Settings.AppCredentialsProvider>(); // Encrypted credential store
+builder.Services.AddScoped<SalesMetrics.Services.Signing.ISmtpSettingsProvider, SalesMetrics.Services.Signing.SmtpSettingsProvider>(); // DB-first SMTP settings
 builder.Services.AddScoped<IEmailTemplateService, EmailTemplateService>(); // Branded email template wrapper
 builder.Services.AddScoped<SalesMetrics.Services.Notifications.INotificationService, SalesMetrics.Services.Notifications.NotificationService>(); // In-app notification service
 builder.Services.AddScoped<IEnvelopeService, EnvelopeService>();
@@ -130,6 +134,36 @@ builder.Services.AddScoped<SalesMetrics.Services.Settings.ISettingsService, Sale
 // Feature Permissions Service
 builder.Services.AddScoped<SalesMetrics.Services.Permissions.IPermissionService, SalesMetrics.Services.Permissions.PermissionService>();
 
+// ── Google OAuth: bootstrap credentials from DB (or fall back to appsettings on first run) ──
+// AddGoogle() must be called before builder.Build(), so the DI container is not yet available.
+// We use raw ADO.NET to read the encrypted credentials from AppCredentials at startup.
+static string BootstrapCredential(string connStr, string encKey, string credKey, string fallback)
+{
+    try
+    {
+        using var conn = new SqlConnection(connStr);
+        conn.Open();
+        using var cmd = new SqlCommand(
+            "SELECT EncryptedValue FROM AppCredentials WHERE CredentialKey = @k", conn);
+        cmd.Parameters.AddWithValue("@k", credKey);
+        var val = cmd.ExecuteScalar()?.ToString();
+        if (!string.IsNullOrWhiteSpace(val))
+            return AesEncryption.Decrypt(val, encKey);
+    }
+    catch
+    {
+        // Table may not exist yet on first boot — fall back to appsettings value.
+    }
+    return fallback;
+}
+
+var encKey         = builder.Configuration["Encryption:Key"] ?? "";
+var smConnStr      = builder.Configuration.GetConnectionString("SalesMetrics") ?? "";
+var googleClientId = BootstrapCredential(smConnStr, encKey, "Google_ClientId",
+    builder.Configuration["Authentication:Google:ClientId"] ?? "");
+var googleClientSecret = BootstrapCredential(smConnStr, encKey, "Google_ClientSecret",
+    builder.Configuration["Authentication:Google:ClientSecret"] ?? "");
+
 // Google OAuth + Cookie Auth
 builder.Services.AddAuthentication(options =>
 {
@@ -138,9 +172,9 @@ builder.Services.AddAuthentication(options =>
 })
 .AddGoogle("Google", options =>
 {
-    options.ClientId = builder.Configuration["Authentication:Google:ClientId"];
-    options.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"];
-    
+    options.ClientId     = googleClientId;
+    options.ClientSecret = googleClientSecret;
+
     options.Scope.Add("openid");
     options.Scope.Add("profile");
     options.Scope.Add("email");

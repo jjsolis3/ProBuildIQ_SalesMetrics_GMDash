@@ -172,8 +172,11 @@ builder.Services.AddAuthentication(options =>
 })
 .AddGoogle("Google", options =>
 {
-    options.ClientId     = googleClientId;
-    options.ClientSecret = googleClientSecret;
+    // If credentials haven't been saved in the DB yet, use non-empty placeholders so
+    // the app starts cleanly. Google OAuth will fail its redirect until real credentials
+    // are entered via Settings → App Credentials (which requires an app pool restart).
+    options.ClientId     = string.IsNullOrWhiteSpace(googleClientId)     ? "PENDING_CONFIGURATION" : googleClientId;
+    options.ClientSecret = string.IsNullOrWhiteSpace(googleClientSecret) ? "PENDING_CONFIGURATION" : googleClientSecret;
 
     options.Scope.Add("openid");
     options.Scope.Add("profile");

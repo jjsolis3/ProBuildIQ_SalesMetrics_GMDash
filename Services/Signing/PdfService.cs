@@ -269,7 +269,7 @@ public sealed class PdfService : IPdfService
 
             var waivedFont = new XFont("Roboto", 10, XFontStyle.Bold);
             var waivedBrush = XBrushes.Red;
-            var waivedText = $"TENANT SIGNATURE WAIVED BY {env.TenantSkippedByName?.ToUpper() ?? "PROPERTY STAFF"}";
+            var waivedText = $"TENANT SIGNATURE WAIVED — AUTHORIZED BY: {env.TenantSkippedByName?.ToUpper() ?? "PROPERTY STAFF"}";
             var waivedDate = env.TenantSkippedAtUtc?.ToLocalTime().ToString("MM/dd/yyyy h:mm tt") ?? "";
 
             // Get manager phone for display

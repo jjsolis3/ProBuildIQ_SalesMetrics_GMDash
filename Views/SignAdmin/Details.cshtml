@@ -478,6 +478,23 @@
                             </ul>
                         </div>
                     }
+
+                    <div class="mt-3">
+                        <label for="authorizedBy" class="form-label fw-semibold">
+                            <i class="fas fa-user-check me-1 text-warning"></i>
+                            Authorized by (Property Staff name) <span class="text-danger">*</span>
+                        </label>
+                        <input type="text"
+                               id="authorizedBy"
+                               name="authorizedBy"
+                               class="form-control"
+                               placeholder="Enter the name of the Property Staff who authorized this waiver"
+                               required
+                               autocomplete="off" />
+                        <div class="form-text text-muted">
+                            This name will appear on the <strong>"Tenant Signature Waived"</strong> stamp in the completed PDF.
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>

@@ -361,7 +361,7 @@ namespace SalesMetrics.Controllers
             return View(vm);
         }
 
-        // POST: /Settings/Credentials/Save
+        // POST: /Settings/SaveCredential  (single-row fallback, kept for compatibility)
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> SaveCredential(string credentialKey, string plainValue, string category)
@@ -375,7 +375,6 @@ namespace SalesMetrics.Controllers
                 return RedirectToAction(nameof(Credentials));
             }
 
-            // Only allow known categories to prevent arbitrary key injection
             if (category != "Google" && category != "Smtp")
             {
                 TempData["ErrorMessage"] = "Unknown credential category.";
@@ -392,6 +391,53 @@ namespace SalesMetrics.Controllers
             catch (Exception ex)
             {
                 TempData["ErrorMessage"] = $"Error saving credential: {ex.Message}";
+            }
+
+            return RedirectToAction(nameof(Credentials));
+        }
+
+        // POST: /Settings/SaveAllCredentials
+        // Saves every non-blank field in a section in one round-trip.
+        // Blank values are skipped so existing DB entries are preserved.
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SaveAllCredentials(string category,
+            List<string> keys, List<string> values)
+        {
+            if (!await _permissionService.HasFeatureAccessAsync(GetCurrentUserId(), "Settings"))
+                return Forbid();
+
+            if (category != "Google" && category != "Smtp")
+            {
+                TempData["ErrorMessage"] = "Unknown credential category.";
+                return RedirectToAction(nameof(Credentials));
+            }
+
+            if (keys == null || values == null || keys.Count != values.Count)
+            {
+                TempData["ErrorMessage"] = "Invalid form submission.";
+                return RedirectToAction(nameof(Credentials));
+            }
+
+            try
+            {
+                var userId = GetCurrentUserId();
+                var saved = 0;
+                for (int i = 0; i < keys.Count; i++)
+                {
+                    if (string.IsNullOrWhiteSpace(values[i])) continue; // blank = keep existing
+                    await _appCredentials.UpsertAsync(keys[i], values[i], category,
+                        description: "", modifiedByUserId: userId);
+                    saved++;
+                }
+
+                TempData["SuccessMessage"] = saved > 0
+                    ? $"{saved} {category} credential{(saved == 1 ? "" : "s")} saved successfully."
+                    : "No changes — all fields were left blank.";
+            }
+            catch (Exception ex)
+            {
+                TempData["ErrorMessage"] = $"Error saving credentials: {ex.Message}";
             }
 
             return RedirectToAction(nameof(Credentials));

@@ -191,21 +191,21 @@
                 @if (showSysSettings)
                 {
                     <div class="hub-section-label"><i class="fas fa-cog me-1"></i> System Settings</div>
-                    @{ RenderRows(sysItems, x => x.Icon, x => x.Title, x => x.Desc, x => x.Url); }
+                    { RenderRows(sysItems, x => x.Icon, x => x.Title, x => x.Desc, x => x.Url); }
                 }
 
                 @* ── ADMINISTRATION section ── *@
                 @if (visibleAdmin.Any())
                 {
                     <div class="hub-section-label"><i class="fas fa-users-cog me-1"></i> Administration</div>
-                    @{ RenderRows(visibleAdmin, x => x.Icon, x => x.Title, x => x.Desc, x => x.Url); }
+                    { RenderRows(visibleAdmin, x => x.Icon, x => x.Title, x => x.Desc, x => x.Url); }
                 }
 
                 @* ── DIAGNOSTICS section ── *@
                 @if (visibleDiag.Any())
                 {
                     <div class="hub-section-label"><i class="fas fa-bug me-1"></i> Diagnostics</div>
-                    @{ RenderRows(visibleDiag, x => x.Icon, x => x.Title, x => x.Desc, x => x.Url); }
+                    { RenderRows(visibleDiag, x => x.Icon, x => x.Title, x => x.Desc, x => x.Url); }
                 }
 
             </div>

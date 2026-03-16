@@ -507,7 +507,14 @@
                                                 data-setting-key="@setting.SettingKey">
                                             @foreach (var opt in setting.AvailableOptions)
                                             {
-                                                <option value="@opt" @(setting.SettingValue == opt ? "selected" : "")>@opt</option>
+                                                if (setting.SettingValue == opt)
+                                                {
+                                                    <option value="@opt" selected>@opt</option>
+                                                }
+                                                else
+                                                {
+                                                    <option value="@opt">@opt</option>
+                                                }
                                             }
                                         </select>
                                     }

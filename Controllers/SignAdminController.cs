@@ -309,15 +309,17 @@ public class SignAdminController : Controller
     // Allows a staff admin to skip the tenant signature from the Details page,
     // but only after at least one Property Staff/Manager has already signed.
     [HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> AdminSkipTenant(long id)
+    public async Task<IActionResult> AdminSkipTenant(long id, string? authorizedBy)
     {
         try
         {
-            var staffName = User.FindFirst("FullName")?.Value
-                         ?? User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value
-                         ?? "Staff";
+            if (string.IsNullOrWhiteSpace(authorizedBy))
+            {
+                TempData["error"] = "Please enter the name of the Property Staff member who authorized this waiver.";
+                return RedirectToAction(nameof(Details), new { id });
+            }
 
-            await _svc.MarkTenantSkippedAsync(id, staffName);
+            await _svc.MarkTenantSkippedAsync(id, authorizedBy.Trim());
             var (isComplete, _) = await _svc.TryFinalizeEnvelopeAsync(id);
             TempData["msg"] = isComplete
                 ? "Tenant skipped. Envelope is now complete and notifications have been sent."

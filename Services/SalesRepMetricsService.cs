@@ -178,7 +178,7 @@ namespace SalesMetrics.Services
                 {
                     while (reader.Read())
                     {
-                        var amount = reader.IsDBNull("TotalAmount") ? 0 : Convert.ToDecimal(reader["TotalAmount"]);
+                        var amount = reader.IsDBNull(reader.GetOrdinal("TotalAmount")) ? 0 : Convert.ToDecimal(reader["TotalAmount"]);
                         if (amount > 0) goalMonths.Add(amount);
                     }
                 }
@@ -204,8 +204,8 @@ namespace SalesMetrics.Services
                 {
                     if (reader.Read())
                     {
-                        performance.YTDSales = reader.IsDBNull("YTDSales") ? 0 : Convert.ToDecimal(reader["YTDSales"]);
-                        int invoiceCount = reader.IsDBNull("InvoiceCount") ? 0 : reader.GetInt32("InvoiceCount");
+                        performance.YTDSales = reader.IsDBNull(reader.GetOrdinal("YTDSales")) ? 0 : Convert.ToDecimal(reader["YTDSales"]);
+                        int invoiceCount = reader.IsDBNull(reader.GetOrdinal("InvoiceCount")) ? 0 : reader.GetInt32(reader.GetOrdinal("InvoiceCount"));
                         avgOrderAmount = invoiceCount > 0 ? performance.YTDSales / invoiceCount : 0;
                     }
                 }
@@ -232,9 +232,9 @@ namespace SalesMetrics.Services
                 {
                     while (reader.Read())
                     {
-                        var label = reader.GetString("MonthLabel");
-                        var count = reader.GetInt32("InvoiceCount");
-                        var actual = reader.IsDBNull("TotalAmount") ? 0 : Convert.ToDecimal(reader["TotalAmount"]);
+                        var label = reader.GetString(reader.GetOrdinal("MonthLabel"));
+                        var count = reader.GetInt32(reader.GetOrdinal("InvoiceCount"));
+                        var actual = reader.IsDBNull(reader.GetOrdinal("TotalAmount")) ? 0 : Convert.ToDecimal(reader["TotalAmount"]);
                         var expected = Math.Round(count * avgOrderAmount, 2);
 
                         monthData.Add(new MonthlyPerformanceTrend
@@ -288,8 +288,8 @@ namespace SalesMetrics.Services
                 using var reader = cmd.ExecuteReader();
                 if (reader.Read())
                 {
-                    performance.TaskCount = reader.GetInt32("TotalTasks");
-                    performance.CompletedTasks = reader.IsDBNull("CompletedTasks") ? 0 : reader.GetInt32("CompletedTasks");
+                    performance.TaskCount = reader.GetInt32(reader.GetOrdinal("TotalTasks"));
+                    performance.CompletedTasks = reader.IsDBNull(reader.GetOrdinal("CompletedTasks")) ? 0 : reader.GetInt32(reader.GetOrdinal("CompletedTasks"));
                 }
             }
 
@@ -426,16 +426,16 @@ namespace SalesMetrics.Services
                     LastOrderBeforeGap = Convert.ToDateTime(reader["LastOrderBeforeGap"]),
                     PreviousSalesperson = reader["PreviousSalesmanName"]?.ToString() ?? "",
                     PreviousSalesmanId = reader["PreviousSalesmanId"] != DBNull.Value ? Convert.ToInt32(reader["PreviousSalesmanId"]) : 0,
-                    LastOrderAmount = reader.IsDBNull("PreviousOrderAmount") ? 0 : Convert.ToDecimal(reader["PreviousOrderAmount"]),
+                    LastOrderAmount = reader.IsDBNull(reader.GetOrdinal("PreviousOrderAmount")) ? 0 : Convert.ToDecimal(reader["PreviousOrderAmount"]),
                     FirstOrderAfterReturn = Convert.ToDateTime(reader["FirstOrderAfterReturn"]),
                     ReturningSalesperson = reader["ReturningSalesmanName"]?.ToString() ?? "",
                     ReturningSalesmanId = reader["ReturningSalesmanId"] != DBNull.Value ? Convert.ToInt32(reader["ReturningSalesmanId"]) : 0,
-                    ReturningOrderAmount = reader.IsDBNull("ReturningOrderAmount") ? 0 : Convert.ToDecimal(reader["ReturningOrderAmount"]),
-                    ReturningBalanceDue = reader.IsDBNull("ReturningBalanceDue") ? 0 : Convert.ToDecimal(reader["ReturningBalanceDue"]),
-                    TotalBalanceDue = reader.IsDBNull("TotalBalanceDue") ? 0 : Convert.ToDecimal(reader["TotalBalanceDue"]),
+                    ReturningOrderAmount = reader.IsDBNull(reader.GetOrdinal("ReturningOrderAmount")) ? 0 : Convert.ToDecimal(reader["ReturningOrderAmount"]),
+                    ReturningBalanceDue = reader.IsDBNull(reader.GetOrdinal("ReturningBalanceDue")) ? 0 : Convert.ToDecimal(reader["ReturningBalanceDue"]),
+                    TotalBalanceDue = reader.IsDBNull(reader.GetOrdinal("TotalBalanceDue")) ? 0 : Convert.ToDecimal(reader["TotalBalanceDue"]),
                     MonthsInactive = Convert.ToInt32(reader["MonthsInactive"]),
                     OrdersSinceReturn = Convert.ToInt32(reader["OrdersSinceReturn"]),
-                    TotalAmountSinceReturn = reader.IsDBNull("TotalAmountSinceReturn") ? 0 : Convert.ToDecimal(reader["TotalAmountSinceReturn"])
+                    TotalAmountSinceReturn = reader.IsDBNull(reader.GetOrdinal("TotalAmountSinceReturn")) ? 0 : Convert.ToDecimal(reader["TotalAmountSinceReturn"])
                 });
             }
 

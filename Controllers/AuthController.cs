@@ -659,13 +659,13 @@ namespace SalesMetrics.Controllers
                 SET GoogleEmail = @Email,
                     GoogleAccessToken = @AccessToken,
                     GoogleRefreshToken = @RefreshToken
-                WHERE UserID = @UserID
+                WHERE Users_ID = @Users_ID
             ", conn);
 
             cmd.Parameters.AddWithValue("@Email", googleEmail ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("@AccessToken", accessToken ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("@RefreshToken", refreshToken ?? (object)DBNull.Value);
-            cmd.Parameters.AddWithValue("@UserID", userId);
+            cmd.Parameters.AddWithValue("@Users_ID", userId);
 
             await cmd.ExecuteNonQueryAsync();
 
@@ -692,8 +692,8 @@ namespace SalesMetrics.Controllers
 
                 // Read current access token so we can revoke it
                 var readCmd = new SqlCommand(
-                    "SELECT GoogleAccessToken FROM Users WHERE UserID = @UserID", conn);
-                readCmd.Parameters.AddWithValue("@UserID", userId);
+                    "SELECT GoogleAccessToken FROM Users WHERE Users_ID = @Users_ID", conn);
+                readCmd.Parameters.AddWithValue("@Users_ID", userId);
                 var accessToken = (await readCmd.ExecuteScalarAsync())?.ToString();
 
                 if (!string.IsNullOrEmpty(accessToken))
@@ -711,9 +711,9 @@ namespace SalesMetrics.Controllers
                     SET GoogleEmail       = NULL,
                         GoogleAccessToken = NULL,
                         GoogleRefreshToken = NULL
-                    WHERE UserID = @UserID
+                    WHERE Users_ID = @Users_ID
                 ", conn);
-                clearCmd.Parameters.AddWithValue("@UserID", userId);
+                clearCmd.Parameters.AddWithValue("@Users_ID", userId);
                 await clearCmd.ExecuteNonQueryAsync();
             }
             catch

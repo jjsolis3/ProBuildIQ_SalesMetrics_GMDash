@@ -1319,12 +1319,10 @@ namespace SalesMetrics.Controllers
                         var accessToken = reader["GoogleAccessToken"]?.ToString();
                         var refreshToken = reader["GoogleRefreshToken"]?.ToString();
 
+                        // Only call Google Calendar if we have a real stored GoogleEventId
                         if (!string.IsNullOrWhiteSpace(accessToken) && !string.IsNullOrWhiteSpace(refreshToken) && !string.IsNullOrWhiteSpace(googleEventId))
                         {
                             var calendarService = new GoogleCalendarService(_configuration);
-
-                            // NOTE: You need to store & retrieve GoogleEventId in Tasks table for accurate updates/deletes
-                            // Assuming you're doing that and it’s mapped to the TaskID for now:
                             await calendarService.UpdateTaskEventAsync(users_Id, accessToken, refreshToken, googleEventId, updatedTask.Title, updatedTask.Description, updatedTask.DueDate);
                         }
                     }
@@ -1432,6 +1430,16 @@ namespace SalesMetrics.Controllers
                         //cmd.ExecuteNonQuery();
                     }
 
+                    // Fetch stored GoogleEventId for this task
+                    string? googleEventIdForUpdate = null;
+                    var evtCmd = new SqlCommand("SELECT GoogleEventId FROM Tasks WHERE TaskID = @TaskID", conn);
+                    evtCmd.Parameters.AddWithValue("@TaskID", updatedTask.TaskID);
+                    using (var evtReader = evtCmd.ExecuteReader())
+                    {
+                        if (evtReader.Read())
+                            googleEventIdForUpdate = evtReader["GoogleEventId"]?.ToString();
+                    }
+
                     // Pull Google token info
                     var tokenCmd = new SqlCommand("SELECT GoogleAccessToken, GoogleRefreshToken FROM Users WHERE Users_ID = @Users_ID", conn);
                     tokenCmd.Parameters.AddWithValue("@Users_ID", users_Id);
@@ -1441,13 +1449,10 @@ namespace SalesMetrics.Controllers
                         var accessToken = reader["GoogleAccessToken"]?.ToString();
                         var refreshToken = reader["GoogleRefreshToken"]?.ToString();
 
-                        if (!string.IsNullOrWhiteSpace(accessToken) && !string.IsNullOrWhiteSpace(refreshToken))
+                        if (!string.IsNullOrWhiteSpace(accessToken) && !string.IsNullOrWhiteSpace(refreshToken) && !string.IsNullOrWhiteSpace(googleEventIdForUpdate))
                         {
                             var calendarService = new GoogleCalendarService(_configuration);
-
-                            // NOTE: You need to store & retrieve GoogleEventId in Tasks table for accurate updates/deletes
-                            // Assuming you're doing that and it’s mapped to the TaskID for now:
-                            await calendarService.UpdateTaskEventAsync(userId, accessToken, refreshToken, updatedTask.TaskID.ToString(), updatedTask.Title, updatedTask.Description, updatedTask.DueDate);
+                            await calendarService.UpdateTaskEventAsync(userId, accessToken, refreshToken, googleEventIdForUpdate, updatedTask.Title, updatedTask.Description, updatedTask.DueDate);
                         }
                     }
                 }
@@ -1476,6 +1481,16 @@ namespace SalesMetrics.Controllers
                 using var conn = new SqlConnection(_configuration.GetConnectionString("SalesMetrics"));
                 await conn.OpenAsync();
 
+                // Get GoogleEventId for this task
+                string? googleEventId = null;
+                var eventIdCmd = new SqlCommand("SELECT GoogleEventId FROM Tasks WHERE TaskID = @TaskID", conn);
+                eventIdCmd.Parameters.AddWithValue("@TaskID", taskId);
+                using (var eReader = await eventIdCmd.ExecuteReaderAsync())
+                {
+                    if (await eReader.ReadAsync())
+                        googleEventId = eReader["GoogleEventId"]?.ToString();
+                }
+
                 // Get the GoogleAccessToken and RefreshToken
                 var tokenCmd = new SqlCommand("SELECT GoogleAccessToken, GoogleRefreshToken FROM Users WHERE Users_ID = @Users_ID", conn);
                 tokenCmd.Parameters.AddWithValue("@Users_ID", users_Id);
@@ -1490,11 +1505,11 @@ namespace SalesMetrics.Controllers
                     }
                 }
 
-                // Delete the Google Calendar event first
-                if (!string.IsNullOrEmpty(accessToken) && !string.IsNullOrEmpty(refreshToken))
+                // Delete the Google Calendar event first (using stored GoogleEventId, not local taskId)
+                if (!string.IsNullOrEmpty(accessToken) && !string.IsNullOrEmpty(refreshToken) && !string.IsNullOrEmpty(googleEventId))
                 {
                     var calendarService = new GoogleCalendarService(_configuration);
-                    await calendarService.DeleteTaskEventAsync(users_Id, accessToken, refreshToken, taskId.ToString());
+                    await calendarService.DeleteTaskEventAsync(users_Id, accessToken, refreshToken, googleEventId);
                 }
 
                 // Delete from DB
@@ -1534,6 +1549,10 @@ namespace SalesMetrics.Controllers
         {
             try
             {
+                string? googleEventId = null;
+                int? assignedUserId = null;
+                string? accessToken = null, refreshToken = null;
+
                 using (SqlConnection conn = new SqlConnection(_configuration.GetConnectionString("SalesMetrics")))
                 {
                     conn.Open();
@@ -1555,6 +1574,56 @@ namespace SalesMetrics.Controllers
                         cmd.Parameters.AddWithValue("@ModifiedDate", DateTime.Now);
                         cmd.Parameters.AddWithValue("@TaskID", model.TaskId);
                         cmd.ExecuteNonQuery();
+                    }
+
+                    // Fetch GoogleEventId and AssignedTo for calendar sync
+                    var syncInfoCmd = new SqlCommand("SELECT GoogleEventId, AssignedTo FROM Tasks WHERE TaskID = @TaskID", conn);
+                    syncInfoCmd.Parameters.AddWithValue("@TaskID", model.TaskId);
+                    using (var syncReader = syncInfoCmd.ExecuteReader())
+                    {
+                        if (syncReader.Read())
+                        {
+                            googleEventId = syncReader["GoogleEventId"]?.ToString();
+                            assignedUserId = syncReader.IsDBNull(syncReader.GetOrdinal("AssignedTo")) ? (int?)null : syncReader.GetInt32(syncReader.GetOrdinal("AssignedTo"));
+                        }
+                    }
+
+                    // Fetch Google tokens for the assigned user
+                    if (assignedUserId.HasValue)
+                    {
+                        var tokenCmd = new SqlCommand("SELECT GoogleAccessToken, GoogleRefreshToken FROM Users WHERE Users_ID = @Users_ID", conn);
+                        tokenCmd.Parameters.AddWithValue("@Users_ID", assignedUserId.Value);
+                        using var tokenReader = tokenCmd.ExecuteReader();
+                        if (tokenReader.Read())
+                        {
+                            accessToken = tokenReader["GoogleAccessToken"]?.ToString();
+                            refreshToken = tokenReader["GoogleRefreshToken"]?.ToString();
+                        }
+                    }
+                }
+
+                // Sync to Google Calendar: delete event when task is Completed or Cancelled
+                if (!string.IsNullOrEmpty(googleEventId) && !string.IsNullOrEmpty(accessToken) && !string.IsNullOrEmpty(refreshToken) && assignedUserId.HasValue)
+                {
+                    try
+                    {
+                        var calendarService = new GoogleCalendarService(_configuration);
+                        if (model.NewStatus == "Completed" || model.NewStatus == "Cancelled")
+                        {
+                            await calendarService.DeleteTaskEventAsync(assignedUserId.Value, accessToken, refreshToken, googleEventId);
+
+                            // Clear GoogleEventId in DB since the event is removed
+                            using var cleanConn = new SqlConnection(_configuration.GetConnectionString("SalesMetrics"));
+                            await cleanConn.OpenAsync();
+                            var clearCmd = new SqlCommand("UPDATE Tasks SET GoogleEventId = NULL, IsSyncedToGoogle = 0 WHERE TaskID = @TaskID", cleanConn);
+                            clearCmd.Parameters.AddWithValue("@TaskID", model.TaskId);
+                            await clearCmd.ExecuteNonQueryAsync();
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[UpdateStatus] Google Calendar sync failed for TaskID={model.TaskId}: {ex.Message}");
+                        // Non-fatal — status was already updated in DB
                     }
                 }
 
@@ -2365,15 +2434,17 @@ namespace SalesMetrics.Controllers
             {
                 if (await reader.ReadAsync())
                 {
+                    var dueDateOrd = reader.GetOrdinal("DueDate");
+                    var assignedToOrd = reader.GetOrdinal("AssignedTo");
                     task = new SalesTask
                     {
                         TaskID = reader.GetInt32(reader.GetOrdinal("TaskID")),
-                        Title = reader.GetString(reader.GetOrdinal("Title")),
+                        Title = reader.IsDBNull(reader.GetOrdinal("Title")) ? "" : reader.GetString(reader.GetOrdinal("Title")),
                         Description = reader["Description"]?.ToString(),
-                        DueDate = reader.GetDateTime(reader.GetOrdinal("DueDate")),
+                        DueDate = reader.IsDBNull(dueDateOrd) ? (DateTime?)null : reader.GetDateTime(dueDateOrd),
                         Type = reader["Type"]?.ToString(),
-                        AssignedTo = reader.GetInt32(reader.GetOrdinal("AssignedTo")),
-                        // add IsSyncedToGoogle bit from SQL
+                        AssignedTo = reader.IsDBNull(assignedToOrd) ? (int?)null : reader.GetInt32(assignedToOrd),
+                        GoogleEventId = reader["GoogleEventId"]?.ToString(),
                         IsSyncedToGoogle = reader.IsDBNull(reader.GetOrdinal("IsSyncedToGoogle")) ? false : reader.GetBoolean(reader.GetOrdinal("IsSyncedToGoogle"))
                     };
                 }
@@ -2413,9 +2484,10 @@ namespace SalesMetrics.Controllers
                 var googleTaskId = await tasksService.CreateTaskAsync(accessToken, refreshToken, task.AssignedTo.ToString(), task.TaskID.ToString(), task.Title, task.Description, task.DueDate);
                 string? googleEventId = null;
 
-                if (task.Type?.Equals("QC", StringComparison.OrdinalIgnoreCase) == true || task.Type?.Equals("Site Visit", StringComparison.OrdinalIgnoreCase) == true)
+                if (task.DueDate.HasValue &&
+                    (task.Type?.Equals("QC", StringComparison.OrdinalIgnoreCase) == true || task.Type?.Equals("Site Visit", StringComparison.OrdinalIgnoreCase) == true))
                 {
-                    googleEventId = await calendarService.AddTaskEventAsync(task.AssignedTo.Value, accessToken, refreshToken, task.TaskID.ToString(), task.Title, task.Description, task.DueDate.Value);
+                    googleEventId = await calendarService.AddTaskEventAsync(task.AssignedTo ?? 0, accessToken, refreshToken, task.TaskID.ToString(), task.Title, task.Description, task.DueDate.Value);
                 }
 
                 var updateCmd = new SqlCommand(@"

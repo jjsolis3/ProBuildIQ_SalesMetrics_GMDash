@@ -62,5 +62,16 @@ namespace SalesMetrics.Services.Permissions
         /// <param name="userId">User ID</param>
         /// <returns>List of feature IDs the user has access to</returns>
         Task<List<int>> GetUserPermissionIdsAsync(int userId);
+
+        /// <summary>
+        /// Get all user IDs that currently have access to a specific feature
+        /// </summary>
+        Task<List<int>> GetUsersWithFeatureAccessAsync(int featureId);
+
+        /// <summary>
+        /// Bulk set which users have access to a feature.
+        /// Users in userIdsWithAccess are granted; all others have access revoked.
+        /// </summary>
+        Task<bool> BulkUpdateFeatureAccessAsync(int featureId, List<int> userIdsWithAccess, int grantedByUserId);
     }
 }

@@ -232,5 +232,70 @@ namespace SalesMetrics.Services.Permissions
                 return new List<int>();
             }
         }
+
+        public async Task<List<int>> GetUsersWithFeatureAccessAsync(int featureId)
+        {
+            try
+            {
+                var now = DateTime.Now;
+                return await _context.UserFeaturePermissions
+                    .Where(p => p.FeatureId == featureId
+                        && p.HasAccess
+                        && (!p.ExpiresDate.HasValue || p.ExpiresDate.Value > now))
+                    .Select(p => p.Users_ID)
+                    .ToListAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving users with access to feature {FeatureId}", featureId);
+                return new List<int>();
+            }
+        }
+
+        public async Task<bool> BulkUpdateFeatureAccessAsync(int featureId, List<int> userIdsWithAccess, int grantedByUserId)
+        {
+            try
+            {
+                var existing = await _context.UserFeaturePermissions
+                    .Where(p => p.FeatureId == featureId)
+                    .ToListAsync();
+
+                // Revoke access for users not in the new list
+                var toRevoke = existing.Where(p => !userIdsWithAccess.Contains(p.Users_ID)).ToList();
+                _context.UserFeaturePermissions.RemoveRange(toRevoke);
+
+                // Grant or update access for users in the list
+                foreach (var userId in userIdsWithAccess)
+                {
+                    var perm = existing.FirstOrDefault(p => p.Users_ID == userId);
+                    if (perm != null)
+                    {
+                        perm.HasAccess = true;
+                        perm.GrantedDate = DateTime.Now;
+                        perm.GrantedByUsers_ID = grantedByUserId;
+                        perm.ExpiresDate = null;
+                    }
+                    else
+                    {
+                        _context.UserFeaturePermissions.Add(new UserFeaturePermissionEntity
+                        {
+                            FeatureId = featureId,
+                            Users_ID = userId,
+                            HasAccess = true,
+                            GrantedDate = DateTime.Now,
+                            GrantedByUsers_ID = grantedByUserId
+                        });
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error bulk-updating feature access for feature {FeatureId}", featureId);
+                return false;
+            }
+        }
     }
 }

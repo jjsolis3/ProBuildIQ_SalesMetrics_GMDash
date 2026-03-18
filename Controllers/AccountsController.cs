@@ -804,5 +804,135 @@ namespace SalesMetrics.Controllers
             var referrer = Request.Headers["Referer"].ToString();
             return Redirect(!string.IsNullOrEmpty(referrer) ? referrer : "/");
         }
+
+        // ======================================================================
+        // BULK PERMISSIONS MANAGER
+        // ======================================================================
+
+        [HttpGet]
+        public async Task<IActionResult> BulkPermissions(int? featureId, int? roleId, int? locationId)
+        {
+            var features = await _permissionService.GetAllFeaturesAsync();
+
+            var vm = new BulkPermissionViewModel
+            {
+                SelectedFeatureId = featureId ?? 0,
+                SelectedRoleId    = roleId,
+                SelectedLocationId = locationId,
+                AllFeatures = features
+                    .Select(f => new SelectListItem
+                    {
+                        Value    = f.FeatureId.ToString(),
+                        Text     = string.IsNullOrWhiteSpace(f.Category) ? f.FeatureName : $"{f.Category} › {f.FeatureName}",
+                        Selected = f.FeatureId == featureId
+                    }).ToList(),
+                AllRoles = GetRolesSelectList(roleId),
+            };
+            vm.AllFeatures.Insert(0, new SelectListItem { Value = "", Text = "— Select a Feature —" });
+
+            if (featureId.HasValue && featureId.Value > 0)
+            {
+                vm.FeatureName = features.FirstOrDefault(f => f.FeatureId == featureId.Value)?.FeatureName;
+                var usersWithAccess = await _permissionService.GetUsersWithFeatureAccessAsync(featureId.Value);
+                vm.Users = LoadUsersForBulkPermissions(roleId, locationId, usersWithAccess);
+            }
+
+            return View(vm);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> BulkUpdatePermissions(int featureId, int? roleId, int? locationId, List<int>? grantedUserIds)
+        {
+            var grantedByUserId = int.TryParse(User.FindFirst("Users_ID")?.Value, out var uid) ? uid : 0;
+            var userIdsWithAccess = grantedUserIds ?? new List<int>();
+
+            var success = await _permissionService.BulkUpdateFeatureAccessAsync(featureId, userIdsWithAccess, grantedByUserId);
+
+            if (success)
+                TempData["SuccessMessage"] = $"Permissions updated for {userIdsWithAccess.Count} user(s).";
+            else
+                TempData["ErrorMessage"] = "An error occurred while updating permissions. Please try again.";
+
+            return RedirectToAction(nameof(BulkPermissions), new { featureId, roleId, locationId });
+        }
+
+        private List<BulkUserPermissionRow> LoadUsersForBulkPermissions(int? roleId, int? locationId, List<int> usersWithAccess)
+        {
+            var users = new List<BulkUserPermissionRow>();
+            string connStr = _configuration.GetConnectionString("SalesMetrics");
+
+            using var conn = new SqlConnection(connStr);
+            conn.Open();
+
+            var where = new List<string> { "u.IsActive = 1" };
+            var cmd = new SqlCommand();
+            cmd.Connection = conn;
+
+            if (roleId.HasValue)
+            {
+                where.Add("u.RoleID = @RoleId");
+                cmd.Parameters.AddWithValue("@RoleId", roleId.Value);
+            }
+            if (locationId.HasValue)
+            {
+                where.Add("u.Location = @LocationId");
+                cmd.Parameters.AddWithValue("@LocationId", locationId.Value);
+            }
+
+            cmd.CommandText = $@"
+                SELECT u.Users_ID, u.FirstName, u.LastName, u.RoleID,
+                       ISNULL(r.RoleName, 'Unknown') AS RoleName,
+                       u.Location,
+                       CASE u.Location WHEN 1 THEN 'LAX' WHEN 2 THEN 'LSV'
+                           WHEN 3 THEN 'CHN' WHEN 4 THEN 'PHX' WHEN 5 THEN 'SND'
+                           ELSE 'N/A' END AS LocationName
+                FROM Users u
+                LEFT JOIN Roles r ON u.RoleID = r.RoleID
+                WHERE {string.Join(" AND ", where)}
+                ORDER BY u.FirstName, u.LastName";
+
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                var usersId = reader.GetInt32(reader.GetOrdinal("Users_ID"));
+                users.Add(new BulkUserPermissionRow
+                {
+                    Users_ID  = usersId,
+                    FullName  = $"{reader["FirstName"]} {reader["LastName"]}".Trim(),
+                    RoleName  = reader["RoleName"].ToString() ?? "",
+                    RoleId    = reader.GetInt32(reader.GetOrdinal("RoleID")),
+                    Location  = reader["LocationName"].ToString() ?? "",
+                    LocationId = reader.GetInt32(reader.GetOrdinal("Location")),
+                    HasAccess = usersWithAccess.Contains(usersId)
+                });
+            }
+
+            return users;
+        }
+
+        private List<SelectListItem> GetRolesSelectList(int? selectedRoleId)
+        {
+            var roles = new List<SelectListItem>
+            {
+                new SelectListItem { Value = "", Text = "— All Roles —", Selected = !selectedRoleId.HasValue }
+            };
+            string connStr = _configuration.GetConnectionString("SalesMetrics");
+            using var conn = new SqlConnection(connStr);
+            conn.Open();
+            var cmd = new SqlCommand("SELECT RoleID, RoleName FROM Roles ORDER BY RoleName", conn);
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                var id = reader.GetInt32(reader.GetOrdinal("RoleID"));
+                roles.Add(new SelectListItem
+                {
+                    Value    = id.ToString(),
+                    Text     = reader["RoleName"].ToString() ?? "",
+                    Selected = selectedRoleId.HasValue && selectedRoleId.Value == id
+                });
+            }
+            return roles;
+        }
     }
 }

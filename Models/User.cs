@@ -85,6 +85,28 @@ namespace SalesMetrics.Models
         public int DisplayOrder { get; set; }
     }
 
+    public class BulkPermissionViewModel
+    {
+        public int SelectedFeatureId { get; set; }
+        public int? SelectedRoleId { get; set; }
+        public int? SelectedLocationId { get; set; }
+        public string? FeatureName { get; set; }
+        public List<SelectListItem> AllFeatures { get; set; } = new();
+        public List<SelectListItem> AllRoles { get; set; } = new();
+        public List<BulkUserPermissionRow> Users { get; set; } = new();
+    }
+
+    public class BulkUserPermissionRow
+    {
+        public int Users_ID { get; set; }
+        public string FullName { get; set; } = "";
+        public string RoleName { get; set; } = "";
+        public int RoleId { get; set; }
+        public string Location { get; set; } = "";
+        public int LocationId { get; set; }
+        public bool HasAccess { get; set; }
+    }
+
     public class FlaggedUserViewModel
     {
         public int Users_ID { get; set; }

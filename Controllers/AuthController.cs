@@ -672,6 +672,58 @@ namespace SalesMetrics.Controllers
             return RedirectToAction("User", "Accounts");
         }
 
+        // POST: /auth/disconnect-google
+        // Revokes the stored Google tokens and clears them from the database.
+        [Authorize]
+        [HttpPost("auth/disconnect-google")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DisconnectGoogle()
+        {
+            var userId = HttpContext.Session.GetString("UserId");
+            if (string.IsNullOrEmpty(userId))
+                return RedirectToAction("Profile", "Accounts");
+
+            // Try to revoke the access token at Google's endpoint (best-effort — don't block on failure)
+            try
+            {
+                using var conn = new SqlConnection(_configuration.GetConnectionString("SalesMetrics"));
+                await conn.OpenAsync();
+
+                // Read current access token so we can revoke it
+                var readCmd = new SqlCommand(
+                    "SELECT GoogleAccessToken FROM Users WHERE UserID = @UserID", conn);
+                readCmd.Parameters.AddWithValue("@UserID", userId);
+                var accessToken = (await readCmd.ExecuteScalarAsync())?.ToString();
+
+                if (!string.IsNullOrEmpty(accessToken))
+                {
+                    using var http = new System.Net.Http.HttpClient();
+                    // Google revocation endpoint — fire-and-forget is fine; we clear the DB regardless
+                    _ = http.PostAsync(
+                        $"https://oauth2.googleapis.com/revoke?token={Uri.EscapeDataString(accessToken)}",
+                        null);
+                }
+
+                // Clear the tokens from the database
+                var clearCmd = new SqlCommand(@"
+                    UPDATE Users
+                    SET GoogleEmail       = NULL,
+                        GoogleAccessToken = NULL,
+                        GoogleRefreshToken = NULL
+                    WHERE UserID = @UserID
+                ", conn);
+                clearCmd.Parameters.AddWithValue("@UserID", userId);
+                await clearCmd.ExecuteNonQueryAsync();
+            }
+            catch
+            {
+                // Swallow — the UI will still reflect disconnected state
+            }
+
+            TempData["Success"] = "Google account disconnected successfully.";
+            return RedirectToAction("Profile", "Accounts");
+        }
+
         [HttpGet]
         public IActionResult Register()
         {

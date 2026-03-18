@@ -131,6 +131,9 @@ builder.Services.AddScoped<IEnvelopeService, EnvelopeService>();
 builder.Services.AddScoped<SalesMetrics.Services.Announcements.IAnnouncementService, SalesMetrics.Services.Announcements.AnnouncementService>();
 builder.Services.AddScoped<SalesMetrics.Services.Settings.ISettingsService, SalesMetrics.Services.Settings.SettingsService>();
 
+// Shared Sales Rep metrics service (used by SalespersonController and AccountsController)
+builder.Services.AddScoped<SalesMetrics.Services.SalesRepMetricsService>();
+
 // Feature Permissions Service
 builder.Services.AddScoped<SalesMetrics.Services.Permissions.IPermissionService, SalesMetrics.Services.Permissions.PermissionService>();
 

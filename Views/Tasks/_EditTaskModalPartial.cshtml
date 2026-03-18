@@ -37,7 +37,7 @@
                         var taskTime = Model.Task.DueDate.ToString("HH:mm");
                         for (int hour = 0; hour < 24; hour++)
                         {
-                            foreach (int minute in new[] { 0, 30 })
+                            foreach (int minute in new[] { 0, 15, 30, 45 })
                             {
                                 var timeStr = new TimeSpan(hour, minute, 0).ToString(@"hh\:mm");
                                 <option value="@timeStr" selected="@(taskTime == timeStr)">

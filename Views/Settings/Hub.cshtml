@@ -143,8 +143,8 @@
                     // ── Administration cards ───────────────────────────────────
                     var adminItems = new List<(string Icon, string Title, string Desc, string Url, bool Show)>
                     {
-                        ("fa-bullhorn",    "Announcements",         "Post and manage organization-wide announcements visible to all users.",          "/Announcements/Index",        Model.CanAccessAnnouncements),
                         ("fa-user-shield", "Access Control",        "Create users, assign roles, and manage feature-level permissions.",              "/Accounts/Index",             Model.CanAccessAccessControl),
+                        ("fa-bullhorn",    "Announcements",         "Post and manage organization-wide announcements visible to all users.",          "/Announcements/Index",        Model.CanAccessAnnouncements),
                         ("fa-layer-group", "Bulk Permission Manager","Grant or revoke a feature for multiple users at once — filter by role or location.", "/Accounts/BulkPermissions",  Model.CanAccessBulkPermissions),
                         ("fa-file-upload", "Yardi Upload",          "Import property and unit pricing data from Yardi Excel matrix exports.",         "/Yardi/Upload",               Model.CanAccessYardiUpload),
                     };

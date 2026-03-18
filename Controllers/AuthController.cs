@@ -670,7 +670,7 @@ namespace SalesMetrics.Controllers
             await cmd.ExecuteNonQueryAsync();
 
             TempData["Success"] = "Google Calendar connected successfully!";
-            return RedirectToAction("User", "Accounts");
+            return RedirectToAction("Profile", "Accounts");
         }
 
         // POST: /auth/disconnect-google

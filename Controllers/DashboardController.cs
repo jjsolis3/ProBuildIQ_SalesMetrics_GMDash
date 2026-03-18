@@ -846,7 +846,7 @@ namespace SalesMetrics.Controllers
                     {
                         mtdResults.Add(new SalesRanking
                         {
-                            SalespersonName = reader.GetString(0),
+                            SalespersonName = reader.IsDBNull(0) ? "" : reader.GetString(0),
                             SalespersonID = reader.GetInt32(1),
                             MTDSales = Convert.ToDecimal(reader[2])
                         });
@@ -860,7 +860,7 @@ namespace SalesMetrics.Controllers
                         {
                             ytdResults.Add(new SalesRanking
                             {
-                                SalespersonName = reader.GetString(0),
+                                SalespersonName = reader.IsDBNull(0) ? "" : reader.GetString(0),
                                 SalespersonID = reader.GetInt32(1),
                                 YTDSales = Convert.ToDecimal(reader[2])
                             });

@@ -143,6 +143,7 @@ namespace SalesMetrics.Controllers
                         string errorMsg = "Invalid Password!";
                         ViewBag.Error = errorMsg + " Please try again.";
                         LogLoginAttempt(salesMetricsUserId, userName, officeLocation, false, errorMsg);
+                        return View("Login");
                     }
                     else
                     {

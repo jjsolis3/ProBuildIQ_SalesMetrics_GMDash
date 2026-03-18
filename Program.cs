@@ -181,6 +181,10 @@ builder.Services.AddAuthentication(options =>
     options.ClientId     = string.IsNullOrWhiteSpace(googleClientId)     ? "PENDING_CONFIGURATION" : googleClientId;
     options.ClientSecret = string.IsNullOrWhiteSpace(googleClientSecret) ? "PENDING_CONFIGURATION" : googleClientSecret;
 
+    // IMPORTANT: This path must be registered in Google Cloud Console as an
+    // Authorized Redirect URI: https://salesmetrics.seamlessflooring.com/signin-google
+    options.CallbackPath = "/signin-google";
+
     options.Scope.Add("openid");
     options.Scope.Add("profile");
     options.Scope.Add("email");

@@ -2405,37 +2405,41 @@ namespace SalesMetrics.Controllers
             }
 
             // Perform Google sync
-            var tasksService = new GoogleTasksService(_configuration);
-            var calendarService = new GoogleCalendarService(_configuration);
-
-            var googleTaskId = await tasksService.CreateTaskAsync(accessToken, refreshToken, task.AssignedTo.ToString(), task.TaskID.ToString(), task.Title, task.Description, task.DueDate);
-            string? googleEventId = null;
-
-            if (task.Type?.Equals("QC", StringComparison.OrdinalIgnoreCase) == true || task.Type?.Equals("Site Visit", StringComparison.OrdinalIgnoreCase) == true)
+            try
             {
-                googleEventId = await calendarService.AddTaskEventAsync(task.AssignedTo.Value, accessToken, refreshToken, task.TaskID.ToString(), task.Title, task.Description, task.DueDate.Value);
+                var tasksService = new GoogleTasksService(_configuration);
+                var calendarService = new GoogleCalendarService(_configuration);
+
+                var googleTaskId = await tasksService.CreateTaskAsync(accessToken, refreshToken, task.AssignedTo.ToString(), task.TaskID.ToString(), task.Title, task.Description, task.DueDate);
+                string? googleEventId = null;
+
+                if (task.Type?.Equals("QC", StringComparison.OrdinalIgnoreCase) == true || task.Type?.Equals("Site Visit", StringComparison.OrdinalIgnoreCase) == true)
+                {
+                    googleEventId = await calendarService.AddTaskEventAsync(task.AssignedTo.Value, accessToken, refreshToken, task.TaskID.ToString(), task.Title, task.Description, task.DueDate.Value);
+                }
+
+                var updateCmd = new SqlCommand(@"
+                    UPDATE Tasks SET
+                        GoogleTaskId = @GoogleTaskId,
+                        GoogleEventId = @GoogleEventId,
+                        IsSyncedToGoogle = 1
+                    WHERE TaskID = @TaskID
+                ", conn);
+
+                updateCmd.Parameters.AddWithValue("@GoogleTaskId", (object?)googleTaskId ?? DBNull.Value);
+                updateCmd.Parameters.AddWithValue("@GoogleEventId", (object?)googleEventId ?? DBNull.Value);
+                updateCmd.Parameters.AddWithValue("@TaskID", taskId);
+
+                await updateCmd.ExecuteNonQueryAsync();
+
+                TempData["Success"] = "Task synced with Google.";
             }
-            else
+            catch (Exception ex)
             {
-                TempData["Error"] = "Missing AssignedTo or DueDate — cannot sync with Google Calendar.";
-                return RedirectToAction("Task");
+                TempData["Error"] = "Google sync failed. Please reconnect your Google account from your profile and try again.";
+                Console.WriteLine($"[ManualGoogleSync ERROR] TaskID={taskId}: {ex}");
             }
 
-            var updateCmd = new SqlCommand(@"
-                UPDATE Tasks SET
-                    GoogleTaskId = @GoogleTaskId,
-                    GoogleEventId = @GoogleEventId,
-                    IsSyncedToGoogle = 1
-                WHERE TaskID = @TaskID
-            ", conn);
-
-            updateCmd.Parameters.AddWithValue("@GoogleTaskId", (object?)googleTaskId ?? DBNull.Value);
-            updateCmd.Parameters.AddWithValue("@GoogleEventId", (object?)googleEventId ?? DBNull.Value);
-            updateCmd.Parameters.AddWithValue("@TaskID", taskId);
-
-            await updateCmd.ExecuteNonQueryAsync();
-
-            TempData["Success"] = "Task synced with Google.";
             return RedirectToAction("Task");
         }
 

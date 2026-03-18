@@ -845,12 +845,18 @@ namespace SalesMetrics.Controllers
         public async Task<IActionResult> BulkUpdatePermissions(int featureId, int? roleId, int? locationId, List<int>? grantedUserIds)
         {
             var grantedByUserId = int.TryParse(User.FindFirst("Users_ID")?.Value, out var uid) ? uid : 0;
-            var userIdsWithAccess = grantedUserIds ?? new List<int>();
+            var grantedSet = grantedUserIds ?? new List<int>();
 
-            var success = await _permissionService.BulkUpdateFeatureAccessAsync(featureId, userIdsWithAccess, grantedByUserId);
+            // Load the exact set of user IDs that were visible under the active filters.
+            // This ensures Grant All / Revoke All only affects the filtered scope and
+            // never touches permissions for users outside the current filter.
+            var scopedUserIds = LoadUserIdsForBulkPermissions(roleId, locationId);
+
+            var success = await _permissionService.BulkUpdateFeatureAccessForScopedUsersAsync(
+                featureId, scopedUserIds, grantedSet, grantedByUserId);
 
             if (success)
-                TempData["SuccessMessage"] = $"Permissions updated for {userIdsWithAccess.Count} user(s).";
+                TempData["SuccessMessage"] = $"Permissions updated for {grantedSet.Count} user(s).";
             else
                 TempData["ErrorMessage"] = "An error occurred while updating permissions. Please try again.";
 
@@ -909,6 +915,38 @@ namespace SalesMetrics.Controllers
             }
 
             return users;
+        }
+
+        private List<int> LoadUserIdsForBulkPermissions(int? roleId, int? locationId)
+        {
+            var userIds = new List<int>();
+            string connStr = _configuration.GetConnectionString("SalesMetrics");
+
+            using var conn = new SqlConnection(connStr);
+            conn.Open();
+
+            var where = new List<string> { "IsActive = 1" };
+            var cmd = new SqlCommand();
+            cmd.Connection = conn;
+
+            if (roleId.HasValue)
+            {
+                where.Add("RoleID = @RoleId");
+                cmd.Parameters.AddWithValue("@RoleId", roleId.Value);
+            }
+            if (locationId.HasValue)
+            {
+                where.Add("Location = @LocationId");
+                cmd.Parameters.AddWithValue("@LocationId", locationId.Value);
+            }
+
+            cmd.CommandText = $"SELECT Users_ID FROM Users WHERE {string.Join(" AND ", where)}";
+
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+                userIds.Add(reader.GetInt32(0));
+
+            return userIds;
         }
 
         private List<SelectListItem> GetRolesSelectList(int? selectedRoleId)

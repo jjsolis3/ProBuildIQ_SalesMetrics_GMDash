@@ -297,5 +297,52 @@ namespace SalesMetrics.Services.Permissions
                 return false;
             }
         }
+
+        public async Task<bool> BulkUpdateFeatureAccessForScopedUsersAsync(int featureId, List<int> scopedUserIds, List<int> userIdsWithAccess, int grantedByUserId)
+        {
+            try
+            {
+                // Only load existing permissions for users within the filtered scope
+                var existing = await _context.UserFeaturePermissions
+                    .Where(p => p.FeatureId == featureId && scopedUserIds.Contains(p.Users_ID))
+                    .ToListAsync();
+
+                // Revoke access for scoped users not in the granted list
+                var toRevoke = existing.Where(p => !userIdsWithAccess.Contains(p.Users_ID)).ToList();
+                _context.UserFeaturePermissions.RemoveRange(toRevoke);
+
+                // Grant or update access for scoped users in the granted list
+                foreach (var userId in userIdsWithAccess.Where(id => scopedUserIds.Contains(id)))
+                {
+                    var perm = existing.FirstOrDefault(p => p.Users_ID == userId);
+                    if (perm != null)
+                    {
+                        perm.HasAccess = true;
+                        perm.GrantedDate = DateTime.Now;
+                        perm.GrantedByUsers_ID = grantedByUserId;
+                        perm.ExpiresDate = null;
+                    }
+                    else
+                    {
+                        _context.UserFeaturePermissions.Add(new UserFeaturePermissionEntity
+                        {
+                            FeatureId = featureId,
+                            Users_ID = userId,
+                            HasAccess = true,
+                            GrantedDate = DateTime.Now,
+                            GrantedByUsers_ID = grantedByUserId
+                        });
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in scoped bulk-update for feature {FeatureId}", featureId);
+                return false;
+            }
+        }
     }
 }

@@ -73,5 +73,11 @@ namespace SalesMetrics.Services.Permissions
         /// Users in userIdsWithAccess are granted; all others have access revoked.
         /// </summary>
         Task<bool> BulkUpdateFeatureAccessAsync(int featureId, List<int> userIdsWithAccess, int grantedByUserId);
+
+        /// <summary>
+        /// Bulk set feature access limited to a specific scope of users.
+        /// Only users in scopedUserIds are affected; users outside the scope are left unchanged.
+        /// </summary>
+        Task<bool> BulkUpdateFeatureAccessForScopedUsersAsync(int featureId, List<int> scopedUserIds, List<int> userIdsWithAccess, int grantedByUserId);
     }
 }

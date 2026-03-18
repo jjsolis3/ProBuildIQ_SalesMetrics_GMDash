@@ -6,6 +6,7 @@
 }
 
 @section Styles {
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css" />
 <style>
     .filter-card  { background:#fff; border:1px solid #dee2e6; border-radius:8px; padding:20px 24px; margin-bottom:24px; }
     .results-card { background:#fff; border:1px solid #dee2e6; border-radius:8px; overflow:hidden; }
@@ -22,6 +23,11 @@
     .empty-state i { font-size:2.5rem; margin-bottom:12px; color:#dee2e6; }
     /* select-all row */
     #selectAllRow { background:#f0f4ff; }
+    /* DataTables integration */
+    #bulkTable_wrapper .dataTables_filter input { font-size:.85rem; }
+    #bulkTable_wrapper .dataTables_length select { font-size:.85rem; }
+    #bulkTable_wrapper .dataTables_info { font-size:.8rem; color:#6c757d; }
+    #bulkTable thead th.sorting, #bulkTable thead th.sorting_asc, #bulkTable thead th.sorting_desc { cursor:pointer; }
 </style>
 }
 
@@ -161,7 +167,7 @@
                 @if (Model.Users.Any())
                 {
                     <div class="table-responsive">
-                        <table class="table table-bulk table-hover mb-0 align-middle">
+                        <table id="bulkTable" class="table table-bulk table-hover mb-0 align-middle">
                             <thead>
                                 <tr>
                                     <th style="width:46px; padding:10px 16px;">
@@ -234,7 +240,31 @@
 </div>
 
 @section Scripts {
+<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap5.min.js"></script>
 <script>
+    // ── DataTables init ──────────────────────────────────────────────────────
+    var bulkTable;
+    $(document).ready(function () {
+        var tableEl = document.getElementById('bulkTable');
+        if (tableEl) {
+            bulkTable = $('#bulkTable').DataTable({
+                pageLength: 25,
+                order: [[1, 'asc']],       // default: sort by Name ascending
+                columnDefs: [
+                    { orderable: false, targets: 0 }   // checkbox column – not sortable
+                ],
+                language: {
+                    search: 'Search users:',
+                    lengthMenu: 'Show _MENU_ users',
+                    info: 'Showing _START_ to _END_ of _TOTAL_ users',
+                    infoFiltered: '(filtered from _MAX_ total)'
+                }
+            });
+        }
+    });
+
+    // ── Bulk helpers ─────────────────────────────────────────────────────────
     function setAll(grant) {
         document.querySelectorAll('.user-check').forEach(cb => {
             cb.checked = grant;

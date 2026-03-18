@@ -2304,33 +2304,43 @@ namespace SalesMetrics.Controllers
 
                 if (!string.IsNullOrWhiteSpace(accessToken) && !string.IsNullOrWhiteSpace(refreshToken))
                 {
-                    var tasksService = new GoogleTasksService(_configuration);
-                    googleTaskId = await tasksService.CreateTaskAsync(
-                        accessToken, refreshToken, task.AssignedTo.ToString(), task.TaskID.ToString(), task.Title, task.Description, task.DueDate
-                    );
-
-                    if (task.Type?.Equals("QC", StringComparison.OrdinalIgnoreCase) == true || task.Type?.Equals("Site Visit", StringComparison.OrdinalIgnoreCase) == true)
+                    try
                     {
-                        var calendarService = new GoogleCalendarService(_configuration);
-                        googleEventId = await calendarService.AddTaskEventAsync(
-                            task.AssignedTo ?? 0, accessToken, refreshToken, task.TaskID.ToString(), task.Title, task.Description, task.DueDate ?? DateTime.Now
+                        var tasksService = new GoogleTasksService(_configuration);
+                        googleTaskId = await tasksService.CreateTaskAsync(
+                            accessToken, refreshToken, task.AssignedTo.ToString(), task.TaskID.ToString(), task.Title, task.Description, task.DueDate
                         );
+
+                        if (task.Type?.Equals("QC", StringComparison.OrdinalIgnoreCase) == true || task.Type?.Equals("Site Visit", StringComparison.OrdinalIgnoreCase) == true)
+                        {
+                            var calendarService = new GoogleCalendarService(_configuration);
+                            googleEventId = await calendarService.AddTaskEventAsync(
+                                task.AssignedTo ?? 0, accessToken, refreshToken, task.TaskID.ToString(), task.Title, task.Description, task.DueDate ?? DateTime.Now
+                            );
+                        }
+
+                        // Update DB with Google info
+                        var updateCmd = new SqlCommand(@"
+                            UPDATE Tasks
+                            SET GoogleTaskId = @GoogleTaskId,
+                                GoogleEventId = @GoogleEventId,
+                                IsSyncedToGoogle = 1
+                            WHERE TaskID = @TaskID
+                        ", conn);
+
+                        updateCmd.Parameters.AddWithValue("@GoogleTaskId", (object?)googleTaskId ?? DBNull.Value);
+                        updateCmd.Parameters.AddWithValue("@GoogleEventId", (object?)googleEventId ?? DBNull.Value);
+                        updateCmd.Parameters.AddWithValue("@TaskID", task.TaskID);
+
+                        await updateCmd.ExecuteNonQueryAsync();
                     }
-
-                    // Update DB with Google info
-                    var updateCmd = new SqlCommand(@"
-                        UPDATE Tasks
-                        SET GoogleTaskId = @GoogleTaskId,
-                            GoogleEventId = @GoogleEventId,
-                            IsSyncedToGoogle = 1
-                        WHERE TaskID = @TaskID
-                    ", conn);
-
-                    updateCmd.Parameters.AddWithValue("@GoogleTaskId", (object?)googleTaskId ?? DBNull.Value);
-                    updateCmd.Parameters.AddWithValue("@GoogleEventId", (object?)googleEventId ?? DBNull.Value);
-                    updateCmd.Parameters.AddWithValue("@TaskID", task.TaskID);
-
-                    await updateCmd.ExecuteNonQueryAsync();
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[Google Sync] Failed to sync task {task.TaskID} to Google: {ex.Message}");
+                        // Return nulls — task was already saved to DB; user can manually sync via 'Sync Now'
+                        googleTaskId = null;
+                        googleEventId = null;
+                    }
                 }
             }
 

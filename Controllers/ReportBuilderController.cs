@@ -1566,7 +1566,9 @@ namespace SalesMetrics.Controllers
         /// Branches that return no data get an empty sheet with a note.
         /// </summary>
         [HttpPost]
-        public async Task<IActionResult> ExportAllBranchesToExcel(int id, [FromForm] Dictionary<string, string>? parameterValues)
+        public async Task<IActionResult> ExportAllBranchesToExcel(int id,
+            [FromForm] Dictionary<string, string>? parameterValues,
+            [FromForm(Name = "branches")] List<string>? selectedBranches)
         {
             try
             {
@@ -1582,8 +1584,8 @@ namespace SalesMetrics.Controllers
 
                 var connStr = _configuration.GetConnectionString("SalesMetrics");
 
-                // Branch code → friendly name used as the sheet tab
-                var branchMap = new (string Code, string Label)[]
+                // All available branches; filter to only those selected by the user (default = all).
+                var allBranches = new (string Code, string Label)[]
                 {
                     ("LAX", "Los Angeles"),
                     ("LSV", "Las Vegas"),
@@ -1591,6 +1593,16 @@ namespace SalesMetrics.Controllers
                     ("PHX", "Phoenix"),
                     ("SND", "San Diego")
                 };
+
+                var branchMap = (selectedBranches != null && selectedBranches.Count > 0)
+                    ? allBranches.Where(b => selectedBranches.Contains(b.Code, StringComparer.OrdinalIgnoreCase)).ToArray()
+                    : allBranches;
+
+                if (branchMap.Length == 0)
+                {
+                    TempData["ErrorMessage"] = "Please select at least one branch to export.";
+                    return RedirectToAction("Execute", new { id });
+                }
 
                 var isSqlMode = report.QueryDefinitionJson?.Contains("\"queryMode\":\"sql\"", StringComparison.OrdinalIgnoreCase) == true
                              || report.QueryDefinitionJson?.Contains("\"queryMode\": \"sql\"", StringComparison.OrdinalIgnoreCase) == true;

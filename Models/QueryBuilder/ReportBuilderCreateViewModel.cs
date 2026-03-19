@@ -264,6 +264,15 @@ namespace SalesMetrics.Models.QueryBuilder
         /// Parameter values that were used to generate the current results (for export).
         /// </summary>
         public Dictionary<string, string>? SubmittedParameterValues { get; set; }
+        /// <summary>
+        /// The branch/location selected by the user when running the report.
+        /// Overrides the session OfficeLocation so admin users can query any branch database.
+        /// </summary>
+        public string? SelectedLocation { get; set; }
+        /// <summary>
+        /// The resolved database name that was used for the most recent execution (for display).
+        /// </summary>
+        public string? ExecutedAgainstDatabase { get; set; }
     }
 
     /// <summary>

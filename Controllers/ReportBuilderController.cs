@@ -1359,34 +1359,30 @@ namespace SalesMetrics.Controllers
                     }
                 }
 
-                // If report has parameters, show parameter entry form
-                // Resolve branch DB placeholder for display (show user their actual DB name)
+                // Always show the run form first so users can select the branch/location
+                // before executing. This is required for admin users who need to query
+                // a different branch than their current session location.
                 var currentLocation = HttpContext.Session.GetString("OfficeLocation") ?? "LAX";
                 var currentBranchDb = GetCompUFloorDatabaseName(currentLocation);
 
-                if (parameters.Any())
+                var viewModel = new ReportExecutionViewModel
                 {
-                    var viewModel = new ReportExecutionViewModel
-                    {
-                        ReportId = report.ReportDefinitionId,
-                        ReportName = report.Name ?? "Untitled Report",
-                        ReportDescription = report.Description ?? "",
-                        Category = report.Category ?? "Custom Reports",
-                        GeneratedSql = ResolveBranchDatabase(report.GeneratedSql ?? "", currentBranchDb),
-                        Parameters = parameters,
-                        QueryDefinitionJson = report.QueryDefinitionJson,
-                        ColumnNames = new List<string>(),
-                        ResultData = new List<Dictionary<string, object>>(),
-                        RowCount = 0,
-                        ExecutionTimeMs = 0,
-                        ExecutedDate = DateTime.Now
-                    };
+                    ReportId = report.ReportDefinitionId,
+                    ReportName = report.Name ?? "Untitled Report",
+                    ReportDescription = report.Description ?? "",
+                    Category = report.Category ?? "Custom Reports",
+                    GeneratedSql = ResolveBranchDatabase(report.GeneratedSql ?? "", currentBranchDb),
+                    Parameters = parameters,
+                    QueryDefinitionJson = report.QueryDefinitionJson,
+                    ColumnNames = new List<string>(),
+                    ResultData = new List<Dictionary<string, object>>(),
+                    RowCount = 0,
+                    ExecutionTimeMs = 0,
+                    ExecutedDate = DateTime.Now,
+                    ExecutedAgainstDatabase = null // null = not yet run
+                };
 
-                    return View(viewModel);
-                }
-
-                // No parameters - execute directly
-                return await ExecuteReportWithParameters(report, null);
+                return View(viewModel);
             }
             catch (Exception ex)
             {
@@ -1570,13 +1566,23 @@ namespace SalesMetrics.Controllers
         /// </summary>
         private async Task<IActionResult> ExecuteReportWithParameters(Data.Entities.QueryBuilder.ReportDefinitionEntity report, Dictionary<string, string>? parameterValues)
         {
+            // Extract the _location override submitted by the branch selector on the Execute form.
+            // This allows admin users to query any branch database without changing their session.
+            string? locationOverride = null;
+            if (parameterValues != null && parameterValues.TryGetValue("_location", out var locVal) && !string.IsNullOrWhiteSpace(locVal))
+            {
+                locationOverride = locVal;
+                parameterValues = new Dictionary<string, string>(parameterValues); // copy so we don't mutate
+                parameterValues.Remove("_location");
+            }
+
             var connStr = _configuration.GetConnectionString("SalesMetrics");
             using var conn = new System.Data.SqlClient.SqlConnection(connStr);
             await conn.OpenAsync();
 
-            // Resolve branch database for the current user — works for BOTH wizard and SQL modes.
-            // Wizard-mode SQL has {BRANCH_DB} placeholder; SQL-mode may have hardcoded DB names.
-            var userLocation = HttpContext.Session.GetString("OfficeLocation") ?? "LAX";
+            // Resolve branch database: location override (from branch selector) takes priority,
+            // then the user's current session location, then default to LAX.
+            var userLocation = locationOverride ?? HttpContext.Session.GetString("OfficeLocation") ?? "LAX";
             var compuFloorDb = GetCompUFloorDatabaseName(userLocation);
             _logger.LogInformation("Executing report for location {Location}, database {Database}", userLocation, compuFloorDb);
 
@@ -1640,8 +1646,27 @@ namespace SalesMetrics.Controllers
                     }
                     else
                     {
-                        // Standard single-value parameter
-                        cmd.Parameters.AddWithValue(paramName, string.IsNullOrEmpty(paramValue) ? DBNull.Value : paramValue);
+                        if (string.IsNullOrEmpty(paramValue))
+                        {
+                            cmd.Parameters.AddWithValue(paramName, DBNull.Value);
+                        }
+                        else if (DateTime.TryParse(paramValue, out var parsedDate) &&
+                                 (paramName.Contains("date", StringComparison.OrdinalIgnoreCase) ||
+                                  paramName.Contains("start", StringComparison.OrdinalIgnoreCase) ||
+                                  paramName.Contains("end", StringComparison.OrdinalIgnoreCase) ||
+                                  paramName.Contains("from", StringComparison.OrdinalIgnoreCase) ||
+                                  paramName.Contains("to", StringComparison.OrdinalIgnoreCase)))
+                        {
+                            // Explicitly type date parameters as SqlDbType.Date to avoid NVARCHAR
+                            // implicit-conversion mismatches that can silently return 0 rows.
+                            var sqlParam = new System.Data.SqlClient.SqlParameter(paramName, System.Data.SqlDbType.Date);
+                            sqlParam.Value = parsedDate.Date;
+                            cmd.Parameters.Add(sqlParam);
+                        }
+                        else
+                        {
+                            cmd.Parameters.AddWithValue(paramName, paramValue);
+                        }
                     }
                 }
             }
@@ -1692,7 +1717,9 @@ namespace SalesMetrics.Controllers
                 ExecutedDate = DateTime.Now,
                 QueryDefinitionJson = report.QueryDefinitionJson,
                 Parameters = new List<ReportParameter>(),
-                SubmittedParameterValues = parameterValues
+                SubmittedParameterValues = parameterValues,
+                SelectedLocation = locationOverride,
+                ExecutedAgainstDatabase = compuFloorDb
             };
 
             return View(viewModel);

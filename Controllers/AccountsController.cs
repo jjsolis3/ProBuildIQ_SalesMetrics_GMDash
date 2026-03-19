@@ -95,7 +95,7 @@ namespace SalesMetrics.Controllers
                         WHERE UserID = @UserId AND IsActive = 'YES'
                         ORDER BY LocationID
                     ", conn);
-                    locCmd.Parameters.AddWithValue("@UserId", user.UserId);
+                    locCmd.Parameters.AddWithValue("@UserId", user.Users_ID);
 
                     using var locReader = locCmd.ExecuteReader();
                     while (locReader.Read())
@@ -335,7 +335,7 @@ namespace SalesMetrics.Controllers
                     FROM UserLocationAssignments
                     WHERE UserID = @UserId AND IsActive = 'YES'
                 ", conn);
-                locationCmd.Parameters.AddWithValue("@UserId", user.UserId);
+                locationCmd.Parameters.AddWithValue("@UserId", user.Users_Id);
                 using (var locReader = locationCmd.ExecuteReader())
                 {
                     while (locReader.Read())
@@ -475,9 +475,9 @@ namespace SalesMetrics.Controllers
 
                     cmd.ExecuteNonQuery();
 
-                    // Remove all previous location assignments
+                    // Remove all previous location assignments (use Users_Id primary key — same ID used by SwitchLocation)
                     var deleteCmd = new SqlCommand("DELETE FROM UserLocationAssignments WHERE UserID = @UserId", conn);
-                    deleteCmd.Parameters.AddWithValue("@UserId", model.UserId);
+                    deleteCmd.Parameters.AddWithValue("@UserId", model.Users_Id);
                     deleteCmd.ExecuteNonQuery();
 
                     // Reinsert selected locations
@@ -489,7 +489,7 @@ namespace SalesMetrics.Controllers
                             INSERT INTO UserLocationAssignments (UserID, LocationID, IsActive, DateAssigned)
                             VALUES (@UserId, @LocationId, 'YES', GETDATE())
                         ", conn);
-                            insertCmd.Parameters.AddWithValue("@UserId", model.UserId);
+                            insertCmd.Parameters.AddWithValue("@UserId", model.Users_Id);
                             insertCmd.Parameters.AddWithValue("@LocationId", locId);
                             insertCmd.ExecuteNonQuery();
                         }
@@ -592,11 +592,13 @@ namespace SalesMetrics.Controllers
             using var conn = new SqlConnection(connStr);
             conn.Open();
 
+            // Use SELECT SCOPE_IDENTITY() to capture the new Users_ID so location assignments use the primary key
             var cmd = new SqlCommand(@"
-                INSERT INTO Users 
+                INSERT INTO Users
                     (Username, Password, FirstName, LastName, Email, UserID, RoleID, Location, SalesmanID, SalesmanNumber, CreatedDate, IsActive, PasswordHash, Salt)
-                VALUES 
-                    (@Username, @Password, @FirstName, @LastName, @Email, @UserId, @RoleId, @LocationId, @SalesmanId, @SalesmanNumber, GETDATE(), 1, @PasswordHash, @Salt)
+                VALUES
+                    (@Username, @Password, @FirstName, @LastName, @Email, @UserId, @RoleId, @LocationId, @SalesmanId, @SalesmanNumber, GETDATE(), 1, @PasswordHash, @Salt);
+                SELECT CAST(SCOPE_IDENTITY() AS INT);
             ", conn);
 
             cmd.Parameters.AddWithValue("@Username", model.Username);
@@ -611,9 +613,11 @@ namespace SalesMetrics.Controllers
             cmd.Parameters.AddWithValue("@SalesmanNumber", (object?)model.SalesmanNumber ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@PasswordHash", hash);
             cmd.Parameters.AddWithValue("@Salt", salt);
-            cmd.ExecuteNonQuery();
 
-            // 🔻 assigned multiple locations for user
+            // Capture the new Users_ID (primary key) so location assignments are keyed correctly
+            var newUsersId = Convert.ToInt32(cmd.ExecuteScalar());
+
+            // Insert location assignments using the primary key (same column SwitchLocation queries)
             if (model.AssignedLocationIds != null && model.AssignedLocationIds.Any())
             {
                 foreach (var locId in model.AssignedLocationIds)
@@ -622,7 +626,7 @@ namespace SalesMetrics.Controllers
                         INSERT INTO UserLocationAssignments (UserID, LocationID, IsActive, DateAssigned)
                         VALUES (@UserId, @LocationId, 'YES', GETDATE())
                     ", conn);
-                    insertCmd.Parameters.AddWithValue("@UserId", model.UserId);
+                    insertCmd.Parameters.AddWithValue("@UserId", newUsersId);
                     insertCmd.Parameters.AddWithValue("@LocationId", locId);
                     insertCmd.ExecuteNonQuery();
                 }

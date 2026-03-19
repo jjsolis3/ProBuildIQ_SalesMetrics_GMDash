@@ -237,12 +237,12 @@
                 <div class="row g-2 align-items-center">
                     <div class="col-md-4">
                         <select name="_location" class="form-select" id="locationSelect">
-                            <option value="">-- Current session (@(HttpContext.Session.GetString("OfficeLocation") ?? "LAX")) --</option>
-                            <option value="LAX" @(Model.SelectedLocation == "LAX" ? "selected" : "")>LAX &ndash; Los Angeles (CompUFloorLA)</option>
-                            <option value="LSV" @(Model.SelectedLocation == "LSV" ? "selected" : "")>LSV &ndash; Las Vegas (CompUFloorLV)</option>
-                            <option value="CHN" @(Model.SelectedLocation == "CHN" ? "selected" : "")>CHN &ndash; Chino (CompUFloorChino)</option>
-                            <option value="PHX" @(Model.SelectedLocation == "PHX" ? "selected" : "")>PHX &ndash; Phoenix (CompUFloorPHX)</option>
-                            <option value="SND" @(Model.SelectedLocation == "SND" ? "selected" : "")>SND &ndash; San Diego (CompUFloorSD)</option>
+                            <!option value="">-- Current session (@(Context.Session.GetString("OfficeLocation") ?? "LAX")) --</!option>
+                            <!option value="LAX" @(Model.SelectedLocation == "LAX" ? "selected" : "")>LAX &ndash; Los Angeles (CompUFloorLA)</!option>
+                            <!option value="LSV" @(Model.SelectedLocation == "LSV" ? "selected" : "")>LSV &ndash; Las Vegas (CompUFloorLV)</!option>
+                            <!option value="CHN" @(Model.SelectedLocation == "CHN" ? "selected" : "")>CHN &ndash; Chino (CompUFloorChino)</!option>
+                            <!option value="PHX" @(Model.SelectedLocation == "PHX" ? "selected" : "")>PHX &ndash; Phoenix (CompUFloorPHX)</!option>
+                            <!option value="SND" @(Model.SelectedLocation == "SND" ? "selected" : "")>SND &ndash; San Diego (CompUFloorSD)</!option>
                         </select>
                     </div>
                     <div class="col-md-8">

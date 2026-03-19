@@ -7,6 +7,11 @@ namespace SalesMetrics.Services.Reports
         byte[] ExportToCsv(DataTable data, out string contentType);
         byte[] ExportToExcel(DataTable data, out string contentType);
         byte[] ExportToExcel(DataTable data, ExcelExportOptions options, out string contentType);
+        /// <summary>
+        /// Exports multiple DataTables into a single .xlsx file, one sheet per entry.
+        /// Each tuple provides the sheet tab name and its data.
+        /// </summary>
+        byte[] ExportToExcelMultiSheet(IList<(string SheetName, DataTable Data)> sheets, ExcelExportOptions options, out string contentType);
     }
 
     public class ExcelExportOptions

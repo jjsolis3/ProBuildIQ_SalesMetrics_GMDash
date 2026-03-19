@@ -366,10 +366,24 @@ else
     <button type="button" class="btn btn-export" onclick="exportToExcel()" id="btnExportExcel">
         <i class="fa fa-file-excel"></i> Export to Excel
     </button>
+    <button type="button" class="btn btn-outline-success" onclick="exportAllBranches()" id="btnExportAllBranches" title="Export this report for all branches into one Excel file with a tab per branch">
+        <i class="fa fa-layer-group"></i> Export All Branches
+    </button>
 </div>
 
-@* Hidden form for Excel export — posts reportId + any parameter values to the ExportToExcel action *@
+@* Hidden form for single-branch Excel export *@
 <form id="exportForm" method="post" action="@Url.Action("ExportToExcel", "ReportBuilder", new { id = Model.ReportId })" style="display:none;">
+    @if (Model.SubmittedParameterValues != null)
+    {
+        @foreach (var param in Model.SubmittedParameterValues)
+        {
+            <input type="hidden" name="@param.Key" value="@param.Value" />
+        }
+    }
+</form>
+
+@* Hidden form for multi-branch Excel export (one tab per branch) *@
+<form id="exportAllBranchesForm" method="post" action="@Url.Action("ExportAllBranchesToExcel", "ReportBuilder", new { id = Model.ReportId })" style="display:none;">
     @if (Model.SubmittedParameterValues != null)
     {
         @foreach (var param in Model.SubmittedParameterValues)
@@ -483,6 +497,21 @@ else
                 btn.innerHTML = originalHtml;
                 btn.disabled = false;
             }, 3000);
+        }
+
+        function exportAllBranches() {
+            var btn = document.getElementById('btnExportAllBranches');
+            var originalHtml = btn.innerHTML;
+            btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Exporting All Branches...';
+            btn.disabled = true;
+
+            document.getElementById('exportAllBranchesForm').submit();
+
+            // Re-enable after longer delay since this queries all 5 branches
+            setTimeout(function() {
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+            }, 15000);
         }
     </script>
 }

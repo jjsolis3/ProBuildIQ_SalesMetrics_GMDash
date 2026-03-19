@@ -242,6 +242,135 @@ namespace SalesMetrics.Services.Reports
             return stream.ToArray();
         }
 
+        /// <summary>
+        /// Exports multiple DataTables into a single .xlsx workbook, one sheet per entry.
+        /// A compact branding header (company name + report name) is added to each sheet.
+        /// </summary>
+        public byte[] ExportToExcelMultiSheet(IList<(string SheetName, DataTable Data)> sheets,
+                                               ExcelExportOptions options, out string contentType)
+        {
+            contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+            using var stream = new MemoryStream();
+            using var document = SpreadsheetDocument.Create(stream, SpreadsheetDocumentType.Workbook, true);
+
+            var workbookPart = document.AddWorkbookPart();
+            workbookPart.Workbook = new Workbook();
+
+            var stylesPart = workbookPart.AddNewPart<WorkbookStylesPart>();
+            stylesPart.Stylesheet = CreateStylesheet();
+            stylesPart.Stylesheet.Save();
+
+            var sheetsElem = workbookPart.Workbook.AppendChild(new Sheets());
+
+            for (int sheetIdx = 0; sheetIdx < sheets.Count; sheetIdx++)
+            {
+                var (sheetName, data) = sheets[sheetIdx];
+                var worksheetPart = workbookPart.AddNewPart<WorksheetPart>();
+                var sheetData = new SheetData();
+                var mergeCells = new MergeCells();
+                int colCount = Math.Max(data.Columns.Count, 4);
+                string lastCol = GetColumnLetter(colCount - 1);
+                uint rowIdx = 1;
+
+                // Compact branding: company name row
+                if (!string.IsNullOrEmpty(options.CompanyName))
+                {
+                    var companyRow = CreateRow(rowIdx);
+                    companyRow.Append(CreateStyledCell($"A{rowIdx}", options.CompanyName!, 3));
+                    for (int i = 1; i < colCount; i++)
+                        companyRow.Append(CreateStyledCell($"{GetColumnLetter(i)}{rowIdx}", "", 0));
+                    sheetData.Append(companyRow);
+                    mergeCells.Append(new MergeCell { Reference = $"A{rowIdx}:{lastCol}{rowIdx}" });
+                    rowIdx++;
+                }
+
+                // Report name + sheet name (branch)
+                var titleRow = CreateRow(rowIdx);
+                var titleText = string.IsNullOrEmpty(options.ReportName)
+                    ? sheetName
+                    : $"{options.ReportName} — {sheetName}";
+                titleRow.Append(CreateStyledCell($"A{rowIdx}", titleText, 2));
+                for (int i = 1; i < colCount; i++)
+                    titleRow.Append(CreateStyledCell($"{GetColumnLetter(i)}{rowIdx}", "", 0));
+                sheetData.Append(titleRow);
+                mergeCells.Append(new MergeCell { Reference = $"A{rowIdx}:{lastCol}{rowIdx}" });
+                rowIdx++;
+
+                // Generated date / row count
+                var infoRow = CreateRow(rowIdx);
+                infoRow.Append(CreateStyledCell($"A{rowIdx}",
+                    $"Generated: {DateTime.Now:MMMM dd, yyyy h:mm tt}   |   Total Rows: {data.Rows.Count:N0}", 6));
+                for (int i = 1; i < colCount; i++)
+                    infoRow.Append(CreateStyledCell($"{GetColumnLetter(i)}{rowIdx}", "", 0));
+                sheetData.Append(infoRow);
+                mergeCells.Append(new MergeCell { Reference = $"A{rowIdx}:{lastCol}{rowIdx}" });
+                rowIdx++;
+
+                // Blank row
+                sheetData.Append(CreateRow(rowIdx++));
+
+                // Column headers
+                var headerRow = CreateRow(rowIdx);
+                for (int i = 0; i < data.Columns.Count; i++)
+                    headerRow.Append(CreateStyledCell($"{GetColumnLetter(i)}{rowIdx}", data.Columns[i].ColumnName, 4));
+                sheetData.Append(headerRow);
+                uint headerRowIdx = rowIdx;
+                rowIdx++;
+
+                // Data rows
+                foreach (DataRow dataRow in data.Rows)
+                {
+                    var row = CreateRow(rowIdx);
+                    for (int i = 0; i < data.Columns.Count; i++)
+                    {
+                        var rawValue = dataRow[data.Columns[i]];
+                        var cellRef = $"{GetColumnLetter(i)}{rowIdx}";
+                        if (rawValue == null || rawValue == DBNull.Value)
+                            row.Append(CreateStyledCell(cellRef, "", 5));
+                        else if (IsNumericType(rawValue.GetType()))
+                            row.Append(CreateNumberCell(cellRef, Convert.ToDouble(rawValue, CultureInfo.InvariantCulture), 7));
+                        else if (rawValue is DateTime dt)
+                            row.Append(CreateStyledCell(cellRef, dt.ToString("MM/dd/yyyy", CultureInfo.InvariantCulture), 5));
+                        else
+                            row.Append(CreateStyledCell(cellRef, Convert.ToString(rawValue, CultureInfo.InvariantCulture) ?? "", 5));
+                    }
+                    sheetData.Append(row);
+                    rowIdx++;
+                }
+
+                // Columns widths
+                var columns = new Columns();
+                for (int i = 0; i < data.Columns.Count; i++)
+                {
+                    double width = Math.Max(12, Math.Min(40, data.Columns[i].ColumnName.Length * 1.3 + 4));
+                    columns.Append(new Column { Min = (uint)(i + 1), Max = (uint)(i + 1), Width = width, CustomWidth = true });
+                }
+
+                var worksheet = new Worksheet();
+                worksheet.Append(columns);
+                worksheet.Append(sheetData);
+                if (mergeCells.HasChildren)
+                    worksheet.Append(mergeCells);
+                if (data.Columns.Count > 0)
+                    worksheet.Append(new AutoFilter { Reference = $"A{headerRowIdx}:{GetColumnLetter(data.Columns.Count - 1)}{rowIdx - 1}" });
+
+                worksheetPart.Worksheet = worksheet;
+
+                sheetsElem.Append(new Sheet
+                {
+                    Id = workbookPart.GetIdOfPart(worksheetPart),
+                    SheetId = (uint)(sheetIdx + 1),
+                    Name = TruncateSheetName(sheetName)
+                });
+            }
+
+            workbookPart.Workbook.Save();
+            document.Dispose();
+
+            return stream.ToArray();
+        }
+
         // ──────────────────────────────────────────────
         //  Logo image embedding
         // ──────────────────────────────────────────────
@@ -445,9 +574,30 @@ namespace SalesMetrics.Services.Reports
             {
                 CellReference = cellRef,
                 DataType = new EnumValue<CellValues>(CellValues.String),
-                CellValue = new CellValue(text ?? ""),
+                CellValue = new CellValue(SanitizeXmlString(text)),
                 StyleIndex = styleIndex
             };
+        }
+
+        /// <summary>
+        /// Removes characters that are illegal in XML 1.0, which would corrupt the .xlsx file.
+        /// Illegal ranges: U+0000–U+0008, U+000B, U+000C, U+000E–U+001F, U+FFFE, U+FFFF.
+        /// </summary>
+        private static string SanitizeXmlString(string? text)
+        {
+            if (string.IsNullOrEmpty(text)) return "";
+            var sb = new StringBuilder(text.Length);
+            foreach (char c in text)
+            {
+                if (c == 0x09 || c == 0x0A || c == 0x0D ||
+                    (c >= 0x20 && c <= 0xD7FF) ||
+                    (c >= 0xE000 && c <= 0xFFFD))
+                {
+                    sb.Append(c);
+                }
+                // else: illegal XML character — skip it
+            }
+            return sb.ToString();
         }
 
         private static Cell CreateNumberCell(string cellRef, double value, uint styleIndex)

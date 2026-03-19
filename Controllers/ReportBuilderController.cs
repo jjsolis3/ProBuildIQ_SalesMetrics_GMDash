@@ -1562,6 +1562,136 @@ namespace SalesMetrics.Controllers
         }
 
         /// <summary>
+        /// Exports a report for ALL branches into a single Excel workbook, one tab per branch.
+        /// Branches that return no data get an empty sheet with a note.
+        /// </summary>
+        [HttpPost]
+        public async Task<IActionResult> ExportAllBranchesToExcel(int id, [FromForm] Dictionary<string, string>? parameterValues)
+        {
+            try
+            {
+                var userId = GetCurrentUserId();
+                var hasAccess = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_ACCESS");
+                if (!hasAccess) return Forbid();
+
+                var report = await _context.ReportDefinitions
+                    .FirstOrDefaultAsync(r => r.ReportDefinitionId == id && r.IsActive);
+                if (report == null) return NotFound();
+
+                _logger.LogInformation("User {UserId} exporting report {ReportId} to multi-branch Excel", userId, id);
+
+                var connStr = _configuration.GetConnectionString("SalesMetrics");
+
+                // Branch code → friendly name used as the sheet tab
+                var branchMap = new (string Code, string Label)[]
+                {
+                    ("LAX", "Los Angeles"),
+                    ("LSV", "Las Vegas"),
+                    ("CHN", "Chino"),
+                    ("PHX", "Phoenix"),
+                    ("SND", "San Diego")
+                };
+
+                var isSqlMode = report.QueryDefinitionJson?.Contains("\"queryMode\":\"sql\"", StringComparison.OrdinalIgnoreCase) == true
+                             || report.QueryDefinitionJson?.Contains("\"queryMode\": \"sql\"", StringComparison.OrdinalIgnoreCase) == true;
+
+                var sheetList = new List<(string SheetName, System.Data.DataTable Data)>();
+
+                foreach (var (code, label) in branchMap)
+                {
+                    var compuFloorDb = GetCompUFloorDatabaseName(code);
+                    var sqlToExecute = ResolveBranchDatabase(report.GeneratedSql ?? "", compuFloorDb);
+
+                    try
+                    {
+                        using var conn = new System.Data.SqlClient.SqlConnection(connStr);
+                        await conn.OpenAsync();
+
+                        if (isSqlMode)
+                            await conn.ChangeDatabaseAsync(compuFloorDb);
+
+                        var cmd = new System.Data.SqlClient.SqlCommand
+                        {
+                            Connection = conn,
+                            CommandTimeout = 120
+                        };
+
+                        if (parameterValues != null && parameterValues.Any())
+                        {
+                            foreach (var param in parameterValues)
+                            {
+                                if (string.IsNullOrEmpty(param.Key)) continue;
+                                var paramName = param.Key.StartsWith("@") ? param.Key : "@" + param.Key;
+                                var paramValue = param.Value;
+                                var inPattern = $@"IN\s*\(\s*{System.Text.RegularExpressions.Regex.Escape(paramName)}\s*\)";
+                                if (!string.IsNullOrEmpty(paramValue) && paramValue.Contains(',')
+                                    && System.Text.RegularExpressions.Regex.IsMatch(sqlToExecute, inPattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                                {
+                                    var values = paramValue.Split(',').Select(v => v.Trim()).Where(v => v.Length > 0).ToArray();
+                                    var expandedParams = new List<string>();
+                                    for (int i = 0; i < values.Length; i++)
+                                    {
+                                        var expandedName = $"{paramName}_{i}";
+                                        expandedParams.Add(expandedName);
+                                        cmd.Parameters.AddWithValue(expandedName, values[i]);
+                                    }
+                                    sqlToExecute = System.Text.RegularExpressions.Regex.Replace(
+                                        sqlToExecute, inPattern,
+                                        $"IN ({string.Join(", ", expandedParams)})",
+                                        System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                                }
+                                else
+                                {
+                                    cmd.Parameters.AddWithValue(paramName, string.IsNullOrEmpty(paramValue) ? DBNull.Value : (object)paramValue);
+                                }
+                            }
+                        }
+
+                        cmd.CommandText = sqlToExecute;
+                        var dt = new System.Data.DataTable();
+                        using (var reader = await cmd.ExecuteReaderAsync())
+                            dt.Load(reader);
+
+                        sheetList.Add((label, dt));
+                        _logger.LogInformation("Branch {Branch}: {Rows} rows", label, dt.Rows.Count);
+                    }
+                    catch (Exception branchEx)
+                    {
+                        _logger.LogWarning(branchEx, "Branch {Branch} failed during multi-branch export", label);
+                        // Add an empty DataTable with an error note so the tab still appears
+                        var emptyDt = new System.Data.DataTable();
+                        emptyDt.Columns.Add("Note");
+                        emptyDt.Rows.Add($"No data available: {branchEx.Message}");
+                        sheetList.Add((label, emptyDt));
+                    }
+                }
+
+                var options = new SalesMetrics.Services.Reports.ExcelExportOptions
+                {
+                    ReportName = report.Name ?? "Untitled Report",
+                    ReportDescription = report.Description,
+                    CompanyName = _branding.CompanyName,
+                    CompanyWebsite = _branding.Website,
+                    CompanyPhone = _branding.Phone
+                };
+
+                var bytes = _exportService.ExportToExcelMultiSheet(sheetList, options, out var contentType);
+
+                var safeName = (report.Name ?? "Report").Replace(" ", "_");
+                safeName = System.Text.RegularExpressions.Regex.Replace(safeName, @"[^\w\-]", "");
+                var fileName = $"{safeName}_AllBranches_{DateTime.Now:yyyyMMdd_HHmm}.xlsx";
+
+                return File(bytes, contentType, fileName);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error exporting report {ReportId} to multi-branch Excel", id);
+                TempData["ErrorMessage"] = $"Error exporting report: {ex.Message}";
+                return RedirectToAction("Execute", new { id });
+            }
+        }
+
+        /// <summary>
         /// Helper method to execute report with optional parameter values
         /// </summary>
         private async Task<IActionResult> ExecuteReportWithParameters(Data.Entities.QueryBuilder.ReportDefinitionEntity report, Dictionary<string, string>? parameterValues)

@@ -1,0 +1,198 @@
+@{
+    ViewBag.Title = "Access Denied";
+    Layout = "~/Views/Shared/AuthLayout.cshtml";
+    var featureName = ViewBag.FeatureName as string;
+    var returnUrl = ViewBag.ReturnUrl as string;
+}
+
+<style>
+    .access-denied-wrapper {
+        min-height: 100vh;
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+    }
+
+    .access-denied-card {
+        background: #fff;
+        border-radius: 16px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+        max-width: 540px;
+        width: 100%;
+        padding: 3rem 2.5rem;
+        text-align: center;
+    }
+
+    .lock-icon-wrap {
+        width: 90px;
+        height: 90px;
+        background: #fff3cd;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1.5rem;
+        border: 3px solid #ffc107;
+    }
+
+    .lock-icon-wrap i {
+        font-size: 2.6rem;
+        color: #e67e22;
+    }
+
+    .access-denied-card h2 {
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: #2c3e50;
+        margin-bottom: 0.5rem;
+    }
+
+    .access-denied-card .subtitle {
+        font-size: 1rem;
+        color: #7f8c8d;
+        margin-bottom: 1.5rem;
+    }
+
+    .feature-badge {
+        display: inline-block;
+        background: #f0f4ff;
+        border: 1px solid #c5cfe8;
+        color: #3a4a6b;
+        border-radius: 8px;
+        padding: 0.45rem 1rem;
+        font-size: 0.9rem;
+        font-weight: 600;
+        margin-bottom: 1.75rem;
+    }
+
+    .info-box {
+        background: #f8f9fa;
+        border-left: 4px solid #3498db;
+        border-radius: 6px;
+        padding: 1rem 1.25rem;
+        text-align: left;
+        margin-bottom: 2rem;
+        font-size: 0.92rem;
+        color: #4a5568;
+        line-height: 1.6;
+    }
+
+    .info-box strong {
+        color: #2c3e50;
+    }
+
+    .it-contact-block {
+        background: #eafaf1;
+        border: 1px solid #a9dfbf;
+        border-radius: 8px;
+        padding: 1rem 1.25rem;
+        margin-bottom: 2rem;
+        text-align: left;
+    }
+
+    .it-contact-block .label {
+        font-size: 0.78rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #27ae60;
+        margin-bottom: 0.35rem;
+    }
+
+    .it-contact-block p {
+        margin: 0;
+        font-size: 0.9rem;
+        color: #2c3e50;
+    }
+
+    .btn-go-back {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: #2c3e50;
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        padding: 0.65rem 1.5rem;
+        font-size: 0.95rem;
+        font-weight: 600;
+        text-decoration: none;
+        transition: background 0.2s;
+    }
+
+    .btn-go-back:hover {
+        background: #34495e;
+        color: #fff;
+        text-decoration: none;
+    }
+
+    .btn-go-home {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: transparent;
+        color: #7f8c8d;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 0.65rem 1.5rem;
+        font-size: 0.95rem;
+        font-weight: 500;
+        text-decoration: none;
+        transition: all 0.2s;
+        margin-left: 0.75rem;
+    }
+
+    .btn-go-home:hover {
+        background: #f5f5f5;
+        color: #2c3e50;
+        text-decoration: none;
+    }
+</style>
+
+<div class="access-denied-wrapper">
+    <div class="access-denied-card">
+
+        <div class="lock-icon-wrap">
+            <i class="mdi mdi-lock-outline"></i>
+        </div>
+
+        <h2>Access Denied</h2>
+        <p class="subtitle">You do not have permission to access this feature.</p>
+
+        @if (!string.IsNullOrEmpty(featureName))
+        {
+            <div class="feature-badge">
+                <i class="mdi mdi-shield-alert-outline me-1"></i> @featureName
+            </div>
+        }
+
+        <div class="info-box">
+            <strong>Why am I seeing this?</strong><br />
+            Your current account role does not include access to this section of SalesMetrics.
+            Permissions are assigned per feature and may vary by user role.
+        </div>
+
+        <div class="it-contact-block">
+            <div class="label"><i class="mdi mdi-headset me-1"></i> Need Access?</div>
+            <p>
+                If you believe you should have access to this feature, please contact your
+                <strong>IT Department</strong> to request the appropriate permissions.
+            </p>
+        </div>
+
+        <div>
+            <a href="javascript:history.back()" class="btn-go-back">
+                <i class="mdi mdi-arrow-left"></i> Go Back
+            </a>
+            <a href="/Home" class="btn-go-home">
+                <i class="mdi mdi-home-outline"></i> Dashboard
+            </a>
+        </div>
+
+        <div class="mt-4" style="font-size:0.78rem; color:#bdc3c7;">
+            Error 403 &mdash; Forbidden &nbsp;|&nbsp; SalesMetrics &copy; @DateTime.Now.Year
+        </div>
+    </div>
+</div>

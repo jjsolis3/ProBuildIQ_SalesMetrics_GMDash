@@ -620,6 +620,34 @@ namespace SalesMetrics.Controllers
             return RedirectToAction("Login", "Auth");
         }
 
+        // ACCESS DENIED
+        [HttpGet("Auth/AccessDenied")]
+        public IActionResult AccessDenied(string? returnUrl = null)
+        {
+            // Decode the return URL to show user which feature they tried to access
+            string? featureName = null;
+            if (!string.IsNullOrEmpty(returnUrl))
+            {
+                // Convert URL path to a readable feature name, e.g. "/ReportBuilder/Edit/5" -> "Report Builder - Edit"
+                var decoded = Uri.UnescapeDataString(returnUrl).Trim('/');
+                var parts = decoded.Split('/');
+                if (parts.Length >= 2)
+                {
+                    // Format "ReportBuilder" -> "Report Builder"
+                    var controller = System.Text.RegularExpressions.Regex.Replace(parts[0], "([a-z])([A-Z])", "$1 $2");
+                    var action = System.Text.RegularExpressions.Regex.Replace(parts[1], "([a-z])([A-Z])", "$1 $2");
+                    featureName = $"{controller} - {action}";
+                }
+                else if (parts.Length == 1 && parts[0].Length > 0)
+                {
+                    featureName = System.Text.RegularExpressions.Regex.Replace(parts[0], "([a-z])([A-Z])", "$1 $2");
+                }
+            }
+
+            ViewBag.FeatureName = featureName;
+            ViewBag.ReturnUrl = returnUrl;
+            return View();
+        }
 
 
         // GOOGLE AUTHENTICATION

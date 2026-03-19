@@ -211,7 +211,7 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.ExpireTimeSpan = TimeSpan.FromMinutes(90); // 15-min expiration
     options.SlidingExpiration = true; // Refresh Activity
     options.LoginPath = "/Auth/Login";
-    options.AccessDeniedPath = "/Auth/Login";
+    options.AccessDeniedPath = "/Auth/AccessDenied";
 });
 
 var app = builder.Build();

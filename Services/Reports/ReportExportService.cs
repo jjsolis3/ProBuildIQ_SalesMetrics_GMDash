@@ -206,6 +206,8 @@ namespace SalesMetrics.Services.Reports
             var worksheet = new Worksheet();
             worksheet.Append(columns);
             worksheet.Append(sheetData);
+            // AutoFilter must precede MergeCells per OOXML schema (CT_Worksheet element order)
+            worksheet.Append(new AutoFilter { Reference = $"A{headerRowIdx}:{GetColumnLetter(data.Columns.Count - 1)}{rowIdx - 1}" });
             if (mergeCells.HasChildren)
                 worksheet.Append(mergeCells);
 
@@ -221,9 +223,6 @@ namespace SalesMetrics.Services.Reports
                     // Logo embedding failed — continue without it
                 }
             }
-
-            // Auto-filter on header row
-            worksheet.Append(new AutoFilter { Reference = $"A{headerRowIdx}:{GetColumnLetter(data.Columns.Count - 1)}{rowIdx - 1}" });
 
             worksheetPart.Worksheet = worksheet;
 
@@ -350,10 +349,11 @@ namespace SalesMetrics.Services.Reports
                 var worksheet = new Worksheet();
                 worksheet.Append(columns);
                 worksheet.Append(sheetData);
-                if (mergeCells.HasChildren)
-                    worksheet.Append(mergeCells);
+                // AutoFilter must precede MergeCells per OOXML schema (CT_Worksheet element order)
                 if (data.Columns.Count > 0)
                     worksheet.Append(new AutoFilter { Reference = $"A{headerRowIdx}:{GetColumnLetter(data.Columns.Count - 1)}{rowIdx - 1}" });
+                if (mergeCells.HasChildren)
+                    worksheet.Append(mergeCells);
 
                 worksheetPart.Worksheet = worksheet;
 

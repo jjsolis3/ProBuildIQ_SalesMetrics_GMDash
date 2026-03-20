@@ -245,73 +245,84 @@ var app = builder.Build();
 
     if (Directory.Exists(migrationsPath))
     {
-        // Ensure the tracking table exists (bootstrapped separately, not via a migration file)
-        db.Database.ExecuteSqlRaw(@"
-            IF NOT EXISTS (
-                SELECT 1 FROM sys.tables
-                WHERE name = '_MigrationsApplied' AND schema_id = SCHEMA_ID('dbo')
-            )
-            BEGIN
-                CREATE TABLE [dbo].[_MigrationsApplied] (
-                    [MigrationFile] NVARCHAR(260) NOT NULL,
-                    [AppliedAtUtc]  DATETIME       NOT NULL DEFAULT GETUTCDATE(),
-                    [Succeeded]     BIT            NOT NULL DEFAULT 1,
-                    CONSTRAINT [PK__MigrationsApplied] PRIMARY KEY ([MigrationFile])
-                );
-            END");
-
-        // Load the set of already-applied file names
-        var applied = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        using (var cmd = db.Database.GetDbConnection().CreateCommand())
+        try
         {
-            if (cmd.Connection!.State != System.Data.ConnectionState.Open)
-                cmd.Connection.Open();
-            cmd.CommandText = "SELECT [MigrationFile] FROM [dbo].[_MigrationsApplied]";
-            using var reader = cmd.ExecuteReader();
-            while (reader.Read()) applied.Add(reader.GetString(0));
-        }
+            // Ensure the tracking table exists (bootstrapped separately, not via a migration file)
+            db.Database.ExecuteSqlRaw(@"
+                IF NOT EXISTS (
+                    SELECT 1 FROM sys.tables
+                    WHERE name = '_MigrationsApplied' AND schema_id = SCHEMA_ID('dbo')
+                )
+                BEGIN
+                    CREATE TABLE [dbo].[_MigrationsApplied] (
+                        [MigrationFile] NVARCHAR(260) NOT NULL,
+                        [AppliedAtUtc]  DATETIME       NOT NULL DEFAULT GETUTCDATE(),
+                        [Succeeded]     BIT            NOT NULL DEFAULT 1,
+                        CONSTRAINT [PK__MigrationsApplied] PRIMARY KEY ([MigrationFile])
+                    );
+                END");
 
-        var goSplitter = new System.Text.RegularExpressions.Regex(
-            @"^\s*GO\s*$",
-            System.Text.RegularExpressions.RegexOptions.Multiline |
-            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-
-        foreach (var file in Directory.GetFiles(migrationsPath, "*.sql").OrderBy(Path.GetFileName))
-        {
-            var fileName = Path.GetFileName(file);
-            if (applied.Contains(fileName))
-                continue; // already ran — skip
-
-            bool succeeded = true;
-            try
+            // Load the set of already-applied file names
+            var applied = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            using (var cmd = db.Database.GetDbConnection().CreateCommand())
             {
-                var sql = File.ReadAllText(file);
-                foreach (var batch in goSplitter.Split(sql))
+                if (cmd.Connection!.State != System.Data.ConnectionState.Open)
+                    cmd.Connection.Open();
+                cmd.CommandText = "SELECT [MigrationFile] FROM [dbo].[_MigrationsApplied]";
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read()) applied.Add(reader.GetString(0));
+            }
+
+            var goSplitter = new System.Text.RegularExpressions.Regex(
+                @"^\s*GO\s*$",
+                System.Text.RegularExpressions.RegexOptions.Multiline |
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+            foreach (var file in Directory.GetFiles(migrationsPath, "*.sql").OrderBy(Path.GetFileName))
+            {
+                var fileName = Path.GetFileName(file);
+                if (applied.Contains(fileName))
+                    continue; // already ran — skip
+
+                bool succeeded = true;
+                try
                 {
-                    var trimmed = batch.Trim();
-                    if (!string.IsNullOrWhiteSpace(trimmed))
-                        db.Database.ExecuteSqlRaw(trimmed);
+                    var sql = File.ReadAllText(file);
+                    foreach (var batch in goSplitter.Split(sql))
+                    {
+                        var trimmed = batch.Trim();
+                        if (!string.IsNullOrWhiteSpace(trimmed))
+                            db.Database.ExecuteSqlRaw(trimmed);
+                    }
+                    Console.WriteLine($"[Migration] Applied: {fileName}");
                 }
-                Console.WriteLine($"[Migration] Applied: {fileName}");
-            }
-            catch (Exception ex)
-            {
-                succeeded = false;
-                // Log but don't crash startup
-                Console.WriteLine($"[Migration] Failed: {fileName} — {ex.Message}");
-            }
+                catch (Exception ex)
+                {
+                    succeeded = false;
+                    // Log but don't crash startup
+                    Console.WriteLine($"[Migration] Failed: {fileName} — {ex.Message}");
+                }
 
-            // Record the attempt (succeeded or not) so it won't run again
-            try
-            {
-                db.Database.ExecuteSqlRaw(
-                    "INSERT INTO [dbo].[_MigrationsApplied] ([MigrationFile],[Succeeded]) VALUES ({0},{1})",
-                    fileName, succeeded);
+                // Record the attempt (succeeded or not) so it won't run again
+                try
+                {
+                    db.Database.ExecuteSqlRaw(
+                        "INSERT INTO [dbo].[_MigrationsApplied] ([MigrationFile],[Succeeded]) VALUES ({0},{1})",
+                        fileName, succeeded);
+                }
+                catch
+                {
+                    // Ignore tracking insert errors
+                }
             }
-            catch
-            {
-                // Ignore tracking insert errors
-            }
+        }
+        catch (Exception ex)
+        {
+            // DB unreachable at startup (e.g. wrong DB_HOST, firewall, or SQL Server Browser
+            // not accessible for named-instance resolution). Log and continue — the app will
+            // surface connection errors when controllers actually query the database.
+            Console.WriteLine($"[Migration] Skipped — cannot connect to database: {ex.Message}");
+            Console.WriteLine("[Migration] Check DB_HOST in launchSettings.json (use IP or IP,port — not IP\\InstanceName for remote servers).");
         }
     }
 }

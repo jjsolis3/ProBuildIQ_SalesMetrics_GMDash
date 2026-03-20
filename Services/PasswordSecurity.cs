@@ -49,7 +49,8 @@ namespace SalesMetrics.Services
             using var sha256 = SHA256.Create();
             var combined = Encoding.UTF8.GetBytes(password + salt);
             var hash = sha256.ComputeHash(combined);
-            return BitConverter.ToString(hash).Replace("-", "").ToUpper();
+            // The original HashPassword stored hashes as Base64, not hex — must match.
+            return Convert.ToBase64String(hash);
         }
 
         /// <summary>
@@ -58,9 +59,11 @@ namespace SalesMetrics.Services
         /// </summary>
         public static bool IsLegacyHash(string storedHash)
         {
-            // Legacy hashes are 64-char uppercase hex; PBKDF2 hashes are Base64.
-            return storedHash.Length == 64 &&
-                   storedHash.All(c => (c >= '0' && c <= '9') || (c >= 'A' && c <= 'F'));
+            // Legacy SHA-256 hashes were stored as Base64 of 32 bytes = 44 chars.
+            // PBKDF2 hashes are also Base64 of 32 bytes = 44 chars, so distinguish
+            // by attempting PBKDF2 verification at login rather than by format alone.
+            // This helper is retained for informational use; the auth flow tries both.
+            return storedHash.Length == 44 && !storedHash.Contains(":");
         }
     }
 }

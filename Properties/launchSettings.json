@@ -5,7 +5,7 @@
       "launchBrowser": true,
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DB_HOST": "YOUR_SQL_SERVER_HOST",
+        "DB_HOST": "YOUR_SQL_SERVER_IP_OR_IP,PORT",
         "DB_USER": "YOUR_DB_USERNAME",
         "DB_PASSWORD": "YOUR_DB_PASSWORD"
       },
@@ -18,7 +18,7 @@
       "launchBrowser": true,
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DB_HOST": "YOUR_SQL_SERVER_HOST",
+        "DB_HOST": "YOUR_SQL_SERVER_IP_OR_IP,PORT",
         "DB_USER": "YOUR_DB_USERNAME",
         "DB_PASSWORD": "YOUR_DB_PASSWORD"
       },

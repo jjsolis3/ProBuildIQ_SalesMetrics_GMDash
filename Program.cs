@@ -16,6 +16,24 @@ using SalesMetrics.Services.Notifications;
 using SalesMetrics.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Resolve ${VAR} placeholders in appsettings.json with actual environment variable values.
+// ASP.NET Core does not natively substitute shell-style ${VAR} syntax in JSON config files,
+// so any key whose value contains ${...} is re-evaluated here before services are registered.
+{
+    var interpolated = builder.Configuration
+        .AsEnumerable()
+        .Where(kv => kv.Value != null && kv.Value.Contains("${"))
+        .ToDictionary(
+            kv => kv.Key,
+            kv => System.Text.RegularExpressions.Regex.Replace(
+                kv.Value!, @"\$\{([^}]+)\}",
+                m => Environment.GetEnvironmentVariable(m.Groups[1].Value) ?? m.Value));
+
+    if (interpolated.Count > 0)
+        builder.Configuration.AddInMemoryCollection(interpolated!);
+}
+
 var connectionString = builder.Configuration.GetConnectionString("SalesMetrics");
 
 // Add services to the container

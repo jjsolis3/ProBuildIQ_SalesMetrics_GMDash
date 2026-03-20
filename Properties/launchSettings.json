@@ -4,7 +4,10 @@
       "commandName": "Project",
       "launchBrowser": true,
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DB_HOST": "YOUR_SQL_SERVER_HOST",
+        "DB_USER": "YOUR_DB_USERNAME",
+        "DB_PASSWORD": "YOUR_DB_PASSWORD"
       },
       "dotnetRunMessages": true,
       "applicationUrl": "http://localhost:5041",
@@ -14,7 +17,10 @@
       "commandName": "Project",
       "launchBrowser": true,
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DB_HOST": "YOUR_SQL_SERVER_HOST",
+        "DB_USER": "YOUR_DB_USERNAME",
+        "DB_PASSWORD": "YOUR_DB_PASSWORD"
       },
       "dotnetRunMessages": true,
       "applicationUrl": "https://localhost:7080;http://localhost:5041",

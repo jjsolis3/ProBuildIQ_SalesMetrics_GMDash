@@ -1240,45 +1240,8 @@ public sealed class EnvelopeService : IEnvelopeService
             _logger.LogWarning(ex, "Failed to send in-app completion notification for envelope {EnvelopeId}", envelopeId);
         }
 
-        // Send completion emails to all recipients
-        var downloadUrl = env.PdfStoragePath;
-        foreach (var recipient in env.Recipients)
-        {
-            // Build download button if a PDF path is available
-            var downloadBtnHtml = "";
-            if (!string.IsNullOrWhiteSpace(downloadUrl))
-            {
-                var absoluteDownload = downloadUrl.StartsWith("/")
-                    ? $"{_appSettings.BaseUrl.TrimEnd('/')}{downloadUrl}"
-                    : downloadUrl;
-                downloadBtnHtml = $@"
-                <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:24px 0;"">
-                  <tr>
-                    <td align=""center"" style=""background-color:#16a34a;border-radius:6px;"">
-                      <a href=""{absoluteDownload}"" style=""display:inline-block;padding:12px 32px;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px;"">Download Completed PDF</a>
-                    </td>
-                  </tr>
-                </table>";
-            }
-
-            var completionInner = $@"
-                <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Document Completed</h2>
-                <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Hello {recipient.FullName},</p>
-                <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Thank you for signing. The document <strong>{env.Subject}</strong> has been completed by all parties.</p>
-                {downloadBtnHtml}";
-
-            var completionHtml = await _emailTemplate.WrapInBrandedTemplateAsync(completionInner);
-            // Pass null for downloadUrl since it's already included in the branded template
-            await _notify.SendCompletedReceiptAsync(
-                recipient.Email,
-                recipient.FullName,
-                $"Completed: {env.Subject}",
-                completionHtml,
-                null);
-        }
-
         // ---------------------------------------------------------------
-        // Fetch property name + address for notification emails
+        // Fetch property name + address (shared by recipient, creator, and internal emails)
         // ---------------------------------------------------------------
         string? notifPropertyName    = null;
         string? notifPropertyAddress = null;
@@ -1298,6 +1261,112 @@ public sealed class EnvelopeService : IEnvelopeService
             }
         }
         notifPropertyName ??= env.PropertyName; // fall back to stored free-text name
+
+        // Build shared property/order context block for completion emails
+        var completionContextRows = "";
+        if (!string.IsNullOrWhiteSpace(notifPropertyName))
+            completionContextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Property</td><td style=\"padding:4px 0;font-size:13px;\">{System.Net.WebUtility.HtmlEncode(notifPropertyName)}</td></tr>";
+        if (!string.IsNullOrWhiteSpace(notifPropertyAddress))
+            completionContextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Address</td><td style=\"padding:4px 0;font-size:13px;\">{System.Net.WebUtility.HtmlEncode(notifPropertyAddress)}</td></tr>";
+        if (!string.IsNullOrWhiteSpace(env.OrderNumber))
+            completionContextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Order #</td><td style=\"padding:4px 0;font-size:13px;\">{System.Net.WebUtility.HtmlEncode(env.OrderNumber)}</td></tr>";
+        if (!string.IsNullOrWhiteSpace(env.LocationCode))
+            completionContextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Branch</td><td style=\"padding:4px 0;font-size:13px;\">{System.Net.WebUtility.HtmlEncode(env.LocationCode)}</td></tr>";
+        var completionContextHtml = string.IsNullOrEmpty(completionContextRows) ? "" : $@"
+            <table cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:12px 0 16px 0;border-left:3px solid #f59e0b;padding-left:12px;"">
+                {completionContextRows}
+            </table>";
+
+        // Build signers summary block (for recipient + creator emails)
+        var signersRows = string.Join("", env.Recipients.OrderBy(r => r.SignerOrder).Select(r =>
+            $"<tr><td style=\"padding:4px 12px 4px 0;font-size:13px;color:#374151;\">{System.Net.WebUtility.HtmlEncode(r.FullName)}</td>" +
+            $"<td style=\"padding:4px 12px 4px 0;font-size:13px;color:#6b7280;\">{System.Net.WebUtility.HtmlEncode(r.Role)}</td>" +
+            $"<td style=\"padding:4px 0;font-size:13px;color:#16a34a;\">&#10003; Signed</td></tr>"));
+        var signersHtml = string.IsNullOrEmpty(signersRows) ? "" : $@"
+            <p style=""margin:16px 0 6px 0;font-size:13px;font-weight:600;color:#374151;"">Signing Summary</p>
+            <table cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:0 0 16px 0;"">
+                {signersRows}
+            </table>";
+
+        // Build absolute download URL (shared across all completion emails)
+        var downloadUrl = env.PdfStoragePath;
+        var absoluteCompletionDownload = !string.IsNullOrWhiteSpace(downloadUrl)
+            ? (downloadUrl.StartsWith("/") ? $"{_appSettings.BaseUrl.TrimEnd('/')}{downloadUrl}" : downloadUrl)
+            : null;
+        var sharedDownloadBtnHtml = absoluteCompletionDownload != null
+            ? $@"<table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:24px 0;"">
+                  <tr>
+                    <td align=""center"" style=""background-color:#16a34a;border-radius:6px;"">
+                      <a href=""{absoluteCompletionDownload}"" style=""display:inline-block;padding:12px 32px;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px;"">Download Completed PDF</a>
+                    </td>
+                  </tr>
+                </table>"
+            : "";
+
+        // Send completion emails to all recipients (with property context + signers list)
+        foreach (var recipient in env.Recipients)
+        {
+            var completionInner = $@"
+                <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Document Completed</h2>
+                <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Hello {System.Net.WebUtility.HtmlEncode(recipient.FullName)},</p>
+                <p style=""margin:0 0 8px 0;font-size:15px;color:#374151;"">Thank you for signing. The document <strong>{System.Net.WebUtility.HtmlEncode(env.Subject)}</strong> has been completed by all parties.</p>
+                {completionContextHtml}
+                {signersHtml}
+                {sharedDownloadBtnHtml}";
+
+            var completionHtml = await _emailTemplate.WrapInBrandedTemplateAsync(completionInner);
+            await _notify.SendCompletedReceiptAsync(
+                recipient.Email,
+                recipient.FullName,
+                $"Completed: {env.Subject}",
+                completionHtml,
+                null);
+        }
+
+        // ---------------------------------------------------------------
+        // Send completion email to the envelope creator
+        // ---------------------------------------------------------------
+        try
+        {
+            var creator = await _db.Users.AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Users_ID == env.CreatedByUsers_ID);
+
+            if (creator != null && !string.IsNullOrWhiteSpace(creator.Email))
+            {
+                var creatorName = $"{creator.FirstName} {creator.LastName}".Trim();
+                var detailsUrl  = $"{_appSettings.BaseUrl.TrimEnd('/')}/SignAdmin/Details/{env.EnvelopeId}";
+
+                var creatorDetailsBtn = $@"<table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:8px 0 0 0;"">
+                      <tr>
+                        <td align=""center"" style=""background-color:#3b82f6;border-radius:6px;"">
+                          <a href=""{detailsUrl}"" style=""display:inline-block;padding:10px 24px;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px;"">View Envelope Details</a>
+                        </td>
+                      </tr>
+                    </table>";
+
+                var creatorInner = $@"
+                    <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Envelope Completed</h2>
+                    <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Hello {System.Net.WebUtility.HtmlEncode(creatorName)},</p>
+                    <p style=""margin:0 0 8px 0;font-size:15px;color:#374151;"">
+                        Great news! The envelope <strong>{System.Net.WebUtility.HtmlEncode(env.Subject)}</strong> has been signed by all parties and is now complete.
+                    </p>
+                    {completionContextHtml}
+                    {signersHtml}
+                    {sharedDownloadBtnHtml}
+                    {creatorDetailsBtn}";
+
+                var creatorHtml = await _emailTemplate.WrapInBrandedTemplateAsync(creatorInner);
+                await _notify.SendEnvelopeEmailAsync(
+                    creator.Email,
+                    creatorName,
+                    $"Envelope Completed: {env.Subject}",
+                    creatorHtml);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send creator completion email for envelope {EnvelopeId}", envelopeId);
+        }
 
         // ---------------------------------------------------------------
         // Send internal company / branch notification emails
@@ -1516,6 +1585,46 @@ public sealed class EnvelopeService : IEnvelopeService
             _logger.LogWarning(ex, "Failed to send in-app offline completion notification for envelope {EnvelopeId}", envelopeId);
         }
 
+        // ── Fetch property context for offline completion emails ──────────────
+        string? offlinePropertyName    = null;
+        string? offlinePropertyAddress = null;
+        if (env.PropertyID.HasValue)
+        {
+            try
+            {
+                offlinePropertyName    = await _merge.GetPropertyNameAsync(env.PropertyID.Value, env.LocationCode);
+                offlinePropertyAddress = await _merge.GetPropertyAddressAsync(env.PropertyID.Value, env.LocationCode);
+            }
+            catch { /* non-fatal */ }
+        }
+        offlinePropertyName ??= env.PropertyName;
+
+        // Build property/order context block (shared across recipient, creator, internal emails)
+        var offlineContextRows = "";
+        if (!string.IsNullOrWhiteSpace(offlinePropertyName))
+            offlineContextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Property</td><td style=\"padding:4px 0;font-size:13px;\">{System.Net.WebUtility.HtmlEncode(offlinePropertyName)}</td></tr>";
+        if (!string.IsNullOrWhiteSpace(offlinePropertyAddress))
+            offlineContextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Address</td><td style=\"padding:4px 0;font-size:13px;\">{System.Net.WebUtility.HtmlEncode(offlinePropertyAddress)}</td></tr>";
+        if (!string.IsNullOrWhiteSpace(env.OrderNumber))
+            offlineContextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Order #</td><td style=\"padding:4px 0;font-size:13px;\">{System.Net.WebUtility.HtmlEncode(env.OrderNumber)}</td></tr>";
+        if (!string.IsNullOrWhiteSpace(env.LocationCode))
+            offlineContextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Branch</td><td style=\"padding:4px 0;font-size:13px;\">{System.Net.WebUtility.HtmlEncode(env.LocationCode)}</td></tr>";
+        var offlineContextHtml = string.IsNullOrEmpty(offlineContextRows) ? "" : $@"
+            <table cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:12px 0 16px 0;border-left:3px solid #f59e0b;padding-left:12px;"">
+                {offlineContextRows}
+            </table>";
+
+        // Build signers summary (all recipients marked as signed)
+        var offlineSignersRows = string.Join("", env.Recipients.OrderBy(r => r.SignerOrder).Select(r =>
+            $"<tr><td style=\"padding:4px 12px 4px 0;font-size:13px;color:#374151;\">{System.Net.WebUtility.HtmlEncode(r.FullName)}</td>" +
+            $"<td style=\"padding:4px 12px 4px 0;font-size:13px;color:#6b7280;\">{System.Net.WebUtility.HtmlEncode(r.Role)}</td>" +
+            $"<td style=\"padding:4px 0;font-size:13px;color:#16a34a;\">&#10003; Signed</td></tr>"));
+        var offlineSignersHtml = string.IsNullOrEmpty(offlineSignersRows) ? "" : $@"
+            <p style=""margin:16px 0 6px 0;font-size:13px;font-weight:600;color:#374151;"">Signing Summary</p>
+            <table cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:0 0 16px 0;"">
+                {offlineSignersRows}
+            </table>";
+
         // ── Completion emails to all recipients ──────────────────────────────
         var absoluteDownload = webPath.StartsWith("/")
             ? $"{_appSettings.BaseUrl.TrimEnd('/')}{webPath}"
@@ -1534,12 +1643,57 @@ public sealed class EnvelopeService : IEnvelopeService
         {
             var inner = $@"
                 <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Document Completed</h2>
-                <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Hello {recipient.FullName},</p>
-                <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">The document <strong>{env.Subject}</strong> has been completed and is available to download.</p>
+                <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Hello {System.Net.WebUtility.HtmlEncode(recipient.FullName)},</p>
+                <p style=""margin:0 0 8px 0;font-size:15px;color:#374151;"">The document <strong>{System.Net.WebUtility.HtmlEncode(env.Subject)}</strong> has been completed and is available to download.</p>
+                {offlineContextHtml}
+                {offlineSignersHtml}
                 {downloadBtnHtml}";
             var html = await _emailTemplate.WrapInBrandedTemplateAsync(inner);
             await _notify.SendCompletedReceiptAsync(recipient.Email, recipient.FullName,
                 $"Completed: {env.Subject}", html, null);
+        }
+
+        // ── Completion email to the envelope creator ──────────────────────────
+        try
+        {
+            var offlineCreator = await _db.Users.AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Users_ID == env.CreatedByUsers_ID);
+
+            if (offlineCreator != null && !string.IsNullOrWhiteSpace(offlineCreator.Email))
+            {
+                var offlineCreatorName = $"{offlineCreator.FirstName} {offlineCreator.LastName}".Trim();
+                var offlineDetailsUrl  = $"{_appSettings.BaseUrl.TrimEnd('/')}/SignAdmin/Details/{env.EnvelopeId}";
+
+                var offlineCreatorDetailsBtn = $@"<table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:8px 0 0 0;"">
+                      <tr>
+                        <td align=""center"" style=""background-color:#3b82f6;border-radius:6px;"">
+                          <a href=""{offlineDetailsUrl}"" style=""display:inline-block;padding:10px 24px;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px;"">View Envelope Details</a>
+                        </td>
+                      </tr>
+                    </table>";
+
+                var offlineCreatorInner = $@"
+                    <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Envelope Completed (Offline)</h2>
+                    <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Hello {System.Net.WebUtility.HtmlEncode(offlineCreatorName)},</p>
+                    <p style=""margin:0 0 8px 0;font-size:15px;color:#374151;"">
+                        The envelope <strong>{System.Net.WebUtility.HtmlEncode(env.Subject)}</strong> has been marked as completed via offline/manual signing by <strong>{System.Net.WebUtility.HtmlEncode(staffName)}</strong>.
+                    </p>
+                    {offlineContextHtml}
+                    {offlineSignersHtml}
+                    {downloadBtnHtml}
+                    {offlineCreatorDetailsBtn}";
+
+                var offlineCreatorHtml = await _emailTemplate.WrapInBrandedTemplateAsync(offlineCreatorInner);
+                await _notify.SendEnvelopeEmailAsync(
+                    offlineCreator.Email,
+                    offlineCreatorName,
+                    $"Envelope Completed (Offline): {env.Subject}",
+                    offlineCreatorHtml);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send creator offline completion email for envelope {EnvelopeId}", envelopeId);
         }
 
         // ── Internal branch / company notification emails ────────────────────
@@ -1549,18 +1703,8 @@ public sealed class EnvelopeService : IEnvelopeService
 
         if (internalSettings.Count > 0)
         {
-            string? notifPropertyName    = null;
-            string? notifPropertyAddress = null;
-            if (env.PropertyID.HasValue)
-            {
-                try
-                {
-                    notifPropertyName    = await _merge.GetPropertyNameAsync(env.PropertyID.Value, env.LocationCode);
-                    notifPropertyAddress = await _merge.GetPropertyAddressAsync(env.PropertyID.Value, env.LocationCode);
-                }
-                catch { /* non-fatal */ }
-            }
-            notifPropertyName ??= env.PropertyName;
+            string? notifPropertyName    = offlinePropertyName;
+            string? notifPropertyAddress = offlinePropertyAddress;
 
             var propertyRows = "";
             if (!string.IsNullOrWhiteSpace(notifPropertyName))

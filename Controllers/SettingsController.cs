@@ -58,7 +58,8 @@ namespace SalesMetrics.Controllers
                 CanAccessAccessControl  = userId > 0 && await _permissionService.HasFeatureAccessAsync(userId, "Users"),
                 CanAccessYardiUpload    = userId > 0 && await _permissionService.HasFeatureAccessAsync(userId, "YardiUpload"),
                 CanAccessErrorLogs        = userId > 0 && await _permissionService.HasFeatureAccessAsync(userId, "ErrorLogs"),
-                CanAccessBulkPermissions  = userId > 0 && await _permissionService.HasFeatureAccessAsync(userId, "Users"),
+                CanAccessBulkPermissions          = userId > 0 && await _permissionService.HasFeatureAccessAsync(userId, "Users"),
+                CanAccessBulkLocationAssignment   = userId > 0 && await _permissionService.HasFeatureAccessAsync(userId, "Users"),
             };
 
             if (!vm.CanAccessAnnouncements && !vm.CanAccessSystemSettings &&

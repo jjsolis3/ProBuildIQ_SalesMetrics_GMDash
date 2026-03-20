@@ -8,5 +8,6 @@ namespace SalesMetrics.Models
         public bool CanAccessYardiUpload { get; set; }
         public bool CanAccessErrorLogs { get; set; }
         public bool CanAccessBulkPermissions { get; set; }
+        public bool CanAccessBulkLocationAssignment { get; set; }
     }
 }

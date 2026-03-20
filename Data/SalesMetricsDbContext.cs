@@ -68,14 +68,24 @@ public partial class SalesMetricsDbContext : DbContext
             var config = new ConfigurationBuilder()
                 .SetBasePath(AppContext.BaseDirectory)
                 .AddJsonFile("appsettings.json")
+                .AddEnvironmentVariables()
                 .Build();
 
             var connectionString = config.GetConnectionString("SalesMetrics");
-            optionsBuilder
-                .UseSqlServer(connectionString)
-                .EnableSensitiveDataLogging()
-                .EnableDetailedErrors()
-                .LogTo(Console.WriteLine, LogLevel.Information);
+            var isDevelopment = string.Equals(
+                config["ASPNETCORE_ENVIRONMENT"], "Development",
+                StringComparison.OrdinalIgnoreCase);
+
+            optionsBuilder.UseSqlServer(connectionString);
+
+            // EnableSensitiveDataLogging logs SQL parameter values — development only.
+            if (isDevelopment)
+            {
+                optionsBuilder
+                    .EnableSensitiveDataLogging()
+                    .EnableDetailedErrors()
+                    .LogTo(Console.WriteLine, LogLevel.Information);
+            }
         }
     }
 

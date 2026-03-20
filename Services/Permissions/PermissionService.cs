@@ -344,5 +344,66 @@ namespace SalesMetrics.Services.Permissions
                 return false;
             }
         }
+
+        // ── Bulk Location Assignment ──────────────────────────────────────────
+
+        public async Task<List<int>> GetUsersWithLocationAssignmentAsync(int locationId)
+        {
+            return await _context.UserLocationAssignments
+                .Where(a => a.LocationID == locationId && a.IsActive == "YES")
+                .Select(a => a.UserID)
+                .ToListAsync();
+        }
+
+        public async Task<bool> BulkUpdateLocationAssignmentsAsync(
+            int locationId, List<int> scopedUserIds, List<int> userIdsToAssign, int adminUserId)
+        {
+            try
+            {
+                // Load existing active assignments for scoped users only
+                var existing = await _context.UserLocationAssignments
+                    .Where(a => a.LocationID == locationId && scopedUserIds.Contains(a.UserID))
+                    .ToListAsync();
+
+                var assignSet = new HashSet<int>(userIdsToAssign);
+
+                // Remove (deactivate) assignments for scoped users NOT in the assign list
+                foreach (var assignment in existing.Where(a => !assignSet.Contains(a.UserID)))
+                {
+                    _context.UserLocationAssignments.Remove(assignment);
+                }
+
+                // Add assignment for scoped users in the assign list who don't have it yet
+                var existingUserIds = new HashSet<int>(existing.Select(a => a.UserID));
+                foreach (var userId in userIdsToAssign.Where(id => scopedUserIds.Contains(id)))
+                {
+                    if (!existingUserIds.Contains(userId))
+                    {
+                        _context.UserLocationAssignments.Add(new SalesMetrics.Models.EFCore.UserLocationAssignment
+                        {
+                            UserID       = userId,
+                            LocationID   = locationId,
+                            IsActive     = "YES",
+                            DateAssigned = DateTime.UtcNow
+                        });
+                    }
+                    else
+                    {
+                        // Row exists but may have been soft-deleted — ensure IsActive = YES
+                        var row = existing.First(a => a.UserID == userId);
+                        row.IsActive     = "YES";
+                        row.DateAssigned = DateTime.UtcNow;
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in bulk location assignment update for location {LocationId}", locationId);
+                return false;
+            }
+        }
     }
 }

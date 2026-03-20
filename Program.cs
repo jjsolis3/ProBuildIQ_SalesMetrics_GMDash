@@ -309,6 +309,9 @@ var configuration = new ConfigurationBuilder()
 // Use custom error handling middleware that logs to database
 app.UseMiddleware<SalesMetrics.Middleware.GlobalErrorHandlingMiddleware>();
 
+// Add security response headers (CSP, X-Frame-Options, etc.)
+app.UseMiddleware<SalesMetrics.Middleware.SecurityHeadersMiddleware>();
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseHsts();

@@ -145,7 +145,8 @@
                     {
                         ("fa-user-shield", "Access Control",        "Create users, assign roles, and manage feature-level permissions.",              "/Accounts/Index",             Model.CanAccessAccessControl),
                         ("fa-bullhorn",    "Announcements",         "Post and manage organization-wide announcements visible to all users.",          "/Announcements/Index",        Model.CanAccessAnnouncements),
-                        ("fa-layer-group", "Bulk Permission Manager","Grant or revoke a feature for multiple users at once — filter by role or location.", "/Accounts/BulkPermissions",  Model.CanAccessBulkPermissions),
+                        ("fa-layer-group",    "Bulk Permission Manager",  "Grant or revoke a feature for multiple users at once — filter by role or location.", "/Accounts/BulkPermissions",        Model.CanAccessBulkPermissions),
+                        ("fa-map-marker-alt", "Bulk Location Assignment", "Assign or remove location access for multiple users at once — filter by role or primary location.", "/Accounts/BulkLocationAssignment", Model.CanAccessBulkLocationAssignment),
                         ("fa-file-upload", "Yardi Upload",          "Import property and unit pricing data from Yardi Excel matrix exports.",         "/Yardi/Upload",               Model.CanAccessYardiUpload),
                     };
                     var visibleAdmin = adminItems.Where(i => i.Show).ToList();

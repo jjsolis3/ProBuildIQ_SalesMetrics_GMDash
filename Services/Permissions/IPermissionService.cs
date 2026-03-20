@@ -79,5 +79,18 @@ namespace SalesMetrics.Services.Permissions
         /// Only users in scopedUserIds are affected; users outside the scope are left unchanged.
         /// </summary>
         Task<bool> BulkUpdateFeatureAccessForScopedUsersAsync(int featureId, List<int> scopedUserIds, List<int> userIdsWithAccess, int grantedByUserId);
+
+        /// <summary>
+        /// Get all user IDs that currently have a specific location assigned.
+        /// </summary>
+        Task<List<int>> GetUsersWithLocationAssignmentAsync(int locationId);
+
+        /// <summary>
+        /// Bulk update location assignments for a scoped set of users.
+        /// Only users in <paramref name="scopedUserIds"/> are affected.
+        /// Users in <paramref name="userIdsToAssign"/> receive the location;
+        /// scoped users NOT in that list have the location removed.
+        /// </summary>
+        Task<bool> BulkUpdateLocationAssignmentsAsync(int locationId, List<int> scopedUserIds, List<int> userIdsToAssign, int adminUserId);
     }
 }

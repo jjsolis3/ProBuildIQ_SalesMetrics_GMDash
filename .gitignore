@@ -369,3 +369,8 @@ FodyWeavers.xsd
 # Rotativa PDF tools (large executables - download separately)
 #/Tools/Rotativa/
 /wwwroot/Files
+
+# Environment secrets — never commit actual .env files
+.env
+.env.local
+.env.production

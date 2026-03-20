@@ -953,6 +953,120 @@ namespace SalesMetrics.Controllers
             return userIds;
         }
 
+        // ======================================================================
+        // BULK LOCATION ASSIGNMENT
+        // ======================================================================
+
+        [HttpGet]
+        public async Task<IActionResult> BulkLocationAssignment(int? locationId, int? roleId, int? primaryLocationId)
+        {
+            var vm = new BulkLocationAssignmentViewModel
+            {
+                SelectedLocationId     = locationId ?? 0,
+                FilterRoleId           = roleId,
+                FilterPrimaryLocationId = primaryLocationId,
+                AllLocations = new List<SelectListItem>
+                {
+                    new SelectListItem { Value = "", Text = "— Select a Location —" },
+                    new SelectListItem { Value = "1", Text = "LAX — Los Angeles",  Selected = locationId == 1 },
+                    new SelectListItem { Value = "2", Text = "LSV — Las Vegas",    Selected = locationId == 2 },
+                    new SelectListItem { Value = "3", Text = "CHN — Chino",        Selected = locationId == 3 },
+                    new SelectListItem { Value = "4", Text = "PHX — Phoenix",      Selected = locationId == 4 },
+                    new SelectListItem { Value = "5", Text = "SND — San Diego",    Selected = locationId == 5 },
+                },
+                AllRoles = GetRolesSelectList(roleId),
+            };
+
+            if (locationId.HasValue && locationId.Value > 0)
+            {
+                vm.LocationName = vm.AllLocations
+                    .FirstOrDefault(l => l.Value == locationId.Value.ToString())?.Text;
+
+                var usersWithAssignment = await _permissionService.GetUsersWithLocationAssignmentAsync(locationId.Value);
+                vm.Users = LoadUsersForBulkLocationAssignment(roleId, primaryLocationId, usersWithAssignment);
+            }
+
+            return View(vm);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> BulkUpdateLocationAssignment(
+            int locationId, int? roleId, int? primaryLocationId, List<int>? assignedUserIds)
+        {
+            var adminUserId = Convert.ToInt32(
+                HttpContext.Session.GetString("Users_ID") ?? HttpContext.Session.GetString("UserId") ?? "0");
+            var assignSet = assignedUserIds ?? new List<int>();
+
+            // Reconstruct the exact filtered scope so we only touch visible users
+            var scopedUserIds = LoadUserIdsForBulkPermissions(roleId, primaryLocationId);
+
+            var success = await _permissionService.BulkUpdateLocationAssignmentsAsync(
+                locationId, scopedUserIds, assignSet, adminUserId);
+
+            if (success)
+                TempData["SuccessMessage"] = $"Location assignments updated for {assignSet.Count} user(s).";
+            else
+                TempData["ErrorMessage"] = "An error occurred while updating location assignments. Please try again.";
+
+            return RedirectToAction(nameof(BulkLocationAssignment), new { locationId, roleId, primaryLocationId });
+        }
+
+        private List<BulkUserLocationRow> LoadUsersForBulkLocationAssignment(
+            int? roleId, int? primaryLocationId, List<int> usersWithAssignment)
+        {
+            var users = new List<BulkUserLocationRow>();
+            string connStr = _configuration.GetConnectionString("SalesMetrics");
+
+            using var conn = new SqlConnection(connStr);
+            conn.Open();
+
+            var where = new List<string> { "u.IsActive = 1" };
+            var cmd = new SqlCommand();
+            cmd.Connection = conn;
+
+            if (roleId.HasValue)
+            {
+                where.Add("u.RoleID = @RoleId");
+                cmd.Parameters.AddWithValue("@RoleId", roleId.Value);
+            }
+            if (primaryLocationId.HasValue)
+            {
+                where.Add("u.Location = @PrimaryLocationId");
+                cmd.Parameters.AddWithValue("@PrimaryLocationId", primaryLocationId.Value);
+            }
+
+            cmd.CommandText = $@"
+                SELECT u.Users_ID, u.FirstName, u.LastName, u.RoleID,
+                       ISNULL(r.RoleName, 'Unknown') AS RoleName,
+                       u.Location,
+                       CASE u.Location WHEN 1 THEN 'LAX' WHEN 2 THEN 'LSV'
+                           WHEN 3 THEN 'CHN' WHEN 4 THEN 'PHX' WHEN 5 THEN 'SND'
+                           ELSE 'N/A' END AS LocationName
+                FROM Users u
+                LEFT JOIN Roles r ON u.RoleID = r.RoleID
+                WHERE {string.Join(" AND ", where)}
+                ORDER BY u.FirstName, u.LastName";
+
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                var usersId = reader.GetInt32(reader.GetOrdinal("Users_ID"));
+                users.Add(new BulkUserLocationRow
+                {
+                    Users_ID          = usersId,
+                    FullName          = $"{reader["FirstName"]} {reader["LastName"]}".Trim(),
+                    RoleName          = reader["RoleName"].ToString() ?? "",
+                    RoleId            = reader.GetInt32(reader.GetOrdinal("RoleID")),
+                    PrimaryLocation   = reader["LocationName"].ToString() ?? "",
+                    PrimaryLocationId = reader.GetInt32(reader.GetOrdinal("Location")),
+                    IsAssigned        = usersWithAssignment.Contains(usersId)
+                });
+            }
+
+            return users;
+        }
+
         private List<SelectListItem> GetRolesSelectList(int? selectedRoleId)
         {
             var roles = new List<SelectListItem>

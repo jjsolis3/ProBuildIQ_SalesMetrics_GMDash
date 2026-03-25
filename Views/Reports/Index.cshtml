@@ -190,6 +190,7 @@
     }
 </style>
 
+@Html.AntiForgeryToken()
 <div class="reports-header">
     <h1>📊 Reports Center</h1>
     <p>Access powerful business intelligence reports tailored to your role and location</p>
@@ -249,9 +250,22 @@ else
                             }
                         </div>
 
-                        <a class="btn btn-run" href="@Url.Action("Run", new { id = report.Id })">
-                            Run Report →
-                        </a>
+                        <div class="d-flex gap-2">
+                            <a class="btn btn-run flex-grow-1" href="@Url.Action("Run", new { id = report.Id })">
+                                Run Report →
+                            </a>
+                            @if (Model.IsAdmin)
+                            {
+                                <button type="button"
+                                        class="btn btn-outline-secondary btn-manage-access"
+                                        data-report-id="@report.Id"
+                                        data-report-name="@report.Name"
+                                        title="Manage who can run this report"
+                                        style="flex-shrink:0; padding:0.75rem 1rem;">
+                                    <i class="fas fa-user-lock"></i>
+                                </button>
+                            }
+                        </div>
                     </div>
                 </div>
             </div>
@@ -263,6 +277,57 @@ else
         <h4>No Reports Found</h4>
         <p class="text-muted">Try adjusting your search terms</p>
     </div>
+}
+
+<!-- Report Access Management Modal (Admin only) -->
+@if (Model.IsAdmin)
+{
+<div class="modal fade" id="reportAccessModal" tabindex="-1" aria-labelledby="reportAccessModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header" style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;">
+                <h5 class="modal-title" id="reportAccessModalLabel">
+                    <i class="fas fa-user-lock me-2"></i>Manage Access — <span id="accessModalReportName"></span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info mb-3" style="font-size:0.9rem;">
+                    <i class="fas fa-info-circle me-1"></i>
+                    <strong>How it works:</strong> If you add at least one user to this list, only those users (plus Admins) will be able to run this report — regardless of their role access.
+                    If the list is empty, all users whose role &amp; location normally allow access can run it.
+                </div>
+
+                <!-- Add user -->
+                <div class="d-flex gap-2 mb-3">
+                    <select id="accessUserSelect" class="form-select">
+                        <option value="">— Select a user to grant access —</option>
+                    </select>
+                    <button type="button" class="btn btn-success btn-sm px-3" id="btnGrantCatalogAccess">
+                        <i class="fas fa-plus me-1"></i>Grant
+                    </button>
+                </div>
+
+                <!-- Current grantees -->
+                <table class="table table-sm table-hover" id="accessGranteesTable">
+                    <thead class="table-light">
+                        <tr>
+                            <th>User</th>
+                            <th>Granted</th>
+                            <th style="width:80px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="accessGranteesList">
+                        <tr><td colspan="3" class="text-center text-muted py-3">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
 }
 
 @section Scripts {
@@ -314,6 +379,83 @@ else
                 });
             }
         });
+
+        // ---- Report Access Management (Admin only) ----
+        @if (Model.IsAdmin)
+        {
+            <text>
+        var _currentCatalogReportId = null;
+
+        $(document).on('click', '.btn-manage-access', function() {
+            _currentCatalogReportId = $(this).data('report-id');
+            var reportName = $(this).data('report-name');
+            $('#accessModalReportName').text(reportName);
+            $('#accessGranteesList').html('<tr><td colspan="3" class="text-center text-muted py-3"><span class="spinner-border spinner-border-sm"></span> Loading...</td></tr>');
+            loadCatalogAccessList(_currentCatalogReportId);
+            $('#reportAccessModal').modal('show');
+        });
+
+        function loadCatalogAccessList(reportId) {
+            $.get('@Url.Action("GetReportAccess", "Reports")', { reportId: reportId }, function(data) {
+                // Populate user dropdown (exclude already-granted users)
+                var grantedIds = data.grantedUsers.map(function(u) { return u.usersId; });
+                var $sel = $('#accessUserSelect').empty().append('<option value="">— Select a user to grant access —</option>');
+                data.allUsers.forEach(function(u) {
+                    if (grantedIds.indexOf(u.usersId) === -1) {
+                        $sel.append('<option value="' + u.usersId + '">' + u.fullName + '</option>');
+                    }
+                });
+
+                // Populate grantee table
+                var $tbody = $('#accessGranteesList').empty();
+                if (data.grantedUsers.length === 0) {
+                    $tbody.append('<tr><td colspan="3" class="text-center text-muted py-3"><i class="fas fa-unlock me-1"></i>No restrictions — all role-authorised users can run this report.</td></tr>');
+                } else {
+                    data.grantedUsers.forEach(function(u) {
+                        $tbody.append(
+                            '<tr data-access-id="' + u.accessId + '">' +
+                            '<td>' + u.fullName + '</td>' +
+                            '<td class="text-muted">' + u.grantedDate + '</td>' +
+                            '<td><button type="button" class="btn btn-danger btn-sm btn-revoke-catalog" data-access-id="' + u.accessId + '">' +
+                            '<i class="fas fa-trash-alt"></i></button></td></tr>'
+                        );
+                    });
+                }
+            });
+        }
+
+        $('#btnGrantCatalogAccess').on('click', function() {
+            var usersId = parseInt($('#accessUserSelect').val());
+            if (!usersId) return;
+            $.ajax({
+                url: '@Url.Action("GrantReportAccess", "Reports")',
+                type: 'POST',
+                contentType: 'application/json',
+                headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() },
+                data: JSON.stringify({ reportId: _currentCatalogReportId, usersId: usersId }),
+                success: function(res) {
+                    if (res.success) loadCatalogAccessList(_currentCatalogReportId);
+                    else alert(res.message);
+                }
+            });
+        });
+
+        $(document).on('click', '.btn-revoke-catalog', function() {
+            var accessId = $(this).data('access-id');
+            if (!confirm('Remove this user\'s access?')) return;
+            $.ajax({
+                url: '@Url.Action("RevokeReportAccess", "Reports")',
+                type: 'POST',
+                contentType: 'application/json',
+                headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() },
+                data: JSON.stringify({ accessId: accessId }),
+                success: function(res) {
+                    if (res.success) loadCatalogAccessList(_currentCatalogReportId);
+                }
+            });
+        });
+            </text>
+        }
     </script>
 }
 

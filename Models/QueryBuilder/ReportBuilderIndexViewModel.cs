@@ -28,5 +28,8 @@ namespace SalesMetrics.Models.QueryBuilder
         public DateTime LastModifiedDate { get; set; }
         public bool IsShared { get; set; }
         public int ExecutionCount { get; set; }
+
+        /// <summary>When true, only specifically-granted users (plus admins) may run this report.</summary>
+        public bool IsAccessRestricted { get; set; }
     }
 }

@@ -49,6 +49,12 @@ namespace SalesMetrics.Data.Entities.QueryBuilder
         [MaxLength(255)]
         public string? AllowedLocations { get; set; }
 
+        /// <summary>
+        /// When true, only users explicitly listed in ReportAccess can run this report.
+        /// Admins are always allowed regardless of this flag.
+        /// </summary>
+        public bool IsAccessRestricted { get; set; } = false;
+
         // Status & Versioning
         public bool IsActive { get; set; } = true;
         public int Version { get; set; } = 1;

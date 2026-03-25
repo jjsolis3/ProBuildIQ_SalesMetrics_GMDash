@@ -330,6 +330,15 @@ else
                             }
                         </div>
 
+                        @if (report.IsAccessRestricted)
+                        {
+                            <div class="mb-2">
+                                <span class="report-badge" style="background:#fde8e8;color:#c62828;font-size:0.72rem;">
+                                    <i class="fa fa-lock me-1"></i>Restricted Access
+                                </span>
+                            </div>
+                        }
+
                         <div class="report-actions">
                             <a href="@Url.Action("Execute", "ReportBuilder", new { id = report.ReportId })"
                                class="btn btn-run"
@@ -344,6 +353,19 @@ else
                                    title="Edit Report">
                                     <i class="fa fa-edit"></i>
                                 </a>
+                            }
+
+                            @if (Model.IsAdmin)
+                            {
+                                <button type="button"
+                                        class="btn btn-manage-builder-access"
+                                        data-report-id="@report.ReportId"
+                                        data-report-name="@report.Name"
+                                        data-is-restricted="@report.IsAccessRestricted.ToString().ToLower()"
+                                        title="Manage who can run this report"
+                                        style="background:#5c6bc0;color:white;border:none;border-radius:6px;padding:0.5rem 0.75rem;">
+                                    <i class="fa fa-user-lock"></i>
+                                </button>
                             }
 
                             @if (Model.CanDeleteReports || Model.IsAdmin)
@@ -368,6 +390,73 @@ else
         <h4>No Reports Found</h4>
         <p class="text-muted">Try adjusting your search terms</p>
     </div>
+}
+
+@Html.AntiForgeryToken()
+
+<!-- Query Builder Report Access Management Modal (Admin only) -->
+@if (Model.IsAdmin)
+{
+<div class="modal fade" id="builderAccessModal" tabindex="-1" aria-labelledby="builderAccessModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header" style="background:linear-gradient(135deg,#28a745 0%,#20c997 100%);color:white;">
+                <h5 class="modal-title" id="builderAccessModalLabel">
+                    <i class="fa fa-user-lock me-2"></i>Manage Access — <span id="builderAccessReportName"></span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Restrict toggle -->
+                <div class="card mb-3 border-0" style="background:#f8f9fa;">
+                    <div class="card-body d-flex align-items-center justify-content-between py-2 px-3">
+                        <div>
+                            <strong>Restrict this report</strong>
+                            <div class="text-muted" style="font-size:0.85rem;">
+                                When enabled, only the users listed below (plus Admins) can run this report.
+                            </div>
+                        </div>
+                        <div class="form-check form-switch ms-3">
+                            <input class="form-check-input" type="checkbox" id="builderRestrictToggle" style="width:2.5rem;height:1.25rem;">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="builderAccessUserSection">
+                    <div class="alert alert-info mb-3" style="font-size:0.875rem;">
+                        <i class="fa fa-info-circle me-1"></i>
+                        Add users below. Only they (and Admins) will be able to run this report when restriction is on.
+                    </div>
+
+                    <div class="d-flex gap-2 mb-3">
+                        <select id="builderUserSelect" class="form-select">
+                            <option value="">— Select a user to grant access —</option>
+                        </select>
+                        <button type="button" class="btn btn-success btn-sm px-3" id="btnGrantBuilderAccess">
+                            <i class="fa fa-plus me-1"></i>Grant
+                        </button>
+                    </div>
+
+                    <table class="table table-sm table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>User</th>
+                                <th>Granted</th>
+                                <th style="width:80px;"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="builderGranteesList">
+                            <tr><td colspan="3" class="text-center text-muted py-3">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
 }
 
 @section Scripts {
@@ -405,6 +494,110 @@ else
                         if (reportGrid) reportGrid.style.display = 'flex';
                     }
                 });
+            }
+
+            // ---- Builder Report Access Management (Admin only) ----
+            @if (Model.IsAdmin)
+            {
+                <text>
+            var _currentBuilderReportId = null;
+
+            $(document).on('click', '.btn-manage-builder-access', function() {
+                _currentBuilderReportId = $(this).data('report-id');
+                var reportName = $(this).data('report-name');
+                var isRestricted = $(this).data('is-restricted') === true || $(this).data('is-restricted') === 'true';
+                $('#builderAccessReportName').text(reportName);
+                $('#builderRestrictToggle').prop('checked', isRestricted);
+                $('#builderGranteesList').html('<tr><td colspan="3" class="text-center text-muted py-3"><span class="spinner-border spinner-border-sm"></span> Loading...</td></tr>');
+                loadBuilderAccessList(_currentBuilderReportId);
+                $('#builderAccessModal').modal('show');
+            });
+
+            $('#builderRestrictToggle').on('change', function() {
+                var isRestricted = $(this).is(':checked');
+                $.ajax({
+                    url: '@Url.Action("SetBuilderReportRestricted", "ReportBuilder")',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() },
+                    data: JSON.stringify({ reportId: _currentBuilderReportId, isRestricted: isRestricted }),
+                    success: function(res) {
+                        if (res.success) {
+                            // Update the card badge without full reload
+                            var $btn = $('[data-report-id="' + _currentBuilderReportId + '"].btn-manage-builder-access');
+                            $btn.data('is-restricted', isRestricted);
+                            var $badge = $btn.closest('.report-card-body').find('.report-badge[style*="lock"]');
+                            if (isRestricted) {
+                                if ($badge.length === 0) {
+                                    $btn.closest('.report-card-body').find('.report-meta-badges')
+                                        .before('<div class="mb-2"><span class="report-badge" style="background:#fde8e8;color:#c62828;font-size:0.72rem;"><i class="fa fa-lock me-1"></i>Restricted Access</span></div>');
+                                }
+                            } else {
+                                $badge.closest('div').remove();
+                            }
+                        }
+                    }
+                });
+            });
+
+            function loadBuilderAccessList(reportId) {
+                $.get('@Url.Action("GetBuilderReportAccess", "ReportBuilder")', { reportId: reportId }, function(data) {
+                    $('#builderRestrictToggle').prop('checked', data.isRestricted);
+
+                    var grantedIds = data.grantedUsers.map(function(u) { return u.usersId; });
+                    var $sel = $('#builderUserSelect').empty().append('<option value="">— Select a user to grant access —</option>');
+                    data.allUsers.forEach(function(u) {
+                        if (grantedIds.indexOf(u.usersId) === -1) {
+                            $sel.append('<option value="' + u.usersId + '">' + u.fullName + '</option>');
+                        }
+                    });
+
+                    var $tbody = $('#builderGranteesList').empty();
+                    if (data.grantedUsers.length === 0) {
+                        $tbody.append('<tr><td colspan="3" class="text-center text-muted py-3"><i class="fa fa-unlock me-1"></i>No users added yet.</td></tr>');
+                    } else {
+                        data.grantedUsers.forEach(function(u) {
+                            $tbody.append(
+                                '<tr><td>' + u.fullName + '</td><td class="text-muted">' + u.grantedDate + '</td>' +
+                                '<td><button type="button" class="btn btn-danger btn-sm btn-revoke-builder" data-access-id="' + u.accessId + '">' +
+                                '<i class="fa fa-trash-alt"></i></button></td></tr>'
+                            );
+                        });
+                    }
+                });
+            }
+
+            $('#btnGrantBuilderAccess').on('click', function() {
+                var usersId = parseInt($('#builderUserSelect').val());
+                if (!usersId) return;
+                $.ajax({
+                    url: '@Url.Action("GrantBuilderReportAccess", "ReportBuilder")',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() },
+                    data: JSON.stringify({ reportId: _currentBuilderReportId, usersId: usersId }),
+                    success: function(res) {
+                        if (res.success) loadBuilderAccessList(_currentBuilderReportId);
+                        else alert(res.message);
+                    }
+                });
+            });
+
+            $(document).on('click', '.btn-revoke-builder', function() {
+                var accessId = $(this).data('access-id');
+                if (!confirm('Remove this user\'s access?')) return;
+                $.ajax({
+                    url: '@Url.Action("RevokeBuilderReportAccess", "ReportBuilder")',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() },
+                    data: JSON.stringify({ accessId: accessId }),
+                    success: function(res) {
+                        if (res.success) loadBuilderAccessList(_currentBuilderReportId);
+                    }
+                });
+            });
+                </text>
             }
 
             // Delete report functionality

@@ -59,14 +59,31 @@ namespace SalesMetrics.Controllers
             var currentLocation = HttpContext.Session.GetString("OfficeLocation") ?? "LAX";
             var roleId = HttpContext.Session.GetString("RoleId") ?? "0";
 
+            var isAdmin = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_ADMIN");
+
             // Get all reports the user can access
-            var reports = await _context.ReportDefinitions
+            var allReports = await _context.ReportDefinitions
                 .Where(r => r.IsActive)
                 .OrderByDescending(r => r.ModifiedDate ?? r.CreatedDate)
                 .ToListAsync();
 
-            // TODO: Filter reports based on user's role and location
-            // For now, show all active reports
+            // For restricted reports, non-admins only see reports they have explicit access to
+            List<SalesMetrics.Data.Entities.QueryBuilder.ReportDefinitionEntity> reports;
+            if (isAdmin)
+            {
+                reports = allReports;
+            }
+            else
+            {
+                var accessibleKeys = await _context.ReportAccess
+                    .Where(a => a.Users_ID == userId && a.ReportKey.StartsWith("builder:"))
+                    .Select(a => a.ReportKey)
+                    .ToListAsync();
+
+                reports = allReports
+                    .Where(r => !r.IsAccessRestricted || accessibleKeys.Contains($"builder:{r.ReportDefinitionId}"))
+                    .ToList();
+            }
 
             var viewModel = new ReportBuilderIndexViewModel
             {
@@ -76,15 +93,16 @@ namespace SalesMetrics.Controllers
                     Name = r.Name ?? "Untitled Report",
                     Description = r.Description ?? "",
                     DataSourceType = r.DataSourceType ?? "SQL",
-                    CreatedBy = "User " + r.CreatedByUserId, // TODO: Join with Users table to get name
+                    CreatedBy = "User " + r.CreatedByUserId,
                     CreatedDate = r.CreatedDate,
                     LastModifiedDate = r.ModifiedDate ?? r.CreatedDate,
-                    IsShared = !string.IsNullOrEmpty(r.AllowedRoles) || !string.IsNullOrEmpty(r.AllowedLocations)
+                    IsShared = !string.IsNullOrEmpty(r.AllowedRoles) || !string.IsNullOrEmpty(r.AllowedLocations),
+                    IsAccessRestricted = r.IsAccessRestricted
                 }).ToList(),
                 CanCreateReports = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_CREATE"),
                 CanEditReports = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_EDIT"),
                 CanDeleteReports = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_DELETE"),
-                IsAdmin = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_ADMIN")
+                IsAdmin = isAdmin
             };
 
             return View(viewModel);
@@ -1141,6 +1159,126 @@ namespace SalesMetrics.Controllers
             return Json(new { success = true, message = "Report deleted successfully" });
         }
 
+        // ======================================================================
+        // Per-Report Access Management (Query Builder reports)
+        // ======================================================================
+
+        /// <summary>
+        /// Returns the current access list and all active users for a builder report.
+        /// Requires REPORT_BUILDER_ADMIN permission.
+        /// </summary>
+        [HttpGet]
+        public async Task<IActionResult> GetBuilderReportAccess(int reportId)
+        {
+            var userId = GetCurrentUserId();
+            var isAdmin = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_ADMIN");
+            if (!isAdmin) return Forbid();
+
+            var report = await _context.ReportDefinitions
+                .FirstOrDefaultAsync(r => r.ReportDefinitionId == reportId && r.IsActive);
+            if (report == null) return NotFound();
+
+            var reportKey = $"builder:{reportId}";
+
+            var grantedUsers = await _context.ReportAccess
+                .Where(a => a.ReportKey == reportKey)
+                .Include(a => a.User)
+                .Select(a => new
+                {
+                    accessId    = a.AccessId,
+                    usersId     = a.Users_ID,
+                    fullName    = a.User != null ? a.User.FirstName + " " + a.User.LastName : "Unknown",
+                    grantedDate = a.GrantedDate.ToString("MM/dd/yyyy")
+                })
+                .ToListAsync();
+
+            var allUsers = await _context.Users
+                .Where(u => u.IsActive)
+                .OrderBy(u => u.FirstName).ThenBy(u => u.LastName)
+                .Select(u => new { usersId = u.Users_ID, fullName = u.FirstName + " " + u.LastName, roleId = u.RoleId })
+                .ToListAsync();
+
+            return Json(new
+            {
+                grantedUsers,
+                allUsers,
+                isRestricted = report.IsAccessRestricted
+            });
+        }
+
+        /// <summary>
+        /// Toggles the IsAccessRestricted flag on a builder report.
+        /// </summary>
+        [HttpPost]
+        public async Task<IActionResult> SetBuilderReportRestricted([FromBody] SetRestrictedRequest request)
+        {
+            var userId = GetCurrentUserId();
+            var isAdmin = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_ADMIN");
+            if (!isAdmin) return Forbid();
+
+            var report = await _context.ReportDefinitions
+                .FirstOrDefaultAsync(r => r.ReportDefinitionId == request.ReportId && r.IsActive);
+            if (report == null) return NotFound();
+
+            report.IsAccessRestricted = request.IsRestricted;
+            report.ModifiedDate = DateTime.UtcNow;
+            report.ModifiedByUserId = userId;
+            await _context.SaveChangesAsync();
+
+            return Json(new { success = true });
+        }
+
+        /// <summary>
+        /// Grants a user access to run a specific builder report.
+        /// </summary>
+        [HttpPost]
+        public async Task<IActionResult> GrantBuilderReportAccess([FromBody] BuilderAccessRequest request)
+        {
+            var userId = GetCurrentUserId();
+            var isAdmin = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_ADMIN");
+            if (!isAdmin) return Forbid();
+
+            var reportKey = $"builder:{request.ReportId}";
+
+            var existing = await _context.ReportAccess
+                .FirstOrDefaultAsync(a => a.ReportKey == reportKey && a.Users_ID == request.UsersId);
+            if (existing != null)
+                return Json(new { success = true, message = "User already has access." });
+
+            _context.ReportAccess.Add(new SalesMetrics.Data.Entities.ReportAccessEntity
+            {
+                ReportKey         = reportKey,
+                Users_ID          = request.UsersId,
+                GrantedDate       = DateTime.Now,
+                GrantedByUsers_ID = userId > 0 ? userId : null
+            });
+
+            await _context.SaveChangesAsync();
+            return Json(new { success = true });
+        }
+
+        /// <summary>
+        /// Revokes a user's access to a builder report.
+        /// </summary>
+        [HttpPost]
+        public async Task<IActionResult> RevokeBuilderReportAccess([FromBody] BuilderAccessRevokeRequest request)
+        {
+            var userId = GetCurrentUserId();
+            var isAdmin = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_ADMIN");
+            if (!isAdmin) return Forbid();
+
+            var entry = await _context.ReportAccess.FindAsync(request.AccessId);
+            if (entry == null) return Json(new { success = false, message = "Record not found." });
+
+            _context.ReportAccess.Remove(entry);
+            await _context.SaveChangesAsync();
+            return Json(new { success = true });
+        }
+
+        public class SetRestrictedRequest  { public int ReportId { get; set; } public bool IsRestricted { get; set; } }
+        public class BuilderAccessRequest  { public int ReportId { get; set; } public int UsersId { get; set; } }
+        public class BuilderAccessRevokeRequest { public int AccessId { get; set; } }
+
         /// <summary>
         /// Detects parameters in SQL query (looks for @ParameterName patterns)
         /// </summary>
@@ -1332,6 +1470,20 @@ namespace SalesMetrics.Controllers
                     return NotFound();
                 }
 
+                // Per-report access check: if restricted, user must be in ReportAccess
+                var isAdmin = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_ADMIN");
+                if (!isAdmin && report.IsAccessRestricted)
+                {
+                    var reportKey = $"builder:{id}";
+                    var hasReportAccess = await _context.ReportAccess
+                        .AnyAsync(a => a.ReportKey == reportKey && a.Users_ID == userId);
+                    if (!hasReportAccess)
+                    {
+                        _logger.LogWarning("User {UserId} attempted to run restricted report {ReportId} without access", userId, id);
+                        return View("AccessDenied");
+                    }
+                }
+
                 _logger.LogInformation("User {UserId} loading report {ReportId}: {ReportName}", userId, id, report.Name);
 
                 // Check if report has parameters
@@ -1418,6 +1570,16 @@ namespace SalesMetrics.Controllers
                 {
                     _logger.LogWarning("Report {ReportId} not found or inactive", id);
                     return NotFound();
+                }
+
+                // Per-report access check
+                var isAdminPost = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_ADMIN");
+                if (!isAdminPost && report.IsAccessRestricted)
+                {
+                    var reportKey = $"builder:{id}";
+                    var hasReportAccess = await _context.ReportAccess
+                        .AnyAsync(a => a.ReportKey == reportKey && a.Users_ID == userId);
+                    if (!hasReportAccess) return View("AccessDenied");
                 }
 
                 _logger.LogInformation("User {UserId} executing report {ReportId}: {ReportName} with parameters", userId, id, report.Name);

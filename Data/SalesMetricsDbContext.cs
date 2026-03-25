@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using SalesMetrics.Domain.Signing;
 using SalesMetrics.Infrastructure.EF.Configurations.Signing;
 using SalesMetrics.Models.EFCore;
+using SalesMetrics.Data.Entities;
 using SalesMetrics.Data.Entities.QueryBuilder;
 
 namespace SalesMetrics.Data;
@@ -60,6 +61,9 @@ public partial class SalesMetricsDbContext : DbContext
     public DbSet<ReportSharingEntity> ReportSharings { get; set; } = default!;
     public DbSet<UserFavoriteReportEntity> UserFavoriteReports { get; set; } = default!;
     public DbSet<DataSourceConfigurationEntity> DataSourceConfigurations { get; set; } = default!;
+
+    // Per-report user access
+    public DbSet<ReportAccessEntity> ReportAccess { get; set; } = default!;
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -392,6 +396,21 @@ public partial class SalesMetricsDbContext : DbContext
                 .HasForeignKey(d => d.FeatureId)
                 .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("FK_UserFeaturePermissions_Features");
+        });
+
+        modelBuilder.Entity<ReportAccessEntity>(entity =>
+        {
+            entity.HasKey(e => e.AccessId);
+            entity.Property(e => e.ReportKey).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.GrantedDate).HasColumnType("datetime").HasDefaultValueSql("(getdate())");
+            entity.HasIndex(e => new { e.ReportKey, e.Users_ID }).IsUnique();
+            entity.HasIndex(e => e.ReportKey);
+            entity.HasIndex(e => e.Users_ID);
+            entity.HasOne(d => d.User)
+                .WithMany()
+                .HasForeignKey(d => d.Users_ID)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_ReportAccess_Users");
         });
 
         OnModelCreatingPartial(modelBuilder);

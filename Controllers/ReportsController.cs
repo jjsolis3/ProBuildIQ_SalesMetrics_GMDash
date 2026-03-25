@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Data;
 using System.Linq;
 using SalesMetrics.Data;
+using SalesMetrics.Data.Entities;
 using SalesMetrics.Models;
 using SalesMetrics.Models.Reports;
 using SalesMetrics.Services.Helpers;
@@ -58,7 +59,8 @@ namespace SalesMetrics.Controllers
 
             var viewModel = new ReportCatalogViewModel
             {
-                AvailableReports = reports
+                AvailableReports = reports,
+                IsAdmin = userContext.RoleId == "1"
             };
 
             return View(viewModel);
@@ -460,7 +462,10 @@ namespace SalesMetrics.Controllers
         // Envelope Activity Report
         // ======================================================================
 
-        private static readonly int[] EnvelopeReportAllowedRoles = { 1, 4, 5, 6, 7, 8 };
+        public class ReportAccessRequest  { public string ReportId { get; set; } = ""; public int UsersId { get; set; } }
+    public class ReportAccessRevokeRequest { public int AccessId { get; set; } }
+
+    private static readonly int[] EnvelopeReportAllowedRoles = { 1, 4, 5, 6, 7, 8 };
 
         private EnvelopeReportViewModel BuildEnvelopeReportBase(ReportUserContext userContext)
         {
@@ -620,6 +625,125 @@ namespace SalesMetrics.Controllers
             }
 
             return View("RunEnvelope", vm);
+        }
+
+        // ======================================================================
+        // Per-Report Access Management (Reports Center catalog reports)
+        // ======================================================================
+
+        /// <summary>
+        /// Returns the list of users that have been granted explicit access to a catalog report.
+        /// Also returns all active users so the admin can add new grantees.
+        /// Admin-only endpoint (RoleId 1).
+        /// </summary>
+        [HttpGet]
+        public async Task<IActionResult> GetReportAccess(string reportId)
+        {
+            var roleId = HttpContext.Session.GetString("RoleId") ?? "0";
+            if (roleId != "1") return Forbid();
+
+            var reportKey = $"catalog:{reportId}";
+
+            var grantedUsers = await _db.ReportAccess
+                .Where(a => a.ReportKey == reportKey)
+                .Include(a => a.User)
+                .Select(a => new
+                {
+                    accessId = a.AccessId,
+                    usersId  = a.Users_ID,
+                    fullName = a.User != null ? a.User.FirstName + " " + a.User.LastName : "Unknown",
+                    grantedDate = a.GrantedDate.ToString("MM/dd/yyyy")
+                })
+                .ToListAsync();
+
+            var allUsers = await _db.Users
+                .Where(u => u.IsActive)
+                .OrderBy(u => u.FirstName).ThenBy(u => u.LastName)
+                .Select(u => new { usersId = u.Users_ID, fullName = u.FirstName + " " + u.LastName, roleId = u.RoleId })
+                .ToListAsync();
+
+            return Json(new { grantedUsers, allUsers });
+        }
+
+        /// <summary>
+        /// Grants a user access to a catalog report.
+        /// </summary>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> GrantReportAccess([FromBody] ReportAccessRequest request)
+        {
+            var roleId = HttpContext.Session.GetString("RoleId") ?? "0";
+            if (roleId != "1") return Forbid();
+
+            var grantorUsersId = int.Parse(User.FindFirst("Users_Id")?.Value ?? "0");
+            var reportKey = $"catalog:{request.ReportId}";
+
+            var existing = await _db.ReportAccess
+                .FirstOrDefaultAsync(a => a.ReportKey == reportKey && a.Users_ID == request.UsersId);
+
+            if (existing != null)
+                return Json(new { success = true, message = "User already has access." });
+
+            _db.ReportAccess.Add(new ReportAccessEntity
+            {
+                ReportKey         = reportKey,
+                Users_ID          = request.UsersId,
+                GrantedDate       = DateTime.Now,
+                GrantedByUsers_ID = grantorUsersId > 0 ? grantorUsersId : null
+            });
+
+            await _db.SaveChangesAsync();
+            return Json(new { success = true });
+        }
+
+        /// <summary>
+        /// Revokes a user's access to a catalog report.
+        /// </summary>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> RevokeReportAccess([FromBody] ReportAccessRevokeRequest request)
+        {
+            var roleId = HttpContext.Session.GetString("RoleId") ?? "0";
+            if (roleId != "1") return Forbid();
+
+            var entry = await _db.ReportAccess.FindAsync(request.AccessId);
+            if (entry == null) return Json(new { success = false, message = "Record not found." });
+
+            _db.ReportAccess.Remove(entry);
+            await _db.SaveChangesAsync();
+            return Json(new { success = true });
+        }
+
+        // ======================================================================
+        // Helpers
+        // ======================================================================
+
+        /// <summary>
+        /// Checks whether the current user may run the given catalog report,
+        /// applying role/location rules AND (if the catalog entry is marked restricted)
+        /// the per-user ReportAccess table.
+        /// </summary>
+        private async Task<bool> CanUserRunCatalogReportAsync(IReportDefinition definition, ReportUserContext userContext)
+        {
+            // Role + location check (existing logic)
+            if (!_authorizationService.IsUserAuthorized(definition, userContext))
+                return false;
+
+            // Admin always passes
+            if (userContext.RoleId == "1") return true;
+
+            // Check per-user restriction flag (stored by convention on Description or we use a DB table)
+            var reportKey = $"catalog:{definition.Id}";
+            var isRestricted = await _db.ReportAccess.AnyAsync(a => a.ReportKey == reportKey);
+
+            // If no access rows exist at all, the report is "open" (not yet restricted)
+            if (!isRestricted) return true;
+
+            // Restriction is active → check if this specific user is listed
+            var usersIdStr = User.FindFirst("Users_Id")?.Value ?? "0";
+            var usersId = int.Parse(usersIdStr);
+            return await _db.ReportAccess
+                .AnyAsync(a => a.ReportKey == reportKey && a.Users_ID == usersId);
         }
 
         /// <summary>

@@ -120,7 +120,7 @@ public partial class SalesMetricsDbContext : DbContext
 
             entity.Property(e => e.LoginHistoryId).HasColumnName("LoginHistoryID");
             entity.Property(e => e.Ipaddress)
-                .HasMaxLength(20)
+                .HasMaxLength(45)
                 .HasColumnName("IPAddress");
             entity.Property(e => e.LoginDate).HasDefaultValueSql("(CONVERT([date],getdate()))");
             entity.Property(e => e.LoginTime)

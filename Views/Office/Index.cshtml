@@ -13,6 +13,7 @@
     var transactionSummary = ViewBag.TransactionSummary as TransactionSummary;
     var overdueInvoices = ViewBag.OverdueInvoices as List<OverdueInvoice>;
     var weekOffset = ViewBag.WeekOffset ?? 0;
+    var monthlyEnvelopes = ViewBag.MonthlyEnvelopes as List<MonthlyEnvelopeItem> ?? new List<MonthlyEnvelopeItem>();
 }
 
 @section styles {
@@ -36,7 +37,7 @@
     <div class="row mb-4">
         <!-- Envelopes Sent This Month -->
         <div class="col-xl-3 col-md-6 mb-3">
-            <div class="card border-left-primary shadow h-100 py-2">
+            <div class="card border-left-primary shadow h-100 py-2 kpi-clickable" onclick="showKpiModal('envelopes_sent')" title="Click to view all envelopes sent this month">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
                         <div class="col mr-2">
@@ -51,13 +52,14 @@
                             <i class="fas fa-envelope fa-2x text-gray-300"></i>
                         </div>
                     </div>
+                    <div class="kpi-click-hint"><i class="fas fa-table me-1"></i>Click to view details</div>
                 </div>
             </div>
         </div>
 
         <!-- Completion Rate -->
         <div class="col-xl-3 col-md-6 mb-3">
-            <div class="card border-left-success shadow h-100 py-2">
+            <div class="card border-left-success shadow h-100 py-2 kpi-clickable" onclick="showKpiModal('completion_rate')" title="Click to view completion rate breakdown">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
                         <div class="col mr-2">
@@ -72,13 +74,14 @@
                             <i class="fas fa-check-circle fa-2x text-gray-300"></i>
                         </div>
                     </div>
+                    <div class="kpi-click-hint"><i class="fas fa-table me-1"></i>Click to view details</div>
                 </div>
             </div>
         </div>
 
         <!-- Pending Signatures -->
         <div class="col-xl-3 col-md-6 mb-3">
-            <div class="card border-left-warning shadow h-100 py-2">
+            <div class="card border-left-warning shadow h-100 py-2 kpi-clickable" onclick="showKpiModal('pending_signatures')" title="Click to view pending signature envelopes">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
                         <div class="col mr-2">
@@ -93,13 +96,14 @@
                             <i class="fas fa-clock fa-2x text-gray-300"></i>
                         </div>
                     </div>
+                    <div class="kpi-click-hint"><i class="fas fa-table me-1"></i>Click to view details</div>
                 </div>
             </div>
         </div>
 
         <!-- Avg Time to Sign -->
         <div class="col-xl-3 col-md-6 mb-3">
-            <div class="card border-left-info shadow h-100 py-2">
+            <div class="card border-left-info shadow h-100 py-2 kpi-clickable" onclick="showKpiModal('avg_time_to_sign')" title="Click to view completed envelope signing times">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
                         <div class="col mr-2">
@@ -121,6 +125,7 @@
                             <i class="fas fa-hourglass-half fa-2x text-gray-300"></i>
                         </div>
                     </div>
+                    <div class="kpi-click-hint"><i class="fas fa-table me-1"></i>Click to view details</div>
                 </div>
             </div>
         </div>
@@ -516,6 +521,29 @@
     </div>
 </div>
 
+<!-- KPI DETAIL MODAL -->
+<div class="modal fade" id="kpiModal" tabindex="-1" aria-labelledby="kpiModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="kpiModalLabel">KPI Details</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="kpiTableContainer">
+                    <table id="kpiDetailTable" class="table table-bordered table-hover w-100">
+                        <thead id="kpiTableHead"></thead>
+                        <tbody id="kpiTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- JOB SCHEDULE MODAL -->
 <div class="modal fade" id="workOrderModal" tabindex="-1" aria-labelledby="workOrderModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
@@ -620,6 +648,130 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
     <script>
+        // Monthly envelopes data for KPI drill-down modals
+        var monthlyEnvelopesData = @Html.Raw(Json.Serialize(monthlyEnvelopes));
+        var kpiDetailTableInstance = null;
+
+        function getStatusBadge(status) {
+            switch(status) {
+                case 'Completed': return 'success';
+                case 'Sent': return 'primary';
+                case 'Viewed': return 'info';
+                case 'Draft': return 'secondary';
+                case 'Declined': return 'danger';
+                case 'Voided': return 'dark';
+                case 'Expired': return 'warning';
+                default: return 'secondary';
+            }
+        }
+
+        function showKpiModal(kpiType) {
+            // Destroy existing DataTable instance
+            if (kpiDetailTableInstance && $.fn.DataTable.isDataTable('#kpiDetailTable')) {
+                kpiDetailTableInstance.destroy();
+                kpiDetailTableInstance = null;
+            }
+            $('#kpiTableHead').empty();
+            $('#kpiTableBody').empty();
+
+            var title = '';
+            var filteredData = [];
+            var tableHead = $('#kpiTableHead');
+            var tableBody = $('#kpiTableBody');
+
+            switch(kpiType) {
+                case 'envelopes_sent':
+                    title = 'Envelopes Sent This Month';
+                    filteredData = monthlyEnvelopesData.filter(function(e) { return e.status !== 'Draft'; });
+                    tableHead.html('<tr><th>Subject</th><th>Type</th><th>Status</th><th>Property</th><th>Order #</th><th>Sent Date</th></tr>');
+                    filteredData.forEach(function(e) {
+                        tableBody.append('<tr>' +
+                            '<td>' + (e.subject || '') + '</td>' +
+                            '<td>' + (e.envelopeType || '') + '</td>' +
+                            '<td><span class="badge bg-' + getStatusBadge(e.status) + '">' + (e.status || '') + '</span></td>' +
+                            '<td>' + (e.propertyName || '') + '</td>' +
+                            '<td>' + (e.orderNumber || '') + '</td>' +
+                            '<td>' + (e.sentAtUtc ? new Date(e.sentAtUtc).toLocaleDateString() : 'N/A') + '</td>' +
+                        '</tr>');
+                    });
+                    break;
+
+                case 'completion_rate':
+                    title = 'Completion Rate — Envelope Status Breakdown';
+                    filteredData = monthlyEnvelopesData.filter(function(e) { return e.status !== 'Draft'; });
+                    tableHead.html('<tr><th>Subject</th><th>Type</th><th>Status</th><th>Property</th><th>Sent Date</th><th>Completed Date</th></tr>');
+                    filteredData.forEach(function(e) {
+                        tableBody.append('<tr>' +
+                            '<td>' + (e.subject || '') + '</td>' +
+                            '<td>' + (e.envelopeType || '') + '</td>' +
+                            '<td><span class="badge bg-' + getStatusBadge(e.status) + '">' + (e.status || '') + '</span></td>' +
+                            '<td>' + (e.propertyName || '') + '</td>' +
+                            '<td>' + (e.sentAtUtc ? new Date(e.sentAtUtc).toLocaleDateString() : 'N/A') + '</td>' +
+                            '<td>' + (e.completedAtUtc ? new Date(e.completedAtUtc).toLocaleDateString() : '—') + '</td>' +
+                        '</tr>');
+                    });
+                    break;
+
+                case 'pending_signatures':
+                    title = 'Pending Signatures';
+                    filteredData = monthlyEnvelopesData.filter(function(e) { return e.status === 'Sent' || e.status === 'Viewed'; });
+                    tableHead.html('<tr><th>Subject</th><th>Type</th><th>Status</th><th>Property</th><th>Order #</th><th>Sent Date</th><th>Days Pending</th></tr>');
+                    filteredData.forEach(function(e) {
+                        var daysPending = e.sentAtUtc ? Math.floor((new Date() - new Date(e.sentAtUtc)) / (1000*60*60*24)) : 0;
+                        tableBody.append('<tr>' +
+                            '<td>' + (e.subject || '') + '</td>' +
+                            '<td>' + (e.envelopeType || '') + '</td>' +
+                            '<td><span class="badge bg-' + getStatusBadge(e.status) + '">' + (e.status || '') + '</span></td>' +
+                            '<td>' + (e.propertyName || '') + '</td>' +
+                            '<td>' + (e.orderNumber || '') + '</td>' +
+                            '<td>' + (e.sentAtUtc ? new Date(e.sentAtUtc).toLocaleDateString() : 'N/A') + '</td>' +
+                            '<td>' + daysPending + '</td>' +
+                        '</tr>');
+                    });
+                    break;
+
+                case 'avg_time_to_sign':
+                    title = 'Avg Time to Sign — Completed Envelopes';
+                    filteredData = monthlyEnvelopesData.filter(function(e) { return e.status === 'Completed' && e.timeToSignHours != null; });
+                    tableHead.html('<tr><th>Subject</th><th>Type</th><th>Property</th><th>Order #</th><th>Sent Date</th><th>Completed Date</th><th>Time to Sign</th></tr>');
+                    filteredData.forEach(function(e) {
+                        var timeDisplay = e.timeToSignHours < 24
+                            ? e.timeToSignHours.toFixed(1) + ' hrs'
+                            : (e.timeToSignHours / 24).toFixed(1) + ' days';
+                        tableBody.append('<tr>' +
+                            '<td>' + (e.subject || '') + '</td>' +
+                            '<td>' + (e.envelopeType || '') + '</td>' +
+                            '<td>' + (e.propertyName || '') + '</td>' +
+                            '<td>' + (e.orderNumber || '') + '</td>' +
+                            '<td>' + (e.sentAtUtc ? new Date(e.sentAtUtc).toLocaleDateString() : 'N/A') + '</td>' +
+                            '<td>' + (e.completedAtUtc ? new Date(e.completedAtUtc).toLocaleDateString() : '—') + '</td>' +
+                            '<td>' + timeDisplay + '</td>' +
+                        '</tr>');
+                    });
+                    break;
+            }
+
+            $('#kpiModalLabel').text(title);
+
+            if (filteredData.length === 0) {
+                tableBody.html('<tr><td colspan="8" class="text-center text-muted py-4"><i class="fas fa-info-circle me-2"></i>No data available</td></tr>');
+            }
+
+            kpiDetailTableInstance = $('#kpiDetailTable').DataTable({
+                pageLength: 10,
+                ordering: true,
+                searching: true,
+                autoWidth: false,
+                dom: '<"top d-flex justify-content-between align-items-center mb-3"lf>rt<"bottom d-flex justify-content-between align-items-center mt-3"ip>',
+                language: {
+                    search: '<i class="fas fa-search me-1"></i> Search:',
+                    lengthMenu: 'Show _MENU_ entries'
+                }
+            });
+
+            $('#kpiModal').modal('show');
+        }
+
         // Store chart instances for cleanup
         let envelopeStatusChartInstance = null;
         let weeklyJobsChartInstance = null;
@@ -768,7 +920,7 @@
                 order: [[5, 'desc']], // Sort by Days Past Due
                 pageLength: 10,
                 responsive: true,
-                scrollX: true,
+                autoWidth: false,
                 dom: `
                     <"top d-flex justify-content-between align-items-center mb-3" lBf>
                     rt
@@ -912,7 +1064,7 @@
                         order: [[5, 'desc']], // Sort by Days Since Order
                         pageLength: 10,
                         responsive: true,
-                        scrollX: true,
+                        autoWidth: false,
                         dom: `
                             <"top d-flex justify-content-between align-items-center mb-3" lBf>
                             rt
@@ -963,6 +1115,9 @@
             if ($.fn.DataTable.isDataTable('#workOrdersTable')) {
                 $('#workOrdersTable').DataTable().destroy();
             }
+            if (kpiDetailTableInstance && $.fn.DataTable.isDataTable('#kpiDetailTable')) {
+                kpiDetailTableInstance.destroy();
+            }
         });
     </script>
 
@@ -996,6 +1151,25 @@
         }
         .modal-header.bg-primary {
             background-color: #4e73df !important;
+        }
+        .kpi-clickable {
+            cursor: pointer;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+        .kpi-clickable:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 0.5rem 1.5rem rgba(0,0,0,0.18) !important;
+        }
+        .kpi-click-hint {
+            font-size: 0.68rem;
+            color: #adb5bd;
+            margin-top: 6px;
+        }
+        .kpi-clickable:hover .kpi-click-hint {
+            color: #6c757d;
+        }
+        #kpiDetailTable th {
+            white-space: nowrap;
         }
     </style>
 }

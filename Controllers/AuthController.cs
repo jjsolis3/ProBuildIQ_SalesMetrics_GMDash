@@ -12,7 +12,12 @@ using UAParser;
 using System.Security.Cryptography;
 using System.Text;
 using SalesMetrics.Services;
+using SalesMetrics.Services.Signing;
+using SalesMetrics.Utilities.Security;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Options;
+using System.Net;
+using System.Net.Mail;
 
 
 namespace SalesMetrics.Controllers
@@ -22,17 +27,28 @@ namespace SalesMetrics.Controllers
         private readonly IConfiguration _configuration;
         private readonly IErrorLoggingService _errorLoggingService;
         private readonly IMemoryCache _cache;
+        private readonly ISmtpSettingsProvider _smtpProvider;
+        private readonly AppSettings _appSettings;
 
         // Lock out an IP after this many consecutive failures within the sliding window.
         private const int MaxLoginAttempts = 5;
         // Sliding window / lockout duration.
         private static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(15);
+        // Password reset token validity window.
+        private static readonly TimeSpan ResetTokenExpiry = TimeSpan.FromHours(1);
 
-        public AuthController(IConfiguration configuration, IErrorLoggingService errorLoggingService, IMemoryCache cache)
+        public AuthController(
+            IConfiguration configuration,
+            IErrorLoggingService errorLoggingService,
+            IMemoryCache cache,
+            ISmtpSettingsProvider smtpProvider,
+            IOptions<AppSettings> appSettings)
         {
             _configuration = configuration;
             _errorLoggingService = errorLoggingService;
             _cache = cache;
+            _smtpProvider = smtpProvider;
+            _appSettings = appSettings.Value;
         }
 
         // ─────────────────────────────────────────────
@@ -534,12 +550,245 @@ namespace SalesMetrics.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public IActionResult ForgotPassword(string email)
+        public async Task<IActionResult> ForgotPassword(string email)
         {
-            // Always show the same message regardless of whether the email exists,
-            // to prevent account enumeration.
+            // Always show the same success message to prevent account enumeration.
             ViewBag.Submitted = true;
+
+            if (string.IsNullOrWhiteSpace(email) || !email.Contains("@"))
+                return View();
+
+            email = email.Trim().ToLower();
+
+            try
+            {
+                string connStr = _configuration.GetConnectionString("SalesMetrics");
+
+                // Look up user — only proceed if the account exists; otherwise silently drop.
+                string? userEmail = null;
+                string? fullName = null;
+
+                using (var conn = new SqlConnection(connStr))
+                {
+                    await conn.OpenAsync();
+                    var cmd = new SqlCommand(
+                        "SELECT Email, FirstName + ' ' + LastName AS FullName FROM Users WHERE Email = @Email AND IsActive = 1",
+                        conn);
+                    cmd.Parameters.AddWithValue("@Email", email);
+
+                    using var reader = await cmd.ExecuteReaderAsync();
+                    if (reader.Read())
+                    {
+                        userEmail = reader["Email"]?.ToString();
+                        fullName  = reader["FullName"]?.ToString();
+                    }
+                }
+
+                if (string.IsNullOrEmpty(userEmail))
+                    return View(); // User not found — silently return
+
+                // Generate a secure URL-safe token and persist it
+                string token = TokenHelper.CreateSecureToken(32);
+                DateTime expiresAt = DateTime.UtcNow.Add(ResetTokenExpiry);
+
+                using (var conn = new SqlConnection(connStr))
+                {
+                    await conn.OpenAsync();
+
+                    // Invalidate any previous unused tokens for this email
+                    var deleteOld = new SqlCommand(
+                        "DELETE FROM PasswordResetTokens WHERE Email = @Email AND UsedAt IS NULL",
+                        conn);
+                    deleteOld.Parameters.AddWithValue("@Email", email);
+                    await deleteOld.ExecuteNonQueryAsync();
+
+                    var insertCmd = new SqlCommand(@"
+                        INSERT INTO PasswordResetTokens (Token, Email, ExpiresAt)
+                        VALUES (@Token, @Email, @ExpiresAt)", conn);
+                    insertCmd.Parameters.AddWithValue("@Token", token);
+                    insertCmd.Parameters.AddWithValue("@Email", email);
+                    insertCmd.Parameters.AddWithValue("@ExpiresAt", expiresAt);
+                    await insertCmd.ExecuteNonQueryAsync();
+                }
+
+                // Build the reset link
+                string baseUrl = _appSettings?.BaseUrl?.TrimEnd('/') ?? $"{Request.Scheme}://{Request.Host}";
+                string resetUrl = $"{baseUrl}/Auth/ResetPassword?token={Uri.EscapeDataString(token)}";
+
+                // Send the reset email via SMTP
+                var smtp = await _smtpProvider.GetAsync();
+                if (!string.IsNullOrWhiteSpace(smtp.Host) && !string.IsNullOrWhiteSpace(smtp.FromEmail))
+                {
+                    string subject = "SalesMetrics — Password Reset Request";
+                    string body = $@"
+                        <p>Hi {System.Net.WebUtility.HtmlEncode(fullName ?? email)},</p>
+                        <p>We received a request to reset your SalesMetrics password.</p>
+                        <p>
+                            <a href=""{resetUrl}"" style=""background:#0d6efd;color:#fff;padding:10px 20px;border-radius:5px;text-decoration:none;"">
+                                Reset My Password
+                            </a>
+                        </p>
+                        <p>This link expires in <strong>1 hour</strong>.</p>
+                        <p>If you did not request a password reset, please ignore this email or contact your IT Department.</p>
+                        <hr/>
+                        <small>ProBuildIQ SalesMetrics &mdash; password reset link</small>";
+
+                    using var message = new MailMessage
+                    {
+                        From      = new MailAddress(smtp.FromEmail, smtp.FromName),
+                        Subject   = subject,
+                        Body      = body,
+                        IsBodyHtml = true
+                    };
+                    message.To.Add(new MailAddress(email, fullName ?? email));
+
+                    using var client = new SmtpClient(smtp.Host, smtp.Port)
+                    {
+                        EnableSsl             = smtp.EnableSsl,
+                        UseDefaultCredentials = false,
+                        Credentials           = new NetworkCredential(smtp.User, smtp.Pass)
+                    };
+                    await client.SendMailAsync(message);
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log but do not surface error to prevent enumeration
+                await _errorLoggingService.LogWarningAsync(
+                    $"ForgotPassword flow error for '{email}': {ex.Message}",
+                    HttpContext, null, "Auth");
+            }
+
             return View();
+        }
+
+        // ─────────────────────────────────────────────
+        // Reset Password (token-based)
+        // ─────────────────────────────────────────────
+
+        [HttpGet]
+        public async Task<IActionResult> ResetPassword(string? token)
+        {
+            if (string.IsNullOrWhiteSpace(token))
+                return RedirectToAction("ForgotPassword");
+
+            // Validate token exists, is unused, and has not expired
+            bool valid = await IsResetTokenValidAsync(token);
+            if (!valid)
+            {
+                ViewBag.InvalidToken = true;
+                return View();
+            }
+
+            ViewBag.Token = token;
+            return View();
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ResetPassword(string token, string newPassword, string confirmPassword)
+        {
+            if (string.IsNullOrWhiteSpace(token))
+                return RedirectToAction("ForgotPassword");
+
+            ViewBag.Token = token;
+
+            if (string.IsNullOrWhiteSpace(newPassword) || newPassword.Length < 8)
+            {
+                ViewBag.Error = "Password must be at least 8 characters.";
+                return View();
+            }
+
+            if (newPassword != confirmPassword)
+            {
+                ViewBag.Error = "Passwords do not match.";
+                return View();
+            }
+
+            string connStr = _configuration.GetConnectionString("SalesMetrics");
+
+            try
+            {
+                string? email = null;
+                DateTime? expiresAt = null;
+
+                using (var conn = new SqlConnection(connStr))
+                {
+                    await conn.OpenAsync();
+                    var lookupCmd = new SqlCommand(@"
+                        SELECT Email, ExpiresAt FROM PasswordResetTokens
+                        WHERE Token = @Token AND UsedAt IS NULL", conn);
+                    lookupCmd.Parameters.AddWithValue("@Token", token);
+
+                    using var reader = await lookupCmd.ExecuteReaderAsync();
+                    if (reader.Read())
+                    {
+                        email     = reader["Email"]?.ToString();
+                        expiresAt = Convert.ToDateTime(reader["ExpiresAt"]);
+                    }
+                }
+
+                if (string.IsNullOrEmpty(email) || expiresAt == null || expiresAt < DateTime.UtcNow)
+                {
+                    ViewBag.InvalidToken = true;
+                    return View();
+                }
+
+                // Hash the new password
+                string salt    = PasswordSecurity.GenerateSalt();
+                string newHash = PasswordSecurity.HashPassword(newPassword, salt);
+
+                using (var conn = new SqlConnection(connStr))
+                {
+                    await conn.OpenAsync();
+
+                    // Update the user's password (all records sharing this email)
+                    var updateCmd = new SqlCommand(@"
+                        UPDATE Users
+                        SET PasswordHash        = @Hash,
+                            Salt                = @Salt,
+                            PasswordChangedDate = GETDATE()
+                        WHERE Email = @Email AND IsActive = 1", conn);
+                    updateCmd.Parameters.AddWithValue("@Hash",  newHash);
+                    updateCmd.Parameters.AddWithValue("@Salt",  salt);
+                    updateCmd.Parameters.AddWithValue("@Email", email);
+                    await updateCmd.ExecuteNonQueryAsync();
+
+                    // Mark token as used
+                    var markUsed = new SqlCommand(@"
+                        UPDATE PasswordResetTokens SET UsedAt = GETDATE()
+                        WHERE Token = @Token", conn);
+                    markUsed.Parameters.AddWithValue("@Token", token);
+                    await markUsed.ExecuteNonQueryAsync();
+                }
+
+                ViewBag.Success = true;
+                return View();
+            }
+            catch (Exception ex)
+            {
+                await _errorLoggingService.LogWarningAsync(
+                    $"ResetPassword error for token '{token}': {ex.Message}",
+                    HttpContext, null, "Auth");
+
+                ViewBag.Error = "An unexpected error occurred. Please try again or contact IT.";
+                return View();
+            }
+        }
+
+        private async Task<bool> IsResetTokenValidAsync(string token)
+        {
+            string connStr = _configuration.GetConnectionString("SalesMetrics");
+            using var conn = new SqlConnection(connStr);
+            await conn.OpenAsync();
+
+            var cmd = new SqlCommand(@"
+                SELECT COUNT(1) FROM PasswordResetTokens
+                WHERE Token = @Token AND UsedAt IS NULL AND ExpiresAt > GETUTCDATE()", conn);
+            cmd.Parameters.AddWithValue("@Token", token);
+
+            int count = (int)await cmd.ExecuteScalarAsync();
+            return count > 0;
         }
 
         // ─────────────────────────────────────────────

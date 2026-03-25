@@ -141,7 +141,7 @@
     @{
         var hideLocationSwitcher = PageHelper.ShouldHideLocationSwitcher(currentController, currentAction);
 
-        // Show modal if user has multiple locations OR is admin/GM/Office Manager
+        // Show modal if user has multiple locations OR is admin/Leadership/Office Manager
         var showSwitchLocationModal = !hideLocationSwitcher
         && (switchModel.AvailableLocations.Count > 1 ||
             User.IsInRole("Admin") || User.IsInRole("General Manager") || User.IsInRole("Office Manager") ||

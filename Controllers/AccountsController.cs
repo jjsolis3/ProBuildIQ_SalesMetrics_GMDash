@@ -435,8 +435,15 @@ namespace SalesMetrics.Controllers
                     }
                     if (!string.IsNullOrWhiteSpace(model.Password))
                     {
-                        updates.Add("Password = @Password");
-                        cmd.Parameters.AddWithValue("@Password", model.Password ?? "");
+                        // Hash the new password with a fresh salt; never store plaintext.
+                        string newSalt = PasswordSecurity.GenerateSalt();
+                        string newHash = PasswordSecurity.HashPassword(model.Password, newSalt);
+
+                        updates.Add("PasswordHash = @PasswordHash");
+                        updates.Add("Salt = @Salt");
+                        updates.Add("PasswordChangedDate = GETDATE()");
+                        cmd.Parameters.AddWithValue("@PasswordHash", newHash);
+                        cmd.Parameters.AddWithValue("@Salt", newSalt);
                     }
                     if (!string.IsNullOrWhiteSpace(model.UserId.ToString()))
                     {

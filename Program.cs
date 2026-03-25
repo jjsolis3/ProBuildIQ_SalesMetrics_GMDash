@@ -186,10 +186,13 @@ var googleClientSecret = BootstrapCredential(smConnStr, encKey, "Google_ClientSe
     builder.Configuration["Authentication:Google:ClientSecret"] ?? "");
 
 // Google OAuth + Cookie Auth
+// DefaultChallengeScheme = Cookie so that [Authorize] redirects to the local
+// email/password login page, NOT to Google.  Google OAuth is only initiated
+// explicitly via the ConnectGoogle action (for Calendar/Tasks integration).
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = "Google";
+    options.DefaultChallengeScheme = CookieAuthenticationDefaults.AuthenticationScheme;
 })
 .AddGoogle("Google", options =>
 {

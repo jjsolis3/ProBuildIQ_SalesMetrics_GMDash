@@ -29,6 +29,7 @@ namespace SalesMetrics.Controllers
         private readonly IMemoryCache _cache;
         private readonly ISmtpSettingsProvider _smtpProvider;
         private readonly AppSettings _appSettings;
+        private readonly ILogger<AuthController> _logger;
 
         // Lock out an IP after this many consecutive failures within the sliding window.
         private const int MaxLoginAttempts = 5;
@@ -42,13 +43,15 @@ namespace SalesMetrics.Controllers
             IErrorLoggingService errorLoggingService,
             IMemoryCache cache,
             ISmtpSettingsProvider smtpProvider,
-            IOptions<AppSettings> appSettings)
+            IOptions<AppSettings> appSettings,
+            ILogger<AuthController> logger)
         {
             _configuration = configuration;
             _errorLoggingService = errorLoggingService;
             _cache = cache;
             _smtpProvider = smtpProvider;
             _appSettings = appSettings.Value;
+            _logger = logger;
         }
 
         // ─────────────────────────────────────────────
@@ -833,49 +836,62 @@ namespace SalesMetrics.Controllers
         /// <summary>
         /// Records a login attempt to LoginHistory and, on failure, also writes a Warning
         /// to the ErrorLog so it surfaces in the Error Dashboard.
+        /// Errors in history logging are swallowed so they never block a successful login.
         /// </summary>
         private async Task LogLoginAttemptAsync(int userID, string username, string branch, bool success, string errorMsg = null)
         {
-            string connSR = _configuration.GetConnectionString("SalesMetrics");
-
-            using (SqlConnection conn = new SqlConnection(connSR))
+            try
             {
-                conn.Open();
+                string connSR = _configuration.GetConnectionString("SalesMetrics");
 
-                var userAgent = HttpContext.Request.Headers["User-Agent"].ToString();
-                var parser = UAParser.Parser.GetDefault();
-                var clientInfo = parser.Parse(userAgent);
+                using (SqlConnection conn = new SqlConnection(connSR))
+                {
+                    conn.Open();
 
-                var browser = clientInfo.UA.Family + " " + clientInfo.UA.Major;
-                var os = clientInfo.OS.Family + " " + clientInfo.OS.Major;
-                var deviceInfo = $"{browser} on {os}";
+                    var userAgent = HttpContext.Request.Headers["User-Agent"].ToString();
+                    var parser = UAParser.Parser.GetDefault();
+                    var clientInfo = parser.Parse(userAgent);
 
-                SqlCommand cmd = new SqlCommand(@"
-                    INSERT INTO [LoginHistory] (UserID, UserName, Success, IPAddress, office, DeviceInfo, UserAgentRaw, ErrorLog)
-                    VALUES (@userID, @userName, @success, @ipAddress, @office, @deviceInfo, @userAgentRaw, @errorLog)", conn);
+                    var browser = clientInfo.UA.Family + " " + clientInfo.UA.Major;
+                    var os = clientInfo.OS.Family + " " + clientInfo.OS.Major;
+                    var deviceInfo = $"{browser} on {os}";
 
-                cmd.Parameters.AddWithValue("@userID", userID);
-                cmd.Parameters.AddWithValue("@userName", username);
-                cmd.Parameters.AddWithValue("@success", success ? "Success" : "Failed");
-                cmd.Parameters.AddWithValue("@ipAddress", GetUserIPAddress());
-                cmd.Parameters.AddWithValue("@office", branch);
-                cmd.Parameters.AddWithValue("@deviceInfo", deviceInfo ?? "Unknown");
-                cmd.Parameters.AddWithValue("@userAgentRaw", Request.Headers["User-Agent"].ToString());
-                cmd.Parameters.AddWithValue("@errorLog", success ? (object)DBNull.Value : errorMsg);
+                    SqlCommand cmd = new SqlCommand(@"
+                        INSERT INTO [LoginHistory] (UserID, UserName, Success, IPAddress, office, DeviceInfo, UserAgentRaw, ErrorLog)
+                        VALUES (@userID, @userName, @success, @ipAddress, @office, @deviceInfo, @userAgentRaw, @errorLog)", conn);
 
-                cmd.ExecuteNonQuery();
+                    cmd.Parameters.AddWithValue("@userID", userID);
+                    cmd.Parameters.AddWithValue("@userName", username);
+                    cmd.Parameters.AddWithValue("@success", success ? "Success" : "Failed");
+                    cmd.Parameters.AddWithValue("@ipAddress", GetUserIPAddress());
+                    cmd.Parameters.AddWithValue("@office", branch);
+                    cmd.Parameters.AddWithValue("@deviceInfo", deviceInfo ?? "Unknown");
+                    cmd.Parameters.AddWithValue("@userAgentRaw", Request.Headers["User-Agent"].ToString());
+                    cmd.Parameters.AddWithValue("@errorLog", success ? (object)DBNull.Value : errorMsg);
+
+                    cmd.ExecuteNonQuery();
+                }
+            }
+            catch (Exception ex)
+            {
+                // History logging must never prevent a login from succeeding.
+                _logger?.LogWarning(ex, "LoginHistory insert failed for user '{Username}'", username);
             }
 
             // On failure, also write to the ErrorLog so it appears in the Error Dashboard
             if (!success)
             {
-                var additionalData = $"{{\"username\":\"{username}\",\"office\":\"{branch}\",\"ip\":\"{GetUserIPAddress()}\"}}";
-                await _errorLoggingService.LogWarningAsync(
-                    $"Failed login attempt for '{username}' from {GetUserIPAddress()} [{branch}]: {errorMsg}",
-                    HttpContext,
-                    additionalData,
-                    "Auth"
-                );
+                try
+                {
+                    var additionalData = $"{{\"username\":\"{username}\",\"office\":\"{branch}\",\"ip\":\"{GetUserIPAddress()}\"}}";
+                    await _errorLoggingService.LogWarningAsync(
+                        $"Failed login attempt for '{username}' from {GetUserIPAddress()} [{branch}]: {errorMsg}",
+                        HttpContext,
+                        additionalData,
+                        "Auth"
+                    );
+                }
+                catch { /* swallow — never block login */ }
             }
         }
 

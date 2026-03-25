@@ -137,6 +137,9 @@ public partial class SalesMetricsDbContext : DbContext
             entity.Property(e => e.UserName)
                 .HasMaxLength(50)
                 .IsUnicode(false);
+            entity.Property(e => e.DeviceInfo).HasMaxLength(500);
+            entity.Property(e => e.UserAgentRaw).HasMaxLength(2000);
+            entity.Property(e => e.ErrorLog);
         });
 
         modelBuilder.Entity<RoleEntity>(entity =>

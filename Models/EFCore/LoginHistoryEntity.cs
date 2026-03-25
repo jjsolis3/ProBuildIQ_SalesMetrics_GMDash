@@ -20,4 +20,10 @@ public partial class LoginHistoryEntity
     public string? Ipaddress { get; set; }
 
     public string? Office { get; set; }
+
+    public string? DeviceInfo { get; set; }
+
+    public string? UserAgentRaw { get; set; }
+
+    public string? ErrorLog { get; set; }
 }

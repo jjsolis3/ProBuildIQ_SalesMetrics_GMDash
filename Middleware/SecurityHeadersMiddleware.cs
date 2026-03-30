@@ -43,7 +43,8 @@ namespace SalesMetrics.Middleware
                     "https://cdn.jsdelivr.net " +
                     "https://cdnjs.cloudflare.com " +
                     "https://cdn.datatables.net " +
-                    "https://ajax.googleapis.com; " +
+                    "https://ajax.googleapis.com " +
+                    "https://html2canvas.hertzen.com; " +
                 "style-src 'self' 'unsafe-inline' " +
                     "https://cdn.jsdelivr.net " +
                     "https://cdnjs.cloudflare.com " +
@@ -51,9 +52,12 @@ namespace SalesMetrics.Middleware
                     "https://fonts.googleapis.com; " +
                 "font-src 'self' " +
                     "https://fonts.gstatic.com " +
-                    "https://cdnjs.cloudflare.com; " +
+                    "https://cdnjs.cloudflare.com " +
+                    "https://cdn.jsdelivr.net; " +
                 "img-src 'self' data: https: blob:; " +
-                "connect-src 'self'; " +
+                "connect-src 'self' " +
+                    "https://cdn.jsdelivr.net " +
+                    "https://cdnjs.cloudflare.com; " +
                 "frame-ancestors 'none'; " +
                 "form-action 'self'; " +
                 "base-uri 'self';";

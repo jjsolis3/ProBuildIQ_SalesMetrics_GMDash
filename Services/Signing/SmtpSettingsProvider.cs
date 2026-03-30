@@ -31,13 +31,17 @@ public sealed class SmtpSettingsProvider : ISmtpSettingsProvider
         var fromEmail = await _creds.GetDecryptedAsync("Smtp_FromEmail");
         var fromName  = await _creds.GetDecryptedAsync("Smtp_FromName");
 
+        var resolvedUser = Coalesce(user, _defaults.User) ?? "";
+
         return new SmtpSettings
         {
             Host      = Coalesce(host,      _defaults.Host)      ?? "smtp.gmail.com",
             Port      = int.TryParse(portStr, out var p) ? p : _defaults.Port,
-            User      = Coalesce(user,      _defaults.User)      ?? "",
+            User      = resolvedUser,
             Pass      = Coalesce(pass,      _defaults.Pass),
-            FromEmail = Coalesce(fromEmail, _defaults.FromEmail) ?? "",
+            // If Smtp_FromEmail isn't set, fall back to the SMTP username — they are
+            // always the same for Gmail/standard providers and this avoids the empty-address crash.
+            FromEmail = Coalesce(fromEmail, _defaults.FromEmail) ?? resolvedUser,
             FromName  = Coalesce(fromName,  _defaults.FromName)  ?? "SalesMetrics",
             EnableSsl = _defaults.EnableSsl,
         };

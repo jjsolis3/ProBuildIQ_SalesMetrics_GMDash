@@ -37,6 +37,10 @@ public sealed class NotificationService : INotificationService
     {
         var smtp = await _smtpProvider.GetAsync();
 
+        if (string.IsNullOrWhiteSpace(smtp.FromEmail))
+            throw new InvalidOperationException(
+                "SMTP 'From' address is not configured. Go to Settings → Credentials and set Smtp_FromEmail (or at minimum Smtp_User).");
+
         using var message = new MailMessage
         {
             From = new MailAddress(smtp.FromEmail, smtp.FromName),

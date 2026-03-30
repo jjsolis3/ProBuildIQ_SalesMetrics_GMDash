@@ -1,4 +1,5 @@
 using System.Data.SqlClient;
+using System.Security.Cryptography;
 
 namespace SalesMetrics.Services.Settings;
 
@@ -36,7 +37,22 @@ public sealed class AppCredentialsProvider : IAppCredentialsProvider
         if (string.IsNullOrWhiteSpace(raw))
             return null;
 
-        return AesEncryption.Decrypt(raw, _encKey);
+        try
+        {
+            return AesEncryption.Decrypt(raw, _encKey);
+        }
+        catch (FormatException)
+        {
+            // Encryption key is not valid Base-64 (e.g. ENCRYPTION_KEY env var not set),
+            // or the stored value was encrypted with a different key.
+            // Return null so callers fall back to appsettings.json defaults.
+            return null;
+        }
+        catch (CryptographicException)
+        {
+            // Wrong key (key mismatch after key rotation). Fall back to defaults.
+            return null;
+        }
     }
 
     public async Task UpsertAsync(string key, string plainValue, string category,

@@ -85,36 +85,25 @@ namespace SalesMetrics.Controllers
                 }
                 reader.Close();
 
-                // Fetch assigned locations for each user
-                foreach (var user in usersWithAssignments)
+                // Load all active location assignments in one query, then map in memory
+                var allAssignments = new Dictionary<int, List<string>>();
+                var assignCmd = new SqlCommand(@"
+                    SELECT UserID, LocationID
+                    FROM UserLocationAssignments
+                    WHERE IsActive = 'YES'
+                    ORDER BY UserID, LocationID
+                ", conn);
+                using var assignReader = assignCmd.ExecuteReader();
+                while (assignReader.Read())
                 {
-                    var assignedLocations = new List<string>();
-                    var locCmd = new SqlCommand(@"
-                        SELECT LocationID
-                        FROM UserLocationAssignments
-                        WHERE UserID = @UserId AND IsActive = 'YES'
-                        ORDER BY LocationID
-                    ", conn);
-                    locCmd.Parameters.AddWithValue("@UserId", user.Users_ID);
-
-                    using var locReader = locCmd.ExecuteReader();
-                    while (locReader.Read())
-                    {
-                        int locId = Convert.ToInt32(locReader["LocationID"]);
-                        string locName = locId switch
-                        {
-                            1 => "LAX",
-                            2 => "LSV",
-                            3 => "CHN",
-                            4 => "PHX",
-                            5 => "SND",
-                            _ => "?"
-                        };
-                        assignedLocations.Add(locName);
-                    }
-
-                    user.AssignedLocations = assignedLocations;
+                    int uid = Convert.ToInt32(assignReader["UserID"]);
+                    int locId = Convert.ToInt32(assignReader["LocationID"]);
+                    string locName = locId switch { 1 => "LAX", 2 => "LSV", 3 => "CHN", 4 => "PHX", 5 => "SND", _ => "?" };
+                    if (!allAssignments.ContainsKey(uid)) allAssignments[uid] = new List<string>();
+                    allAssignments[uid].Add(locName);
                 }
+                foreach (var user in usersWithAssignments)
+                    user.AssignedLocations = allAssignments.TryGetValue(user.Users_ID, out var locs) ? locs : new List<string>();
             }
 
             ViewBag.FlaggedUsers = GetFlaggedUsers();
@@ -613,7 +602,7 @@ namespace SalesMetrics.Controllers
             cmd.Parameters.AddWithValue("@FirstName", model.FirstName);
             cmd.Parameters.AddWithValue("@LastName", model.LastName);
             cmd.Parameters.AddWithValue("@Email", model.Email);
-            cmd.Parameters.AddWithValue("@UserId", model.UserId);
+            cmd.Parameters.AddWithValue("@UserId", (object?)(model.UserId > 0 ? model.UserId : null) ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@RoleId", model.RoleId);
             cmd.Parameters.AddWithValue("@LocationId", model.LocationId);
             cmd.Parameters.AddWithValue("@SalesmanId", (object?)model.SalesmanId ?? DBNull.Value);
@@ -761,6 +750,61 @@ namespace SalesMetrics.Controllers
             else
                 TempData["Error"] = $"❌ Update failed for user {userId}.";
 
+            return RedirectToAction("Index");
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult FixAllFlaggedPasswords()
+        {
+            int roleId = int.Parse(HttpContext.User.FindFirst("RoleId")?.Value ?? "0");
+            if (roleId != 1)
+                return RedirectToAction("Error404", "Pages");
+
+            string connStr = _configuration.GetConnectionString("SalesMetrics");
+            DateTime cutoff = new DateTime(2025, 6, 3, 10, 0, 0, DateTimeKind.Utc);
+
+            var usersToFix = new List<(int Users_ID, string Password)>();
+
+            using (var conn = new SqlConnection(connStr))
+            {
+                conn.Open();
+                var cmd = new SqlCommand(@"
+                    SELECT Users_ID, Password
+                    FROM Users
+                    WHERE IsActive = 1
+                      AND Password IS NOT NULL
+                      AND (PasswordChangedDate IS NULL OR PasswordChangedDate < @Cutoff)
+                ", conn);
+                cmd.Parameters.AddWithValue("@Cutoff", cutoff);
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                    usersToFix.Add((Convert.ToInt32(reader["Users_ID"]), reader["Password"].ToString()!));
+            }
+
+            int fixed_ = 0;
+            using (var conn = new SqlConnection(connStr))
+            {
+                conn.Open();
+                foreach (var (id, plainPassword) in usersToFix)
+                {
+                    string newSalt = PasswordSecurity.GenerateSalt();
+                    string newHash = PasswordSecurity.HashPassword(plainPassword, newSalt);
+                    var updateCmd = new SqlCommand(@"
+                        UPDATE Users
+                        SET PasswordHash = @Hash,
+                            Salt = @Salt,
+                            PasswordChangedDate = GETDATE()
+                        WHERE Users_ID = @UserId
+                    ", conn);
+                    updateCmd.Parameters.AddWithValue("@Hash", newHash);
+                    updateCmd.Parameters.AddWithValue("@Salt", newSalt);
+                    updateCmd.Parameters.AddWithValue("@UserId", id);
+                    fixed_ += updateCmd.ExecuteNonQuery();
+                }
+            }
+
+            TempData["Success"] = $"Fixed {fixed_} flagged user password(s).";
             return RedirectToAction("Index");
         }
 

@@ -226,6 +226,13 @@ builder.Services.AddAuthentication(options =>
 builder.Services.AddAuthorization();
 builder.Services.AddHttpContextAccessor();
 
+// Prevent "Cannot determine the https port from IServerAddressesFeature, multiple values were found"
+// which occurs when IIS + Kestrel both bind HTTPS and the middleware can't pick one automatically.
+builder.Services.AddHttpsRedirection(options =>
+{
+    options.HttpsPort = 443;
+});
+
 builder.Services.ConfigureApplicationCookie(options =>
 {
     options.Cookie.HttpOnly = true;

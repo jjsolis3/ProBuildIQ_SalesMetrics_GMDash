@@ -63,7 +63,7 @@ namespace SalesMetrics.Models
         public string Username { get; set; }
         public string? Password { get; set; }
         public int Users_Id { get; set; }
-        public int UserId { get; set; }
+        public int? UserId { get; set; }
         public int RoleId { get; set; }
         public int LocationId { get; set; }
         public int? SalesmanId { get; set; }

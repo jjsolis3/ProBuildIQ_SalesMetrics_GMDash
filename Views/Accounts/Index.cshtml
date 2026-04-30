@@ -91,7 +91,14 @@
 
 @if (ViewBag.FlaggedUsers != null)
 {
-    <h4 class="mt-5">⚠️ Users With Potential Login Issues</h4>
+    <div class="d-flex align-items-center justify-content-between mt-5 mb-2">
+        <h4 class="mb-0">⚠️ Users With Potential Login Issues</h4>
+        <form method="post" asp-controller="Accounts" asp-action="FixAllFlaggedPasswords"
+              onsubmit="return confirm('Fix all @((ViewBag.FlaggedUsers as List<SalesMetrics.Models.FlaggedUserViewModel>)?.Count ?? 0) flagged user password(s)? This cannot be undone.');">
+            @Html.AntiForgeryToken()
+            <button type="submit" class="btn btn-warning btn-sm">🔐 Fix All (@((ViewBag.FlaggedUsers as List<SalesMetrics.Models.FlaggedUserViewModel>)?.Count ?? 0))</button>
+        </form>
+    </div>
     <div style="overflow-x: auto;">
         <table id="flaggedUsersTable" class="table table-bordered table-warning table-striped w-100">
             <thead class="sticky-top">

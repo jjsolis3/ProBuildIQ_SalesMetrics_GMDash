@@ -107,13 +107,20 @@
                     <select asp-for="OrderId" id="orderSelect" class="form-select" disabled>
                         <option value="">Select a property first</option>
                     </select>
+                    <div class="form-text">
+                        <a href="#" id="manualOrderLink" onclick="switchToManualOrder(); return false;" style="display:none;">
+                            Order not listed? Enter manually
+                        </a>
+                    </div>
                 </div>
 
                 @* Free-text order + unit — visible by default (no ERP match) *@
                 <div class="col-md-2" id="freeOrderSection">
                     <label class="form-label">Order #</label>
                     <input asp-for="CustomOrderNumber" id="freeOrderInput" class="form-control" placeholder="e.g. 90805.4" />
-                    <div class="form-text text-muted small">Manual entry</div>
+                    <div class="form-text text-muted small">
+                        Manual entry<span id="erpPickLink" style="display:none;"> &middot; <a href="#" onclick="switchToErpOrder(); return false;">Pick from list</a></span>
+                    </div>
                 </div>
                 <div class="col-md-1" id="freeUnitSection">
                     <label class="form-label">Unit</label>
@@ -264,17 +271,50 @@
         const propResults = document.getElementById('propResults');
         const orderSelect = document.getElementById('orderSelect');
 
-        // Switch between ERP mode (property found in ERP → show order dropdown)
-        // and free-text mode (no ERP match → show manual order# + unit fields).
-        function setPropertyMode(erp) {
-            document.getElementById('erpOrderSection').style.display  = erp ? '' : 'none';
-            document.getElementById('freeOrderSection').style.display = erp ? 'none' : '';
-            document.getElementById('freeUnitSection').style.display  = erp ? 'none' : '';
-            // Disable the ERP order select when hidden so it won't submit
-            orderSelect.disabled = !erp;
+        // Two flags drive visibility:
+        //   erpPropertySelected — a property was picked from the ERP search
+        //   manualOrderEntry   — user clicked "Order not listed? Enter manually" while in ERP mode
+        let erpPropertySelected = false;
+        let manualOrderEntry    = false;
+
+        function updateOrderFields() {
+            const showErpDropdown = erpPropertySelected && !manualOrderEntry;
+            document.getElementById('erpOrderSection').style.display  = showErpDropdown ? '' : 'none';
+            document.getElementById('freeOrderSection').style.display = showErpDropdown ? 'none' : '';
+            document.getElementById('freeUnitSection').style.display  = showErpDropdown ? 'none' : '';
+            orderSelect.disabled = !showErpDropdown;
+            document.getElementById('manualOrderLink').style.display = showErpDropdown ? '' : 'none';
+            document.getElementById('erpPickLink').style.display = (erpPropertySelected && manualOrderEntry) ? '' : 'none';
         }
+
+        function setPropertyMode(erp) {
+            erpPropertySelected = erp;
+            if (!erp) manualOrderEntry = false; // full reset when leaving ERP mode
+            updateOrderFields();
+        }
+
+        function switchToManualOrder() {
+            manualOrderEntry = true;
+            orderSelect.value = ''; // clear so OrderId won't post
+            updateOrderFields();
+        }
+
+        function switchToErpOrder() {
+            manualOrderEntry = false;
+            updateOrderFields();
+        }
+
         // Default: free-text mode (nothing selected from ERP yet)
         setPropertyMode(false);
+
+        // If the user changes the Branch dropdown after picking a property, clear the
+        // selection so a stale ERP property ID isn't carried into the new branch context.
+        document.getElementById('branchSelect')?.addEventListener('change', () => {
+            propId.value = '';
+            propSearch.value = '';
+            propResults.innerHTML = '';
+            setPropertyMode(false);
+        });
 
         const propSearchHandler = function () {
             clearTimeout(propTimer);

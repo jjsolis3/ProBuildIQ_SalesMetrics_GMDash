@@ -120,15 +120,25 @@ public class SignAdminController : Controller
             userAccessibleLocations = LocationHelper.Locations;
         }
 
+        // Pull all active templates, then filter in memory by branch visibility.
+        // EF Core can't translate string.Split(...).Contains() to SQL, and the active
+        // template count is small (tens at most), so the in-memory filter is fine.
+        var activeTemplates = await _db.SignTemplates
+            .Where(t => t.IsActive)
+            .OrderBy(t => t.DisplayName)
+            .Select(t => new { t.TemplateKey, t.DisplayName, t.TemplateType, t.LocationCodes })
+            .ToListAsync();
+
         var vm = new CreateEnvelopeVm
         {
             ExpiresAtUtc = DateTime.UtcNow.AddDays(14),
             LocationCode = currentLocationCode, // Pre-populate with current location
-            Templates = await _db.SignTemplates
-                .Where(t => t.IsActive)
-                .OrderBy(t => t.DisplayName)
+            Templates = activeTemplates
+                .Where(t => string.IsNullOrEmpty(t.LocationCodes)
+                         || t.LocationCodes.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                           .Contains(currentLocationCode))
                 .Select(t => new ValueTuple<string, string, string>(t.TemplateKey, t.DisplayName, t.TemplateType))
-                .ToListAsync()
+                .ToList()
         };
 
         // Pass filtered branch locations for dropdown

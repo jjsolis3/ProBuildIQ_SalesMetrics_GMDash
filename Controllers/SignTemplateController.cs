@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using SalesMetrics.Data;
 using SalesMetrics.Domain.Signing;
 using SalesMetrics.Models.Signing;
+using SalesMetrics.Services.Helpers;
 
 namespace SalesMetrics.Controllers;
 
@@ -33,18 +34,25 @@ public class SignTemplatesController : Controller
     {
         ViewBag.ViewPaths = GetRazorViewPaths();
         ViewBag.TemplateMetadata = TemplateMetadata.GetTemplateMetadata(); // NEW: Pass template metadata
+        ViewBag.Locations = LocationHelper.Locations; // for branch checkbox group
         return View(new SignTemplate { IsActive = true, DefaultSubject = "Please review and sign" });
     }
 
     // POST: /SignTemplates/Create
     [HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create(SignTemplate model, IFormFile? pdfFile)
+    public async Task<IActionResult> Create(SignTemplate model, IFormFile? pdfFile, string[]? selectedLocationCodes)
     {
         if (!ModelState.IsValid)
         {
             ViewBag.ViewPaths = GetRazorViewPaths();
+            ViewBag.Locations = LocationHelper.Locations;
             return View(model);
         }
+
+        // Empty selection (or all unchecked) = global / visible to all branches
+        model.LocationCodes = (selectedLocationCodes != null && selectedLocationCodes.Length > 0)
+            ? string.Join(",", selectedLocationCodes)
+            : null;
 
         // Upload base PDF for stamping
         if (pdfFile is not null && pdfFile.Length > 0)
@@ -79,18 +87,20 @@ public class SignTemplatesController : Controller
         var t = await _db.SignTemplates.FindAsync(id);
         if (t is null) return NotFound();
         ViewBag.ViewPaths = GetRazorViewPaths();
+        ViewBag.Locations = LocationHelper.Locations;
         return View(t);
     }
 
     // POST: /SignTemplates/Edit/{key}
     [HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> Edit(string id, SignTemplate model, IFormFile? pdfFile)
+    public async Task<IActionResult> Edit(string id, SignTemplate model, IFormFile? pdfFile, string[]? selectedLocationCodes)
     {
         if (id != model.TemplateKey) return BadRequest();
 
         if (!ModelState.IsValid)
         {
             ViewBag.ViewPaths = GetRazorViewPaths();
+            ViewBag.Locations = LocationHelper.Locations;
             return View(model);
         }
 
@@ -106,6 +116,9 @@ public class SignTemplatesController : Controller
         t.IsActive               = model.IsActive;
         t.RequiresTenantSection  = model.RequiresTenantSection;
         t.TemplateType           = model.TemplateType;
+        t.LocationCodes          = (selectedLocationCodes != null && selectedLocationCodes.Length > 0)
+                                       ? string.Join(",", selectedLocationCodes)
+                                       : null;
         t.ModifiedDateUtc        = DateTime.UtcNow;
         t.ModifiedByUsers_ID     = GetCurrentUserId();
 
@@ -147,6 +160,7 @@ public class SignTemplatesController : Controller
             DefaultMessage = original.DefaultMessage,
             RazorViewPath = original.RazorViewPath,
             MergeSpecJson = original.MergeSpecJson,
+            LocationCodes = original.LocationCodes,
             IsActive = false, // Set to inactive by default
             CreatedByUsers_ID = GetCurrentUserId(),
             CreatedDateUtc = DateTime.UtcNow

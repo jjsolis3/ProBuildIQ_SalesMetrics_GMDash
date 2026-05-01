@@ -240,6 +240,32 @@
             </small>
         </div>
 
+        @{
+            var assignedCodes = string.IsNullOrEmpty(Model.LocationCodes)
+                ? Array.Empty<string>()
+                : Model.LocationCodes.Split(',', StringSplitOptions.RemoveEmptyEntries);
+        }
+        <div class="mb-3 p-3 border rounded bg-light">
+            <label class="form-label fw-semibold mb-2">Branch Visibility</label>
+            <div class="d-flex flex-wrap gap-3">
+                @foreach (var loc in (Dictionary<int, (string Code, string Name)>)ViewBag.Locations)
+                {
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox"
+                               name="selectedLocationCodes" value="@loc.Value.Code"
+                               id="loc_@loc.Value.Code"
+                               @(assignedCodes.Contains(loc.Value.Code) ? "checked" : "") />
+                        <label class="form-check-label" for="loc_@loc.Value.Code">
+                            @loc.Value.Code – @loc.Value.Name
+                        </label>
+                    </div>
+                }
+            </div>
+            <small class="text-muted d-block mt-1">
+                Leave all unchecked to show this template at every branch. Check specific branches to restrict it (e.g. check LSV only for Las Vegas templates).
+            </small>
+        </div>
+
         <div class="mb-3">
             <label class="form-label">Razor View Path <small class="text-muted">(legacy — used only when HTML Body below is empty)</small></label>
             <select asp-for="RazorViewPath" class="form-select">

@@ -39,6 +39,12 @@ public sealed class SignTemplate
     /// </summary>
     public string TemplateType { get; set; } = "Consent";
 
+    /// <summary>
+    /// Comma-separated list of branch codes that may use this template (e.g. "LAX,CHN,SND").
+    /// NULL/empty means the template is visible to all branches (global/shared).
+    /// </summary>
+    public string? LocationCodes { get; set; }
+
     public int CreatedByUsers_ID { get; set; }
     public DateTime CreatedDateUtc { get; set; }
     public int? ModifiedByUsers_ID { get; set; }

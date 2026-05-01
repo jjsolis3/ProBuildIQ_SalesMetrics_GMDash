@@ -19,6 +19,7 @@ public sealed class SignTemplateConfiguration : IEntityTypeConfiguration<SignTem
         b.Property(x => x.IsActive).HasDefaultValue(true);
         b.Property(x => x.RequiresTenantSection).HasDefaultValue(true);
         b.Property(x => x.TemplateType).HasMaxLength(20).HasDefaultValue("Consent");
+        b.Property(x => x.LocationCodes).HasMaxLength(100).IsRequired(false);
         b.Property(x => x.CreatedDateUtc).HasDefaultValueSql("SYSUTCDATETIME()");
         // Indexes if needed
         b.HasIndex(x => x.IsActive);

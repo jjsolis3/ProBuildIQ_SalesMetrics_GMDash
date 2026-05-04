@@ -28,6 +28,24 @@
 }
 
 <form asp-action="Submit" asp-controller="Onboarding" method="post">
+    <div class="row mb-3">
+        <div class="col-md-9">
+            <div class="card p-3 d-flex flex-row align-items-center gap-3">
+                <label class="form-label fw-semibold mb-0 text-nowrap">Branch / Location:</label>
+                <select name="LocationCode" id="locationCodeSelect" class="form-select" style="max-width:280px;" required>
+                    <option value="">— Select branch —</option>
+                    @foreach (var loc in (Dictionary<int, (string Code, string Name)>)ViewBag.Locations)
+                    {
+                        <option value="@loc.Value.Code"
+                                @(ViewBag.CurrentLocationCode == loc.Value.Code ? "selected" : "")>
+                            @loc.Value.Code – @loc.Value.Name
+                        </option>
+                    }
+                </select>
+                <small class="text-muted">Select the branch this request is being submitted for.</small>
+            </div>
+        </div>
+    </div>
     <div class="row">
         <div class="col-md-9">
             <div class="card">

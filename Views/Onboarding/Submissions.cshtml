@@ -14,6 +14,7 @@
             <thead class="table-light">
                 <tr>
                     <th>#</th>
+                    <th>Branch</th>
                     <th>Property Name</th>
                     <th>Submitted By</th>
                     <th>Submitted Date</th>
@@ -26,6 +27,16 @@
                 {
                     <tr>
                         <td>@(i + 1)</td>
+                        <td>
+                            @if (!string.IsNullOrEmpty(Model[i].LocationCode))
+                            {
+                                <span class="badge bg-info">@Model[i].LocationCode</span>
+                            }
+                            else
+                            {
+                                <span class="text-muted">—</span>
+                            }
+                        </td>
                         <td>@Model[i].PropertyName</td>
                         <td>@Model[i].SubmittedBy</td>
                         <td>@Model[i].SubmittedDate.ToString("MM/dd/yyyy")</td>

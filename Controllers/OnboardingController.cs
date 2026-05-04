@@ -1,9 +1,11 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using SalesMetrics.Data;
 using SalesMetrics.Models;
+using SalesMetrics.Services.Helpers;
 using System.IO;
 
 namespace SalesMetrics.Controllers
@@ -12,11 +14,13 @@ namespace SalesMetrics.Controllers
     {
         private readonly IConfiguration _configuration;
         private readonly SalesMetricsDbContext _context;
+        private readonly IWebHostEnvironment _env;
 
-        public OnboardingController(IConfiguration configuration, SalesMetricsDbContext context)
+        public OnboardingController(IConfiguration configuration, SalesMetricsDbContext context, IWebHostEnvironment env)
         {
             _configuration = configuration;
             _context = context;
+            _env = env;
         }
 
         public IActionResult Index()
@@ -41,7 +45,7 @@ namespace SalesMetrics.Controllers
 
                 // Get main request
                 var cmd = new SqlCommand(@"
-                    SELECT 
+                    SELECT
                         SubmittedDate, SubmittedBy, SubmittedByUserId,
                         PropertyName, CreditLine, ShipToName, ShipToAddress, PropertyUnits,
                         MgmtCompanyName, MgmtCompanyAddress,
@@ -49,7 +53,7 @@ namespace SalesMetrics.Controllers
                         InvoiceAddress, InvoiceCity, InvoiceState, InvoiceZip, InvoiceAttention,
                         ThirdPartyVendor, RequiresCustomerPO,
                         SalespersonName, EstimatedMonthlyRevenue, ARCreditLimit,
-                        Terms, DiscountPercent, SpecialNotes, BillingInstructions
+                        Terms, DiscountPercent, SpecialNotes, BillingInstructions, LocationCode
                     FROM NewCustomerRequests
                     WHERE ID = @ID
                 ", conn);
@@ -110,6 +114,7 @@ namespace SalesMetrics.Controllers
 
                     model.SpecialNotes = reader.IsDBNull(25) ? "" : reader.GetString(25);
                     model.BillingInstructions = reader.IsDBNull(26) ? "" : reader.GetString(26);
+                    model.LocationCode = reader.IsDBNull(27) ? null : reader.GetString(27);
 
                 }
                 reader.Close();
@@ -196,7 +201,7 @@ namespace SalesMetrics.Controllers
             {
                 conn.Open();
                 var cmd = new SqlCommand(@"
-                    SELECT ID, PropertyName, SubmittedBy, SubmittedDate, SalespersonName
+                    SELECT ID, PropertyName, SubmittedBy, SubmittedDate, SalespersonName, LocationCode
                     FROM NewCustomerRequests
                     ORDER BY SubmittedDate DESC
                 ", conn);
@@ -210,7 +215,8 @@ namespace SalesMetrics.Controllers
                         PropertyName = reader.IsDBNull(1) ? "" : reader.GetString(1),
                         SubmittedBy = reader.IsDBNull(2) ? "N/A" : reader.GetString(2),
                         SubmittedDate = reader.GetDateTime(3),
-                        SalespersonName = reader.IsDBNull(4) ? "" : reader.GetString(4)
+                        SalespersonName = reader.IsDBNull(4) ? "" : reader.GetString(4),
+                        LocationCode = reader.IsDBNull(5) ? null : reader.GetString(5)
                     });
                 }
             }
@@ -220,6 +226,8 @@ namespace SalesMetrics.Controllers
 
         public IActionResult NewCustomer()
         {
+            ViewBag.Locations = LocationHelper.Locations;
+            ViewBag.CurrentLocationCode = HttpContext.Session.GetString("OfficeLocation") ?? "";
             return View();
         }
                 
@@ -257,8 +265,8 @@ namespace SalesMetrics.Controllers
                             InvoiceEmail, InvoiceAddress, InvoiceCity, InvoiceState, InvoiceZip, InvoiceAttention,
                             ThirdPartyVendor, RequiresCustomerPO,
                             SalespersonName, EstimatedMonthlyRevenue, ARCreditLimit,
-                            Terms, DiscountPercent, SpecialNotes
-                        ) 
+                            Terms, DiscountPercent, SpecialNotes, LocationCode
+                        )
                         OUTPUT INSERTED.ID
                         VALUES (
                             @SubmittedDate, @SubmittedBy, @SubmittedByUserId,
@@ -268,7 +276,7 @@ namespace SalesMetrics.Controllers
                             @InvoiceEmail, @InvoiceAddress, @InvoiceCity, @InvoiceState, @InvoiceZip, @InvoiceAttention,
                             @ThirdPartyVendor, @RequiresCustomerPO,
                             @SalespersonName, @EstimatedMonthlyRevenue, @ARCreditLimit,
-                            @Terms, @DiscountPercent, @SpecialNotes
+                            @Terms, @DiscountPercent, @SpecialNotes, @LocationCode
                     )", conn);
 
 
@@ -308,6 +316,7 @@ namespace SalesMetrics.Controllers
 
                     // Notes
                     cmd.Parameters.AddWithValue("@SpecialNotes", model.SpecialNotes ?? "");
+                    cmd.Parameters.AddWithValue("@LocationCode", (object?)model.LocationCode ?? DBNull.Value);
 
                     newRequestId = (int)cmd.ExecuteScalar();
 
@@ -387,7 +396,19 @@ namespace SalesMetrics.Controllers
         public IActionResult ExportCustomerRequestPdf(int id)
         {
             var model = GetCustomerRequestById(id);
-            ViewBag.BaseUrl = $"{Request.Scheme}://{Request.Host}";
+
+            // Embed logos as base64 data URIs — wkhtmltopdf cannot resolve relative or
+            // local HTTP URLs, so we inline the image bytes directly into the HTML.
+            string ToBase64DataUri(string relativePath)
+            {
+                var fullPath = Path.Combine(_env.WebRootPath, relativePath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
+                if (!System.IO.File.Exists(fullPath)) return "";
+                var bytes = System.IO.File.ReadAllBytes(fullPath);
+                return $"data:image/png;base64,{Convert.ToBase64String(bytes)}";
+            }
+
+            ViewBag.SeamlessLogoSrc = ToBase64DataUri("assets/images/seamless-logo.png");
+            ViewBag.SMLogoSrc = ToBase64DataUri("assets/images/logo-dark.png");
 
             var propertyName = model?.Property?.Name ?? id.ToString();
             var safeFileName = string.Concat(propertyName.Split(Path.GetInvalidFileNameChars()));

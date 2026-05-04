@@ -25,7 +25,12 @@ namespace SalesMetrics.Controllers
 
         public IActionResult Index()
         {
-            return RedirectToAction("Submissions");
+            var connStr = _configuration.GetConnectionString("SalesMetrics");
+            using var conn = new SqlConnection(connStr);
+            conn.Open();
+            var cmd = new SqlCommand("SELECT COUNT(*) FROM NewCustomerRequests", conn);
+            ViewBag.NCRCount = (int)cmd.ExecuteScalar();
+            return View();
         }
 
         public IActionResult ViewCustomerRequest(int requestId)

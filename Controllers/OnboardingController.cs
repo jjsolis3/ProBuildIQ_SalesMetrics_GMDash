@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using SalesMetrics.Data;
 using SalesMetrics.Models;
+using System.IO;
 
 namespace SalesMetrics.Controllers
 {
@@ -386,10 +387,20 @@ namespace SalesMetrics.Controllers
         public IActionResult ExportCustomerRequestPdf(int id)
         {
             var model = GetCustomerRequestById(id);
+            ViewBag.BaseUrl = $"{Request.Scheme}://{Request.Host}";
+
+            var propertyName = model?.Property?.Name ?? id.ToString();
+            var safeFileName = string.Concat(propertyName.Split(Path.GetInvalidFileNameChars()));
+
             return new Rotativa.AspNetCore.ViewAsPdf("_PrintCustomerRequest", model)
             {
                 PageSize = Rotativa.AspNetCore.Options.Size.A4,
-                FileName = $"CustomerRequest_{id}.pdf"
+                FileName = $"SM_NewCustomerForm-{safeFileName}.pdf",
+                CustomSwitches = "--footer-left \"SalesMetrics New Customer Form\" " +
+                                 "--footer-right \"Page [page] of [topage]\" " +
+                                 "--footer-font-size 9 " +
+                                 "--footer-spacing 5 " +
+                                 "--margin-bottom 20"
             };
         }
     }

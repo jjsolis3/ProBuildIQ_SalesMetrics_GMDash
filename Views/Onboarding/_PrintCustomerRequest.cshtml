@@ -70,10 +70,6 @@
                 border-bottom: 1px solid #ccc;
             }
 
-    .logo {
-        height: 120px;
-        margin-bottom: 1px;
-    }
 
     * {
         box-sizing: border-box;
@@ -119,9 +115,16 @@
 </style>
 
 <div>
-    <div class="text-center">
-        <img src="@Url.Content("~/assets/images/seamless-logo.png")" alt="Seamless Logo" class="logo" />
-        <h4>New Customer Set Up Form</h4>
+    <div style="display:table; width:100%; margin-bottom:14px;">
+        <div style="display:table-cell; vertical-align:middle; text-align:left; width:33%;">
+            <img src="@ViewBag.BaseUrl/assets/images/seamless-logo.png" alt="Seamless Flooring" style="height:80px;" />
+        </div>
+        <div style="display:table-cell; vertical-align:middle; text-align:center; width:34%;">
+            <h4 style="margin:0; font-size:18px;">New Customer Set Up Form</h4>
+        </div>
+        <div style="display:table-cell; vertical-align:middle; text-align:right; width:33%;">
+            <img src="@ViewBag.BaseUrl/assets/images/logo-dark.png" alt="SalesMetrics" style="height:40px;" />
+        </div>
     </div>
 
     <div class="form-section-title">Property Information</div>

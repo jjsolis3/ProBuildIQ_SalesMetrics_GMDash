@@ -23,7 +23,6 @@ namespace SalesMetrics.Controllers
     {
         private readonly IConfiguration _configuration;
         private readonly ErpClientFactory _erpFactory;
-        private readonly IMemoryCache _cache;
 
         public PropertiesController(IConfiguration configuration, ErpClientFactory erpFactory)
         {

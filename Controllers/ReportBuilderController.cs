@@ -764,7 +764,7 @@ namespace SalesMetrics.Controllers
 
                 // Execute query with limit
                 var connStr = _configuration.GetConnectionString("SalesMetrics");
-                using var conn = new System.Data.SqlClient.SqlConnection(connStr);
+                using var conn = new Microsoft.Data.SqlClient.SqlConnection(connStr);
                 await conn.OpenAsync();
 
                 // For SQL mode, switch to the user's CompUFloor database so unqualified
@@ -779,7 +779,7 @@ namespace SalesMetrics.Controllers
 
                 // Resolve {BRANCH_DB} placeholder and any hardcoded branch DB names
                 var sqlToExecute = ResolveBranchDatabase(sql, compuFloorDb);
-                var cmd = new System.Data.SqlClient.SqlCommand();
+                var cmd = new Microsoft.Data.SqlClient.SqlCommand();
                 cmd.Connection = conn;
                 cmd.CommandTimeout = 30; // 30 seconds timeout
 
@@ -1622,7 +1622,7 @@ namespace SalesMetrics.Controllers
 
                 // Open connection
                 var connStr = _configuration.GetConnectionString("SalesMetrics");
-                using var conn = new System.Data.SqlClient.SqlConnection(connStr);
+                using var conn = new Microsoft.Data.SqlClient.SqlConnection(connStr);
                 await conn.OpenAsync();
 
                 // Switch database for SQL mode
@@ -1634,7 +1634,7 @@ namespace SalesMetrics.Controllers
                 }
 
                 // Build command with parameters
-                var cmd = new System.Data.SqlClient.SqlCommand();
+                var cmd = new Microsoft.Data.SqlClient.SqlCommand();
                 cmd.Connection = conn;
                 cmd.CommandTimeout = 120; // 2 min for full export (no row limit)
 
@@ -1778,13 +1778,13 @@ namespace SalesMetrics.Controllers
 
                     try
                     {
-                        using var conn = new System.Data.SqlClient.SqlConnection(connStr);
+                        using var conn = new Microsoft.Data.SqlClient.SqlConnection(connStr);
                         await conn.OpenAsync();
 
                         if (isSqlMode)
                             await conn.ChangeDatabaseAsync(compuFloorDb);
 
-                        var cmd = new System.Data.SqlClient.SqlCommand
+                        var cmd = new Microsoft.Data.SqlClient.SqlCommand
                         {
                             Connection = conn,
                             CommandTimeout = 120
@@ -1881,7 +1881,7 @@ namespace SalesMetrics.Controllers
             }
 
             var connStr = _configuration.GetConnectionString("SalesMetrics");
-            using var conn = new System.Data.SqlClient.SqlConnection(connStr);
+            using var conn = new Microsoft.Data.SqlClient.SqlConnection(connStr);
             await conn.OpenAsync();
 
             // Resolve branch database: location override (from branch selector) takes priority,
@@ -1903,7 +1903,7 @@ namespace SalesMetrics.Controllers
 
             // Resolve {BRANCH_DB} placeholder and any hardcoded branch DB names
             var sqlToExecute = ResolveBranchDatabase(report.GeneratedSql, compuFloorDb);
-            var cmd = new System.Data.SqlClient.SqlCommand();
+            var cmd = new Microsoft.Data.SqlClient.SqlCommand();
             cmd.Connection = conn;
             cmd.CommandTimeout = 60; // 60 seconds timeout for report execution
 
@@ -1963,7 +1963,7 @@ namespace SalesMetrics.Controllers
                         {
                             // Explicitly type date parameters as SqlDbType.Date to avoid NVARCHAR
                             // implicit-conversion mismatches that can silently return 0 rows.
-                            var sqlParam = new System.Data.SqlClient.SqlParameter(paramName, System.Data.SqlDbType.Date);
+                            var sqlParam = new Microsoft.Data.SqlClient.SqlParameter(paramName, System.Data.SqlDbType.Date);
                             sqlParam.Value = parsedDate.Date;
                             cmd.Parameters.Add(sqlParam);
                         }

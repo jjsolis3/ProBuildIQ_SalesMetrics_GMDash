@@ -1686,7 +1686,7 @@ namespace SalesMetrics.Controllers
             // Management roles can assign tasks to team members
             if (RoleHelper.CanManageLocationTasks(roleId))
             {
-                if (model.AssignedTo == null || model.AssignedTo == 0)
+                if (model.AssignedTo == 0)
                 {
                     TempData["Error"] = "Please select a valid user to assign the task.";
                     return RedirectToAction("YardiProperties", "Yardi");
@@ -1782,7 +1782,7 @@ namespace SalesMetrics.Controllers
             }
 
             // ✅ ADD THIS BLOCK before the try-catch
-            if (model.AssignedTo == null || model.AssignedTo == 0)
+            if (model.AssignedTo == 0)
             {
                 model.AssignedTo = int.TryParse(HttpContext.Session.GetString("Users_ID"), out var fallbackAssignedTo)
                     ? fallbackAssignedTo

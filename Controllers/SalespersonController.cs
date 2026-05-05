@@ -34,7 +34,7 @@ namespace SalesMetrics.Controllers
             var roleId = Convert.ToInt32(HttpContext.Session.GetString("RoleId"));
             var locationId = LocationHelper.GetCurrentLocationId(HttpContext);
 
-            var dateFormat = "MM/dd/yyyy";
+
             var culture = System.Globalization.CultureInfo.InvariantCulture;
 
             // Try to parse, or fallback to defaults

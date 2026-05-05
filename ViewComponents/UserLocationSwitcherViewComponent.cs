@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.EntityFrameworkCore;
 using SalesMetrics.Data;
 using SalesMetrics.Models;
 using SalesMetrics.Services.Helpers;
@@ -21,11 +22,11 @@ namespace SalesMetrics.ViewComponents
             var userId = int.Parse(HttpContext.User.FindFirstValue("Users_ID") ?? "0");
             var currentLocation = HttpContext.Session.GetString("OfficeLocation");
 
-            var locations = _context.UserLocationAssignments
+            var locations = await _context.UserLocationAssignments
                 .Where(a => a.UserID == userId && a.IsActive == "YES")
                 .Select(a => a.LocationID)
                 .Distinct()
-                .ToList();
+                .ToListAsync();
 
             var model = new UserLocationSwitcherViewModel
             {

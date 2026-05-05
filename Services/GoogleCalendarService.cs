@@ -59,12 +59,12 @@ public class GoogleCalendarService
                 Description = $"[Task ID: {taskId}]\n\n{description}",
                 Start = new EventDateTime
                 {
-                    DateTime = dueDate,
+                    DateTimeDateTimeOffset = new DateTimeOffset(dueDate, TimeSpan.FromHours(-7)),
                     TimeZone = "America/Los_Angeles"
                 },
                 End = new EventDateTime
                 {
-                    DateTime = dueDate.AddHours(1),
+                    DateTimeDateTimeOffset = new DateTimeOffset(dueDate.AddHours(1), TimeSpan.FromHours(-7)),
                     TimeZone = "America/Los_Angeles"
                 }
             };

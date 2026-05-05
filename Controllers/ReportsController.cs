@@ -273,11 +273,11 @@ namespace SalesMetrics.Controllers
 
                 var viewModel = new WorkOrderDetailViewModel();
 
-                using (var conn = new System.Data.SqlClient.SqlConnection(connectionString))
+                using (var conn = new Microsoft.Data.SqlClient.SqlConnection(connectionString))
                 {
                     conn.Open();
 
-                    var cmd = new System.Data.SqlClient.SqlCommand(@"
+                    var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
                         -- ===============================
                         -- 1. ORDER LINE ITEMS (Product + Stewardship)
                         -- ===============================

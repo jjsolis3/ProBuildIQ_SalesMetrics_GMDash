@@ -19,6 +19,7 @@ namespace SalesMetrics.Models
         public string? SpecialNotes { get; set; }
         public string? BillingInstructions { get; set; }
         public string? LocationCode { get; set; }
+        public string Status { get; set; } = "Pending";
     }
 
     public class PropertyInfo
@@ -93,6 +94,7 @@ namespace SalesMetrics.Models
         public DateTime SubmittedDate { get; set; }
         public string SalespersonName { get; set; }
         public string? LocationCode { get; set; }
+        public string? Status { get; set; }
     }
 
 }

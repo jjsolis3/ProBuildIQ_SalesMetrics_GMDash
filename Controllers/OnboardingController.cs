@@ -6,6 +6,8 @@ using Microsoft.Extensions.Configuration;
 using SalesMetrics.Data;
 using SalesMetrics.Models;
 using SalesMetrics.Services.Helpers;
+using SalesMetrics.Services.Settings;
+using SalesMetrics.Services.Signing;
 using System.IO;
 
 namespace SalesMetrics.Controllers
@@ -15,12 +17,21 @@ namespace SalesMetrics.Controllers
         private readonly IConfiguration _configuration;
         private readonly SalesMetricsDbContext _context;
         private readonly IWebHostEnvironment _env;
+        private readonly INotificationService _notify;
+        private readonly ISettingsService _settings;
 
-        public OnboardingController(IConfiguration configuration, SalesMetricsDbContext context, IWebHostEnvironment env)
+        public OnboardingController(
+            IConfiguration configuration,
+            SalesMetricsDbContext context,
+            IWebHostEnvironment env,
+            INotificationService notify,
+            ISettingsService settings)
         {
             _configuration = configuration;
             _context = context;
             _env = env;
+            _notify = notify;
+            _settings = settings;
         }
 
         public IActionResult Index()
@@ -220,7 +231,7 @@ namespace SalesMetrics.Controllers
             {
                 conn.Open();
                 var cmd = new SqlCommand($@"
-                    SELECT ID, PropertyName, SubmittedBy, SubmittedDate, SalespersonName, LocationCode
+                    SELECT ID, PropertyName, SubmittedBy, SubmittedDate, SalespersonName, LocationCode, Status
                     FROM NewCustomerRequests
                     {whereClause}
                     ORDER BY SubmittedDate DESC
@@ -240,7 +251,8 @@ namespace SalesMetrics.Controllers
                         SubmittedBy = reader.IsDBNull(2) ? "N/A" : reader.GetString(2),
                         SubmittedDate = reader.GetDateTime(3),
                         SalespersonName = reader.IsDBNull(4) ? "" : reader.GetString(4),
-                        LocationCode = reader.IsDBNull(5) ? null : reader.GetString(5)
+                        LocationCode = reader.IsDBNull(5) ? null : reader.GetString(5),
+                        Status = reader.IsDBNull(6) ? "Pending" : reader.GetString(6)
                     });
                 }
             }
@@ -424,26 +436,11 @@ namespace SalesMetrics.Controllers
             return PartialView("_PrintCustomerRequest", model);
         }
 
-        // USE SERVER-SIDE PDF GENERATION
         public IActionResult ExportCustomerRequestPdf(int id)
         {
             var model = GetCustomerRequestById(id);
-
-            // Embed logos as base64 data URIs — wkhtmltopdf cannot resolve relative or
-            // local HTTP URLs, so we inline the image bytes directly into the HTML.
-            string ToBase64DataUri(string relativePath)
-            {
-                var fullPath = Path.Combine(_env.WebRootPath, relativePath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
-                if (!System.IO.File.Exists(fullPath)) return "";
-                var bytes = System.IO.File.ReadAllBytes(fullPath);
-                return $"data:image/png;base64,{Convert.ToBase64String(bytes)}";
-            }
-
-            ViewBag.SeamlessLogoSrc = ToBase64DataUri("assets/images/seamless-logo.png");
-            ViewBag.SMLogoSrc = ToBase64DataUri("assets/images/logo-dark.png");
-
-            var propertyName = model?.Property?.Name ?? id.ToString();
-            var safeFileName = string.Concat(propertyName.Split(Path.GetInvalidFileNameChars()));
+            EmbedLogosInViewBag(model);
+            var safeFileName = SanitizeFileName(model?.Property?.Name ?? id.ToString());
 
             return new Rotativa.AspNetCore.ViewAsPdf("_PrintCustomerRequest", model)
             {
@@ -451,10 +448,68 @@ namespace SalesMetrics.Controllers
                 FileName = $"SM_NewCustomerForm-{safeFileName}.pdf",
                 CustomSwitches = "--footer-left \"SalesMetrics New Customer Form\" " +
                                  "--footer-right \"Page [page] of [topage]\" " +
-                                 "--footer-font-size 9 " +
-                                 "--footer-spacing 5 " +
-                                 "--margin-bottom 20"
+                                 "--footer-font-size 9 --footer-spacing 5 --margin-bottom 20"
             };
         }
+
+        [HttpPost]
+        public async Task<IActionResult> EmailForm(int id, string toEmail)
+        {
+            if (string.IsNullOrWhiteSpace(toEmail))
+                return Json(new { success = false, message = "Email address is required." });
+
+            var model = GetCustomerRequestById(id);
+            EmbedLogosInViewBag(model);
+
+            var safeFileName = $"SM_NewCustomerForm-{SanitizeFileName(model?.Property?.Name ?? id.ToString())}.pdf";
+            var pdfResult = new Rotativa.AspNetCore.ViewAsPdf("_PrintCustomerRequest", model)
+            {
+                PageSize = Rotativa.AspNetCore.Options.Size.A4,
+                FileName = safeFileName,
+                CustomSwitches = "--footer-left \"SalesMetrics New Customer Form\" " +
+                                 "--footer-right \"Page [page] of [topage]\" " +
+                                 "--footer-font-size 9 --footer-spacing 5 --margin-bottom 20"
+            };
+            var pdfBytes = await pdfResult.BuildFile(ControllerContext);
+
+            var subject = $"New Customer Request Form – {model?.Property?.Name}";
+            var body = $"<p>Please find the New Customer Request form for <strong>{model?.Property?.Name}</strong> attached.</p>";
+
+            await _notify.SendFormPdfAsync(toEmail, subject, pdfBytes, safeFileName, body);
+            return Json(new { success = true });
+        }
+
+        [HttpPost]
+        public IActionResult UpdateFormStatus(int id, string status)
+        {
+            var allowed = new[] { "Pending", "Reviewed", "Approved", "Rejected" };
+            if (!allowed.Contains(status))
+                return Json(new { success = false, message = "Invalid status." });
+
+            var connStr = _configuration.GetConnectionString("SalesMetrics");
+            using var conn = new SqlConnection(connStr);
+            conn.Open();
+            var cmd = new SqlCommand("UPDATE NewCustomerRequests SET Status = @Status WHERE ID = @ID", conn);
+            cmd.Parameters.AddWithValue("@Status", status);
+            cmd.Parameters.AddWithValue("@ID", id);
+            cmd.ExecuteNonQuery();
+            return Json(new { success = true });
+        }
+
+        private void EmbedLogosInViewBag(NewCustomerFormRequest? model)
+        {
+            string ToBase64DataUri(string relativePath)
+            {
+                var fullPath = Path.Combine(_env.WebRootPath, relativePath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
+                if (!System.IO.File.Exists(fullPath)) return "";
+                var bytes = System.IO.File.ReadAllBytes(fullPath);
+                return $"data:image/png;base64,{Convert.ToBase64String(bytes)}";
+            }
+            ViewBag.SeamlessLogoSrc = ToBase64DataUri("assets/images/seamless-logo.png");
+            ViewBag.SMLogoSrc = ToBase64DataUri("assets/images/logo-dark.png");
+        }
+
+        private static string SanitizeFileName(string name) =>
+            string.Concat(name.Split(Path.GetInvalidFileNameChars()));
     }
 }

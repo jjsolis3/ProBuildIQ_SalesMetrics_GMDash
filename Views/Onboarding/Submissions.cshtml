@@ -1,8 +1,22 @@
-﻿@model List<SalesMetrics.Models.NewCustomerListItem>
-
+@model List<SalesMetrics.Models.NewCustomerListItem>
 @{
     ViewBag.Title = "Submitted Customer Requests";
     Layout = "~/Views/Shared/_Layout.cshtml";
+
+    var scope = ViewBag.Scope?.ToString() ?? "branch";
+    var office = ViewBag.Office?.ToString() ?? "";
+    var canViewAll = (bool)(ViewBag.CanViewAll ?? false);
+    var currentCode = ViewBag.CurrentLocationCode?.ToString() ?? "";
+
+    // Resolve a friendly label for the branch button
+    string branchLabel = currentCode;
+    if (ViewBag.Locations != null && !string.IsNullOrEmpty(currentCode))
+    {
+        var locs = (Dictionary<int, (string Code, string Name)>)ViewBag.Locations;
+        var match = locs.Values.FirstOrDefault(l => l.Code == currentCode);
+        if (match != default)
+            branchLabel = $"{match.Code} – {match.Name}";
+    }
 }
 
 <div class="card">
@@ -10,6 +24,57 @@
         <h4 class="card-title text-white mb-0">Submitted New Customer Requests</h4>
     </div>
     <div class="card-body">
+
+        @* ── Scope Filter Buttons ── *@
+        <div class="mb-3 d-flex align-items-center gap-3 flex-wrap">
+            <div class="btn-group" role="group" aria-label="Submission scope filter">
+                <a class="btn btn-sm @(scope == "branch" ? "btn-primary" : "btn-outline-primary")"
+                   asp-action="Submissions" asp-route-scope="branch" asp-route-office="@office"
+                   title="Show all submissions for your currently selected branch">
+                    <i class="fas fa-building me-1"></i>@branchLabel
+                </a>
+                <a class="btn btn-sm @(scope == "mine" ? "btn-primary" : "btn-outline-primary")"
+                   asp-action="Submissions" asp-route-scope="mine" asp-route-office="@office"
+                   title="Show only submissions you created">
+                    <i class="fas fa-user me-1"></i>My Forms
+                </a>
+                @if (canViewAll)
+                {
+                    <a class="btn btn-sm @(scope == "all" ? "btn-primary" : "btn-outline-primary")"
+                       asp-action="Submissions" asp-route-scope="all" asp-route-office="@office"
+                       title="Show submissions from all branches (admin/manager)">
+                        <i class="fas fa-globe me-1"></i>All Locations
+                    </a>
+                }
+            </div>
+            <span class="text-muted small ms-2">@ViewBag.Total result@(ViewBag.Total == 1 ? "" : "s")</span>
+        </div>
+
+        @* ── Branch Sub-filter (All scope only) ── *@
+        @if (scope == "all" && canViewAll)
+        {
+            <div class="row g-2 mb-3">
+                <div class="col-md-3">
+                    <label class="form-label small">Filter by Branch:</label>
+                    <select class="form-select form-select-sm" id="officeFilter" onchange="applyFilters()">
+                        <option value="">All Branches</option>
+                        @if (ViewBag.Locations != null)
+                        {
+                            @foreach (var loc in (Dictionary<int, (string Code, string Name)>)ViewBag.Locations)
+                            {
+                                <option value="@loc.Value.Code" selected="@(office == loc.Value.Code ? "selected" : null)">
+                                    @loc.Value.Code – @loc.Value.Name
+                                </option>
+                            }
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <a class="btn btn-sm btn-outline-secondary" asp-action="Submissions" asp-route-scope="all">Clear Filter</a>
+                </div>
+            </div>
+        }
+
         <table class="table table-striped" id="submissionsTable">
             <thead class="table-light">
                 <tr>
@@ -66,11 +131,9 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
-                
                 <a id="btnDownloadPDF" href="#" target="_blank" class="btn btn-outline-primary">
                     <i class="bi bi-file-earmark-pdf"></i> Download PDF
                 </a>
-
             </div>
         </div>
     </div>
@@ -79,22 +142,18 @@
 @section scripts {
     <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
-    
+
     <script>
         document.addEventListener("DOMContentLoaded", function () {
             $('#submissionsTable').DataTable();
 
-            // Bind View modal
             document.querySelectorAll('.view-request').forEach(button => {
                 button.addEventListener('click', function (e) {
                     e.preventDefault();
                     const requestId = $(this).data("id");
-
                     $.get(`/Onboarding/ViewCustomerRequest`, { requestId }, function (html) {
                         $("#viewRequestModal .modal-body").html(html);
                         $("#viewRequestModal").modal("show");
-
-                        // ✅ Dynamically set the PDF export link
                         const pdfButton = document.getElementById('btnDownloadPDF');
                         if (pdfButton) {
                             pdfButton.href = `/Onboarding/ExportCustomerRequestPdf?id=${requestId}`;
@@ -102,9 +161,12 @@
                     });
                 });
             });
-
         });
+
+        function applyFilters() {
+            const office = document.getElementById('officeFilter')?.value ?? '';
+            const params = new URLSearchParams({ scope: 'all', office });
+            window.location.href = '/Onboarding/Submissions?' + params.toString();
+        }
     </script>
-
 }
-

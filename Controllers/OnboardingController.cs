@@ -197,19 +197,38 @@ namespace SalesMetrics.Controllers
             return model;
         }
 
-        public IActionResult Submissions()
+        public IActionResult Submissions(string? scope = "branch", string? office = null)
         {
-            var submissions = new List<NewCustomerListItem>();
+            var userId = int.Parse(User.FindFirst("Users_Id")?.Value ?? "0");
+            var roleId = int.Parse(User.FindFirst("RoleId")?.Value ?? "0");
+            var locationCode = HttpContext.Session.GetString("OfficeLocation") ?? "";
 
+            // "All Locations" is restricted to managers/admins
+            bool canViewAll = roleId == 1 || roleId == 3 || roleId == 4 || roleId == 5 || roleId == 7 || roleId == 8;
+            if (scope == "all" && !canViewAll) scope = "branch";
+
+            var whereClause = scope switch
+            {
+                "mine" => "WHERE SubmittedByUserId = @UserId",
+                "all" when !string.IsNullOrEmpty(office) => "WHERE LocationCode = @Office",
+                _ => "WHERE LocationCode = @LocationCode" // default: branch
+            };
+
+            var submissions = new List<NewCustomerListItem>();
             var connStr = _configuration.GetConnectionString("SalesMetrics");
             using (var conn = new SqlConnection(connStr))
             {
                 conn.Open();
-                var cmd = new SqlCommand(@"
+                var cmd = new SqlCommand($@"
                     SELECT ID, PropertyName, SubmittedBy, SubmittedDate, SalespersonName, LocationCode
                     FROM NewCustomerRequests
+                    {whereClause}
                     ORDER BY SubmittedDate DESC
                 ", conn);
+
+                cmd.Parameters.AddWithValue("@UserId", userId);
+                cmd.Parameters.AddWithValue("@LocationCode", locationCode);
+                cmd.Parameters.AddWithValue("@Office", (object?)office ?? DBNull.Value);
 
                 var reader = cmd.ExecuteReader();
                 while (reader.Read())
@@ -225,6 +244,14 @@ namespace SalesMetrics.Controllers
                     });
                 }
             }
+
+            ViewBag.Scope = scope;
+            ViewBag.Office = office ?? "";
+            ViewBag.RoleId = roleId;
+            ViewBag.CanViewAll = canViewAll;
+            ViewBag.CurrentLocationCode = locationCode;
+            ViewBag.Locations = LocationHelper.Locations;
+            ViewBag.Total = submissions.Count;
 
             return View("Submissions", submissions);
         }

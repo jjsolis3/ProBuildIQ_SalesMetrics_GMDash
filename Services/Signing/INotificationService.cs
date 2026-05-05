@@ -12,4 +12,6 @@ public interface INotificationService
     /// </param>
     Task SendEnvelopeEmailAsync(string toEmail, string toName, string subject, string bodyHtml, string? replyToEmail = null);
     Task SendCompletedReceiptAsync(string toEmail, string toName, string subject, string bodyHtml, string downloadUrl);
+    /// <summary>Sends a form PDF as an email attachment.</summary>
+    Task SendFormPdfAsync(string toEmail, string subject, byte[] pdfBytes, string pdfFileName, string bodyHtml);
 }

@@ -45,6 +45,7 @@ public partial class SalesMetricsDbContext : DbContext
     public DbSet<NotificationSettingsEntity> NotificationSettings { get; set; } = default!;
     public DbSet<SecuritySettingsEntity> SecuritySettings { get; set; } = default!;
     public DbSet<EnvelopeNotificationSettingsEntity> EnvelopeNotificationSettings { get; set; } = default!;
+    public DbSet<FormNotificationSettingsEntity> FormNotificationSettings { get; set; } = default!;
     public DbSet<FeatureEntity> Features { get; set; } = default!;
     public DbSet<UserFeaturePermissionEntity> UserFeaturePermissions { get; set; } = default!;
 
@@ -352,6 +353,18 @@ public partial class SalesMetricsDbContext : DbContext
             entity.Property(e => e.IsEnabled).HasDefaultValue(true);
             entity.Property(e => e.LastModifiedDate).HasColumnType("datetime").HasDefaultValueSql("(getdate())");
             entity.Property(e => e.LastModifiedByUserId).HasColumnName("LastModifiedByUserId");
+        });
+
+        // Form Notification Settings Configuration
+        modelBuilder.Entity<FormNotificationSettingsEntity>(entity =>
+        {
+            entity.HasKey(e => e.FormNotificationSettingsId);
+            entity.ToTable("FormNotificationSettings");
+            entity.Property(e => e.LocationCode).HasMaxLength(10);
+            entity.Property(e => e.LocationName).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.NotificationEmail).HasMaxLength(255);
+            entity.Property(e => e.IsEnabled).HasDefaultValue(true);
+            entity.Property(e => e.LastModifiedDate).HasColumnType("datetime").HasDefaultValueSql("(getdate())");
         });
 
         // Feature Permissions Configuration

@@ -33,6 +33,41 @@ public sealed class NotificationService : INotificationService
         await SendAsync(toEmail, toName, subject, bodyHtml);
     }
 
+    public async Task SendFormPdfAsync(string toEmail, string subject, byte[] pdfBytes, string pdfFileName, string bodyHtml)
+    {
+        var smtp = await _smtpProvider.GetAsync();
+
+        if (string.IsNullOrWhiteSpace(smtp.FromEmail))
+            throw new InvalidOperationException(
+                "SMTP 'From' address is not configured. Go to Settings → Credentials.");
+
+        using var message = new MailMessage
+        {
+            From = new MailAddress(smtp.FromEmail, smtp.FromName),
+            Subject = subject,
+            Body = bodyHtml,
+            IsBodyHtml = true
+        };
+        message.To.Add(new MailAddress(toEmail));
+
+        using var pdfStream = new System.IO.MemoryStream(pdfBytes);
+        message.Attachments.Add(new Attachment(pdfStream, pdfFileName, "application/pdf"));
+
+        using var client = new SmtpClient(smtp.Host, smtp.Port)
+        {
+            EnableSsl = smtp.EnableSsl,
+            UseDefaultCredentials = false,
+            Credentials = new NetworkCredential(smtp.User, smtp.Pass)
+        };
+
+        try { await client.SendMailAsync(message); }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to send form PDF to {Email}", toEmail);
+            throw;
+        }
+    }
+
     private async Task SendAsync(string toEmail, string toName, string subject, string bodyHtml, string? replyToEmail = null)
     {
         var smtp = await _smtpProvider.GetAsync();

@@ -22,11 +22,14 @@ namespace SalesMetrics.Services.Settings
             var brandingSettings = await GetBrandingSettingsAsync();
             var generalSettings = await GetGeneralSettingsAsync();
 
+            var formNotificationSettings = await GetFormNotificationSettingsAsync();
+
             return new SettingsDashboardViewModel
             {
                 NotificationSettings = notificationSettings,
                 SecuritySettings = securitySettings,
                 EnvelopeNotificationSettings = envelopeNotificationSettings,
+                FormNotificationSettings = formNotificationSettings,
                 BrandingSettings = brandingSettings,
                 GeneralSettings = generalSettings,
                 ActiveTab = "notifications"
@@ -404,6 +407,92 @@ namespace SalesMetrics.Services.Settings
                     LastModifiedDate      = DateTime.Now,
                     LastModifiedByUserId  = modifiedByUserId
                 });
+            }
+
+            await _context.SaveChangesAsync();
+        }
+
+        // ======================================================================
+        // Form Notification Settings
+        // ======================================================================
+
+        public async Task<List<FormNotificationSettingViewModel>> GetFormNotificationSettingsAsync()
+        {
+            var settings = await _context.FormNotificationSettings
+                .OrderBy(f => f.FormNotificationSettingsId)
+                .ToListAsync();
+
+            return settings.Select(s => new FormNotificationSettingViewModel
+            {
+                FormNotificationSettingsId = s.FormNotificationSettingsId,
+                LocationCode = s.LocationCode,
+                LocationName = s.LocationName,
+                NotificationEmail = s.NotificationEmail,
+                IsEnabled = s.IsEnabled
+            }).ToList();
+        }
+
+        public async Task<string?> GetFormNotificationEmailAsync(string? locationCode)
+        {
+            // Prefer branch-specific row; fall back to company-wide (null LocationCode)
+            var branchRow = string.IsNullOrEmpty(locationCode) ? null :
+                await _context.FormNotificationSettings
+                    .FirstOrDefaultAsync(f => f.LocationCode == locationCode && f.IsEnabled
+                                           && !string.IsNullOrEmpty(f.NotificationEmail));
+
+            if (branchRow != null) return branchRow.NotificationEmail;
+
+            var companyRow = await _context.FormNotificationSettings
+                .FirstOrDefaultAsync(f => f.LocationCode == null && f.IsEnabled
+                                       && !string.IsNullOrEmpty(f.NotificationEmail));
+
+            return companyRow?.NotificationEmail;
+        }
+
+        public async Task SaveFormNotificationSettingAsync(SaveFormNotificationSettingRequest request, int modifiedByUserId)
+        {
+            var setting = await _context.FormNotificationSettings.FindAsync(request.FormNotificationSettingsId);
+            if (setting == null) throw new Exception("Form notification setting not found");
+
+            setting.NotificationEmail = string.IsNullOrWhiteSpace(request.NotificationEmail)
+                ? null : request.NotificationEmail.Trim();
+            setting.IsEnabled = request.IsEnabled;
+            setting.LastModifiedDate = DateTime.Now;
+            setting.LastModifiedByUserId = modifiedByUserId;
+
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task InitializeDefaultFormNotificationSettingsAsync()
+        {
+            var defaultRows = new[]
+            {
+                new { LocationCode = (string?)null, LocationName = "Company (All Branches)" },
+                new { LocationCode = (string?)"LAX", LocationName = "Los Angeles" },
+                new { LocationCode = (string?)"LSV", LocationName = "Las Vegas" },
+                new { LocationCode = (string?)"CHN", LocationName = "Chino" },
+                new { LocationCode = (string?)"PHX", LocationName = "Phoenix" },
+                new { LocationCode = (string?)"SND", LocationName = "San Diego" }
+            };
+
+            foreach (var row in defaultRows)
+            {
+                bool exists = row.LocationCode == null
+                    ? await _context.FormNotificationSettings.AnyAsync(f => f.LocationCode == null)
+                    : await _context.FormNotificationSettings.AnyAsync(f => f.LocationCode == row.LocationCode);
+
+                if (!exists)
+                {
+                    _context.FormNotificationSettings.Add(new FormNotificationSettingsEntity
+                    {
+                        LocationCode = row.LocationCode,
+                        LocationName = row.LocationName,
+                        NotificationEmail = null,
+                        IsEnabled = true,
+                        LastModifiedDate = DateTime.Now,
+                        LastModifiedByUserId = 1
+                    });
+                }
             }
 
             await _context.SaveChangesAsync();

@@ -205,6 +205,7 @@ namespace SalesMetrics.Controllers
                 await _settingsService.InitializeDefaultNotificationSettingsAsync();
                 await _settingsService.InitializeDefaultSecuritySettingsAsync();
                 await _settingsService.InitializeDefaultEnvelopeNotificationSettingsAsync();
+                await _settingsService.InitializeDefaultFormNotificationSettingsAsync();
                 await _settingsService.InitializeDefaultBrandingSettingsAsync();
                 await _settingsService.InitializeDefaultGeneralSettingsAsync();
 
@@ -246,6 +247,38 @@ namespace SalesMetrics.Controllers
                 var userId = GetCurrentUserId();
                 await _settingsService.SaveEnvelopeNotificationSettingAsync(request, userId);
                 return Json(new { success = true, message = "Envelope notification setting saved successfully" });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = $"Error: {ex.Message}" });
+            }
+        }
+
+        // ======================================================================
+        // Form Notification Settings API
+        // ======================================================================
+
+        // GET: /Settings/GetFormNotificationSettings
+        [HttpGet]
+        public async Task<IActionResult> GetFormNotificationSettings()
+        {
+            if (!IsAdmin()) return Forbid();
+            var settings = await _settingsService.GetFormNotificationSettingsAsync();
+            return Json(settings);
+        }
+
+        // POST: /Settings/SaveFormNotificationSetting
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SaveFormNotificationSetting([FromBody] SaveFormNotificationSettingRequest request)
+        {
+            if (!IsAdmin()) return Forbid();
+
+            try
+            {
+                var userId = GetCurrentUserId();
+                await _settingsService.SaveFormNotificationSettingAsync(request, userId);
+                return Json(new { success = true, message = "Form notification setting saved." });
             }
             catch (Exception ex)
             {

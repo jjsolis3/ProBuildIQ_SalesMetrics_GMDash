@@ -36,10 +36,14 @@
                     <option value="">— Select branch —</option>
                     @foreach (var loc in (Dictionary<int, (string Code, string Name)>)ViewBag.Locations)
                     {
-                        <option value="@loc.Value.Code"
-                                @(ViewBag.CurrentLocationCode == loc.Value.Code ? "selected" : "")>
-                            @loc.Value.Code – @loc.Value.Name
-                        </option>
+                        @if (ViewBag.CurrentLocationCode == loc.Value.Code)
+                        {
+                            <option value="@loc.Value.Code" selected="selected">@loc.Value.Code - @loc.Value.Name</option>
+                        }
+                        else
+                        {
+                            <option value="@loc.Value.Code">@loc.Value.Code - @loc.Value.Name</option>
+                        }
                     }
                 </select>
                 <small class="text-muted">Select the branch this request is being submitted for.</small>

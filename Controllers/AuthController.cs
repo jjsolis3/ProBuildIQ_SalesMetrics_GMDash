@@ -168,15 +168,7 @@ namespace SalesMetrics.Controllers
             salesmanNumber = reader.IsDBNull(reader.GetOrdinal("SalesmanNumber")) ? "" : reader["SalesmanNumber"].ToString();
             fullName = $"{reader["FirstName"]} {reader["LastName"]}";
 
-            string officeLocation = locationId switch
-            {
-                1 => "LAX",
-                2 => "LSV",
-                3 => "CHN",
-                4 => "PHX",
-                5 => "SND",
-                _ => "Unk"
-            };
+            string officeLocation = LocationHelper.GetLocationCode(locationId) ?? "Unk";
 
             try
             {

@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SalesMetrics.Data;
 using SalesMetrics.Models;
@@ -7,6 +8,7 @@ using SalesMetrics.Models.Settings;
 
 namespace SalesMetrics.Controllers
 {
+    [Authorize]
     public class SettingsController : Controller
     {
         private readonly ISettingsService _settingsService;

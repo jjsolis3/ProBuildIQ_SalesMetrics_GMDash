@@ -14,6 +14,7 @@ using System.Text;
 
 namespace SalesMetrics.Controllers
 {
+    [Authorize]
     public class AccountsController : Controller
     {
         private readonly IConfiguration _configuration;
@@ -46,14 +47,6 @@ namespace SalesMetrics.Controllers
                         u.RoleID, r.RoleName,
                         u.SalesmanID, u.SalesmanNumber,
                         u.Location,
-                        CASE u.Location
-                            WHEN 1 THEN 'LAX'
-                            WHEN 2 THEN 'LSV'
-                            WHEN 3 THEN 'CHN'
-                            WHEN 4 THEN 'PHX'
-                            WHEN 5 THEN 'SND'
-                            ELSE 'Unknown'
-                        END as LocationName,
                         u.CreatedDate, u.IsActive, u.LastLoginDate
                     FROM Users u
                     LEFT JOIN Roles r ON u.RoleID = r.RoleID
@@ -76,7 +69,7 @@ namespace SalesMetrics.Controllers
                         SalesmanId = reader["SalesmanID"] != DBNull.Value ? Convert.ToInt32(reader["SalesmanID"]) : 0,
                         SalesmanNumber = reader["SalesmanNumber"]?.ToString() ?? "",
                         Location = Convert.ToInt32(reader["Location"]),
-                        LocationName = reader["LocationName"]?.ToString() ?? "",
+                        LocationName = LocationHelper.GetLocationCode(Convert.ToInt32(reader["Location"])) ?? "Unknown",
                         CreatedDate = Convert.ToDateTime(reader["CreatedDate"]),
                         IsActive = reader["IsActive"] != DBNull.Value && Convert.ToBoolean(reader["IsActive"]),
                         LastLoginDate = reader["LastLoginDate"] != DBNull.Value ? Convert.ToDateTime(reader["LastLoginDate"]) : null
@@ -98,7 +91,7 @@ namespace SalesMetrics.Controllers
                 {
                     int uid = Convert.ToInt32(assignReader["UserID"]);
                     int locId = Convert.ToInt32(assignReader["LocationID"]);
-                    string locName = locId switch { 1 => "LAX", 2 => "LSV", 3 => "CHN", 4 => "PHX", 5 => "SND", _ => "?" };
+                    string locName = LocationHelper.GetLocationCode(locId) ?? "?";
                     if (!allAssignments.ContainsKey(uid)) allAssignments[uid] = new List<string>();
                     allAssignments[uid].Add(locName);
                 }
@@ -944,10 +937,7 @@ namespace SalesMetrics.Controllers
             cmd.CommandText = $@"
                 SELECT u.Users_ID, u.FirstName, u.LastName, u.RoleID,
                        ISNULL(r.RoleName, 'Unknown') AS RoleName,
-                       u.Location,
-                       CASE u.Location WHEN 1 THEN 'LAX' WHEN 2 THEN 'LSV'
-                           WHEN 3 THEN 'CHN' WHEN 4 THEN 'PHX' WHEN 5 THEN 'SND'
-                           ELSE 'N/A' END AS LocationName
+                       u.Location
                 FROM Users u
                 LEFT JOIN Roles r ON u.RoleID = r.RoleID
                 WHERE {string.Join(" AND ", where)}
@@ -957,14 +947,15 @@ namespace SalesMetrics.Controllers
             while (reader.Read())
             {
                 var usersId = reader.GetInt32(reader.GetOrdinal("Users_ID"));
+                var locId = reader.GetInt32(reader.GetOrdinal("Location"));
                 users.Add(new BulkUserPermissionRow
                 {
                     Users_ID  = usersId,
                     FullName  = $"{reader["FirstName"]} {reader["LastName"]}".Trim(),
                     RoleName  = reader["RoleName"].ToString() ?? "",
                     RoleId    = reader.GetInt32(reader.GetOrdinal("RoleID")),
-                    Location  = reader["LocationName"].ToString() ?? "",
-                    LocationId = reader.GetInt32(reader.GetOrdinal("Location")),
+                    Location  = LocationHelper.GetLocationCode(locId) ?? "N/A",
+                    LocationId = locId,
                     HasAccess = usersWithAccess.Contains(usersId)
                 });
             }
@@ -1090,10 +1081,7 @@ namespace SalesMetrics.Controllers
             cmd.CommandText = $@"
                 SELECT u.Users_ID, u.FirstName, u.LastName, u.RoleID,
                        ISNULL(r.RoleName, 'Unknown') AS RoleName,
-                       u.Location,
-                       CASE u.Location WHEN 1 THEN 'LAX' WHEN 2 THEN 'LSV'
-                           WHEN 3 THEN 'CHN' WHEN 4 THEN 'PHX' WHEN 5 THEN 'SND'
-                           ELSE 'N/A' END AS LocationName
+                       u.Location
                 FROM Users u
                 LEFT JOIN Roles r ON u.RoleID = r.RoleID
                 WHERE {string.Join(" AND ", where)}
@@ -1103,14 +1091,15 @@ namespace SalesMetrics.Controllers
             while (reader.Read())
             {
                 var usersId = reader.GetInt32(reader.GetOrdinal("Users_ID"));
+                var locId = reader.GetInt32(reader.GetOrdinal("Location"));
                 users.Add(new BulkUserLocationRow
                 {
                     Users_ID          = usersId,
                     FullName          = $"{reader["FirstName"]} {reader["LastName"]}".Trim(),
                     RoleName          = reader["RoleName"].ToString() ?? "",
                     RoleId            = reader.GetInt32(reader.GetOrdinal("RoleID")),
-                    PrimaryLocation   = reader["LocationName"].ToString() ?? "",
-                    PrimaryLocationId = reader.GetInt32(reader.GetOrdinal("Location")),
+                    PrimaryLocation   = LocationHelper.GetLocationCode(locId) ?? "N/A",
+                    PrimaryLocationId = locId,
                     IsAssigned        = usersWithAssignment.Contains(usersId)
                 });
             }

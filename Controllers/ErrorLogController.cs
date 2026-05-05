@@ -8,16 +8,18 @@ using SalesMetrics.Services;
 
 namespace SalesMetrics.Controllers
 {
-    [Authorize] // Adjust role as needed
+    [Authorize]
     public class ErrorLogController : Controller
     {
         private readonly IErrorLoggingService _errorLoggingService;
         private readonly IConfiguration _configuration;
+        private readonly ILogger<ErrorLogController> _logger;
 
-        public ErrorLogController(IErrorLoggingService errorLoggingService, IConfiguration configuration)
+        public ErrorLogController(IErrorLoggingService errorLoggingService, IConfiguration configuration, ILogger<ErrorLogController> logger)
         {
             _errorLoggingService = errorLoggingService;
             _configuration = configuration;
+            _logger = logger;
         }
 
         public async Task<IActionResult> Index(int page = 1, int pageSize = 50, string level = "All")
@@ -103,7 +105,7 @@ namespace SalesMetrics.Controllers
             catch (Exception ex)
             {
                 // Log the error but don't create a recursive loop
-                Console.WriteLine($"Error in QuickClose: {ex.Message}");
+                _logger.LogError(ex, "Error in QuickClose");
 
                 if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
                 {
@@ -147,7 +149,7 @@ namespace SalesMetrics.Controllers
                     catch (Exception ex)
                     {
                         // Log individual failure but continue
-                        Console.WriteLine($"Failed to resolve error {id}: {ex.Message}");
+                        _logger.LogError(ex, "Failed to resolve error {ErrorId}", id);
                         continue;
                     }
                 }
@@ -160,7 +162,7 @@ namespace SalesMetrics.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error in BulkQuickClose: {ex.Message}");
+                _logger.LogError(ex, "Error in BulkQuickClose");
                 return Json(new { success = false, message = "Bulk operation failed" });
             }
         }
@@ -277,7 +279,7 @@ namespace SalesMetrics.Controllers
             catch (Exception ex)
             {
                 // Log but don't crash the dashboard if LoginHistory is unavailable
-                Console.WriteLine($"[ErrorLogController] Failed to load login security stats: {ex.Message}");
+                _logger.LogError(ex, "Failed to load login security stats");
             }
 
             return stats;

@@ -34,13 +34,15 @@ namespace SalesMetrics.Controllers
         private readonly SalesMetricsDbContext _context;
         private readonly INotificationService _notificationService;
         private readonly IMemoryCache _cache;
+        private readonly ILogger<TasksController> _logger;
 
-        public TasksController(IConfiguration configuration, SalesMetricsDbContext context, INotificationService notificationService, IMemoryCache cache)
+        public TasksController(IConfiguration configuration, SalesMetricsDbContext context, INotificationService notificationService, IMemoryCache cache, ILogger<TasksController> logger)
         {
             _configuration = configuration;
             _context = context;
             _notificationService = notificationService;
             _cache = cache;
+            _logger = logger;
         }
 
         private UserContext GetUserContext()
@@ -243,7 +245,7 @@ namespace SalesMetrics.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error getting task types: {ex.Message}");
+                _logger.LogError(ex, "Error getting task types");
                 return Json(new List<string>());
             }
         }
@@ -439,7 +441,7 @@ namespace SalesMetrics.Controllers
             {
                 foreach (var error in ModelState)
                 {
-                    Console.WriteLine($"{error.Key}: {string.Join(", ", error.Value.Errors.Select(e => e.ErrorMessage))}");
+                    _logger.LogWarning("ModelState error {Key}: {Errors}", error.Key, string.Join(", ", error.Value.Errors.Select(e => e.ErrorMessage)));
                 }
 
                 // Reload page with existing task/user list
@@ -493,7 +495,7 @@ namespace SalesMetrics.Controllers
             };
 
             var locationName = LocationHelper.GetLocationName(assignedUser.LocationId);
-            Console.WriteLine($"New Task Created for {assignedUser.FullName} (id: {model.AssignedTo} ) from the {locationName} branch");
+            _logger.LogInformation("New task created for {FullName} (id: {UserId}) from {Branch}", assignedUser.FullName, model.AssignedTo, locationName);
 
             int taskId = SaveTaskToDatabase(task);
             task.TaskID = taskId;
@@ -509,7 +511,7 @@ namespace SalesMetrics.Controllers
             catch (Exception ex)
             {
                 // Log error but don't fail task creation
-                Console.WriteLine($"Error sending task assignment notification: {ex.Message}");
+                _logger.LogError(ex, "Error sending task assignment notification");
             }
 
             // Add to Google Task
@@ -773,7 +775,7 @@ namespace SalesMetrics.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Error retrieving tasks by Locations: " + ex.Message);
+                _logger.LogError(ex, "Error retrieving tasks by location");
                 // You could also log this exception or rethrow it as needed
             }
 
@@ -968,7 +970,7 @@ namespace SalesMetrics.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Error retrieving paginated tasks: " + ex.Message);
+                _logger.LogError(ex, "Error retrieving paginated tasks");
             }
 
             return (tasks, totalRecords, filteredRecords);
@@ -1039,7 +1041,7 @@ namespace SalesMetrics.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Error retrieving tasks by User: " + ex.Message);
+                _logger.LogError(ex, "Error retrieving tasks by user");
                 // You could also log this exception or rethrow it as needed
             }
 
@@ -1101,7 +1103,7 @@ namespace SalesMetrics.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[DB ERROR] Failed to insert task: {ex.Message}");
+                _logger.LogError(ex, "Failed to insert task");
                 throw;
             }
         }
@@ -1423,7 +1425,7 @@ namespace SalesMetrics.Controllers
                         int rowsAffected = cmd.ExecuteNonQuery();
                         if (rowsAffected == 0)
                         {
-                            Console.WriteLine($"[WARNING] No rows updated. TaskID = {updatedTask.TaskID}");
+                            _logger.LogWarning("No rows updated for TaskID={TaskId}", updatedTask.TaskID);
                             TempData["Error"] = "Update failed. Task not found or no changes applied.";
                             return RedirectToAction("Task");
                         }
@@ -1622,7 +1624,7 @@ namespace SalesMetrics.Controllers
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"[UpdateStatus] Google Calendar sync failed for TaskID={model.TaskId}: {ex.Message}");
+                        _logger.LogError(ex, "Google Calendar sync failed for TaskID={TaskId}", model.TaskId);
                         // Non-fatal — status was already updated in DB
                     }
                 }
@@ -1638,7 +1640,7 @@ namespace SalesMetrics.Controllers
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error sending status change notification: {ex.Message}");
+                    _logger.LogError(ex, "Error sending status change notification");
                 }
 
                 return Json(new { success = true });
@@ -1660,8 +1662,7 @@ namespace SalesMetrics.Controllers
                 return RedirectToAction("YardiProperties", "Yardi");
             }
 
-            Console.WriteLine($"[DEBUG] Incoming Task.AssignedTo = {modal.Task?.AssignedTo}");
-            Console.WriteLine($"[DEBUG] ModelState.IsValid = {ModelState.IsValid}");
+            _logger.LogDebug("Incoming Task.AssignedTo={AssignedTo}, ModelState.IsValid={IsValid}", modal.Task?.AssignedTo, ModelState.IsValid);
 
             // ✅ Convert TaskCreateViewModel ➜ SalesTask
             var task = new SalesTask
@@ -1706,7 +1707,7 @@ namespace SalesMetrics.Controllers
             }
 
 
-            Console.WriteLine($"[DEBUG] Creating Yardi Task: PropertyID = {task.PropertyID}, Property = {task.Property}");
+            _logger.LogDebug("Creating Yardi Task: PropertyID={PropertyId}, Property={Property}", task.PropertyID, task.Property);
 
             int taskId = SaveTaskToDatabase(task);
             if (taskId <= 0)
@@ -1859,7 +1860,7 @@ namespace SalesMetrics.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error creating task: {ex.Message}");
+                _logger.LogError(ex, "Error creating task");
                 TempData["Error"] = $"Error creating Task for {model.Property}";
                 //return StatusCode(500, $"Internal server error: {ex.Message}");
                 return Json(new { success = false, message = "Internal server error." });
@@ -1888,7 +1889,7 @@ namespace SalesMetrics.Controllers
                 modal.LoggedInUserId = users_Id;
 
                 // Determine AssignedTo: Management roles can assign to team members, others assign to themselves
-                Console.WriteLine("AssignedTo in CreateFromWorkOrder: " + model.AssignedTo);
+                _logger.LogDebug("AssignedTo in CreateFromWorkOrder: {AssignedTo}", model.AssignedTo);
 
                 int assignedTo = (RoleHelper.CanManageLocationTasks(roleId) ? model.AssignedTo : users_Id);
 
@@ -1951,7 +1952,7 @@ namespace SalesMetrics.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error creating task: {ex.Message}");
+                _logger.LogError(ex, "Error creating task");
                 return StatusCode(500, $"Internal server error: {ex.Message}");
             }
         }
@@ -1982,7 +1983,7 @@ namespace SalesMetrics.Controllers
                 }
 
                 // Determine AssignedTo: Management roles can assign to team members, others assign to themselves
-                Console.WriteLine("AssignedTo in CreateFromWorkOrder: " + model.AssignedTo);
+                _logger.LogDebug("AssignedTo in CreateFromWorkOrder: {AssignedTo}", model.AssignedTo);
 
                 int assignedTo = (RoleHelper.CanManageLocationTasks(roleId) ? model.AssignedTo : sessionUserId);
 
@@ -2018,7 +2019,7 @@ namespace SalesMetrics.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error creating task: {ex.Message}");
+                _logger.LogError(ex, "Error creating task");
                 return StatusCode(500, $"Internal server error: {ex.Message}");
             }
         }
@@ -2170,7 +2171,7 @@ namespace SalesMetrics.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error sending note notification: {ex.Message}");
+                _logger.LogError(ex, "Error sending note notification");
             }
 
             return Ok();
@@ -2405,7 +2406,7 @@ namespace SalesMetrics.Controllers
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"[Google Sync] Failed to sync task {task.TaskID} to Google: {ex.Message}");
+                        _logger.LogError(ex, "Google Sync failed for TaskID={TaskId}", task.TaskID);
                         // Return nulls — task was already saved to DB; user can manually sync via 'Sync Now'
                         googleTaskId = null;
                         googleEventId = null;
@@ -2509,7 +2510,7 @@ namespace SalesMetrics.Controllers
             catch (Exception ex)
             {
                 TempData["Error"] = "Google sync failed. Please reconnect your Google account from your profile and try again.";
-                Console.WriteLine($"[ManualGoogleSync ERROR] TaskID={taskId}: {ex}");
+                _logger.LogError(ex, "ManualGoogleSync failed for TaskID={TaskId}", taskId);
             }
 
             return RedirectToAction("Task");
@@ -2584,7 +2585,7 @@ namespace SalesMetrics.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error in GetMyTasksData: {ex.Message}");
+                _logger.LogError(ex, "Error in GetMyTasksData");
                 return Json(new { draw = 1, recordsTotal = 0, recordsFiltered = 0, data = new List<object>(), error = ex.Message });
             }
         }

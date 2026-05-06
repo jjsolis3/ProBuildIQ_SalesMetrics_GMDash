@@ -164,28 +164,25 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function () {
-        @* SweetAlert success message if available *@
-        @if (TempData["SuccessMessage"] != null)
-        {
-            <text>
+            var successMsg = '@Html.Raw(TempData["SuccessMessage"] ?? "")';
+            if (successMsg) {
                 Swal.fire({
                     icon: 'success',
                     title: 'Success!',
-                    text: '@TempData["SuccessMessage"]',
+                    text: successMsg,
                     showCancelButton: true,
-                    confirmButtonText: '🆕 Add Another',
-                    cancelButtonText: '📋 View Submissions',
+                    confirmButtonText: 'Add Another',
+                    cancelButtonText: 'View Submissions',
                     confirmButtonColor: '#198754',
                     cancelButtonColor: '#0d6efd'
-                }).then((result) => {
+                }).then(function (result) {
                     if (result.isConfirmed) {
                         window.location.href = '/Onboarding/NewCustomer';
                     } else {
-                        window.location.href = '/Onboarding/Submissions'; // change to your submissions route
+                        window.location.href = '/Onboarding/Submissions';
                     }
                 });
-            </text>
-        }
+            }
         });
     </script>
     <script>

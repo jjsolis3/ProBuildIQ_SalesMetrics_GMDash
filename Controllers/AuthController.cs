@@ -12,6 +12,7 @@ using UAParser;
 using System.Security.Cryptography;
 using System.Text;
 using SalesMetrics.Services;
+using SalesMetrics.Services.Helpers;
 using SalesMetrics.Services.Signing;
 using SalesMetrics.Utilities.Security;
 using Microsoft.Extensions.Caching.Memory;
@@ -172,8 +173,8 @@ namespace SalesMetrics.Controllers
 
             try
             {
-                string storedHash = reader["PasswordHash"]?.ToString();
-                string storedSalt = reader["Salt"]?.ToString();
+                string? storedHash = reader["PasswordHash"]?.ToString();
+                string? storedSalt = reader["Salt"]?.ToString();
 
                 if (string.IsNullOrEmpty(storedHash) || string.IsNullOrEmpty(storedSalt))
                 {
@@ -188,7 +189,9 @@ namespace SalesMetrics.Controllers
 
                 if (!string.Equals(inputHash, storedHash, StringComparison.OrdinalIgnoreCase))
                 {
+#pragma warning disable CS0618
                     string legacyHash = PasswordSecurity.HashPasswordLegacy(password, storedSalt);
+#pragma warning restore CS0618
 
                     if (!string.Equals(legacyHash, storedHash, StringComparison.OrdinalIgnoreCase))
                     {
@@ -246,7 +249,7 @@ namespace SalesMetrics.Controllers
             };
 
             if (salesmanId > 0)
-                claims.Add(new Claim("SalesmanNumber", salesmanNumber));
+                claims.Add(new Claim("SalesmanNumber", salesmanNumber ?? ""));
 
             var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
             var authProperties = new AuthenticationProperties { IsPersistent = true };
@@ -269,7 +272,7 @@ namespace SalesMetrics.Controllers
             if (salesmanId > 0)
             {
                 HttpContext.Session.SetInt32("SalesmanId", salesmanId);
-                HttpContext.Session.SetString("SalesmanNumber", salesmanNumber);
+                HttpContext.Session.SetString("SalesmanNumber", salesmanNumber ?? "");
             }
 
             await LogLoginAttemptAsync(salesMetricsUserId, userName, officeLocation, true);
@@ -294,7 +297,7 @@ namespace SalesMetrics.Controllers
                 using (var reader2 = locationCmd.ExecuteReader())
                 {
                     while (reader2.Read())
-                        assignedLocations.Add(reader2["LocationID"].ToString());
+                        assignedLocations.Add(reader2["LocationID"].ToString() ?? "");
                 }
 
                 HttpContext.Session.SetString("AssignedLocations", string.Join(",", assignedLocations));
@@ -331,7 +334,7 @@ namespace SalesMetrics.Controllers
                 return View("Login_Alt");
             }
 
-            string connectionString = _configuration.GetConnectionString(officeLocation);
+            string? connectionString = _configuration.GetConnectionString(officeLocation);
             if (string.IsNullOrEmpty(connectionString))
             {
                 throw new InvalidOperationException($"Connection string for '{officeLocation}' is not found in appsettings.json.");
@@ -405,8 +408,8 @@ namespace SalesMetrics.Controllers
 
             try
             {
-                string storedHash = reader["PasswordHash"]?.ToString();
-                string storedSalt = reader["Salt"]?.ToString();
+                string? storedHash = reader["PasswordHash"]?.ToString();
+                string? storedSalt = reader["Salt"]?.ToString();
 
                 if (string.IsNullOrEmpty(storedHash) || string.IsNullOrEmpty(storedSalt))
                 {
@@ -421,7 +424,9 @@ namespace SalesMetrics.Controllers
 
                 if (!string.Equals(inputHash, storedHash, StringComparison.OrdinalIgnoreCase))
                 {
+#pragma warning disable CS0618
                     string legacyHash = PasswordSecurity.HashPasswordLegacy(password, storedSalt);
+#pragma warning restore CS0618
 
                     if (!string.Equals(legacyHash, storedHash, StringComparison.OrdinalIgnoreCase))
                     {
@@ -501,7 +506,7 @@ namespace SalesMetrics.Controllers
             if (salesmanId > 0)
                 HttpContext.Session.SetInt32("SalesmanId", salesmanId);
             if (!string.IsNullOrEmpty(salesmanNumber))
-                HttpContext.Session.SetString("SalesmanNumber", salesmanNumber);
+                HttpContext.Session.SetString("SalesmanNumber", salesmanNumber ?? "");
 
             await LogLoginAttemptAsync(salesMetricsUserId, username, officeLocation, true);
 
@@ -524,7 +529,7 @@ namespace SalesMetrics.Controllers
                 using (var reader2 = locationCmd.ExecuteReader())
                 {
                     while (reader2.Read())
-                        assignedLocations.Add(reader2["LocationID"].ToString());
+                        assignedLocations.Add(reader2["LocationID"].ToString() ?? "");
                 }
 
                 HttpContext.Session.SetString("AssignedLocations", string.Join(",", assignedLocations));
@@ -557,7 +562,7 @@ namespace SalesMetrics.Controllers
 
             try
             {
-                string connStr = _configuration.GetConnectionString("SalesMetrics");
+                string? connStr = _configuration.GetConnectionString("SalesMetrics");
 
                 // Look up user — only proceed if the account exists; otherwise silently drop.
                 string? userEmail = null;
@@ -700,7 +705,7 @@ namespace SalesMetrics.Controllers
                 return View();
             }
 
-            string connStr = _configuration.GetConnectionString("SalesMetrics");
+            string? connStr = _configuration.GetConnectionString("SalesMetrics");
 
             try
             {
@@ -773,7 +778,7 @@ namespace SalesMetrics.Controllers
 
         private async Task<bool> IsResetTokenValidAsync(string token)
         {
-            string connStr = _configuration.GetConnectionString("SalesMetrics");
+            string? connStr = _configuration.GetConnectionString("SalesMetrics");
             using var conn = new SqlConnection(connStr);
             await conn.OpenAsync();
 
@@ -782,7 +787,7 @@ namespace SalesMetrics.Controllers
                 WHERE Token = @Token AND UsedAt IS NULL AND ExpiresAt > GETUTCDATE()", conn);
             cmd.Parameters.AddWithValue("@Token", token);
 
-            int count = (int)await cmd.ExecuteScalarAsync();
+            int count = Convert.ToInt32(await cmd.ExecuteScalarAsync());
             return count > 0;
         }
 
@@ -810,7 +815,7 @@ namespace SalesMetrics.Controllers
         private string GetUserRole(int roleId)
         {
             string role = "Guest";
-            string connectionString = _configuration.GetConnectionString("SalesMetrics");
+            string? connectionString = _configuration.GetConnectionString("SalesMetrics");
 
             using (SqlConnection conn = new SqlConnection(connectionString))
             {
@@ -830,11 +835,11 @@ namespace SalesMetrics.Controllers
         /// to the ErrorLog so it surfaces in the Error Dashboard.
         /// Errors in history logging are swallowed so they never block a successful login.
         /// </summary>
-        private async Task LogLoginAttemptAsync(int userID, string username, string branch, bool success, string errorMsg = null)
+        private async Task LogLoginAttemptAsync(int userID, string username, string branch, bool success, string? errorMsg = null)
         {
             try
             {
-                string connSR = _configuration.GetConnectionString("SalesMetrics");
+                string? connSR = _configuration.GetConnectionString("SalesMetrics");
 
                 using (SqlConnection conn = new SqlConnection(connSR))
                 {
@@ -1085,9 +1090,9 @@ namespace SalesMetrics.Controllers
             }
 
             string salt = PasswordSecurity.GenerateSalt();
-            string passwordHash = PasswordSecurity.HashPassword(model.Password, salt);
+            string passwordHash = PasswordSecurity.HashPassword(model.Password ?? "", salt);
 
-            string connStr = _configuration.GetConnectionString("SalesMetrics");
+            string? connStr = _configuration.GetConnectionString("SalesMetrics");
             using (var conn = new SqlConnection(connStr))
             {
                 conn.Open();

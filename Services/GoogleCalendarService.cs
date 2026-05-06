@@ -4,16 +4,19 @@ using Google.Apis.Calendar.v3.Data;
 using Google.Apis.Services;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using System.Net;
 
 public class GoogleCalendarService
 {
     private readonly IConfiguration _configuration;
+    private readonly ILogger<GoogleCalendarService> _logger;
     private readonly string _applicationName = "SalesMetrics";
 
-    public GoogleCalendarService(IConfiguration configuration)
+    public GoogleCalendarService(IConfiguration configuration, ILogger<GoogleCalendarService> logger)
     {
         _configuration = configuration;
+        _logger = logger;
     }
 
     private async Task<string?> EnsureValidAccessTokenAsync(int users_Id, string refreshToken)
@@ -85,12 +88,12 @@ public class GoogleCalendarService
                     Description = $"[Task ID: {taskId}]\n\n{description}",
                     Start = new EventDateTime
                     {
-                        DateTime = dueDate,
+                        DateTimeDateTimeOffset = new DateTimeOffset(dueDate, TimeSpan.FromHours(-7)),
                         TimeZone = "America/Los_Angeles"
                     },
                     End = new EventDateTime
                     {
-                        DateTime = dueDate.AddHours(1),
+                        DateTimeDateTimeOffset = new DateTimeOffset(dueDate.AddHours(1), TimeSpan.FromHours(-7)),
                         TimeZone = "America/Los_Angeles"
                     }
                 };
@@ -99,12 +102,12 @@ public class GoogleCalendarService
                 return createdEvent.Id;
             }
 
-            Console.WriteLine("[Google Calendar] Failed to refresh token.");
+            _logger.LogWarning("Google Calendar: failed to refresh token for create");
             return null;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Google Calendar Error] {ex.Message}");
+            _logger.LogError(ex, "Google Calendar error during create");
             return null;
         }
     }
@@ -157,7 +160,7 @@ public class GoogleCalendarService
                 return true;
             }
 
-            Console.WriteLine("[Google Calendar] Failed to refresh token on update.");
+            _logger.LogWarning("Google Calendar: failed to refresh token for update");
             return false;
         }
     }
@@ -180,12 +183,12 @@ public class GoogleCalendarService
                 return true;
             }
 
-            Console.WriteLine("[Google Calendar] Failed to refresh token on delete.");
+            _logger.LogWarning("Google Calendar: failed to refresh token for delete");
             return false;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Google Calendar Delete Error] {ex.Message}");
+            _logger.LogError(ex, "Google Calendar error during delete");
             return false;
         }
     }

@@ -35,14 +35,16 @@ namespace SalesMetrics.Controllers
         private readonly INotificationService _notificationService;
         private readonly IMemoryCache _cache;
         private readonly ILogger<TasksController> _logger;
+        private readonly GoogleCalendarService _calendarService;
 
-        public TasksController(IConfiguration configuration, SalesMetricsDbContext context, INotificationService notificationService, IMemoryCache cache, ILogger<TasksController> logger)
+        public TasksController(IConfiguration configuration, SalesMetricsDbContext context, INotificationService notificationService, IMemoryCache cache, ILogger<TasksController> logger, GoogleCalendarService calendarService)
         {
             _configuration = configuration;
             _context = context;
             _notificationService = notificationService;
             _cache = cache;
             _logger = logger;
+            _calendarService = calendarService;
         }
 
         private UserContext GetUserContext()
@@ -161,7 +163,7 @@ namespace SalesMetrics.Controllers
 
                 // Get paginated tasks with custom filters
                 var (tasks, totalRecords, filteredRecords) = GetPaginatedTasksByLocation(
-                    locationId, filter, skip, pageSize, searchValue, sortColumn, sortDirection, userLookup,
+                    locationId, filter, skip, pageSize, searchValue ?? "", sortColumn ?? "", sortDirection ?? "", userLookup,
                     typeFilter, statusFilter, assignedToFilter);
 
                 // Format data for DataTables
@@ -213,7 +215,7 @@ namespace SalesMetrics.Controllers
             try
             {
                 int locationId = LocationHelper.GetCurrentLocationId(HttpContext);
-                string connectionString = _configuration.GetConnectionString("SalesMetrics");
+                string? connectionString = _configuration.GetConnectionString("SalesMetrics");
                 var types = new List<string>();
 
                 using (SqlConnection conn = new SqlConnection(connectionString))
@@ -340,10 +342,10 @@ namespace SalesMetrics.Controllers
             {
                 TaskId = t.TaskID,
                 Title = GetTaskTitle(t, users, roleId),
-                Type = t.Type,
-                Status = t.Status,
-                Property = t.Property,
-                Description = t.Description,
+                Type = t.Type ?? "",
+                Status = t.Status ?? "",
+                Property = t.Property ?? "",
+                Description = t.Description ?? "",
                 DueDate = t.DueDate,
                 AssignedTo = users.FirstOrDefault(u => u.Users_ID == t.AssignedTo) is var u && u != null ? $"{u.FirstName} {u.LastName}" : "Unassigned"
             }).ToList();
@@ -406,7 +408,7 @@ namespace SalesMetrics.Controllers
                 RoleId = assigned.RoleID,
                 SalesmanId = assigned.SalesmanID,
                 LocationId = assigned.Location,
-                Username = assigned.Username
+                Username = assigned.Username ?? ""
             };
         }
 
@@ -703,7 +705,7 @@ namespace SalesMetrics.Controllers
 
         private List<SalesTask> GetAllTasksByLocation(int locationId, string filter = "all")
         {
-            string connectionString = _configuration.GetConnectionString("SalesMetrics");
+            string? connectionString = _configuration.GetConnectionString("SalesMetrics");
             var tasks = new List<SalesTask>();
 
             try
@@ -788,9 +790,9 @@ namespace SalesMetrics.Controllers
         private (List<SalesTask> tasks, int totalRecords, int filteredRecords) GetPaginatedTasksByLocation(
             int locationId, string filter, int skip, int pageSize, string searchValue,
             string sortColumn, string sortDirection, Dictionary<int, string> userLookup,
-            string typeFilter = null, string statusFilter = null, string assignedToFilter = null)
+            string? typeFilter = null, string? statusFilter = null, string? assignedToFilter = null)
         {
-            string connectionString = _configuration.GetConnectionString("SalesMetrics");
+            string? connectionString = _configuration.GetConnectionString("SalesMetrics");
             var tasks = new List<SalesTask>();
             int totalRecords = 0;
             int filteredRecords = 0;
@@ -978,7 +980,7 @@ namespace SalesMetrics.Controllers
 
         private List<SalesTask> GetTasksByUserId(int users_Id, int locationId)
         {
-            string connectionString = _configuration.GetConnectionString("SalesMetrics");
+            string? connectionString = _configuration.GetConnectionString("SalesMetrics");
             var tasks = new List<SalesTask>();
 
             try
@@ -1055,11 +1057,11 @@ namespace SalesMetrics.Controllers
             // Management roles see who the task is assigned to in the title
             if (RoleHelper.CanManageLocationTasks(roleId))
             {
-                return (assignedUser != null ? assignedUser.NameandInitial() + " - " : "") + task.Title;
+                return (assignedUser != null ? assignedUser.NameandInitial() + " - " : "") + (task.Title ?? "");
             }
             else
             {
-                return task.Title;
+                return task.Title ?? "";
             }
         }
 
@@ -1121,8 +1123,8 @@ namespace SalesMetrics.Controllers
 
             var users = GetActiveUsers(); // This method is already defined in your controller
 
-            string title = null;
-            string description = null;
+            string? title = null;
+            string? description = null;
 
             switch (source.ToLower())
             {
@@ -1152,8 +1154,8 @@ namespace SalesMetrics.Controllers
             {
                 Task = new TaskCreateViewModel
                 {
-                    Title = title,
-                    Description = description,
+                    Title = title ?? "",
+                    Description = description ?? "",
                     DueDateDate = calcDueDate,
                     DueDateTime = calcDueTime,
                     DueDate = defaultDueDate, // Default to 1 day from now
@@ -1202,13 +1204,13 @@ namespace SalesMetrics.Controllers
             {
                 Task = new TaskCreateViewModel
                 {
-                    Title = task.Title,
-                    Description = task.Description,
+                    Title = task.Title ?? "",
+                    Description = task.Description ?? "",
                     DueDate = task.DueDate ?? DateTime.Now,
-                    Status = task.Status,
-                    Property = task.Property,
+                    Status = task.Status ?? "",
+                    Property = task.Property ?? "",
                     AssignedTo = task.AssignedTo ?? 0,
-                    Type = task.Type,
+                    Type = task.Type ?? "",
                     TaskID = task.TaskID
                 },
                 Users = GetActiveUsers(),
@@ -1221,7 +1223,7 @@ namespace SalesMetrics.Controllers
         [HttpPost]
         public async Task<IActionResult> UpdateFromAdmin(TaskModalViewModel modal)
         {
-            string connStr = _configuration.GetConnectionString("SalesMetrics");
+            string? connStr = _configuration.GetConnectionString("SalesMetrics");
             var userId = Convert.ToInt32(HttpContext.Session.GetString("UserId"));
             int users_Id = int.Parse(User.FindFirst("Users_Id")?.Value ?? "0");
 
@@ -1324,8 +1326,7 @@ namespace SalesMetrics.Controllers
                         // Only call Google Calendar if we have a real stored GoogleEventId
                         if (!string.IsNullOrWhiteSpace(accessToken) && !string.IsNullOrWhiteSpace(refreshToken) && !string.IsNullOrWhiteSpace(googleEventId))
                         {
-                            var calendarService = new GoogleCalendarService(_configuration);
-                            await calendarService.UpdateTaskEventAsync(users_Id, accessToken, refreshToken, googleEventId, updatedTask.Title, updatedTask.Description, updatedTask.DueDate);
+                            await _calendarService.UpdateTaskEventAsync(users_Id, accessToken, refreshToken, googleEventId, updatedTask.Title ?? "", updatedTask.Description ?? "", updatedTask.DueDate);
                         }
                     }
                 }
@@ -1356,7 +1357,7 @@ namespace SalesMetrics.Controllers
         [HttpPost]
         public async Task<IActionResult> Update(TaskModalViewModel modal)
         {
-            string connStr = _configuration.GetConnectionString("SalesMetrics");
+            string? connStr = _configuration.GetConnectionString("SalesMetrics");
             
             var userId = Convert.ToInt32(HttpContext.Session.GetString("UserId"));
             int users_Id = int.Parse(User.FindFirst("Users_Id")?.Value ?? "0");
@@ -1453,13 +1454,12 @@ namespace SalesMetrics.Controllers
 
                         if (!string.IsNullOrWhiteSpace(accessToken) && !string.IsNullOrWhiteSpace(refreshToken) && !string.IsNullOrWhiteSpace(googleEventIdForUpdate))
                         {
-                            var calendarService = new GoogleCalendarService(_configuration);
-                            await calendarService.UpdateTaskEventAsync(userId, accessToken, refreshToken, googleEventIdForUpdate, updatedTask.Title, updatedTask.Description, updatedTask.DueDate);
+                            await _calendarService.UpdateTaskEventAsync(userId, accessToken, refreshToken, googleEventIdForUpdate, updatedTask.Title ?? "", updatedTask.Description ?? "", updatedTask.DueDate);
                         }
                     }
                 }
 
-                TempData["Success"] = $"Task {updatedTask.TaskID.ToString()}  |  {updatedTask.Title.ToString()} | has been updated.";
+                TempData["Success"] = $"Task {updatedTask?.TaskID}  |  {updatedTask?.Title} | has been updated.";
 
             }
             catch (Exception ex)
@@ -1510,8 +1510,7 @@ namespace SalesMetrics.Controllers
                 // Delete the Google Calendar event first (using stored GoogleEventId, not local taskId)
                 if (!string.IsNullOrEmpty(accessToken) && !string.IsNullOrEmpty(refreshToken) && !string.IsNullOrEmpty(googleEventId))
                 {
-                    var calendarService = new GoogleCalendarService(_configuration);
-                    await calendarService.DeleteTaskEventAsync(users_Id, accessToken, refreshToken, googleEventId);
+                    await _calendarService.DeleteTaskEventAsync(users_Id, accessToken, refreshToken, googleEventId);
                 }
 
                 // Delete from DB
@@ -1609,10 +1608,9 @@ namespace SalesMetrics.Controllers
                 {
                     try
                     {
-                        var calendarService = new GoogleCalendarService(_configuration);
                         if (model.NewStatus == "Completed" || model.NewStatus == "Cancelled")
                         {
-                            await calendarService.DeleteTaskEventAsync(assignedUserId.Value, accessToken, refreshToken, googleEventId);
+                            await _calendarService.DeleteTaskEventAsync(assignedUserId.Value, accessToken, refreshToken, googleEventId);
 
                             // Clear GoogleEventId in DB since the event is removed
                             using var cleanConn = new SqlConnection(_configuration.GetConnectionString("SalesMetrics"));
@@ -2293,7 +2291,7 @@ namespace SalesMetrics.Controllers
                 // Handle invalid model state
                 TempData["TaskFormError"] = "Please complete all required fields before submitting the task.";
                 // make sure returnUrl is valid (fallback if null)
-                return Redirect(returnUrl ?? Url.Action("Schedule", "Tasks"));
+                return Redirect(returnUrl ?? Url.Action("Schedule", "Tasks") ?? "/Tasks/Schedule");
             }
 
             switch (model.Task.Source)
@@ -2330,14 +2328,14 @@ namespace SalesMetrics.Controllers
             {
                 Task = new TaskCreateViewModel
                 {
-                    Title = task.Title,
-                    Description = task.Description,
+                    Title = task.Title ?? "",
+                    Description = task.Description ?? "",
                     DueDate = due,
                     DueDateDate = due.ToString("yyyy-MM-dd"), // ✅ Fix for HTML5 <input type="date">
                     DueDateTime = due.ToString("hh:mm tt"),
-                    Type = task.Type,
+                    Type = task.Type ?? "",
                     Status = "Pending",
-                    Property = task.Property,
+                    Property = task.Property ?? "",
                     PropertyID = task.PropertyID,
                     AssignedTo = task.AssignedTo ?? users_Id
                 },
@@ -2378,14 +2376,13 @@ namespace SalesMetrics.Controllers
                     {
                         var tasksService = new GoogleTasksService(_configuration);
                         googleTaskId = await tasksService.CreateTaskAsync(
-                            accessToken, refreshToken, task.AssignedTo.ToString(), task.TaskID.ToString(), task.Title, task.Description, task.DueDate
+                            accessToken, refreshToken, task.AssignedTo?.ToString() ?? "", task.TaskID.ToString(), task.Title ?? "", task.Description ?? "", task.DueDate
                         );
 
                         if (task.Type?.Equals("QC", StringComparison.OrdinalIgnoreCase) == true || task.Type?.Equals("Site Visit", StringComparison.OrdinalIgnoreCase) == true)
                         {
-                            var calendarService = new GoogleCalendarService(_configuration);
-                            googleEventId = await calendarService.AddTaskEventAsync(
-                                task.AssignedTo ?? 0, accessToken, refreshToken, task.TaskID.ToString(), task.Title, task.Description, task.DueDate ?? DateTime.Now
+                            googleEventId = await _calendarService.AddTaskEventAsync(
+                                task.AssignedTo ?? 0, accessToken, refreshToken, task.TaskID.ToString(), task.Title ?? "", task.Description ?? "", task.DueDate ?? DateTime.Now
                             );
                         }
 
@@ -2480,15 +2477,14 @@ namespace SalesMetrics.Controllers
             try
             {
                 var tasksService = new GoogleTasksService(_configuration);
-                var calendarService = new GoogleCalendarService(_configuration);
 
-                var googleTaskId = await tasksService.CreateTaskAsync(accessToken, refreshToken, task.AssignedTo.ToString(), task.TaskID.ToString(), task.Title, task.Description, task.DueDate);
+                var googleTaskId = await tasksService.CreateTaskAsync(accessToken, refreshToken, task.AssignedTo?.ToString() ?? "", task.TaskID.ToString(), task.Title ?? "", task.Description ?? "", task.DueDate);
                 string? googleEventId = null;
 
                 if (task.DueDate.HasValue &&
                     (task.Type?.Equals("QC", StringComparison.OrdinalIgnoreCase) == true || task.Type?.Equals("Site Visit", StringComparison.OrdinalIgnoreCase) == true))
                 {
-                    googleEventId = await calendarService.AddTaskEventAsync(task.AssignedTo ?? 0, accessToken, refreshToken, task.TaskID.ToString(), task.Title, task.Description, task.DueDate.Value);
+                    googleEventId = await _calendarService.AddTaskEventAsync(task.AssignedTo ?? 0, accessToken, refreshToken, task.TaskID.ToString(), task.Title ?? "", task.Description ?? "", task.DueDate.Value);
                 }
 
                 var updateCmd = new SqlCommand(@"
@@ -2598,7 +2594,7 @@ namespace SalesMetrics.Controllers
         {
             string cacheKey = $"Users_Location_{locationId}_Role_{roleId}";
 
-            if (!_cache.TryGetValue(cacheKey, out List<User> users))
+            if (!_cache.TryGetValue(cacheKey, out List<User>? users))
             {
                 users = GetAllUsersForTaskDisplay(locationId, roleId);
 
@@ -2646,10 +2642,10 @@ namespace SalesMetrics.Controllers
         public int RoleId { get; set; }
         public int SalesmanId { get; set; }
         public int LocationId { get; set; }
-        public string Username { get; set; }
-        public string FName { get; set; }
-        public string LName { get; set; }
-        public string Email { get; set; }
-        public string FullName { get; set; }
+        public string Username { get; set; } = "";
+        public string FName { get; set; } = "";
+        public string LName { get; set; } = "";
+        public string Email { get; set; } = "";
+        public string FullName { get; set; } = "";
     }
 }

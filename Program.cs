@@ -155,6 +155,7 @@ builder.Services.AddScoped<SalesMetrics.Services.SalesRepMetricsService>();
 // Feature Permissions Service
 builder.Services.AddScoped<SalesMetrics.Services.Permissions.IPermissionService, SalesMetrics.Services.Permissions.PermissionService>();
 builder.Services.AddScoped<GoogleCalendarService>();
+builder.Services.AddScoped<SalesMetrics.Services.GoogleTasksService>();
 
 // ── Google OAuth: bootstrap credentials from DB (or fall back to appsettings on first run) ──
 // AddGoogle() must be called before builder.Build(), so the DI container is not yet available.

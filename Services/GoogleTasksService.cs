@@ -1,4 +1,4 @@
-﻿using Google.Apis.Auth.OAuth2;
+using Google.Apis.Auth.OAuth2;
 using Google.Apis.Auth.OAuth2.Flows;
 using Google.Apis.Auth.OAuth2.Responses;
 using Google.Apis.Services;
@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Google.Apis.Tasks.v1;
 using Google.Apis.Tasks.v1.Data;
 using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Logging;
 
 using GoogleTaskModel = Google.Apis.Tasks.v1.Data.Task;
 using GoogleTaskListModel = Google.Apis.Tasks.v1.Data.TaskList;
@@ -16,10 +17,14 @@ namespace SalesMetrics.Services
     public class GoogleTasksService
     {
         private readonly IConfiguration _configuration;
+        private readonly ILogger<GoogleTasksService> _logger;
+        private readonly IErrorLoggingService _errorLog;
 
-        public GoogleTasksService(IConfiguration config)
+        public GoogleTasksService(IConfiguration config, ILogger<GoogleTasksService> logger, IErrorLoggingService errorLog)
         {
             _configuration = config;
+            _logger = logger;
+            _errorLog = errorLog;
         }
 
         private async Task<TasksService> GetServiceAsync(string accessToken, string refreshToken, string users_Id)
@@ -63,8 +68,8 @@ namespace SalesMetrics.Services
             await conn.OpenAsync();
 
             var cmd = new SqlCommand(@"
-                UPDATE Users 
-                SET GoogleAccessToken = @AccessToken, 
+                UPDATE Users
+                SET GoogleAccessToken = @AccessToken,
                     GoogleTokenLastUpdated = GETDATE()
                 WHERE Users_ID = @Users_Id", conn);
 
@@ -84,7 +89,8 @@ namespace SalesMetrics.Services
 
             if (defaultList == null)
             {
-                Console.WriteLine("[Google Tasks] No task list found for user.");
+                _logger.LogWarning("Google Tasks: no task list found for user {UserId}", users_Id);
+                await _errorLog.LogWarningAsync($"Google Tasks: no task list found (UserId={users_Id})", source: "GoogleTasksService");
                 return null;
             }
 
@@ -104,18 +110,17 @@ namespace SalesMetrics.Services
             }
             catch (Google.GoogleApiException ex)
             {
-                Console.WriteLine("[Google Tasks API ERROR]");
-                Console.WriteLine(ex.ToString());
+                var details = ex.Error?.Errors != null
+                    ? string.Join("; ", ex.Error.Errors.Select(e => $"{e.Reason}: {e.Message}"))
+                    : ex.Message;
 
-                if (ex.Error?.Errors != null)
-                {
-                    foreach (var e in ex.Error.Errors)
-                        Console.WriteLine($"[Google Error] Reason: {e.Reason}, Message: {e.Message}");
-                }
+                _logger.LogError(ex, "Google Tasks API error (UserId={UserId}, TaskId={TaskId}): {Details}", users_Id, taskId, details);
+                await _errorLog.LogErrorAsync(ex, additionalData: $"Operation=CreateTask, UserId={users_Id}, TaskId={taskId}, Details={details}", source: "GoogleTasksService");
 
                 throw;
             }
         }
+
         public async Task<List<GoogleTaskListModel>> GetTaskListsAsync(string accessToken, string refreshToken, string users_Id)
         {
             var service = await GetServiceAsync(accessToken, refreshToken, users_Id);
@@ -123,5 +128,4 @@ namespace SalesMetrics.Services
             return result.Items?.ToList() ?? new List<TaskList>();
         }
     }
-
 }

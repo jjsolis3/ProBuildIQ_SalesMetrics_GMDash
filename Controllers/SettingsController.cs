@@ -433,6 +433,54 @@ namespace SalesMetrics.Controllers
             return RedirectToAction(nameof(Credentials));
         }
 
+        // POST: /Settings/TestGoogleCredentials
+        // Probes the Google token endpoint with the stored client credentials.
+        // If Google returns "invalid_client" the credentials are wrong;
+        // any other error (invalid_grant, redirect_uri_mismatch) means the
+        // Client ID + Secret are recognized — only the dummy auth code was rejected.
+        [HttpPost]
+        public async Task<IActionResult> TestGoogleCredentials()
+        {
+            if (!await _permissionService.HasFeatureAccessAsync(GetCurrentUserId(), "Settings"))
+                return Forbid();
+
+            var clientId     = await _appCredentials.GetDecryptedAsync("Google_ClientId");
+            var clientSecret = await _appCredentials.GetDecryptedAsync("Google_ClientSecret");
+
+            if (string.IsNullOrWhiteSpace(clientId) || string.IsNullOrWhiteSpace(clientSecret))
+                return Json(new { success = false, message = "Google credentials are not configured. Enter a Client ID and Secret first." });
+
+            try
+            {
+                using var http = new System.Net.Http.HttpClient();
+                http.Timeout = TimeSpan.FromSeconds(10);
+
+                var payload = new System.Net.Http.FormUrlEncodedContent(new Dictionary<string, string>
+                {
+                    ["client_id"]     = clientId,
+                    ["client_secret"] = clientSecret,
+                    ["grant_type"]    = "authorization_code",
+                    ["code"]          = "CREDENTIAL_VALIDATION_PROBE",
+                    ["redirect_uri"]  = "https://example.com/not-real"
+                });
+
+                var response = await http.PostAsync("https://oauth2.googleapis.com/token", payload);
+                var body     = await response.Content.ReadAsStringAsync();
+
+                using var doc  = System.Text.Json.JsonDocument.Parse(body);
+                var errorCode  = doc.RootElement.TryGetProperty("error", out var e) ? e.GetString() : null;
+
+                if (errorCode == "invalid_client")
+                    return Json(new { success = false, message = "Google did not recognize these credentials. The Client ID or Secret may be incorrect, deleted, or belong to a different project. Verify them in Google Cloud Console." });
+
+                return Json(new { success = true, message = "Credentials are valid — Google recognized the Client ID and Secret." });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = $"Test could not complete: {ex.Message}" });
+            }
+        }
+
         // POST: /Settings/SaveAllCredentials
         // Saves every non-blank field in a section in one round-trip.
         // Blank values are skipped so existing DB entries are preserved.

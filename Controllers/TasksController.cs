@@ -36,8 +36,9 @@ namespace SalesMetrics.Controllers
         private readonly IMemoryCache _cache;
         private readonly ILogger<TasksController> _logger;
         private readonly GoogleCalendarService _calendarService;
+        private readonly SalesMetrics.Services.GoogleTasksService _tasksService;
 
-        public TasksController(IConfiguration configuration, SalesMetricsDbContext context, INotificationService notificationService, IMemoryCache cache, ILogger<TasksController> logger, GoogleCalendarService calendarService)
+        public TasksController(IConfiguration configuration, SalesMetricsDbContext context, INotificationService notificationService, IMemoryCache cache, ILogger<TasksController> logger, GoogleCalendarService calendarService, SalesMetrics.Services.GoogleTasksService tasksService)
         {
             _configuration = configuration;
             _context = context;
@@ -45,6 +46,7 @@ namespace SalesMetrics.Controllers
             _cache = cache;
             _logger = logger;
             _calendarService = calendarService;
+            _tasksService = tasksService;
         }
 
         private UserContext GetUserContext()
@@ -2374,8 +2376,7 @@ namespace SalesMetrics.Controllers
                 {
                     try
                     {
-                        var tasksService = new GoogleTasksService(_configuration);
-                        googleTaskId = await tasksService.CreateTaskAsync(
+                        googleTaskId = await _tasksService.CreateTaskAsync(
                             accessToken, refreshToken, task.AssignedTo?.ToString() ?? "", task.TaskID.ToString(), task.Title ?? "", task.Description ?? "", task.DueDate
                         );
 
@@ -2476,9 +2477,7 @@ namespace SalesMetrics.Controllers
             // Perform Google sync
             try
             {
-                var tasksService = new GoogleTasksService(_configuration);
-
-                var googleTaskId = await tasksService.CreateTaskAsync(accessToken, refreshToken, task.AssignedTo?.ToString() ?? "", task.TaskID.ToString(), task.Title ?? "", task.Description ?? "", task.DueDate);
+                var googleTaskId = await _tasksService.CreateTaskAsync(accessToken, refreshToken, task.AssignedTo?.ToString() ?? "", task.TaskID.ToString(), task.Title ?? "", task.Description ?? "", task.DueDate);
                 string? googleEventId = null;
 
                 if (task.DueDate.HasValue &&

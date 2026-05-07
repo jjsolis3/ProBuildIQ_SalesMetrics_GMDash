@@ -995,7 +995,11 @@ namespace SalesMetrics.Controllers
         public async Task<IActionResult> GoogleCallback()
         {
             var authenticateResult = await HttpContext.AuthenticateAsync("Google");
-            if (!authenticateResult.Succeeded) return RedirectToAction("Profile");
+            if (!authenticateResult.Succeeded)
+            {
+                TempData["Error"] = "Google authorization failed. Please try again — if the problem persists, verify that the OAuth credentials in App Credentials are correct and that the redirect URI is registered in Google Cloud Console.";
+                return RedirectToAction("Profile", "Accounts");
+            }
 
             var googleEmail = authenticateResult.Principal.FindFirst(ClaimTypes.Email)?.Value;
             var accessToken = authenticateResult.Properties.GetTokenValue("access_token");

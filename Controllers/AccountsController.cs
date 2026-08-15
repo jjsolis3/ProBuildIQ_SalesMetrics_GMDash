@@ -20,13 +20,15 @@ namespace SalesMetrics.Controllers
         private readonly IConfiguration _configuration;
         private readonly IPermissionService _permissionService;
         private readonly SalesRepMetricsService _metricsService;
+        private readonly GoogleTasksService _googleTasksService;
 
         public AccountsController(IConfiguration configuration, IPermissionService permissionService,
-            SalesRepMetricsService metricsService)
+            SalesRepMetricsService metricsService, GoogleTasksService googleTasksService)
         {
             _configuration = configuration;
             _permissionService = permissionService;
             _metricsService = metricsService;
+            _googleTasksService = googleTasksService;
         }
 
         // ACCOUNTS PAGE
@@ -204,10 +206,9 @@ namespace SalesMetrics.Controllers
                 return RedirectToAction("User");
             }
 
-            // 👇 Call the service
-            var taskService = new GoogleTasksService(_configuration);
-            //var result = await taskService.CreateTaskAsync(accessToken, "SalesMetrics Test Task", "This is a test task created from SalesMetrics", "Notes", DateTime.UtcNow.AddHours(1));
-            var result = await taskService.CreateTaskAsync(accessToken, refreshToken, users_Id.ToString(),"**TestTaskID**", "SalesMetrics Test Task", "This is a test task created from SalesMetrics", DateTime.UtcNow.AddHours(1));
+            // Resolved from DI — GoogleTasksService also needs a logger and the error
+            // logging service, which only the container can supply.
+            var result = await _googleTasksService.CreateTaskAsync(accessToken, refreshToken, users_Id.ToString(), "**TestTaskID**", "SalesMetrics Test Task", "This is a test task created from SalesMetrics", DateTime.UtcNow.AddHours(1));
 
             if (!string.IsNullOrEmpty(result))
                 TempData["Success"] = $"Google Task created successfully! Task ID: {result}";

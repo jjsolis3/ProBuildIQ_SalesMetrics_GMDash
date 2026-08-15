@@ -42,12 +42,14 @@ namespace SalesMetrics.Services.Signing
         }
 
         /// <summary>
-        /// Helper to create ErpContext from current session location
+        /// Helper to create ErpContext. When locationCode is provided it is used directly
+        /// (important for background/anonymous calls such as TryFinalizeEnvelopeAsync where
+        /// there is no authenticated session). Falls back to the session value when null.
         /// </summary>
-        private ErpContext GetErpContext()
+        private ErpContext GetErpContext(string? locationCode = null)
         {
-            var locationCode = _http.HttpContext?.Session.GetString("OfficeLocation") ?? "LAX";
-            return new ErpContext { LocationCode = locationCode };
+            var code = locationCode ?? _http.HttpContext?.Session.GetString("OfficeLocation") ?? "LAX";
+            return new ErpContext { LocationCode = code };
         }
 
         public async Task<string> RenderHtmlAsync(string templateKey, long envelopeId, long? recipientId = null)
@@ -133,29 +135,40 @@ namespace SalesMetrics.Services.Signing
             var actionContext = new ActionContext(httpContext, httpContext.GetRouteData(), actionDescriptor);
             var controllerContext = new ControllerContext(actionContext);
 
-            // Resolve view path and render
+            // Resolve template — prefer DB-stored HTML body (token path); fall back to Razor view
             var tmpl = await _db.SignTemplates.SingleAsync(t => t.TemplateKey == templateKey);
-            return await _renderer.RenderAsync(controllerContext, tmpl.RazorViewPath, viewModel);
+
+            if (!string.IsNullOrWhiteSpace(tmpl.HtmlBodyContent))
+            {
+                // Load tenant separately (envelope loaded via FindAsync without nav collection)
+                var tenantForToken = await _db.SignRecipients
+                    .Where(r => r.EnvelopeId == envelopeId && r.Role == "Tenant")
+                    .FirstOrDefaultAsync();
+                return ApplyTokens(tmpl.HtmlBodyContent, viewModel, tenantForToken);
+            }
+
+            // Legacy Razor path
+            return await _renderer.RenderAsync(controllerContext, tmpl.RazorViewPath ?? "", viewModel);
         }
 
-        public async Task<string?> GetPropertyNameAsync(int? propertyId)
+        public async Task<string?> GetPropertyNameAsync(int? propertyId, string? locationCode = null)
         {
             if (!propertyId.HasValue) return null;
 
             // Use ERP abstraction layer instead of direct SQL
-            var context = GetErpContext();
+            var context = GetErpContext(locationCode);
             var client = _erpFactory.GetClient(context);
 
             var property = await client.GetPropertyByIdAsync(propertyId.Value, context);
             return property?.CustomerName;
         }
 
-        public async Task<string?> GetPropertyAddressAsync(int? propertyId)
+        public async Task<string?> GetPropertyAddressAsync(int? propertyId, string? locationCode = null)
         {
             if (!propertyId.HasValue) return null;
 
             // Use ERP abstraction layer instead of direct SQL
-            var context = GetErpContext();
+            var context = GetErpContext(locationCode);
             var client = _erpFactory.GetClient(context);
 
             var property = await client.GetPropertyByIdAsync(propertyId.Value, context);
@@ -420,6 +433,57 @@ namespace SalesMetrics.Services.Signing
             {
                 return null;
             }
+        }
+
+        // ======================================================================
+        // HTML Body Token Replacement
+        // ======================================================================
+
+        /// <summary>
+        /// Available tokens for DB-stored template HTML.
+        /// Staff use {{TokenName}} syntax in the TinyMCE editor.
+        /// </summary>
+        public static readonly IReadOnlyList<(string Token, string Description)> AvailableTokens = new[]
+        {
+            ("{{RecipientName}}",    "Signer's full name"),
+            ("{{RecipientEmail}}",   "Signer's email address"),
+            ("{{RecipientRole}}",    "Signer's role (Manager / Tenant)"),
+            ("{{TenantName}}",       "Tenant's full name (if added to envelope)"),
+            ("{{TenantEmail}}",      "Tenant's email address"),
+            ("{{PropertyName}}",     "Property / customer name"),
+            ("{{PropertyAddress}}", "Property street address"),
+            ("{{OrderNumber}}",      "Work order number"),
+            ("{{UnitNumber}}",       "Unit number"),
+            ("{{LocationCode}}",     "Branch code (e.g. PHX, LAX)"),
+            ("{{EnvelopeId}}",       "Envelope ID number"),
+            ("{{Subject}}",          "Envelope subject line"),
+            ("{{Date}}",             "Today's date (Month D, YYYY)"),
+        };
+
+        private static string ApplyTokens(string html, TemplateRenderVm vm,
+            SalesMetrics.Domain.Signing.SignRecipient? tenant = null)
+        {
+            var tokens = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["{{RecipientName}}"]    = vm.Recipient?.FullName ?? "",
+                ["{{RecipientEmail}}"]   = vm.Recipient?.Email ?? "",
+                ["{{RecipientRole}}"]    = vm.Recipient?.Role ?? "",
+                ["{{TenantName}}"]       = tenant?.FullName ?? "",
+                ["{{TenantEmail}}"]      = tenant?.Email ?? "",
+                ["{{PropertyName}}"]     = vm.Property?.Name ?? vm.Envelope.PropertyName ?? "",
+                ["{{PropertyAddress}}"] = vm.Property?.Address ?? "",
+                ["{{OrderNumber}}"]      = vm.Envelope.OrderNumber ?? "",
+                ["{{UnitNumber}}"]       = vm.Property?.Unit ?? vm.Order?.UnitNumber ?? "",
+                ["{{LocationCode}}"]     = vm.Envelope.LocationCode ?? "",
+                ["{{EnvelopeId}}"]       = vm.Envelope.EnvelopeId.ToString(),
+                ["{{Subject}}"]          = vm.Envelope.Subject ?? "",
+                ["{{Date}}"]             = DateTime.Now.ToString("MMMM d, yyyy"),
+            };
+
+            foreach (var (token, value) in tokens)
+                html = html.Replace(token, System.Net.WebUtility.HtmlEncode(value), StringComparison.OrdinalIgnoreCase);
+
+            return html;
         }
     }
 }

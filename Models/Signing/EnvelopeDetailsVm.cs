@@ -11,6 +11,7 @@ public sealed class EnvelopeDetailsVm
     public string Subject { get; set; } = default!;
     public string? MessageBody { get; set; }
     public string Status { get; set; } = default!;
+    public string EnvelopeType { get; set; } = "Consent"; // Consent|Communication
     public string? LocationCode { get; set; }
     public DateTime? SentAtUtc { get; set; }
     public DateTime? CompletedAtUtc { get; set; }
@@ -23,8 +24,16 @@ public sealed class EnvelopeDetailsVm
     public string? OrderNumber { get; set; }
     public string? UnitNumber { get; set; }
 
+    // Tenant skip tracking
+    public bool TenantSkipped { get; set; }
+    public string? TenantSkippedByName { get; set; }
+    public DateTime? TenantSkippedAtUtc { get; set; }
+
     public List<RecipientVm> Recipients { get; set; } = new();
     public List<EventVm> Events { get; set; } = new();
+
+    /// <summary>All non-signature SignField records for this envelope, for the staff "Document Fields" card.</summary>
+    public List<FieldValueVm> FieldValues { get; set; } = new();
 
     public sealed class RecipientVm
     {
@@ -33,6 +42,7 @@ public sealed class EnvelopeDetailsVm
         public int SignerOrder { get; set; }
         public string FullName { get; set; } = default!;
         public string Email { get; set; } = default!;
+        public string? Phone { get; set; }
         public DateTime? ViewedAtUtc { get; set; }
         public DateTime? SignedAtUtc { get; set; }
         public DateTime? DeclinedAtUtc { get; set; }
@@ -44,5 +54,15 @@ public sealed class EnvelopeDetailsVm
         public DateTime OccurredAtUtc { get; set; }
         public string? Recipient { get; set; }
         public string? Meta { get; set; }
+    }
+
+    public sealed class FieldValueVm
+    {
+        public long FieldId { get; set; }
+        public string FieldKey { get; set; } = default!;
+        public string FieldType { get; set; } = "text";
+        public string? FieldValue { get; set; }
+        public long? RecipientId { get; set; }
+        public string? RecipientRole { get; set; }
     }
 }

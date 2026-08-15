@@ -1,4 +1,5 @@
 ﻿// Services/Signing/IEnvelopeService.cs
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using SalesMetrics.Domain.Signing;
 using SalesMetrics.Models.Signing;
@@ -10,6 +11,14 @@ namespace SalesMetrics.Services.Signing
         Task<long> CreateAsync(int createdByUsersId, CreateEnvelopeVm vm);
         Task SendAsync(long envelopeId); // send emails & mark Sent
         Task VoidEnvelopeAsync(long envelopeId, int voidedByUserId, string? reason = null); // void/cancel envelope
+
+        /// <summary>
+        /// Edit subject, message body, and/or unsigned recipient details.
+        /// If a recipient's email is changed, their access token is regenerated and a
+        /// fresh invitation is sent automatically.  Signed recipients are never modified.
+        /// </summary>
+        Task EditEnvelopeAsync(EditEnvelopeVm vm, int modifiedByUserId);
+
         Task<EnvelopeDetailsVm?> GetDetailsAsync(long envelopeId);
         Task<(IReadOnlyList<EnvelopeListItemVm> Rows, int Total)> SearchAsync(string? status, string? office, int page, int pageSize, int? createdByUserId = null, string? scope = null, int? userRoleId = null, int? userLocationId = null);
 
@@ -21,11 +30,25 @@ namespace SalesMetrics.Services.Signing
         // NEW (used by your POST Review action)
         Task UpsertTenantRecipientAsync(long envelopeId, string fullName, string email, string? phone = null);
         Task MarkTenantSkippedAsync(long envelopeId, string skippedByName);
+        Task SaveCustomFieldsAsync(long envelopeId, long recipientId, Dictionary<string, string> fields);
+
+        /// <summary>
+        /// Staff update of field values from the Details page (any status, any field).
+        /// Only overwrites fields that currently have no value.
+        /// </summary>
+        Task UpdateFieldsAsync(long envelopeId, Dictionary<string, string> fields);
         Task CaptureSignatureAsync(long envelopeId, long recipientId, string typedFullName, string sigDataBase64);
         Task ProgressToNextAsync(long envelopeId);
 
         // Template access
         Task<SignTemplate?> GetTemplateByKeyAsync(string templateKey);
+
+        /// <summary>
+        /// Marks an envelope as complete using a staff-uploaded scanned PDF (offline signing).
+        /// Any recipients who have not yet signed digitally are marked as signed with offline metadata.
+        /// The uploaded PDF is stored in place of the auto-generated one and the envelope is set to Completed.
+        /// </summary>
+        Task MarkOfflineCompleteAsync(long envelopeId, Microsoft.AspNetCore.Http.IFormFile signedPdf, string? staffNote, int staffUserId, string staffName);
 
     }
 }

@@ -91,13 +91,14 @@ public class SignPublicController : Controller
             ModelState.AddModelError("", "Please check the consent checkbox.");
         }
 
-        if (string.IsNullOrWhiteSpace(post.TypedFullName))
+        // Communication envelopes don't require typed name or drawn signature
+        if (vm.EnvelopeType != "Communication" && string.IsNullOrWhiteSpace(post.TypedFullName))
         {
             _logger.LogWarning("Validation failed: TypedFullName is empty");
             ModelState.AddModelError("", "Please type your full name.");
         }
 
-        if (string.IsNullOrWhiteSpace(post.SigData))
+        if (vm.EnvelopeType != "Communication" && string.IsNullOrWhiteSpace(post.SigData))
         {
             _logger.LogWarning("Validation failed: SigData is empty");
             ModelState.AddModelError("", "Please draw your signature.");
@@ -111,8 +112,9 @@ public class SignPublicController : Controller
             return View(vm);
         }
 
-        // Manager must capture tenant info if no tenant recipient already (unless skipping tenant)
-        if (vm.Recipient.Role == "Manager" && vm.HasTenantRecipient == false)
+        // Manager must capture tenant info if template requires it and no tenant recipient yet
+        if (vm.Recipient.Role == "Manager" && vm.HasTenantRecipient == false
+            && vm.RequiresTenantSection && vm.EnvelopeType != "Communication")
         {
             if (!post.SkipTenant)
             {
@@ -147,9 +149,14 @@ public class SignPublicController : Controller
             }
         }
 
-        // Capture the signature
+        // Phase 2: save any signer-filled custom fields
+        if (post.CustomFields != null && post.CustomFields.Count > 0)
+            await _svc.SaveCustomFieldsAsync(vm.Envelope.EnvelopeId, vm.Recipient.RecipientId, post.CustomFields);
+
+        // Capture the signature (Communication envelopes pass empty sig data; service handles it)
         _logger.LogInformation("Capturing signature for recipient {RecipientId}", vm.Recipient.RecipientId);
-        await _svc.CaptureSignatureAsync(vm.Envelope.EnvelopeId, vm.Recipient.RecipientId, post.TypedFullName!.Trim(), post.SigData!);
+        await _svc.CaptureSignatureAsync(vm.Envelope.EnvelopeId, vm.Recipient.RecipientId,
+            post.TypedFullName?.Trim() ?? vm.Recipient.FullName, post.SigData ?? "");
 
         // NEW: Check if this was the last signer and finalize if needed
         var (isComplete, downloadUrl) = await _svc.TryFinalizeEnvelopeAsync(vm.Envelope.EnvelopeId);

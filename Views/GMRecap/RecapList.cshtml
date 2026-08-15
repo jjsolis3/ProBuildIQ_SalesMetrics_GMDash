@@ -2,7 +2,7 @@
 @using SalesMetrics.Models
 
 @{
-    ViewBag.Title = "GM Weekly Recap Dashboard";
+    ViewBag.Title = "Leadership Weekly Recap Dashboard";
     var currentUser = User.FindFirst("Users_ID")?.Value;
     var isAdmin = User.IsInRole("Admin") || User.FindFirst("RoleId")?.Value == "1";
 
@@ -383,8 +383,8 @@
 <div class="dashboard-header">
     <div class="row align-items-center">
         <div class="col-md-8">
-            <h3>🗂️ GM Weekly Recap Dashboard</h3>
-            <p>Track and manage weekly recap submissions from all General Managers</p>
+            <h3>🗂️ Leadership Weekly Recap Dashboard</h3>
+            <p>Track and manage weekly recap submissions from all Leadership</p>
         </div>
         <div class="col-md-4 text-md-end">
             <a href="/GMRecap/RecapEntry" class="btn btn-primary btn-lg">
@@ -410,7 +410,7 @@
     </div>
     <div class="col-lg-3 col-md-6">
         <div class="stats-card">
-            <h5><i class="fas fa-users me-2"></i>Active GMs</h5>
+            <h5><i class="fas fa-users me-2"></i>Active Leaders</h5>
             <h2 class="stats-info">@Model.Select(m => m.GMName).Distinct().Count()</h2>
         </div>
     </div>
@@ -439,9 +439,9 @@
                     </select>
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label"><i class="fas fa-user me-2"></i>Filter by GM:</label>
+                    <label class="form-label"><i class="fas fa-user me-2"></i>Filter by Leader:</label>
                     <select class="form-select" id="gmFilter">
-                        <option value="all">All GMs</option>
+                        <option value="all">All Leaders</option>
                         @foreach (var gm in Model.Select(x => x.GMName).Distinct().OrderBy(n => n))
                         {
                             <option value="@gm">@gm</option>

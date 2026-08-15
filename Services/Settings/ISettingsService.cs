@@ -26,5 +26,20 @@ namespace SalesMetrics.Services.Settings
         Task<List<EnvelopeNotificationSettingViewModel>> GetEnvelopeNotificationSettingsAsync();
         Task SaveEnvelopeNotificationSettingAsync(SaveEnvelopeNotificationSettingRequest request, int modifiedByUserId);
         Task InitializeDefaultEnvelopeNotificationSettingsAsync();
+
+        // Form Notification Settings
+        Task<List<FormNotificationSettingViewModel>> GetFormNotificationSettingsAsync();
+        Task<string?> GetFormNotificationEmailAsync(string? locationCode);
+        Task SaveFormNotificationSettingAsync(SaveFormNotificationSettingRequest request, int modifiedByUserId);
+        Task InitializeDefaultFormNotificationSettingsAsync();
+
+        // Branding Settings
+        Task<List<BrandingSettingViewModel>> GetBrandingSettingsAsync();
+        Task SaveBrandingSettingAsync(SaveBrandingSettingRequest request, int modifiedByUserId);
+        Task InitializeDefaultBrandingSettingsAsync();
+
+        // General Settings
+        Task<List<SecuritySettingViewModel>> GetGeneralSettingsAsync();
+        Task InitializeDefaultGeneralSettingsAsync();
     }
 }

@@ -82,6 +82,9 @@ namespace SalesMetrics.Controllers
             // Get envelope metrics
             var envelopeMetrics = await GetEnvelopeMetricsAsync(locationId);
 
+            // Get all monthly envelopes for KPI drill-down modals
+            var monthlyEnvelopes = await GetMonthlyEnvelopesAsync(locationId);
+
             // Get recent envelope activity
             var recentEnvelopes = await GetRecentEnvelopesAsync(users_Id, locationId);
 
@@ -165,6 +168,7 @@ namespace SalesMetrics.Controllers
 
             // Envelope metrics
             ViewBag.EnvelopeMetrics = envelopeMetrics;
+            ViewBag.MonthlyEnvelopes = monthlyEnvelopes;
             ViewBag.RecentEnvelopes = recentEnvelopes;
             ViewBag.NeedsFollowUp = needsFollowUp;
 
@@ -261,6 +265,42 @@ namespace SalesMetrics.Controllers
                     Status = e.Status,
                     CreatedDateUtc = e.CreatedDateUtc,
                     LocationCode = e.LocationCode
+                })
+                .ToListAsync();
+
+            return envelopes;
+        }
+
+        /// <summary>
+        /// Get all envelopes created this month for KPI drill-down modals
+        /// </summary>
+        private async Task<List<MonthlyEnvelopeItem>> GetMonthlyEnvelopesAsync(int locationId)
+        {
+            var firstDayOfMonth = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+            var today = DateTime.Today.AddDays(1);
+
+            var locationCode = LocationHelper.Locations.ContainsKey(locationId)
+                ? LocationHelper.Locations[locationId].Code
+                : null;
+
+            var envelopes = await _db.SignEnvelopes
+                .Where(e => e.CreatedDateUtc >= firstDayOfMonth && e.CreatedDateUtc < today)
+                .Where(e => locationCode == null || e.LocationCode == locationCode)
+                .OrderByDescending(e => e.CreatedDateUtc)
+                .Select(e => new MonthlyEnvelopeItem
+                {
+                    EnvelopeId = e.EnvelopeId,
+                    Subject = e.Subject,
+                    Status = e.Status,
+                    EnvelopeType = e.EnvelopeType,
+                    PropertyName = e.PropertyName,
+                    OrderNumber = e.OrderNumber,
+                    CreatedDateUtc = e.CreatedDateUtc,
+                    SentAtUtc = e.SentAtUtc,
+                    CompletedAtUtc = e.CompletedAtUtc,
+                    TimeToSignHours = e.SentAtUtc.HasValue && e.CompletedAtUtc.HasValue
+                        ? (double?)(e.CompletedAtUtc.Value - e.SentAtUtc.Value).TotalHours
+                        : null
                 })
                 .ToListAsync();
 
@@ -528,5 +568,19 @@ namespace SalesMetrics.Controllers
         public DateTime SentAtUtc { get; set; }
         public int DaysPending { get; set; }
         public string? LocationCode { get; set; }
+    }
+
+    public class MonthlyEnvelopeItem
+    {
+        public long EnvelopeId { get; set; }
+        public string Subject { get; set; } = default!;
+        public string Status { get; set; } = default!;
+        public string EnvelopeType { get; set; } = default!;
+        public string? PropertyName { get; set; }
+        public string? OrderNumber { get; set; }
+        public DateTime CreatedDateUtc { get; set; }
+        public DateTime? SentAtUtc { get; set; }
+        public DateTime? CompletedAtUtc { get; set; }
+        public double? TimeToSignHours { get; set; }
     }
 }

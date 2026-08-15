@@ -1,0 +1,218 @@
+@model SalesMetrics.Models.SettingsHubViewModel
+@{
+    ViewData["Title"] = "Settings Hub";
+}
+
+@section Styles {
+    <style>
+        .hub-item {
+            display: flex;
+            align-items: flex-start;
+            padding: 20px 22px;
+            text-decoration: none;
+            color: inherit;
+            border: 1px solid #e9ecef;
+            transition: border-color 0.15s ease, background-color 0.15s ease;
+            height: 100%;
+        }
+        .hub-item:hover {
+            border-color: #c85c5c;
+            background-color: #fff8f8;
+            text-decoration: none;
+            color: inherit;
+        }
+        .hub-item:hover .hub-item-title {
+            color: #c85c5c;
+        }
+        .hub-icon-box {
+            flex-shrink: 0;
+            width: 52px;
+            height: 52px;
+            background-color: #f2f3f5;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 16px;
+            font-size: 1.3rem;
+            color: #6c757d;
+        }
+        .hub-item-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #2e6da4;
+            margin-bottom: 4px;
+            line-height: 1.3;
+        }
+        .hub-item-desc {
+            font-size: 0.835rem;
+            color: #6c757d;
+            line-height: 1.45;
+            margin: 0;
+        }
+        /* Section label above each group */
+        .hub-section-label {
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: .07em;
+            text-transform: uppercase;
+            color: #9aa0aa;
+            padding: 10px 22px 6px;
+            border-top: 1px solid #e9ecef;
+            background: #fafbfc;
+        }
+        .hub-section-label:first-child {
+            border-top: none;
+        }
+        .hub-grid-wrapper {
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #fff;
+        }
+        /* 2-column grid (default) */
+        .hub-row {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+        }
+        .hub-row + .hub-row .hub-cell {
+            border-top: 1px solid #e9ecef;
+        }
+        .hub-section-label + .hub-row .hub-cell {
+            border-top: none;
+        }
+        .hub-cell {
+            border-right: 1px solid #e9ecef;
+        }
+        .hub-cell:last-child,
+        .hub-cell:nth-child(2) {
+            border-right: none;
+        }
+        /* 1-col on mobile */
+        @@media (max-width: 575px) {
+            .hub-row {
+                grid-template-columns: 1fr;
+            }
+            .hub-cell {
+                border-right: none;
+                border-top: 1px solid #e9ecef;
+            }
+            .hub-row:first-of-type .hub-cell:first-child {
+                border-top: none;
+            }
+        }
+    </style>
+}
+
+<div class="container-fluid">
+
+    <!-- Page Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex align-items-center gap-3">
+                <div style="width:42px;height:42px;background:#e8f0fb;border-radius:8px;display:flex;align-items:center;justify-content:center;">
+                    <i class="fas fa-th" style="font-size:1.1rem;color:#3b6cc5;"></i>
+                </div>
+                <div>
+                    <h1 class="h3 mb-0 fw-bold">Settings Hub</h1>
+                    <p class="text-muted mb-0" style="font-size:.875rem;">Manage app configuration, users, data imports, and system diagnostics.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hub Card Grid -->
+    <div class="row">
+        <div class="col-12">
+            <div class="hub-grid-wrapper">
+
+                @{
+                    // ── System Settings sub-cards (one per tab) ────────────────
+                    bool showSysSettings = Model.CanAccessSystemSettings;
+
+                    var sysItems = new List<(string Icon, string Title, string Desc, string Url)>
+                    {
+                        ("fa-bell",          "Notification Settings",    "Control which events trigger alerts, who gets notified, and in-app vs email delivery.",       "/Settings/Index?tab=notifications"),
+                        ("fa-shield-alt",    "Security Settings",        "Set password complexity rules, session timeout, and expiry policies.",                         "/Settings/Index?tab=security"),
+                        ("fa-envelope",      "Envelope Notifications",   "Configure per-branch email addresses that receive completed envelope PDF notifications.",      "/Settings/Index?tab=envelope-notifications"),
+                        ("fa-file-alt",      "Form Notifications",        "Configure per-branch email addresses that receive submitted form PDFs as attachments.",            "/Settings/Index?tab=form-notifications"),
+                        ("fa-palette",       "Company Branding",         "Update company name, logo URLs, website, and phone shown in emails and app footers.",          "/Settings/Index?tab=branding"),
+                        ("fa-sliders-h",     "General Settings",         "Set app theme, default timezone, date/time format, and other app-wide preferences.",          "/Settings/Index?tab=general"),
+                        ("fa-key",           "App Credentials",          "Manage Google OAuth and SMTP credentials stored encrypted in the database.",                  "/Settings/Credentials"),
+                    };
+
+                    // ── Administration cards ───────────────────────────────────
+                    var adminItems = new List<(string Icon, string Title, string Desc, string Url, bool Show)>
+                    {
+                        ("fa-user-shield", "Access Control",        "Create users, assign roles, and manage feature-level permissions.",              "/Accounts/Index",             Model.CanAccessAccessControl),
+                        ("fa-bullhorn",    "Announcements",         "Post and manage organization-wide announcements visible to all users.",          "/Announcements/Index",        Model.CanAccessAnnouncements),
+                        ("fa-layer-group",    "Bulk Permission Manager",  "Grant or revoke a feature for multiple users at once — filter by role or location.", "/Accounts/BulkPermissions",        Model.CanAccessBulkPermissions),
+                        ("fa-map-marker-alt", "Bulk Location Assignment", "Assign or remove location access for multiple users at once — filter by role or primary location.", "/Accounts/BulkLocationAssignment", Model.CanAccessBulkLocationAssignment),
+                        ("fa-file-upload", "Yardi Upload",          "Import property and unit pricing data from Yardi Excel matrix exports.",         "/Yardi/Upload",               Model.CanAccessYardiUpload),
+                    };
+                    var visibleAdmin = adminItems.Where(i => i.Show).ToList();
+
+                    // ── Diagnostics cards ──────────────────────────────────────
+                    var diagItems = new List<(string Icon, string Title, string Desc, string Url, bool Show)>
+                    {
+                        ("fa-tachometer-alt","Error Dashboard","View aggregated error counts and trends by severity with resolution tracking.", "/ErrorLog/Dashboard", Model.CanAccessErrorLogs),
+                        ("fa-list-alt",      "Error Logs",     "Browse the full paginated error log with stack traces and status filters.",     "/ErrorLog/Index",     Model.CanAccessErrorLogs),
+                    };
+                    var visibleDiag = diagItems.Where(i => i.Show).ToList();
+
+                    // ── Render helper: chunk a list into rows of 2 ─────────────
+                    void RenderRows<T>(List<T> list, Func<T, string> getIcon, Func<T, string> getTitle, Func<T, string> getDesc, Func<T, string> getUrl)
+                    {
+                        for (int r = 0; r < list.Count; r += 2)
+                        {
+                            var chunk = list.Skip(r).Take(2).ToList();
+                            <div class="hub-row">
+                                @foreach (var it in chunk)
+                                {
+                                    <div class="hub-cell">
+                                        <a href="@getUrl(it)" class="hub-item">
+                                            <div class="hub-icon-box">
+                                                <i class="fas @getIcon(it)"></i>
+                                            </div>
+                                            <div>
+                                                <div class="hub-item-title">@getTitle(it)</div>
+                                                <p class="hub-item-desc">@getDesc(it)</p>
+                                            </div>
+                                        </a>
+                                    </div>
+                                }
+                                @if (chunk.Count < 2)
+                                {
+                                    <div class="hub-cell"></div>
+                                }
+                            </div>
+                        }
+                    }
+                }
+
+                @* ── SYSTEM SETTINGS section ── *@
+                @if (showSysSettings)
+                {
+                    <div class="hub-section-label"><i class="fas fa-cog me-1"></i> System Settings</div>
+                    { RenderRows(sysItems, x => x.Icon, x => x.Title, x => x.Desc, x => x.Url); }
+                }
+
+                @* ── ADMINISTRATION section ── *@
+                @if (visibleAdmin.Any())
+                {
+                    <div class="hub-section-label"><i class="fas fa-users-cog me-1"></i> Administration</div>
+                    { RenderRows(visibleAdmin, x => x.Icon, x => x.Title, x => x.Desc, x => x.Url); }
+                }
+
+                @* ── DIAGNOSTICS section ── *@
+                @if (visibleDiag.Any())
+                {
+                    <div class="hub-section-label"><i class="fas fa-bug me-1"></i> Diagnostics</div>
+                    { RenderRows(visibleDiag, x => x.Icon, x => x.Title, x => x.Desc, x => x.Url); }
+                }
+
+            </div>
+        </div>
+    </div>
+
+</div>

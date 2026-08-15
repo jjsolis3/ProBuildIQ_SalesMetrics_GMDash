@@ -20,6 +20,12 @@ public sealed class CompanyBrandingSettings
 {
     public string CompanyName { get; set; } = "SalesMetrics";
     public string LogoUrl { get; set; } = "/assets/images/logo-light.png";
+    /// <summary>
+    /// Optional absolute URL for the Envelope feature logo.
+    /// When set, it appears inside envelope emails between the orange accent bar
+    /// and the body content — completely separate from the company logo in the header.
+    /// </summary>
+    public string? EnvelopeLogoUrl { get; set; }
     public string? Website { get; set; }
     public string? Phone { get; set; }
 }

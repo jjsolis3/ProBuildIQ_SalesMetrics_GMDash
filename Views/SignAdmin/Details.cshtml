@@ -1,8 +1,17 @@
 ﻿@* Views/SignAdmin/Details.cshtml *@
 @model SalesMetrics.Models.Signing.EnvelopeDetailsVm
 @{
-    ViewData["Title"] = "Envelope Details";
+    ViewData["Title"] = $"Envelope #{Model.EnvelopeId}";
+    ViewBag.PTitle = "My Envelopes";
+    ViewBag.PLink  = "/SignAdmin";
 }
+
+<div class="mb-3">
+    <a href="/SignAdmin" class="btn btn-sm btn-outline-secondary">
+        <i class="fas fa-arrow-left me-1"></i> Back to My Envelopes
+    </a>
+</div>
+
 <div class="card mb-3 border-0 shadow-sm">
     <div class="card-header bg-warning text-dark fw-bold">
         Envelope #@Model.EnvelopeId – @Model.Subject
@@ -43,19 +52,52 @@
                     </div>
                 }
 
+                @if (!string.IsNullOrWhiteSpace(Model.MessageBody))
+                {
+                    <div class="card border-0 mb-3">
+                        <div class="card-header bg-gradient" style="background:linear-gradient(90deg,#ff8c00,#ffb347)">Message</div>
+                        <div class="card-body">
+                            <p class="mb-0" style="white-space:pre-wrap;">@Model.MessageBody</p>
+                        </div>
+                    </div>
+                }
+
                 <div class="card border-0 mb-3">
                     <div class="card-header bg-gradient" style="background:linear-gradient(90deg,#ff8c00,#ffb347)">Recipients</div>
                     <ul class="list-group list-group-flush">
                         @foreach (var r in Model.Recipients)
                         {
-                            <li class="list-group-item d-flex justify-content-between">
+                            <li class="list-group-item d-flex justify-content-between align-items-start">
                                 <div>
                                     <div class="fw-semibold">@r.FullName (@r.Role) • <span class="text-muted">@r.Email</span></div>
-                                    <div class="small text-muted">Viewed: @r.ViewedAtUtc?.ToLocalTime().ToString("g") • Signed: @r.SignedAtUtc?.ToLocalTime().ToString("g")</div>
+                                    @if (!string.IsNullOrWhiteSpace(r.Phone))
+                                    {
+                                        <div class="small text-muted"><i class="fas fa-phone me-1"></i>@r.Phone</div>
+                                    }
+                                    <div class="small text-muted">
+                                        Viewed: @(r.ViewedAtUtc.HasValue ? r.ViewedAtUtc.Value.ToLocalTime().ToString("g") : "—")
+                                        @if (r.SignedAtUtc.HasValue)
+                                        {
+                                            <text> • Signed: @r.SignedAtUtc.Value.ToLocalTime().ToString("g")</text>
+                                        }
+                                        @if (r.DeclinedAtUtc.HasValue)
+                                        {
+                                            <text> • Declined: @r.DeclinedAtUtc.Value.ToLocalTime().ToString("g")</text>
+                                        }
+                                    </div>
                                 </div>
-                                <span class="badge rounded-pill @(r.SignedAtUtc != null ? "bg-success" : "bg-warning text-dark")">
-                                    @(r.SignedAtUtc != null ? "Signed" : "Pending")
-                                </span>
+                                @if (r.SignedAtUtc != null)
+                                {
+                                    <span class="badge rounded-pill bg-success">Signed</span>
+                                }
+                                else if (r.DeclinedAtUtc != null)
+                                {
+                                    <span class="badge rounded-pill bg-danger">Declined</span>
+                                }
+                                else
+                                {
+                                    <span class="badge rounded-pill bg-warning text-dark">Pending</span>
+                                }
                             </li>
                         }
                     </ul>
@@ -66,14 +108,44 @@
                     <div class="list-group list-group-flush">
                         @foreach (var e in Model.Events)
                         {
-                            <div class="list-group-item">
-                                <div class="fw-semibold">@e.EventType</div>
-                                <div class="small text-muted">@e.OccurredAtUtc.ToLocalTime().ToString("g") • @e.Recipient</div>
-                                @if (!string.IsNullOrWhiteSpace(e.Meta))
+                            @if (e.EventType == "TenantSkipped")
+                            {
+                                // Parse the meta to show a friendly summary
+                                string? skippedBy = null;
+                                string? skippedNamesList = null;
+                                if (!string.IsNullOrWhiteSpace(e.Meta))
                                 {
-                                    <pre class="small text-muted mb-0">@e.Meta</pre>
+                                    try
+                                    {
+                                        var doc = System.Text.Json.JsonDocument.Parse(e.Meta);
+                                        skippedBy = doc.RootElement.TryGetProperty("skippedBy", out var sb) ? sb.GetString() : null;
+                                        if (doc.RootElement.TryGetProperty("skippedNames", out var sn) && sn.ValueKind == System.Text.Json.JsonValueKind.Array)
+                                            skippedNamesList = string.Join(", ", sn.EnumerateArray().Select(x => x.GetString()));
+                                    }
+                                    catch { }
                                 }
-                            </div>
+                                <div class="list-group-item border-start border-4 border-warning">
+                                    <div class="fw-semibold text-warning-emphasis">
+                                        <i class="bi bi-person-x-fill me-1"></i> Tenant Signature Waived
+                                    </div>
+                                    <div class="small text-muted">@e.OccurredAtUtc.ToLocalTime().ToString("g") • Waived by @(skippedBy ?? "Staff")</div>
+                                    @if (!string.IsNullOrWhiteSpace(skippedNamesList))
+                                    {
+                                        <div class="small text-muted">Skipped: @skippedNamesList</div>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="list-group-item">
+                                    <div class="fw-semibold">@e.EventType</div>
+                                    <div class="small text-muted">@e.OccurredAtUtc.ToLocalTime().ToString("g") • @e.Recipient</div>
+                                    @if (!string.IsNullOrWhiteSpace(e.Meta))
+                                    {
+                                        <pre class="small text-muted mb-0">@e.Meta</pre>
+                                    }
+                                </div>
+                            }
                         }
                     </div>
                 </div>
@@ -82,10 +154,31 @@
             <div class="col-md-4">
                 <div class="card border-0 mb-3">
                     <div class="card-body">
-                        <div>Status: <span class="badge rounded-pill @(Model.Status == "Completed" ? "bg-success" : "bg-warning text-dark")">@Model.Status</span></div>
+                        <div>
+                            Status: <span class="badge rounded-pill @(Model.Status == "Completed" ? "bg-success" : "bg-warning text-dark")">@Model.Status</span>
+                            @if (Model.EnvelopeType == "Communication")
+                            {
+                                <span class="badge rounded-pill bg-info text-dark ms-1" title="Tracked delivery — no signature required">
+                                    <i class="bi bi-envelope"></i> Communication
+                                </span>
+                            }
+                        </div>
                         <div class="small text-muted mt-2">Sent: @Model.SentAtUtc?.ToLocalTime().ToString("g")</div>
                         <div class="small text-muted">Completed: @Model.CompletedAtUtc?.ToLocalTime().ToString("g")</div>
                         <div class="small text-muted">Expires: @Model.ExpiresAtUtc?.ToLocalTime().ToString("g")</div>
+
+                        @if (Model.FieldValues.Any(f => string.IsNullOrWhiteSpace(f.FieldValue)))
+                        {
+                            var emptyCount = Model.FieldValues.Count(f => string.IsNullOrWhiteSpace(f.FieldValue));
+                            <div class="mt-2">
+                                <button type="button" class="btn btn-sm w-100 btn-outline-warning"
+                                        data-bs-toggle="modal" data-bs-target="#docFieldsModal">
+                                    <i class="fas fa-exclamation-triangle me-1"></i> Document Fields
+                                    <span class="badge bg-warning text-dark ms-1">@emptyCount empty</span>
+                                </button>
+                            </div>
+                        }
+
                         @if (!string.IsNullOrEmpty(Model.PdfPath))
                         {
                             <div class="mt-3">
@@ -98,12 +191,54 @@
                             @Html.AntiForgeryToken()
                         </form>
 
-                        @* Only show Void button if envelope is not already completed or voided *@
+                        @* Admin Skip Tenant — visible only when:
+                           • Envelope is Sent/Viewed (still in-flight)
+                           • At least one Manager/staff has signed
+                           • There is still an unsigned Tenant recipient
+                           • Tenant has not already been skipped
+                        *@
+                        @{
+                            var anyManagerSigned = Model.Recipients.Any(r =>
+                                (r.Role == "Manager" || r.Role == "Staff") && r.SignedAtUtc.HasValue);
+                            var hasUnsignedTenant = Model.Recipients.Any(r =>
+                                r.Role == "Tenant" && !r.SignedAtUtc.HasValue && !r.DeclinedAtUtc.HasValue);
+                        }
+                        @if (!Model.TenantSkipped && anyManagerSigned && hasUnsignedTenant
+                             && (Model.Status == "Sent" || Model.Status == "Viewed"))
+                        {
+                            <hr class="my-3" />
+                            <button type="button" class="btn btn-outline-warning w-100"
+                                    data-bs-toggle="modal" data-bs-target="#skipTenantModal">
+                                <i class="fas fa-user-slash me-1"></i> Skip Tenant &amp; Complete
+                            </button>
+                            <div class="small text-muted mt-1 text-center">
+                                Property Staff has signed. Skip tenant to complete the envelope.
+                            </div>
+                        }
+                        @if (Model.TenantSkipped)
+                        {
+                            <div class="alert alert-warning mt-3 small mb-0">
+                                <i class="fas fa-user-slash me-1"></i>
+                                Tenant signature waived by <strong>@Model.TenantSkippedByName</strong>
+                                on @Model.TenantSkippedAtUtc?.ToLocalTime().ToString("g")
+                            </div>
+                        }
+
+                        @* Edit and Void buttons — only when envelope is still active *@
                         @if (Model.Status != "Completed" && Model.Status != "Voided")
                         {
+                            <a asp-action="Edit" asp-route-id="@Model.EnvelopeId"
+                               class="btn btn-outline-warning w-100 mt-2">
+                                <i class="fas fa-edit me-1"></i> Edit Envelope
+                            </a>
                             <button type="button" class="btn btn-outline-danger w-100 mt-2" data-bs-toggle="modal" data-bs-target="#voidModal">
                                 Void / Cancel Envelope
                             </button>
+                            <hr class="my-3" />
+                            <button type="button" class="btn btn-outline-secondary w-100" data-bs-toggle="modal" data-bs-target="#offlineModal">
+                                <i class="fas fa-file-upload me-1"></i> Upload Offline Signed PDF
+                            </button>
+                            <div class="small text-muted mt-1 text-center">Recipient signed on paper? Upload the scanned PDF here.</div>
                         }
 
                         @* Show TempData messages *@
@@ -118,6 +253,73 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+</div>
+
+@* Offline Signing Modal *@
+<div class="modal fade" id="offlineModal" tabindex="-1" aria-labelledby="offlineModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header" style="background:linear-gradient(90deg,#ff8c00,#ffb347);">
+                <h5 class="modal-title text-dark fw-bold" id="offlineModalLabel">
+                    <i class="fas fa-file-upload me-2"></i>Upload Offline Signed PDF
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form asp-action="MarkOffline" asp-route-id="@Model.EnvelopeId" method="post" enctype="multipart/form-data">
+                <div class="modal-body">
+                    <div class="alert alert-info d-flex gap-2 mb-3">
+                        <i class="fas fa-info-circle mt-1 flex-shrink-0"></i>
+                        <div>
+                            Use this when the recipient <strong>printed, physically signed, and returned</strong> the document
+                            (e.g. via email or fax). Upload the scanned signed PDF and the envelope will be marked as
+                            <strong>Completed</strong>. Any recipients who have not yet signed digitally will be marked as
+                            signed offline. Completion emails will be sent automatically.
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="signedPdf" class="form-label fw-semibold">
+                            Signed PDF <span class="text-danger">*</span>
+                        </label>
+                        <input type="file" class="form-control" id="signedPdf" name="signedPdf"
+                               accept="application/pdf,.pdf" required />
+                        <div class="form-text">PDF files only, max 25 MB. This will replace the auto-generated PDF for this envelope.</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="offlineStaffNote" class="form-label fw-semibold">Staff Note <span class="text-muted fw-normal">(optional)</span></label>
+                        <textarea class="form-control" id="offlineStaffNote" name="staffNote" rows="2"
+                                  placeholder="e.g. Customer emailed signed copy on 2/20/2026, attached as received."></textarea>
+                        <div class="form-text">This note is recorded in the envelope timeline for audit purposes.</div>
+                    </div>
+
+                    <div class="mb-2">
+                        <strong>Envelope:</strong> #@Model.EnvelopeId — @Model.Subject
+                    </div>
+                    @{
+                        var unsigned = Model.Recipients.Count(r => !r.SignedAtUtc.HasValue);
+                    }
+                    @if (unsigned > 0)
+                    {
+                        <div class="alert alert-warning d-flex gap-2 mb-0">
+                            <i class="fas fa-exclamation-triangle mt-1 flex-shrink-0"></i>
+                            <div>
+                                <strong>@unsigned recipient(s) have not yet signed digitally.</strong>
+                                They will be recorded as offline-signed when you submit.
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning fw-semibold">
+                        <i class="fas fa-check me-1"></i>Mark as Completed &amp; Upload PDF
+                    </button>
+                </div>
+                @Html.AntiForgeryToken()
+            </form>
         </div>
     </div>
 </div>
@@ -143,6 +345,162 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="submit" class="btn btn-danger">Void Envelope</button>
+                </div>
+                @Html.AntiForgeryToken()
+            </form>
+        </div>
+    </div>
+</div>
+
+@* Document Fields Modal — only rendered when there are fields that need manual input *@
+@if (Model.FieldValues.Any(f => string.IsNullOrWhiteSpace(f.FieldValue)))
+{
+    <div class="modal fade" id="docFieldsModal" tabindex="-1" aria-labelledby="docFieldsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header" style="background:linear-gradient(90deg,#ff8c00,#ffb347);">
+                    <h5 class="modal-title text-dark fw-bold" id="docFieldsModalLabel">
+                        <i class="fas fa-table-list me-2"></i>Document Fields — Envelope #@Model.EnvelopeId
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form asp-action="UpdateFields" asp-route-id="@Model.EnvelopeId" method="post">
+                    @Html.AntiForgeryToken()
+                    <div class="modal-body p-0">
+                        @{
+                            var modalEmptyCount = Model.FieldValues.Count(f => string.IsNullOrWhiteSpace(f.FieldValue));
+                            var canEdit = Model.Status != "Completed" && Model.Status != "Voided";
+                        }
+                        @if (modalEmptyCount > 0 && canEdit)
+                        {
+                            <div class="alert alert-warning d-flex gap-2 m-3 mb-0">
+                                <i class="fas fa-exclamation-triangle mt-1 flex-shrink-0"></i>
+                                <div>
+                                    <strong>@modalEmptyCount field(s) are empty.</strong>
+                                    These will be blank in the final PDF unless filled in below.
+                                </div>
+                            </div>
+                        }
+                        <table class="table table-sm table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="ps-3" style="width:38%">Field</th>
+                                    <th>Value</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var f in Model.FieldValues)
+                                {
+                                    var isEmpty = string.IsNullOrWhiteSpace(f.FieldValue);
+                                    <tr class="@(isEmpty ? "table-warning" : "")">
+                                        <td class="ps-3 align-middle">
+                                            <code class="small">@f.FieldKey</code>
+                                            @if (!string.IsNullOrWhiteSpace(f.RecipientRole))
+                                            {
+                                                <span class="badge bg-secondary ms-1" style="font-size:0.7em">@f.RecipientRole</span>
+                                            }
+                                        </td>
+                                        <td class="align-middle">
+                                            @if (canEdit)
+                                            {
+                                                <input type="text"
+                                                       name="fields[@f.FieldKey]"
+                                                       value="@f.FieldValue"
+                                                       class="form-control form-control-sm @(isEmpty ? "border-warning" : "")"
+                                                       placeholder="@(isEmpty ? "Empty — enter a value" : "")" />
+                                            }
+                                            else if (!isEmpty)
+                                            {
+                                                <span>@f.FieldValue</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted fst-italic small">empty</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        @if (canEdit)
+                        {
+                            <button type="submit" class="btn btn-warning fw-semibold">
+                                <i class="fas fa-save me-1"></i> Save Field Values
+                            </button>
+                        }
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}
+
+@* Admin Skip Tenant Modal *@
+<div class="modal fade" id="skipTenantModal" tabindex="-1" aria-labelledby="skipTenantModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header" style="background:linear-gradient(90deg,#ff8c00,#ffb347);">
+                <h5 class="modal-title text-dark fw-bold" id="skipTenantModalLabel">
+                    <i class="fas fa-user-slash me-2"></i>Skip Tenant &amp; Complete Envelope
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form asp-action="AdminSkipTenant" asp-route-id="@Model.EnvelopeId" method="post">
+                <div class="modal-body">
+                    <div class="alert alert-warning d-flex gap-2 mb-3">
+                        <i class="fas fa-exclamation-triangle mt-1 flex-shrink-0"></i>
+                        <div>
+                            This will <strong>waive the tenant's signature</strong> on this envelope.
+                            A <em>"Tenant Signature Waived"</em> stamp will be applied to the signed PDF
+                            and completion notifications will be sent automatically.
+                            <strong>This action cannot be undone.</strong>
+                        </div>
+                    </div>
+                    <div class="mb-2">
+                        <strong>Envelope:</strong> #@Model.EnvelopeId — @Model.Subject
+                    </div>
+                    @{
+                        var unsignedTenants = Model.Recipients
+                            .Where(r => r.Role == "Tenant" && !r.SignedAtUtc.HasValue).ToList();
+                    }
+                    @if (unsignedTenants.Any())
+                    {
+                        <div class="small text-muted mt-2">
+                            The following tenant(s) will be skipped:
+                            <ul class="mb-0 mt-1">
+                                @foreach (var t in unsignedTenants)
+                                {
+                                    <li>@t.FullName (@t.Email)</li>
+                                }
+                            </ul>
+                        </div>
+                    }
+
+                    <div class="mt-3">
+                        <label for="authorizedBy" class="form-label fw-semibold">
+                            <i class="fas fa-user-check me-1 text-warning"></i>
+                            Authorized by (Property Staff name) <span class="text-danger">*</span>
+                        </label>
+                        <input type="text"
+                               id="authorizedBy"
+                               name="authorizedBy"
+                               class="form-control"
+                               placeholder="Enter the name of the Property Staff who authorized this waiver"
+                               required
+                               autocomplete="off" />
+                        <div class="form-text text-muted">
+                            This name will appear on the <strong>"Tenant Signature Waived"</strong> stamp in the completed PDF.
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning fw-semibold">
+                        <i class="fas fa-user-slash me-1"></i>Yes, Skip Tenant &amp; Complete
+                    </button>
                 </div>
                 @Html.AntiForgeryToken()
             </form>

@@ -2,6 +2,8 @@
 @model SalesMetrics.Models.Reports.EnvelopeReportViewModel
 @{
     ViewData["Title"] = "Envelope Activity Report";
+    ViewBag.PTitle = "Reports";
+    ViewBag.PLink = "/Reports";
     var fromDateStr = Model.FromDate?.ToString("yyyy-MM-dd") ?? DateTime.Today.AddDays(-30).ToString("yyyy-MM-dd");
     var toDateStr   = Model.ToDate?.ToString("yyyy-MM-dd")   ?? DateTime.Today.ToString("yyyy-MM-dd");
 

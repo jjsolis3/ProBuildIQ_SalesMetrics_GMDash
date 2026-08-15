@@ -1,9 +1,14 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using SalesMetrics.Data;
 using SalesMetrics.Models;
+using SalesMetrics.Services.Helpers;
+using SalesMetrics.Services.Settings;
+using SalesMetrics.Services.Signing;
+using System.IO;
 
 namespace SalesMetrics.Controllers
 {
@@ -11,16 +16,32 @@ namespace SalesMetrics.Controllers
     {
         private readonly IConfiguration _configuration;
         private readonly SalesMetricsDbContext _context;
+        private readonly IWebHostEnvironment _env;
+        private readonly INotificationService _notify;
+        private readonly ISettingsService _settings;
 
-        public OnboardingController(IConfiguration configuration, SalesMetricsDbContext context)
+        public OnboardingController(
+            IConfiguration configuration,
+            SalesMetricsDbContext context,
+            IWebHostEnvironment env,
+            INotificationService notify,
+            ISettingsService settings)
         {
             _configuration = configuration;
             _context = context;
+            _env = env;
+            _notify = notify;
+            _settings = settings;
         }
 
         public IActionResult Index()
         {
-            return RedirectToAction("Submissions");
+            var connStr = _configuration.GetConnectionString("SalesMetrics");
+            using var conn = new SqlConnection(connStr);
+            conn.Open();
+            var cmd = new SqlCommand("SELECT COUNT(*) FROM NewCustomerRequests", conn);
+            ViewBag.NCRCount = (int)cmd.ExecuteScalar();
+            return View();
         }
 
         public IActionResult ViewCustomerRequest(int requestId)
@@ -40,7 +61,7 @@ namespace SalesMetrics.Controllers
 
                 // Get main request
                 var cmd = new SqlCommand(@"
-                    SELECT 
+                    SELECT
                         SubmittedDate, SubmittedBy, SubmittedByUserId,
                         PropertyName, CreditLine, ShipToName, ShipToAddress, PropertyUnits,
                         MgmtCompanyName, MgmtCompanyAddress,
@@ -48,7 +69,7 @@ namespace SalesMetrics.Controllers
                         InvoiceAddress, InvoiceCity, InvoiceState, InvoiceZip, InvoiceAttention,
                         ThirdPartyVendor, RequiresCustomerPO,
                         SalespersonName, EstimatedMonthlyRevenue, ARCreditLimit,
-                        Terms, DiscountPercent, SpecialNotes, BillingInstructions
+                        Terms, DiscountPercent, SpecialNotes, BillingInstructions, LocationCode
                     FROM NewCustomerRequests
                     WHERE ID = @ID
                 ", conn);
@@ -109,6 +130,7 @@ namespace SalesMetrics.Controllers
 
                     model.SpecialNotes = reader.IsDBNull(25) ? "" : reader.GetString(25);
                     model.BillingInstructions = reader.IsDBNull(26) ? "" : reader.GetString(26);
+                    model.LocationCode = reader.IsDBNull(27) ? null : reader.GetString(27);
 
                 }
                 reader.Close();
@@ -186,19 +208,38 @@ namespace SalesMetrics.Controllers
             return model;
         }
 
-        public IActionResult Submissions()
+        public IActionResult Submissions(string? scope = "branch", string? office = null)
         {
-            var submissions = new List<NewCustomerListItem>();
+            var userId = int.Parse(User.FindFirst("Users_Id")?.Value ?? "0");
+            var roleId = int.Parse(User.FindFirst("RoleId")?.Value ?? "0");
+            var locationCode = HttpContext.Session.GetString("OfficeLocation") ?? "";
 
+            // "All Locations" is restricted to managers/admins
+            bool canViewAll = roleId == 1 || roleId == 3 || roleId == 4 || roleId == 5 || roleId == 7 || roleId == 8;
+            if (scope == "all" && !canViewAll) scope = "branch";
+
+            var whereClause = scope switch
+            {
+                "mine" => "WHERE SubmittedByUserId = @UserId",
+                "all" when !string.IsNullOrEmpty(office) => "WHERE LocationCode = @Office",
+                _ => "WHERE LocationCode = @LocationCode" // default: branch
+            };
+
+            var submissions = new List<NewCustomerListItem>();
             var connStr = _configuration.GetConnectionString("SalesMetrics");
             using (var conn = new SqlConnection(connStr))
             {
                 conn.Open();
-                var cmd = new SqlCommand(@"
-                    SELECT ID, PropertyName, SubmittedBy, SubmittedDate, SalespersonName
+                var cmd = new SqlCommand($@"
+                    SELECT ID, PropertyName, SubmittedBy, SubmittedDate, SalespersonName, LocationCode, Status
                     FROM NewCustomerRequests
+                    {whereClause}
                     ORDER BY SubmittedDate DESC
                 ", conn);
+
+                cmd.Parameters.AddWithValue("@UserId", userId);
+                cmd.Parameters.AddWithValue("@LocationCode", locationCode);
+                cmd.Parameters.AddWithValue("@Office", (object?)office ?? DBNull.Value);
 
                 var reader = cmd.ExecuteReader();
                 while (reader.Read())
@@ -209,16 +250,28 @@ namespace SalesMetrics.Controllers
                         PropertyName = reader.IsDBNull(1) ? "" : reader.GetString(1),
                         SubmittedBy = reader.IsDBNull(2) ? "N/A" : reader.GetString(2),
                         SubmittedDate = reader.GetDateTime(3),
-                        SalespersonName = reader.IsDBNull(4) ? "" : reader.GetString(4)
+                        SalespersonName = reader.IsDBNull(4) ? "" : reader.GetString(4),
+                        LocationCode = reader.IsDBNull(5) ? null : reader.GetString(5),
+                        Status = reader.IsDBNull(6) ? "Pending" : reader.GetString(6)
                     });
                 }
             }
+
+            ViewBag.Scope = scope;
+            ViewBag.Office = office ?? "";
+            ViewBag.RoleId = roleId;
+            ViewBag.CanViewAll = canViewAll;
+            ViewBag.CurrentLocationCode = locationCode;
+            ViewBag.Locations = LocationHelper.Locations;
+            ViewBag.Total = submissions.Count;
 
             return View("Submissions", submissions);
         }
 
         public IActionResult NewCustomer()
         {
+            ViewBag.Locations = LocationHelper.Locations;
+            ViewBag.CurrentLocationCode = HttpContext.Session.GetString("OfficeLocation") ?? "";
             return View();
         }
                 
@@ -256,8 +309,8 @@ namespace SalesMetrics.Controllers
                             InvoiceEmail, InvoiceAddress, InvoiceCity, InvoiceState, InvoiceZip, InvoiceAttention,
                             ThirdPartyVendor, RequiresCustomerPO,
                             SalespersonName, EstimatedMonthlyRevenue, ARCreditLimit,
-                            Terms, DiscountPercent, SpecialNotes
-                        ) 
+                            Terms, DiscountPercent, SpecialNotes, LocationCode
+                        )
                         OUTPUT INSERTED.ID
                         VALUES (
                             @SubmittedDate, @SubmittedBy, @SubmittedByUserId,
@@ -267,7 +320,7 @@ namespace SalesMetrics.Controllers
                             @InvoiceEmail, @InvoiceAddress, @InvoiceCity, @InvoiceState, @InvoiceZip, @InvoiceAttention,
                             @ThirdPartyVendor, @RequiresCustomerPO,
                             @SalespersonName, @EstimatedMonthlyRevenue, @ARCreditLimit,
-                            @Terms, @DiscountPercent, @SpecialNotes
+                            @Terms, @DiscountPercent, @SpecialNotes, @LocationCode
                     )", conn);
 
 
@@ -307,6 +360,7 @@ namespace SalesMetrics.Controllers
 
                     // Notes
                     cmd.Parameters.AddWithValue("@SpecialNotes", model.SpecialNotes ?? "");
+                    cmd.Parameters.AddWithValue("@LocationCode", (object?)model.LocationCode ?? DBNull.Value);
 
                     newRequestId = (int)cmd.ExecuteScalar();
 
@@ -382,15 +436,80 @@ namespace SalesMetrics.Controllers
             return PartialView("_PrintCustomerRequest", model);
         }
 
-        // USE SERVER-SIDE PDF GENERATION
         public IActionResult ExportCustomerRequestPdf(int id)
         {
             var model = GetCustomerRequestById(id);
+            EmbedLogosInViewBag(model);
+            var safeFileName = SanitizeFileName(model?.Property?.Name ?? id.ToString());
+
             return new Rotativa.AspNetCore.ViewAsPdf("_PrintCustomerRequest", model)
             {
                 PageSize = Rotativa.AspNetCore.Options.Size.A4,
-                FileName = $"CustomerRequest_{id}.pdf"
+                FileName = $"SM_NewCustomerForm-{safeFileName}.pdf",
+                CustomSwitches = "--footer-left \"SalesMetrics New Customer Form\" " +
+                                 "--footer-right \"Page [page] of [topage]\" " +
+                                 "--footer-font-size 9 --footer-spacing 5 --margin-bottom 20"
             };
         }
+
+        [HttpPost]
+        public async Task<IActionResult> EmailForm(int id, string toEmail)
+        {
+            if (string.IsNullOrWhiteSpace(toEmail))
+                return Json(new { success = false, message = "Email address is required." });
+
+            var model = GetCustomerRequestById(id);
+            EmbedLogosInViewBag(model);
+
+            var safeFileName = $"SM_NewCustomerForm-{SanitizeFileName(model?.Property?.Name ?? id.ToString())}.pdf";
+            var pdfResult = new Rotativa.AspNetCore.ViewAsPdf("_PrintCustomerRequest", model)
+            {
+                PageSize = Rotativa.AspNetCore.Options.Size.A4,
+                FileName = safeFileName,
+                CustomSwitches = "--footer-left \"SalesMetrics New Customer Form\" " +
+                                 "--footer-right \"Page [page] of [topage]\" " +
+                                 "--footer-font-size 9 --footer-spacing 5 --margin-bottom 20"
+            };
+            var pdfBytes = await pdfResult.BuildFile(ControllerContext);
+
+            var subject = $"New Customer Request Form – {model?.Property?.Name}";
+            var body = $"<p>Please find the New Customer Request form for <strong>{model?.Property?.Name}</strong> attached.</p>";
+
+            await _notify.SendFormPdfAsync(toEmail, subject, pdfBytes, safeFileName, body);
+            return Json(new { success = true });
+        }
+
+        [HttpPost]
+        public IActionResult UpdateFormStatus(int id, string status)
+        {
+            var allowed = new[] { "Pending", "Reviewed", "Approved", "Rejected" };
+            if (!allowed.Contains(status))
+                return Json(new { success = false, message = "Invalid status." });
+
+            var connStr = _configuration.GetConnectionString("SalesMetrics");
+            using var conn = new SqlConnection(connStr);
+            conn.Open();
+            var cmd = new SqlCommand("UPDATE NewCustomerRequests SET Status = @Status WHERE ID = @ID", conn);
+            cmd.Parameters.AddWithValue("@Status", status);
+            cmd.Parameters.AddWithValue("@ID", id);
+            cmd.ExecuteNonQuery();
+            return Json(new { success = true });
+        }
+
+        private void EmbedLogosInViewBag(NewCustomerFormRequest? model)
+        {
+            string ToBase64DataUri(string relativePath)
+            {
+                var fullPath = Path.Combine(_env.WebRootPath, relativePath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
+                if (!System.IO.File.Exists(fullPath)) return "";
+                var bytes = System.IO.File.ReadAllBytes(fullPath);
+                return $"data:image/png;base64,{Convert.ToBase64String(bytes)}";
+            }
+            ViewBag.SeamlessLogoSrc = ToBase64DataUri("assets/images/seamless-logo.png");
+            ViewBag.SMLogoSrc = ToBase64DataUri("assets/images/logo-dark.png");
+        }
+
+        private static string SanitizeFileName(string name) =>
+            string.Concat(name.Split(Path.GetInvalidFileNameChars()));
     }
 }

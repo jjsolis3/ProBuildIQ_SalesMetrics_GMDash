@@ -1,22 +1,23 @@
-using Microsoft.Extensions.Options;
-
 namespace SalesMetrics.Services.Signing;
 
 public sealed class EmailTemplateService : IEmailTemplateService
 {
-    private readonly CompanyBrandingSettings _branding;
+    private readonly IBrandingSettingsProvider _branding;
 
-    public EmailTemplateService(IOptions<CompanyBrandingSettings> branding)
+    public EmailTemplateService(IBrandingSettingsProvider branding)
     {
-        _branding = branding.Value;
+        _branding = branding;
     }
 
-    public string WrapInBrandedTemplate(string innerHtml)
+    public async Task<string> WrapInBrandedTemplateAsync(string innerHtml)
     {
-        var companyName = _branding.CompanyName;
-        var logoUrl = _branding.LogoUrl;
-        var website = _branding.Website;
-        var phone = _branding.Phone;
+        var b = await _branding.GetAsync();
+
+        var companyName     = b.CompanyName;
+        var logoUrl         = b.LogoUrl;
+        var envelopeLogoUrl = b.EnvelopeLogoUrl;
+        var website         = b.Website;
+        var phone           = b.Phone;
         var year = DateTime.Now.Year;
 
         // Build footer contact line
@@ -53,7 +54,7 @@ public sealed class EmailTemplateService : IEmailTemplateService
       <table role=""presentation"" width=""100%"" cellpadding=""0"" cellspacing=""0"" border=""0"">
         <tr>
           <td align=""center"">
-            <img src=""{logoUrl}"" alt=""{companyName}"" style=""max-height:50px;max-width:260px;width:auto;display:block;margin:0 auto;"" />
+            <img src=""{logoUrl}"" alt=""{companyName}"" style=""max-height:60px;max-width:260px;width:auto;display:block;margin:0 auto;"" />
           </td>
         </tr>
       </table>
@@ -64,6 +65,16 @@ public sealed class EmailTemplateService : IEmailTemplateService
   <tr>
     <td style=""background-color:#E87600;height:4px;font-size:0;line-height:0;"">&nbsp;</td>
   </tr>
+{(string.IsNullOrWhiteSpace(envelopeLogoUrl) ? "" : $@"
+  <!-- Envelope feature logo — sits between the orange bar and the body content -->
+  <tr>
+    <td style=""padding:24px 24px 0 24px;text-align:center;"">
+      <img src=""{envelopeLogoUrl}"" alt=""SalesMetrics Envelope""
+           style=""height:100px;width:auto;display:block;margin:0 auto;"" />
+    </td>
+  </tr>
+  <!-- Envelope Orange Banner -->
+  ")}
 
   <!-- Body content -->
   <tr>

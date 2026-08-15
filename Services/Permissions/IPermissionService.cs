@@ -62,5 +62,35 @@ namespace SalesMetrics.Services.Permissions
         /// <param name="userId">User ID</param>
         /// <returns>List of feature IDs the user has access to</returns>
         Task<List<int>> GetUserPermissionIdsAsync(int userId);
+
+        /// <summary>
+        /// Get all user IDs that currently have access to a specific feature
+        /// </summary>
+        Task<List<int>> GetUsersWithFeatureAccessAsync(int featureId);
+
+        /// <summary>
+        /// Bulk set which users have access to a feature.
+        /// Users in userIdsWithAccess are granted; all others have access revoked.
+        /// </summary>
+        Task<bool> BulkUpdateFeatureAccessAsync(int featureId, List<int> userIdsWithAccess, int grantedByUserId);
+
+        /// <summary>
+        /// Bulk set feature access limited to a specific scope of users.
+        /// Only users in scopedUserIds are affected; users outside the scope are left unchanged.
+        /// </summary>
+        Task<bool> BulkUpdateFeatureAccessForScopedUsersAsync(int featureId, List<int> scopedUserIds, List<int> userIdsWithAccess, int grantedByUserId);
+
+        /// <summary>
+        /// Get all user IDs that currently have a specific location assigned.
+        /// </summary>
+        Task<List<int>> GetUsersWithLocationAssignmentAsync(int locationId);
+
+        /// <summary>
+        /// Bulk update location assignments for a scoped set of users.
+        /// Only users in <paramref name="scopedUserIds"/> are affected.
+        /// Users in <paramref name="userIdsToAssign"/> receive the location;
+        /// scoped users NOT in that list have the location removed.
+        /// </summary>
+        Task<bool> BulkUpdateLocationAssignmentsAsync(int locationId, List<int> scopedUserIds, List<int> userIdsToAssign, int adminUserId);
     }
 }

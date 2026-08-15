@@ -4,6 +4,13 @@
     ViewBag.Title = "Users";
     Layout = "~/Views/Shared/_Layout.cshtml";
 }
+<nav aria-label="breadcrumb" class="mb-2">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/Settings/Hub"><i class="fas fa-th me-1"></i>Settings Hub</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Access Control</li>
+    </ol>
+</nav>
+
 <div class="mb-3 text-end">
     <button class="btn btn-success open-create-user">
         ➕ Add New User
@@ -84,7 +91,14 @@
 
 @if (ViewBag.FlaggedUsers != null)
 {
-    <h4 class="mt-5">⚠️ Users With Potential Login Issues</h4>
+    <div class="d-flex align-items-center justify-content-between mt-5 mb-2">
+        <h4 class="mb-0">⚠️ Users With Potential Login Issues</h4>
+        <form method="post" asp-controller="Accounts" asp-action="FixAllFlaggedPasswords"
+              onsubmit="return confirm('Fix all @((ViewBag.FlaggedUsers as List<SalesMetrics.Models.FlaggedUserViewModel>)?.Count ?? 0) flagged user password(s)? This cannot be undone.');">
+            @Html.AntiForgeryToken()
+            <button type="submit" class="btn btn-warning btn-sm">🔐 Fix All (@((ViewBag.FlaggedUsers as List<SalesMetrics.Models.FlaggedUserViewModel>)?.Count ?? 0))</button>
+        </form>
+    </div>
     <div style="overflow-x: auto;">
         <table id="flaggedUsersTable" class="table table-bordered table-warning table-striped w-100">
             <thead class="sticky-top">
@@ -132,7 +146,6 @@
 
 @section Scripts {
     <link href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css" rel="stylesheet" />
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 

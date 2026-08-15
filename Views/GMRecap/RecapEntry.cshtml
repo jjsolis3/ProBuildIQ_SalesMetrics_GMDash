@@ -2,7 +2,9 @@
 @using SalesMetrics.Models
 
 @{
-    ViewBag.Title = "GM Weekly Recap Entry";
+    ViewBag.Title = "Leadership Weekly Recap Entry";
+    ViewBag.PTitle = "Leadership Recap";
+    ViewBag.PLink = "/GMRecap/RecapList";
 
     // Use centralized field definitions - SINGLE SOURCE OF TRUTH
     var recapFields = GMRecapFieldDefinitions.AllFields;
@@ -298,7 +300,7 @@
     <!-- Main Content Area -->
     <div class="row">
         <div class="col-xl-9 col-lg-8">
-            <h3 class="mb-4">📋 GM Weekly Recap</h3>
+            <h3 class="mb-4">📋 Leadership Weekly Recap</h3>
 
             <!-- FIXED: Week header with inline text -->
             <div class="week-header">

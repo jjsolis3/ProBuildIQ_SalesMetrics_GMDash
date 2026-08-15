@@ -10,6 +10,7 @@ public sealed class SignEnvelope
 
     // Business context
     public int? PropertyID { get; set; }
+    public string? PropertyName { get; set; } // Free-text fallback when no PropertyID match found in ERP
     public int? OrderId { get; set; }
     public string? OrderNumber { get; set; } // e.g., "90805.4" - display friendly order number
     public string? CustomerNumber { get; set; }
@@ -19,6 +20,12 @@ public sealed class SignEnvelope
     public bool TenantSkipped { get; set; } // true if Property Staff skipped tenant signature
     public string? TenantSkippedByName { get; set; } // Name of staff member who skipped tenant
     public DateTime? TenantSkippedAtUtc { get; set; } // When tenant was skipped
+
+    /// <summary>
+    /// Consent = standard signature-required envelope (default).
+    /// Communication = tracked delivery only; no signature is collected.
+    /// </summary>
+    public string EnvelopeType { get; set; } = "Consent"; // Consent|Communication
 
     public string Status { get; set; } = "Draft"; // Draft|Sent|Viewed|Completed|Expired|Declined|Voided
     public DateTime? ExpiresAtUtc { get; set; }

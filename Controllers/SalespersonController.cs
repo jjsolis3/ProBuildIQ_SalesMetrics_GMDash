@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using SalesMetrics.Models;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
+using SalesMetrics.Services;
 using SalesMetrics.Services.Helpers;
 using System;
 using System.Collections.Generic;
@@ -18,10 +19,12 @@ namespace SalesMetrics.Controllers
     public class SalespersonController : Controller
     {
         private readonly IConfiguration _config;
+        private readonly SalesRepMetricsService _metricsService;
 
-        public SalespersonController(IConfiguration config)
+        public SalespersonController(IConfiguration config, SalesRepMetricsService metricsService)
         {
             _config = config;
+            _metricsService = metricsService;
         }
 
 
@@ -31,7 +34,7 @@ namespace SalesMetrics.Controllers
             var roleId = Convert.ToInt32(HttpContext.Session.GetString("RoleId"));
             var locationId = LocationHelper.GetCurrentLocationId(HttpContext);
 
-            var dateFormat = "MM/dd/yyyy";
+
             var culture = System.Globalization.CultureInfo.InvariantCulture;
 
             // Try to parse, or fallback to defaults
@@ -51,7 +54,7 @@ namespace SalesMetrics.Controllers
 
             if (selectedSalesmanId.HasValue)
             {
-                viewModel.Metrics = GetSalesMetrics(selectedSalesmanId.Value, locationId, viewModel.StartDate, viewModel.EndDate);
+                viewModel.Metrics = _metricsService.GetSalesMetrics(selectedSalesmanId.Value, locationId, viewModel.StartDate, viewModel.EndDate);
                 viewModel.UserProfile = GetUserProfileBySalesmanId(selectedSalesmanId.Value, locationId);
                 viewModel.SelectedSalesmanId = selectedSalesmanId.Value;
             }

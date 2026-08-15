@@ -1,19 +1,25 @@
-﻿using Google.Apis.Auth.OAuth2;
+using Google.Apis.Auth.OAuth2;
 using Google.Apis.Calendar.v3;
 using Google.Apis.Calendar.v3.Data;
 using Google.Apis.Services;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using SalesMetrics.Services;
 using System.Net;
 
 public class GoogleCalendarService
 {
     private readonly IConfiguration _configuration;
+    private readonly ILogger<GoogleCalendarService> _logger;
+    private readonly IErrorLoggingService _errorLog;
     private readonly string _applicationName = "SalesMetrics";
 
-    public GoogleCalendarService(IConfiguration configuration)
+    public GoogleCalendarService(IConfiguration configuration, ILogger<GoogleCalendarService> logger, IErrorLoggingService errorLog)
     {
         _configuration = configuration;
+        _logger = logger;
+        _errorLog = errorLog;
     }
 
     private async Task<string?> EnsureValidAccessTokenAsync(int users_Id, string refreshToken)
@@ -59,12 +65,12 @@ public class GoogleCalendarService
                 Description = $"[Task ID: {taskId}]\n\n{description}",
                 Start = new EventDateTime
                 {
-                    DateTime = dueDate,
+                    DateTimeDateTimeOffset = new DateTimeOffset(dueDate, TimeSpan.FromHours(-7)),
                     TimeZone = "America/Los_Angeles"
                 },
                 End = new EventDateTime
                 {
-                    DateTime = dueDate.AddHours(1),
+                    DateTimeDateTimeOffset = new DateTimeOffset(dueDate.AddHours(1), TimeSpan.FromHours(-7)),
                     TimeZone = "America/Los_Angeles"
                 }
             };
@@ -85,12 +91,12 @@ public class GoogleCalendarService
                     Description = $"[Task ID: {taskId}]\n\n{description}",
                     Start = new EventDateTime
                     {
-                        DateTime = dueDate,
+                        DateTimeDateTimeOffset = new DateTimeOffset(dueDate, TimeSpan.FromHours(-7)),
                         TimeZone = "America/Los_Angeles"
                     },
                     End = new EventDateTime
                     {
-                        DateTime = dueDate.AddHours(1),
+                        DateTimeDateTimeOffset = new DateTimeOffset(dueDate.AddHours(1), TimeSpan.FromHours(-7)),
                         TimeZone = "America/Los_Angeles"
                     }
                 };
@@ -99,16 +105,17 @@ public class GoogleCalendarService
                 return createdEvent.Id;
             }
 
-            Console.WriteLine("[Google Calendar] Failed to refresh token.");
+            _logger.LogWarning("Google Calendar: failed to refresh token for create (UserId={UserId})", users_Id);
+            await _errorLog.LogWarningAsync($"Google Calendar: token refresh failed during event create (UserId={users_Id})", source: "GoogleCalendarService");
             return null;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Google Calendar Error] {ex.Message}");
+            _logger.LogError(ex, "Google Calendar error during create (UserId={UserId}, TaskId={TaskId})", users_Id, taskId);
+            await _errorLog.LogErrorAsync(ex, additionalData: $"Operation=AddEvent, UserId={users_Id}, TaskId={taskId}", source: "GoogleCalendarService");
             return null;
         }
     }
-
 
     public async Task<bool> UpdateTaskEventAsync(int userId, string accessToken, string refreshToken, string eventId, string title, string description, DateTime dueDate)
     {
@@ -157,7 +164,14 @@ public class GoogleCalendarService
                 return true;
             }
 
-            Console.WriteLine("[Google Calendar] Failed to refresh token on update.");
+            _logger.LogWarning("Google Calendar: failed to refresh token for update (UserId={UserId}, EventId={EventId})", userId, eventId);
+            await _errorLog.LogWarningAsync($"Google Calendar: token refresh failed during event update (UserId={userId}, EventId={eventId})", source: "GoogleCalendarService");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Google Calendar error during update (UserId={UserId}, EventId={EventId})", userId, eventId);
+            await _errorLog.LogErrorAsync(ex, additionalData: $"Operation=UpdateEvent, UserId={userId}, EventId={eventId}", source: "GoogleCalendarService");
             return false;
         }
     }
@@ -180,14 +194,15 @@ public class GoogleCalendarService
                 return true;
             }
 
-            Console.WriteLine("[Google Calendar] Failed to refresh token on delete.");
+            _logger.LogWarning("Google Calendar: failed to refresh token for delete (UserId={UserId}, EventId={EventId})", userId, eventId);
+            await _errorLog.LogWarningAsync($"Google Calendar: token refresh failed during event delete (UserId={userId}, EventId={eventId})", source: "GoogleCalendarService");
             return false;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Google Calendar Delete Error] {ex.Message}");
+            _logger.LogError(ex, "Google Calendar error during delete (UserId={UserId}, EventId={EventId})", userId, eventId);
+            await _errorLog.LogErrorAsync(ex, additionalData: $"Operation=DeleteEvent, UserId={userId}, EventId={eventId}", source: "GoogleCalendarService");
             return false;
         }
     }
-
 }

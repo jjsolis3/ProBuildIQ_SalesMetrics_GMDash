@@ -1,6 +1,8 @@
 ﻿@model SalesMetrics.Models.ErrorDashboardViewModel
 @{
     ViewData["Title"] = "Error Dashboard";
+    ViewBag.PTitle = "Error Log";
+    ViewBag.PLink = "/ErrorLog";
 }
 
 <!-- Add DataTables CSS in head section -->
@@ -12,18 +14,13 @@
 }
 
 <div class="container-fluid">
-    <div class="row">
-        <div class="col-12">
-            <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                <h4 class="mb-sm-0">Error Dashboard</h4>
-                <div class="page-title-right">
-                    <a href="@Url.Action("Index")" class="btn btn-primary">
-                        <i class="fas fa-list"></i> View All Errors
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="/Settings/Hub"><i class="fas fa-th me-1"></i>Settings Hub</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Error Dashboard</li>
+        </ol>
+    </nav>
 
     <!-- Summary Cards -->
     <div class="row">
@@ -199,6 +196,138 @@
                     else
                     {
                         <p class="text-muted">No controller-specific errors found.</p>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Login Security Panel -->
+    <div class="row">
+        <!-- Stat cards -->
+        <div class="col-xl-3 col-md-6">
+            <div class="card card-animate">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-grow-1">
+                            <p class="text-uppercase fw-medium text-muted mb-0">Failed Logins (24h)</p>
+                            <h4 class="mb-0 @(Model.LoginSecurity.FailedLoginsLast24h > 0 ? "text-danger" : "text-success")">
+                                @Model.LoginSecurity.FailedLoginsLast24h
+                            </h4>
+                        </div>
+                        <div class="flex-shrink-0">
+                            <div class="avatar-sm rounded-circle bg-danger-subtle">
+                                <span class="avatar-title rounded-circle bg-danger">
+                                    <i class="fas fa-user-slash"></i>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6">
+            <div class="card card-animate">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-grow-1">
+                            <p class="text-uppercase fw-medium text-muted mb-0">Failed Logins (7d)</p>
+                            <h4 class="mb-0">@Model.LoginSecurity.FailedLoginsLast7d</h4>
+                        </div>
+                        <div class="flex-shrink-0">
+                            <div class="avatar-sm rounded-circle bg-warning-subtle">
+                                <span class="avatar-title rounded-circle bg-warning">
+                                    <i class="fas fa-shield-alt"></i>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Recent login failures -->
+        <div class="col-xl-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0"><i class="fas fa-user-lock me-2 text-danger"></i>Recent Failed Login Attempts</h5>
+                </div>
+                <div class="card-body">
+                    @if (Model.LoginSecurity.RecentFailures.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Time</th>
+                                        <th>Username / Email</th>
+                                        <th>IP Address</th>
+                                        <th>Office</th>
+                                        <th>Reason</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var f in Model.LoginSecurity.RecentFailures)
+                                    {
+                                        <tr>
+                                            <td class="text-nowrap">@f.LoginTime.ToString("MM/dd/yyyy HH:mm")</td>
+                                            <td>@f.UserName</td>
+                                            <td><code>@(f.IpAddress ?? "—")</code></td>
+                                            <td>@(f.Office ?? "—")</td>
+                                            <td class="text-muted small">@(f.ErrorMessage ?? "—")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted text-center py-3"><i class="fas fa-check-circle text-success me-1"></i>No recent login failures.</p>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Top IPs with failures -->
+        <div class="col-xl-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0"><i class="fas fa-network-wired me-2 text-warning"></i>Top IPs (7-day failures)</h5>
+                </div>
+                <div class="card-body">
+                    @if (Model.LoginSecurity.TopFailedIps.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>IP Address</th>
+                                        <th>Failures</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var ip in Model.LoginSecurity.TopFailedIps)
+                                    {
+                                        <tr>
+                                            <td><code>@ip.IpAddress</code></td>
+                                            <td>
+                                                <span class="badge @(ip.FailureCount >= 5 ? "bg-danger" : ip.FailureCount >= 3 ? "bg-warning" : "bg-secondary")">
+                                                    @ip.FailureCount
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted text-center py-3">No data.</p>
                     }
                 </div>
             </div>

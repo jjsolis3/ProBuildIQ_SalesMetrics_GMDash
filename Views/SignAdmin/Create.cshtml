@@ -2,6 +2,8 @@
 @model SalesMetrics.Models.Signing.CreateEnvelopeVm
 @{
     ViewData["Title"] = "New Envelope";
+    ViewBag.PTitle = "My Envelopes";
+    ViewBag.PLink  = "/SignAdmin";
     var i = 0;
 }
 <div class="card border-0 shadow-sm">
@@ -11,24 +13,40 @@
             @Html.AntiForgeryToken()
 
             <div class="row g-3">
-                <div class="col-md-4">
-                    <label class="form-label">Template</label>
-                    <select asp-for="TemplateKey" class="form-select">
+                <div class="col-md-3">
+                    <label class="form-label">Envelope Type</label>
+                    <select asp-for="EnvelopeType" class="form-select" id="envelopeTypeSelect">
+                        <option value="Consent">✍️ Consent (Signature Required)</option>
+                        <option value="Communication">📧 Communication (Tracked Delivery)</option>
+                    </select>
+                    <small class="form-text text-muted">
+                        <span id="typeHintConsent">Recipient must review and sign the document.</span>
+                        <span id="typeHintComm" style="display:none;">Recipient receives and acknowledges the document — no signature collected.</span>
+                    </small>
+                </div>
+                <div class="col-md-3" id="templateGroup">
+                    <label class="form-label">Template <span id="templateRequired" class="text-danger">*</span></label>
+                    <select asp-for="TemplateKey" id="templateKeySelect" class="form-select">
+                        <option value="">-- Select a template --</option>
                         @foreach (var t in Model.Templates)
                         {
-                            <option value="@t.Key">@t.Display</option>
+                            <option value="@t.Key" data-type="@t.Type">@t.Display</option>
                         }
                     </select>
+                    <div id="noTemplatesMsg" class="form-text text-warning" style="display:none;">
+                        No templates available for this envelope type. <a asp-controller="SignTemplates" asp-action="Create">Create one.</a>
+                    </div>
+                    <span asp-validation-for="TemplateKey" class="text-danger small"></span>
                 </div>
-                <div class="col-md-8">
-                    <label class="form-label">Subject</label>
+                <div class="col-md-6" id="subjectGroup">
+                    <label class="form-label">Subject <span class="text-danger">*</span></label>
                     <input asp-for="Subject" class="form-control" />
                     <span asp-validation-for="Subject" class="text-danger"></span>
                 </div>
                 <div class="col-md-12">
-                    <label class="form-label">Message <span class="text-muted small">(Optional)</span></label>
+                    <label class="form-label" id="messageLabel">Message <span class="text-muted small">(Optional)</span></label>
                     <textarea asp-for="MessageBody" id="messageBody" class="form-control" rows="3" placeholder="Enter your message here..."></textarea>
-                    <div class="form-text">
+                    <div class="form-text" id="messageHint">
                         <small class="text-muted">Property, Order, and Branch details will be automatically appended when you make selections below</small>
                     </div>
                 </div>
@@ -75,16 +93,38 @@
 
                 <div class="col-md-3 position-relative">
                     <label class="form-label">Property</label>
-                    <input id="propSearch" class="form-control" placeholder="Search by property name..." autocomplete="off" />
+                    <input id="propSearch" name="CustomPropertyName" class="form-control" placeholder="Search by property name..." autocomplete="off" />
                     <input type="hidden" asp-for="PropertyID" id="propId" />
                     <div id="propResults" class="list-group position-absolute w-100" style="z-index: 1050;"></div>
+                    <div class="form-text text-muted small">
+                        Search ERP, or type a name and fill in Order&nbsp;# and Unit below.
+                    </div>
                 </div>
 
-                <div class="col-md-3">
+                @* ERP order dropdown — only visible after an ERP property is selected *@
+                <div class="col-md-3" id="erpOrderSection" style="display:none;">
                     <label class="form-label">Order</label>
                     <select asp-for="OrderId" id="orderSelect" class="form-select" disabled>
                         <option value="">Select a property first</option>
                     </select>
+                    <div class="form-text">
+                        <a href="#" id="manualOrderLink" onclick="switchToManualOrder(); return false;" style="display:none;">
+                            Order not listed? Enter manually
+                        </a>
+                    </div>
+                </div>
+
+                @* Free-text order + unit — visible by default (no ERP match) *@
+                <div class="col-md-2" id="freeOrderSection">
+                    <label class="form-label">Order #</label>
+                    <input asp-for="CustomOrderNumber" id="freeOrderInput" class="form-control" placeholder="e.g. 90805.4" />
+                    <div class="form-text text-muted small">
+                        Manual entry<span id="erpPickLink" style="display:none;"> &middot; <a href="#" onclick="switchToErpOrder(); return false;">Pick from list</a></span>
+                    </div>
+                </div>
+                <div class="col-md-1" id="freeUnitSection">
+                    <label class="form-label">Unit</label>
+                    <input asp-for="CustomUnitNumber" id="freeUnitInput" class="form-control" placeholder="e.g. 101" />
                 </div>
 
                 <div class="col-md-3">
@@ -106,7 +146,7 @@
                         <div class="col-md-2">
                             <label class="form-label">Role</label>
                             @* <input name="Recipients[@i].Role" class="form-control" value="@(Model.Recipients.ElementAtOrDefault(i)?.Role ?? "Manager")" /> *@
-                            <select name="Recipeints[@i].Role" class="form-select">
+                            <select name="Recipients[@i].Role" class="form-select">
                                 <option value="Manager" selected>Manager</option>
                                 <option value="Supervisor">Supervisor</option>
                                 <option value="Maintenance">Maintenance</option>
@@ -224,157 +264,191 @@
     </script>
 
     <script>
-        // --- Property search ---
+        // --- Property search with ERP/free-text mode switching ---
         let propTimer;
         const propSearch = document.getElementById('propSearch');
-        const propId = document.getElementById('propId');
+        const propId     = document.getElementById('propId');
         const propResults = document.getElementById('propResults');
         const orderSelect = document.getElementById('orderSelect');
 
-        const propSearchHandler = function() {
-          clearTimeout(propTimer);
-          const q = propSearch.value.trim();
-          if (!q) { propResults.innerHTML = ''; return; }
-          propTimer = setTimeout(async () => {
-            try {
-              // Get selected branch location code
-              const branchSelect = document.getElementById('branchSelect');
-              const locationCode = branchSelect?.value || '';
-              const url = `/api/properties/search?term=${encodeURIComponent(q)}${locationCode ? '&locationCode=' + encodeURIComponent(locationCode) : ''}`;
-              const res = await fetch(url);
-              if (!res.ok) {
-                throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-              }
-              const items = await res.json();
-              propResults.innerHTML = items.map(i =>
-                `<button type="button" class="list-group-item list-group-item-action" data-id="${i.id}" data-name="${i.name}">${i.name}</button>`
-              ).join('');
-            } catch (error) {
-              console.error('Property search error:', error);
-              propResults.innerHTML = '<div class="list-group-item text-danger">Error loading properties. Please try again.</div>';
+        // Two flags drive visibility:
+        //   erpPropertySelected — a property was picked from the ERP search
+        //   manualOrderEntry   — user clicked "Order not listed? Enter manually" while in ERP mode
+        let erpPropertySelected = false;
+        let manualOrderEntry    = false;
+
+        function updateOrderFields() {
+            const showErpDropdown = erpPropertySelected && !manualOrderEntry;
+            document.getElementById('erpOrderSection').style.display  = showErpDropdown ? '' : 'none';
+            document.getElementById('freeOrderSection').style.display = showErpDropdown ? 'none' : '';
+            document.getElementById('freeUnitSection').style.display  = showErpDropdown ? 'none' : '';
+            orderSelect.disabled = !showErpDropdown;
+            document.getElementById('manualOrderLink').style.display = showErpDropdown ? '' : 'none';
+            document.getElementById('erpPickLink').style.display = (erpPropertySelected && manualOrderEntry) ? '' : 'none';
+        }
+
+        function setPropertyMode(erp) {
+            erpPropertySelected = erp;
+            if (!erp) manualOrderEntry = false; // full reset when leaving ERP mode
+            updateOrderFields();
+        }
+
+        function switchToManualOrder() {
+            manualOrderEntry = true;
+            orderSelect.value = ''; // clear so OrderId won't post
+            updateOrderFields();
+        }
+
+        function switchToErpOrder() {
+            manualOrderEntry = false;
+            updateOrderFields();
+        }
+
+        // Default: free-text mode (nothing selected from ERP yet)
+        setPropertyMode(false);
+
+        // If the user changes the Branch dropdown after picking a property, clear the
+        // selection so a stale ERP property ID isn't carried into the new branch context.
+        document.getElementById('branchSelect')?.addEventListener('change', () => {
+            propId.value = '';
+            propSearch.value = '';
+            propResults.innerHTML = '';
+            setPropertyMode(false);
+        });
+
+        const propSearchHandler = function () {
+            clearTimeout(propTimer);
+            const q = propSearch.value.trim();
+            // If the user is re-typing after an ERP selection, drop back to free-text mode
+            if (propId.value) {
+                propId.value = '';
+                setPropertyMode(false);
             }
-          }, 250);
+            if (!q) { propResults.innerHTML = ''; return; }
+            propTimer = setTimeout(async () => {
+                try {
+                    const branchSelect = document.getElementById('branchSelect');
+                    const locationCode = branchSelect?.value || '';
+                    const url = `/api/properties/search?term=${encodeURIComponent(q)}${locationCode ? '&locationCode=' + encodeURIComponent(locationCode) : ''}`;
+                    const res = await fetch(url);
+                    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+                    const items = await res.json();
+                    propResults.innerHTML = items.map(i =>
+                        `<button type="button" class="list-group-item list-group-item-action" data-id="${i.id}" data-name="${i.name}">${i.name}</button>`
+                    ).join('');
+                } catch (error) {
+                    console.error('Property search error:', error);
+                    propResults.innerHTML = '<div class="list-group-item text-danger">Error loading properties. Please try again.</div>';
+                }
+            }, 250);
         };
         propSearch.addEventListener('input', propSearchHandler);
 
-        const propResultsClickHandler = async function(e) {
-          const btn = e.target.closest('button[data-id]');
-          if (!btn) return;
-          propId.value = btn.dataset.id;
-          propSearch.value = btn.dataset.name;
-          propResults.innerHTML = '';
-
-          // load orders for this property
-          orderSelect.innerHTML = '<option value="">Loading orders…</option>';
-          orderSelect.disabled = true;
-          try {
-            // Get selected branch location code
-            const branchSelect = document.getElementById('branchSelect');
-            const locationCode = branchSelect?.value || '';
-            const orderUrl = `/api/orders/by-property?propertyId=${encodeURIComponent(propId.value)}${locationCode ? '&locationCode=' + encodeURIComponent(locationCode) : ''}`;
-            const res = await fetch(orderUrl);
-            if (!res.ok) {
-              throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        const propResultsClickHandler = async function (e) {
+            const btn = e.target.closest('button[data-id]');
+            if (!btn) return;
+            propId.value    = btn.dataset.id;
+            propSearch.value = btn.dataset.name;
+            propResults.innerHTML = '';
+            // Switch to ERP mode: show order dropdown, hide free-text fields
+            setPropertyMode(true);
+            orderSelect.innerHTML = '<option value="">Loading orders…</option>';
+            orderSelect.disabled  = true;
+            try {
+                const branchSelect = document.getElementById('branchSelect');
+                const locationCode = branchSelect?.value || '';
+                const orderUrl = `/api/orders/by-property?propertyId=${encodeURIComponent(propId.value)}${locationCode ? '&locationCode=' + encodeURIComponent(locationCode) : ''}`;
+                const res = await fetch(orderUrl);
+                if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+                const items = await res.json();
+                orderSelect.innerHTML = '<option value="">Select an order (optional)</option>' +
+                    items.map(o => `<option value="${o.id}">${o.display}</option>`).join('');
+                orderSelect.disabled = false;
+            } catch (error) {
+                console.error('Order loading error:', error);
+                orderSelect.innerHTML = '<option value="">Error loading orders – please try again</option>';
+                orderSelect.disabled = false;
             }
-            const items = await res.json();
-            orderSelect.innerHTML = '<option value="">Select an order (optional)</option>' +
-              items.map(o => `<option value="${o.id}">${o.display}</option>`).join('');
-            orderSelect.disabled = false;
-
-            // Auto-populate message body
-            updateMessageBody();
-          } catch (error) {
-            console.error('Order loading error:', error);
-            orderSelect.innerHTML = '<option value="">Error loading orders - Please try again</option>';
-            orderSelect.disabled = false;
-          }
         };
         propResults.addEventListener('click', propResultsClickHandler);
 
-        // Update message body when order is selected
-        const orderSelectHandler = function() {
-          updateMessageBody();
-        };
-        orderSelect.addEventListener('change', orderSelectHandler);
-
-        // Update message body when branch is changed
-        const branchSelect = document.getElementById('branchSelect');
-        let branchSelectHandler = null;
-        if (branchSelect) {
-          branchSelectHandler = function() {
-            updateMessageBody();
-          };
-          branchSelect.addEventListener('change', branchSelectHandler);
-        }
-
-        // Auto-update message body with property, order, and branch info
-        function updateMessageBody() {
-          const messageBody = document.getElementById('messageBody');
-          const propName = propSearch.value || '[Property Name]';
-          const orderDisplay = orderSelect.options[orderSelect.selectedIndex]?.text || '[Order Number]';
-          const branchCode = branchSelect?.value || '[Branch]';
-          const branchText = branchSelect?.options[branchSelect.selectedIndex]?.text || '[Branch]';
-          const branch = branchCode ? branchText : '[Branch]';
-
-          // Don't update if property hasn't been selected yet
-          if (!propName || propName === 'Search by property name...') {
-            return;
-          }
-
-          // Get current message, removing any previous envelope info
-          let currentMessage = messageBody.value.trim();
-
-          // Remove previous "Envelope for:" section if it exists
-          const envelopeRegex = /\n*Envelope for:\s*\n[\s\S]*?(?:Property:[\s\S]*?)?(?:Order#:[\s\S]*?)?(?:Branch:[\s\S]*)?$/;
-          currentMessage = currentMessage.replace(envelopeRegex, '').trim();
-
-          // Build the envelope info section
-          const envelopeInfo = `
-Envelope for:
-            Property: ${propName}
-            Order#: ${orderDisplay}
-            Branch: ${branch}`;
-
-          // Append envelope info to user's message
-          if (currentMessage) {
-            messageBody.value = currentMessage + '\n' + envelopeInfo;
-          } else {
-            messageBody.value = envelopeInfo;
-          }
-        }
-
-        // dismiss suggestions if clicking elsewhere
-        const documentClickHandler = function(e) {
-          if (!propResults.contains(e.target) && e.target !== propSearch)
-            propResults.innerHTML = '';
+        // Dismiss suggestions when clicking elsewhere
+        const documentClickHandler = function (e) {
+            if (!propResults.contains(e.target) && e.target !== propSearch)
+                propResults.innerHTML = '';
         };
         document.addEventListener('click', documentClickHandler);
 
-        // Cleanup function for Create.cshtml event listeners
+        // Cleanup on page unload
         function cleanupCreateEventListeners() {
-          // Clear any pending timers
-          if (propTimer) {
-            clearTimeout(propTimer);
-          }
-
-          // Remove event listeners
-          if (propSearch) {
-            propSearch.removeEventListener('input', propSearchHandler);
-          }
-          if (propResults) {
-            propResults.removeEventListener('click', propResultsClickHandler);
-          }
-          if (orderSelect) {
-            orderSelect.removeEventListener('change', orderSelectHandler);
-          }
-          if (branchSelect && branchSelectHandler) {
-            branchSelect.removeEventListener('change', branchSelectHandler);
-          }
-          document.removeEventListener('click', documentClickHandler);
+            if (propTimer) clearTimeout(propTimer);
+            propSearch?.removeEventListener('input', propSearchHandler);
+            propResults?.removeEventListener('click', propResultsClickHandler);
+            document.removeEventListener('click', documentClickHandler);
         }
-
-        // Register cleanup on page unload
         window.addEventListener('beforeunload', cleanupCreateEventListeners);
     </script>
 
+    <script>
+        // Envelope type: adapt form layout based on Consent vs Communication
+        const typeSelect = document.getElementById('envelopeTypeSelect');
+        const templateGroup = document.getElementById('templateGroup');
+        const templateKeySelect = document.getElementById('templateKeySelect');
+        const subjectGroup = document.getElementById('subjectGroup');
+        const messageBody = document.getElementById('messageBody');
+        const messageLabel = document.getElementById('messageLabel');
+        const messageHint = document.getElementById('messageHint');
+
+        function updateEnvelopeTypeUi() {
+            const isComm = typeSelect && typeSelect.value === 'Communication';
+            const selectedType = isComm ? 'Communication' : 'Consent';
+
+            // Hint text
+            document.getElementById('typeHintConsent').style.display = isComm ? 'none' : '';
+            document.getElementById('typeHintComm').style.display    = isComm ? '' : 'none';
+
+            // Template field: required for Consent, hidden for Communication
+            if (templateGroup) templateGroup.style.display = isComm ? 'none' : '';
+            if (templateKeySelect) templateKeySelect.required = !isComm;
+
+            // Filter template options to only show those matching the selected envelope type
+            if (templateKeySelect) {
+                let visibleCount = 0;
+                templateKeySelect.querySelectorAll('option[data-type]').forEach(opt => {
+                    const show = opt.dataset.type === selectedType;
+                    opt.style.display = show ? '' : 'none';
+                    if (show) visibleCount++;
+                    // Deselect hidden options
+                    if (!show && opt.selected) opt.selected = false;
+                });
+                const noMsg = document.getElementById('noTemplatesMsg');
+                if (noMsg) noMsg.style.display = visibleCount === 0 ? '' : 'none';
+            }
+
+            // Subject: wider when no template col
+            if (subjectGroup) {
+                subjectGroup.className = isComm
+                    ? 'col-md-9'   // Communication: Subject takes the space freed by Template
+                    : 'col-md-6';  // Consent: Template + Subject side-by-side
+            }
+
+            // Message: more prominent for Communication (the body IS the communication)
+            if (messageBody) {
+                messageBody.rows = isComm ? 6 : 3;
+                messageBody.placeholder = isComm
+                    ? 'Enter the communication message to send to the recipient...'
+                    : 'Enter your message here...';
+            }
+            if (messageLabel) messageLabel.innerHTML = isComm
+                ? 'Message Body <span class="text-danger">*</span>'
+                : 'Message <span class="text-muted small">(Optional)</span>';
+            if (messageHint) messageHint.style.display = isComm ? 'none' : '';
+        }
+
+        if (typeSelect) {
+            typeSelect.addEventListener('change', updateEnvelopeTypeUi);
+            updateEnvelopeTypeUi();
+        }
+    </script>
 }
+

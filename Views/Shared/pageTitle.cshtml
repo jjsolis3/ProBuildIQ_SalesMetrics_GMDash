@@ -1,4 +1,4 @@
-﻿<!-- start page title -->
+<!-- start page title -->
 <div class="row">
     <div class="col-12">
         <div class="page-title-box d-flex align-items-center justify-content-between">
@@ -6,8 +6,13 @@
 
             <div class="page-title-right">
                 <ol class="breadcrumb m-0">
-                    <li class="breadcrumb-item"><a href="javascript: void(0);">@ViewBag.PTitle </a></li>
-                    <li class="breadcrumb-item active">@ViewBag.Title </li>
+                    <li class="breadcrumb-item"><a href="/">Dashboard</a></li>
+                    @if (!string.IsNullOrEmpty(ViewBag.PTitle as string))
+                    {
+                        var pLink = (ViewBag.PLink as string) ?? "#";
+                        <li class="breadcrumb-item"><a href="@pLink">@ViewBag.PTitle</a></li>
+                    }
+                    <li class="breadcrumb-item active">@ViewBag.Title</li>
                 </ol>
             </div>
 

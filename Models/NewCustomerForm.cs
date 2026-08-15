@@ -18,6 +18,8 @@ namespace SalesMetrics.Models
         public List<ProductLineItem> Products { get; set; } = new();
         public string? SpecialNotes { get; set; }
         public string? BillingInstructions { get; set; }
+        public string? LocationCode { get; set; }
+        public string Status { get; set; } = "Pending";
     }
 
     public class PropertyInfo
@@ -91,6 +93,8 @@ namespace SalesMetrics.Models
         public string SubmittedBy { get; set; }
         public DateTime SubmittedDate { get; set; }
         public string SalespersonName { get; set; }
+        public string? LocationCode { get; set; }
+        public string? Status { get; set; }
     }
 
 }

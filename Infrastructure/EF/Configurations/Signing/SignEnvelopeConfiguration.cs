@@ -13,6 +13,8 @@ public sealed class SignEnvelopeConfiguration : IEntityTypeConfiguration<SignEnv
         b.HasKey(x => x.EnvelopeId);
 
         b.Property(x => x.Subject).HasMaxLength(200).IsRequired();
+        b.Property(x => x.PropertyName).HasMaxLength(200);
+        b.Property(x => x.EnvelopeType).HasMaxLength(20).HasDefaultValue("Consent");
         b.Property(x => x.Status).HasMaxLength(20).HasDefaultValue("Draft");
         b.Property(x => x.LocationCode).HasMaxLength(10);
         b.Property(x => x.PdfStoragePath).HasMaxLength(400);

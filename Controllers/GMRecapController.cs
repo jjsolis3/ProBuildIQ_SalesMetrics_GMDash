@@ -671,7 +671,7 @@ namespace SalesMetrics.Controllers
                     TempData["SuccessMessage"] = "Your recap has been updated successfully.";
                     return RedirectToAction("RecapList");
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
                     await tran.RollbackAsync();
                     throw;
@@ -915,7 +915,7 @@ namespace SalesMetrics.Controllers
 
                     return Json(new { success = true, message = "Draft saved successfully" });
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
                     await tran.RollbackAsync();
                     throw;

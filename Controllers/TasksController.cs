@@ -34,13 +34,19 @@ namespace SalesMetrics.Controllers
         private readonly SalesMetricsDbContext _context;
         private readonly INotificationService _notificationService;
         private readonly IMemoryCache _cache;
+        private readonly ILogger<TasksController> _logger;
+        private readonly GoogleCalendarService _calendarService;
+        private readonly SalesMetrics.Services.GoogleTasksService _tasksService;
 
-        public TasksController(IConfiguration configuration, SalesMetricsDbContext context, INotificationService notificationService, IMemoryCache cache)
+        public TasksController(IConfiguration configuration, SalesMetricsDbContext context, INotificationService notificationService, IMemoryCache cache, ILogger<TasksController> logger, GoogleCalendarService calendarService, SalesMetrics.Services.GoogleTasksService tasksService)
         {
             _configuration = configuration;
             _context = context;
             _notificationService = notificationService;
             _cache = cache;
+            _logger = logger;
+            _calendarService = calendarService;
+            _tasksService = tasksService;
         }
 
         private UserContext GetUserContext()
@@ -159,7 +165,7 @@ namespace SalesMetrics.Controllers
 
                 // Get paginated tasks with custom filters
                 var (tasks, totalRecords, filteredRecords) = GetPaginatedTasksByLocation(
-                    locationId, filter, skip, pageSize, searchValue, sortColumn, sortDirection, userLookup,
+                    locationId, filter, skip, pageSize, searchValue ?? "", sortColumn ?? "", sortDirection ?? "", userLookup,
                     typeFilter, statusFilter, assignedToFilter);
 
                 // Format data for DataTables
@@ -211,7 +217,7 @@ namespace SalesMetrics.Controllers
             try
             {
                 int locationId = LocationHelper.GetCurrentLocationId(HttpContext);
-                string connectionString = _configuration.GetConnectionString("SalesMetrics");
+                string? connectionString = _configuration.GetConnectionString("SalesMetrics");
                 var types = new List<string>();
 
                 using (SqlConnection conn = new SqlConnection(connectionString))
@@ -243,7 +249,7 @@ namespace SalesMetrics.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error getting task types: {ex.Message}");
+                _logger.LogError(ex, "Error getting task types");
                 return Json(new List<string>());
             }
         }
@@ -338,10 +344,10 @@ namespace SalesMetrics.Controllers
             {
                 TaskId = t.TaskID,
                 Title = GetTaskTitle(t, users, roleId),
-                Type = t.Type,
-                Status = t.Status,
-                Property = t.Property,
-                Description = t.Description,
+                Type = t.Type ?? "",
+                Status = t.Status ?? "",
+                Property = t.Property ?? "",
+                Description = t.Description ?? "",
                 DueDate = t.DueDate,
                 AssignedTo = users.FirstOrDefault(u => u.Users_ID == t.AssignedTo) is var u && u != null ? $"{u.FirstName} {u.LastName}" : "Unassigned"
             }).ToList();
@@ -404,7 +410,7 @@ namespace SalesMetrics.Controllers
                 RoleId = assigned.RoleID,
                 SalesmanId = assigned.SalesmanID,
                 LocationId = assigned.Location,
-                Username = assigned.Username
+                Username = assigned.Username ?? ""
             };
         }
 
@@ -439,7 +445,7 @@ namespace SalesMetrics.Controllers
             {
                 foreach (var error in ModelState)
                 {
-                    Console.WriteLine($"{error.Key}: {string.Join(", ", error.Value.Errors.Select(e => e.ErrorMessage))}");
+                    _logger.LogWarning("ModelState error {Key}: {Errors}", error.Key, string.Join(", ", error.Value.Errors.Select(e => e.ErrorMessage)));
                 }
 
                 // Reload page with existing task/user list
@@ -493,7 +499,7 @@ namespace SalesMetrics.Controllers
             };
 
             var locationName = LocationHelper.GetLocationName(assignedUser.LocationId);
-            Console.WriteLine($"New Task Created for {assignedUser.FullName} (id: {model.AssignedTo} ) from the {locationName} branch");
+            _logger.LogInformation("New task created for {FullName} (id: {UserId}) from {Branch}", assignedUser.FullName, model.AssignedTo, locationName);
 
             int taskId = SaveTaskToDatabase(task);
             task.TaskID = taskId;
@@ -509,7 +515,7 @@ namespace SalesMetrics.Controllers
             catch (Exception ex)
             {
                 // Log error but don't fail task creation
-                Console.WriteLine($"Error sending task assignment notification: {ex.Message}");
+                _logger.LogError(ex, "Error sending task assignment notification");
             }
 
             // Add to Google Task
@@ -701,7 +707,7 @@ namespace SalesMetrics.Controllers
 
         private List<SalesTask> GetAllTasksByLocation(int locationId, string filter = "all")
         {
-            string connectionString = _configuration.GetConnectionString("SalesMetrics");
+            string? connectionString = _configuration.GetConnectionString("SalesMetrics");
             var tasks = new List<SalesTask>();
 
             try
@@ -773,7 +779,7 @@ namespace SalesMetrics.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Error retrieving tasks by Locations: " + ex.Message);
+                _logger.LogError(ex, "Error retrieving tasks by location");
                 // You could also log this exception or rethrow it as needed
             }
 
@@ -786,9 +792,9 @@ namespace SalesMetrics.Controllers
         private (List<SalesTask> tasks, int totalRecords, int filteredRecords) GetPaginatedTasksByLocation(
             int locationId, string filter, int skip, int pageSize, string searchValue,
             string sortColumn, string sortDirection, Dictionary<int, string> userLookup,
-            string typeFilter = null, string statusFilter = null, string assignedToFilter = null)
+            string? typeFilter = null, string? statusFilter = null, string? assignedToFilter = null)
         {
-            string connectionString = _configuration.GetConnectionString("SalesMetrics");
+            string? connectionString = _configuration.GetConnectionString("SalesMetrics");
             var tasks = new List<SalesTask>();
             int totalRecords = 0;
             int filteredRecords = 0;
@@ -968,7 +974,7 @@ namespace SalesMetrics.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Error retrieving paginated tasks: " + ex.Message);
+                _logger.LogError(ex, "Error retrieving paginated tasks");
             }
 
             return (tasks, totalRecords, filteredRecords);
@@ -976,7 +982,7 @@ namespace SalesMetrics.Controllers
 
         private List<SalesTask> GetTasksByUserId(int users_Id, int locationId)
         {
-            string connectionString = _configuration.GetConnectionString("SalesMetrics");
+            string? connectionString = _configuration.GetConnectionString("SalesMetrics");
             var tasks = new List<SalesTask>();
 
             try
@@ -1039,7 +1045,7 @@ namespace SalesMetrics.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Error retrieving tasks by User: " + ex.Message);
+                _logger.LogError(ex, "Error retrieving tasks by user");
                 // You could also log this exception or rethrow it as needed
             }
 
@@ -1053,11 +1059,11 @@ namespace SalesMetrics.Controllers
             // Management roles see who the task is assigned to in the title
             if (RoleHelper.CanManageLocationTasks(roleId))
             {
-                return (assignedUser != null ? assignedUser.NameandInitial() + " - " : "") + task.Title;
+                return (assignedUser != null ? assignedUser.NameandInitial() + " - " : "") + (task.Title ?? "");
             }
             else
             {
-                return task.Title;
+                return task.Title ?? "";
             }
         }
 
@@ -1101,7 +1107,7 @@ namespace SalesMetrics.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[DB ERROR] Failed to insert task: {ex.Message}");
+                _logger.LogError(ex, "Failed to insert task");
                 throw;
             }
         }
@@ -1119,8 +1125,8 @@ namespace SalesMetrics.Controllers
 
             var users = GetActiveUsers(); // This method is already defined in your controller
 
-            string title = null;
-            string description = null;
+            string? title = null;
+            string? description = null;
 
             switch (source.ToLower())
             {
@@ -1150,8 +1156,8 @@ namespace SalesMetrics.Controllers
             {
                 Task = new TaskCreateViewModel
                 {
-                    Title = title,
-                    Description = description,
+                    Title = title ?? "",
+                    Description = description ?? "",
                     DueDateDate = calcDueDate,
                     DueDateTime = calcDueTime,
                     DueDate = defaultDueDate, // Default to 1 day from now
@@ -1200,13 +1206,13 @@ namespace SalesMetrics.Controllers
             {
                 Task = new TaskCreateViewModel
                 {
-                    Title = task.Title,
-                    Description = task.Description,
+                    Title = task.Title ?? "",
+                    Description = task.Description ?? "",
                     DueDate = task.DueDate ?? DateTime.Now,
-                    Status = task.Status,
-                    Property = task.Property,
+                    Status = task.Status ?? "",
+                    Property = task.Property ?? "",
                     AssignedTo = task.AssignedTo ?? 0,
-                    Type = task.Type,
+                    Type = task.Type ?? "",
                     TaskID = task.TaskID
                 },
                 Users = GetActiveUsers(),
@@ -1219,7 +1225,7 @@ namespace SalesMetrics.Controllers
         [HttpPost]
         public async Task<IActionResult> UpdateFromAdmin(TaskModalViewModel modal)
         {
-            string connStr = _configuration.GetConnectionString("SalesMetrics");
+            string? connStr = _configuration.GetConnectionString("SalesMetrics");
             var userId = Convert.ToInt32(HttpContext.Session.GetString("UserId"));
             int users_Id = int.Parse(User.FindFirst("Users_Id")?.Value ?? "0");
 
@@ -1319,13 +1325,10 @@ namespace SalesMetrics.Controllers
                         var accessToken = reader["GoogleAccessToken"]?.ToString();
                         var refreshToken = reader["GoogleRefreshToken"]?.ToString();
 
+                        // Only call Google Calendar if we have a real stored GoogleEventId
                         if (!string.IsNullOrWhiteSpace(accessToken) && !string.IsNullOrWhiteSpace(refreshToken) && !string.IsNullOrWhiteSpace(googleEventId))
                         {
-                            var calendarService = new GoogleCalendarService(_configuration);
-
-                            // NOTE: You need to store & retrieve GoogleEventId in Tasks table for accurate updates/deletes
-                            // Assuming you're doing that and it’s mapped to the TaskID for now:
-                            await calendarService.UpdateTaskEventAsync(users_Id, accessToken, refreshToken, googleEventId, updatedTask.Title, updatedTask.Description, updatedTask.DueDate);
+                            await _calendarService.UpdateTaskEventAsync(users_Id, accessToken, refreshToken, googleEventId, updatedTask.Title ?? "", updatedTask.Description ?? "", updatedTask.DueDate);
                         }
                     }
                 }
@@ -1356,7 +1359,7 @@ namespace SalesMetrics.Controllers
         [HttpPost]
         public async Task<IActionResult> Update(TaskModalViewModel modal)
         {
-            string connStr = _configuration.GetConnectionString("SalesMetrics");
+            string? connStr = _configuration.GetConnectionString("SalesMetrics");
             
             var userId = Convert.ToInt32(HttpContext.Session.GetString("UserId"));
             int users_Id = int.Parse(User.FindFirst("Users_Id")?.Value ?? "0");
@@ -1425,11 +1428,21 @@ namespace SalesMetrics.Controllers
                         int rowsAffected = cmd.ExecuteNonQuery();
                         if (rowsAffected == 0)
                         {
-                            Console.WriteLine($"[WARNING] No rows updated. TaskID = {updatedTask.TaskID}");
+                            _logger.LogWarning("No rows updated for TaskID={TaskId}", updatedTask.TaskID);
                             TempData["Error"] = "Update failed. Task not found or no changes applied.";
                             return RedirectToAction("Task");
                         }
                         //cmd.ExecuteNonQuery();
+                    }
+
+                    // Fetch stored GoogleEventId for this task
+                    string? googleEventIdForUpdate = null;
+                    var evtCmd = new SqlCommand("SELECT GoogleEventId FROM Tasks WHERE TaskID = @TaskID", conn);
+                    evtCmd.Parameters.AddWithValue("@TaskID", updatedTask.TaskID);
+                    using (var evtReader = evtCmd.ExecuteReader())
+                    {
+                        if (evtReader.Read())
+                            googleEventIdForUpdate = evtReader["GoogleEventId"]?.ToString();
                     }
 
                     // Pull Google token info
@@ -1441,18 +1454,14 @@ namespace SalesMetrics.Controllers
                         var accessToken = reader["GoogleAccessToken"]?.ToString();
                         var refreshToken = reader["GoogleRefreshToken"]?.ToString();
 
-                        if (!string.IsNullOrWhiteSpace(accessToken) && !string.IsNullOrWhiteSpace(refreshToken))
+                        if (!string.IsNullOrWhiteSpace(accessToken) && !string.IsNullOrWhiteSpace(refreshToken) && !string.IsNullOrWhiteSpace(googleEventIdForUpdate))
                         {
-                            var calendarService = new GoogleCalendarService(_configuration);
-
-                            // NOTE: You need to store & retrieve GoogleEventId in Tasks table for accurate updates/deletes
-                            // Assuming you're doing that and it’s mapped to the TaskID for now:
-                            await calendarService.UpdateTaskEventAsync(userId, accessToken, refreshToken, updatedTask.TaskID.ToString(), updatedTask.Title, updatedTask.Description, updatedTask.DueDate);
+                            await _calendarService.UpdateTaskEventAsync(userId, accessToken, refreshToken, googleEventIdForUpdate, updatedTask.Title ?? "", updatedTask.Description ?? "", updatedTask.DueDate);
                         }
                     }
                 }
 
-                TempData["Success"] = $"Task {updatedTask.TaskID.ToString()}  |  {updatedTask.Title.ToString()} | has been updated.";
+                TempData["Success"] = $"Task {updatedTask?.TaskID}  |  {updatedTask?.Title} | has been updated.";
 
             }
             catch (Exception ex)
@@ -1476,6 +1485,16 @@ namespace SalesMetrics.Controllers
                 using var conn = new SqlConnection(_configuration.GetConnectionString("SalesMetrics"));
                 await conn.OpenAsync();
 
+                // Get GoogleEventId for this task
+                string? googleEventId = null;
+                var eventIdCmd = new SqlCommand("SELECT GoogleEventId FROM Tasks WHERE TaskID = @TaskID", conn);
+                eventIdCmd.Parameters.AddWithValue("@TaskID", taskId);
+                using (var eReader = await eventIdCmd.ExecuteReaderAsync())
+                {
+                    if (await eReader.ReadAsync())
+                        googleEventId = eReader["GoogleEventId"]?.ToString();
+                }
+
                 // Get the GoogleAccessToken and RefreshToken
                 var tokenCmd = new SqlCommand("SELECT GoogleAccessToken, GoogleRefreshToken FROM Users WHERE Users_ID = @Users_ID", conn);
                 tokenCmd.Parameters.AddWithValue("@Users_ID", users_Id);
@@ -1490,11 +1509,10 @@ namespace SalesMetrics.Controllers
                     }
                 }
 
-                // Delete the Google Calendar event first
-                if (!string.IsNullOrEmpty(accessToken) && !string.IsNullOrEmpty(refreshToken))
+                // Delete the Google Calendar event first (using stored GoogleEventId, not local taskId)
+                if (!string.IsNullOrEmpty(accessToken) && !string.IsNullOrEmpty(refreshToken) && !string.IsNullOrEmpty(googleEventId))
                 {
-                    var calendarService = new GoogleCalendarService(_configuration);
-                    await calendarService.DeleteTaskEventAsync(users_Id, accessToken, refreshToken, taskId.ToString());
+                    await _calendarService.DeleteTaskEventAsync(users_Id, accessToken, refreshToken, googleEventId);
                 }
 
                 // Delete from DB
@@ -1534,6 +1552,10 @@ namespace SalesMetrics.Controllers
         {
             try
             {
+                string? googleEventId = null;
+                int? assignedUserId = null;
+                string? accessToken = null, refreshToken = null;
+
                 using (SqlConnection conn = new SqlConnection(_configuration.GetConnectionString("SalesMetrics")))
                 {
                     conn.Open();
@@ -1556,6 +1578,55 @@ namespace SalesMetrics.Controllers
                         cmd.Parameters.AddWithValue("@TaskID", model.TaskId);
                         cmd.ExecuteNonQuery();
                     }
+
+                    // Fetch GoogleEventId and AssignedTo for calendar sync
+                    var syncInfoCmd = new SqlCommand("SELECT GoogleEventId, AssignedTo FROM Tasks WHERE TaskID = @TaskID", conn);
+                    syncInfoCmd.Parameters.AddWithValue("@TaskID", model.TaskId);
+                    using (var syncReader = syncInfoCmd.ExecuteReader())
+                    {
+                        if (syncReader.Read())
+                        {
+                            googleEventId = syncReader["GoogleEventId"]?.ToString();
+                            assignedUserId = syncReader.IsDBNull(syncReader.GetOrdinal("AssignedTo")) ? (int?)null : syncReader.GetInt32(syncReader.GetOrdinal("AssignedTo"));
+                        }
+                    }
+
+                    // Fetch Google tokens for the assigned user
+                    if (assignedUserId.HasValue)
+                    {
+                        var tokenCmd = new SqlCommand("SELECT GoogleAccessToken, GoogleRefreshToken FROM Users WHERE Users_ID = @Users_ID", conn);
+                        tokenCmd.Parameters.AddWithValue("@Users_ID", assignedUserId.Value);
+                        using var tokenReader = tokenCmd.ExecuteReader();
+                        if (tokenReader.Read())
+                        {
+                            accessToken = tokenReader["GoogleAccessToken"]?.ToString();
+                            refreshToken = tokenReader["GoogleRefreshToken"]?.ToString();
+                        }
+                    }
+                }
+
+                // Sync to Google Calendar: delete event when task is Completed or Cancelled
+                if (!string.IsNullOrEmpty(googleEventId) && !string.IsNullOrEmpty(accessToken) && !string.IsNullOrEmpty(refreshToken) && assignedUserId.HasValue)
+                {
+                    try
+                    {
+                        if (model.NewStatus == "Completed" || model.NewStatus == "Cancelled")
+                        {
+                            await _calendarService.DeleteTaskEventAsync(assignedUserId.Value, accessToken, refreshToken, googleEventId);
+
+                            // Clear GoogleEventId in DB since the event is removed
+                            using var cleanConn = new SqlConnection(_configuration.GetConnectionString("SalesMetrics"));
+                            await cleanConn.OpenAsync();
+                            var clearCmd = new SqlCommand("UPDATE Tasks SET GoogleEventId = NULL, IsSyncedToGoogle = 0 WHERE TaskID = @TaskID", cleanConn);
+                            clearCmd.Parameters.AddWithValue("@TaskID", model.TaskId);
+                            await clearCmd.ExecuteNonQueryAsync();
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Google Calendar sync failed for TaskID={TaskId}", model.TaskId);
+                        // Non-fatal — status was already updated in DB
+                    }
                 }
 
                 // Send notification about status change
@@ -1569,7 +1640,7 @@ namespace SalesMetrics.Controllers
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error sending status change notification: {ex.Message}");
+                    _logger.LogError(ex, "Error sending status change notification");
                 }
 
                 return Json(new { success = true });
@@ -1591,8 +1662,7 @@ namespace SalesMetrics.Controllers
                 return RedirectToAction("YardiProperties", "Yardi");
             }
 
-            Console.WriteLine($"[DEBUG] Incoming Task.AssignedTo = {modal.Task?.AssignedTo}");
-            Console.WriteLine($"[DEBUG] ModelState.IsValid = {ModelState.IsValid}");
+            _logger.LogDebug("Incoming Task.AssignedTo={AssignedTo}, ModelState.IsValid={IsValid}", modal.Task?.AssignedTo, ModelState.IsValid);
 
             // ✅ Convert TaskCreateViewModel ➜ SalesTask
             var task = new SalesTask
@@ -1617,7 +1687,7 @@ namespace SalesMetrics.Controllers
             // Management roles can assign tasks to team members
             if (RoleHelper.CanManageLocationTasks(roleId))
             {
-                if (model.AssignedTo == null || model.AssignedTo == 0)
+                if (model.AssignedTo == 0)
                 {
                     TempData["Error"] = "Please select a valid user to assign the task.";
                     return RedirectToAction("YardiProperties", "Yardi");
@@ -1637,7 +1707,7 @@ namespace SalesMetrics.Controllers
             }
 
 
-            Console.WriteLine($"[DEBUG] Creating Yardi Task: PropertyID = {task.PropertyID}, Property = {task.Property}");
+            _logger.LogDebug("Creating Yardi Task: PropertyID={PropertyId}, Property={Property}", task.PropertyID, task.Property);
 
             int taskId = SaveTaskToDatabase(task);
             if (taskId <= 0)
@@ -1713,7 +1783,7 @@ namespace SalesMetrics.Controllers
             }
 
             // ✅ ADD THIS BLOCK before the try-catch
-            if (model.AssignedTo == null || model.AssignedTo == 0)
+            if (model.AssignedTo == 0)
             {
                 model.AssignedTo = int.TryParse(HttpContext.Session.GetString("Users_ID"), out var fallbackAssignedTo)
                     ? fallbackAssignedTo
@@ -1790,7 +1860,7 @@ namespace SalesMetrics.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error creating task: {ex.Message}");
+                _logger.LogError(ex, "Error creating task");
                 TempData["Error"] = $"Error creating Task for {model.Property}";
                 //return StatusCode(500, $"Internal server error: {ex.Message}");
                 return Json(new { success = false, message = "Internal server error." });
@@ -1819,7 +1889,7 @@ namespace SalesMetrics.Controllers
                 modal.LoggedInUserId = users_Id;
 
                 // Determine AssignedTo: Management roles can assign to team members, others assign to themselves
-                Console.WriteLine("AssignedTo in CreateFromWorkOrder: " + model.AssignedTo);
+                _logger.LogDebug("AssignedTo in CreateFromWorkOrder: {AssignedTo}", model.AssignedTo);
 
                 int assignedTo = (RoleHelper.CanManageLocationTasks(roleId) ? model.AssignedTo : users_Id);
 
@@ -1882,7 +1952,7 @@ namespace SalesMetrics.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error creating task: {ex.Message}");
+                _logger.LogError(ex, "Error creating task");
                 return StatusCode(500, $"Internal server error: {ex.Message}");
             }
         }
@@ -1913,7 +1983,7 @@ namespace SalesMetrics.Controllers
                 }
 
                 // Determine AssignedTo: Management roles can assign to team members, others assign to themselves
-                Console.WriteLine("AssignedTo in CreateFromWorkOrder: " + model.AssignedTo);
+                _logger.LogDebug("AssignedTo in CreateFromWorkOrder: {AssignedTo}", model.AssignedTo);
 
                 int assignedTo = (RoleHelper.CanManageLocationTasks(roleId) ? model.AssignedTo : sessionUserId);
 
@@ -1949,7 +2019,7 @@ namespace SalesMetrics.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error creating task: {ex.Message}");
+                _logger.LogError(ex, "Error creating task");
                 return StatusCode(500, $"Internal server error: {ex.Message}");
             }
         }
@@ -2101,7 +2171,7 @@ namespace SalesMetrics.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error sending note notification: {ex.Message}");
+                _logger.LogError(ex, "Error sending note notification");
             }
 
             return Ok();
@@ -2223,7 +2293,7 @@ namespace SalesMetrics.Controllers
                 // Handle invalid model state
                 TempData["TaskFormError"] = "Please complete all required fields before submitting the task.";
                 // make sure returnUrl is valid (fallback if null)
-                return Redirect(returnUrl ?? Url.Action("Schedule", "Tasks"));
+                return Redirect(returnUrl ?? Url.Action("Schedule", "Tasks") ?? "/Tasks/Schedule");
             }
 
             switch (model.Task.Source)
@@ -2260,14 +2330,14 @@ namespace SalesMetrics.Controllers
             {
                 Task = new TaskCreateViewModel
                 {
-                    Title = task.Title,
-                    Description = task.Description,
+                    Title = task.Title ?? "",
+                    Description = task.Description ?? "",
                     DueDate = due,
                     DueDateDate = due.ToString("yyyy-MM-dd"), // ✅ Fix for HTML5 <input type="date">
                     DueDateTime = due.ToString("hh:mm tt"),
-                    Type = task.Type,
+                    Type = task.Type ?? "",
                     Status = "Pending",
-                    Property = task.Property,
+                    Property = task.Property ?? "",
                     PropertyID = task.PropertyID,
                     AssignedTo = task.AssignedTo ?? users_Id
                 },
@@ -2304,33 +2374,41 @@ namespace SalesMetrics.Controllers
 
                 if (!string.IsNullOrWhiteSpace(accessToken) && !string.IsNullOrWhiteSpace(refreshToken))
                 {
-                    var tasksService = new GoogleTasksService(_configuration);
-                    googleTaskId = await tasksService.CreateTaskAsync(
-                        accessToken, refreshToken, task.AssignedTo.ToString(), task.TaskID.ToString(), task.Title, task.Description, task.DueDate
-                    );
-
-                    if (task.Type?.Equals("QC", StringComparison.OrdinalIgnoreCase) == true || task.Type?.Equals("Site Visit", StringComparison.OrdinalIgnoreCase) == true)
+                    try
                     {
-                        var calendarService = new GoogleCalendarService(_configuration);
-                        googleEventId = await calendarService.AddTaskEventAsync(
-                            task.AssignedTo ?? 0, accessToken, refreshToken, task.TaskID.ToString(), task.Title, task.Description, task.DueDate ?? DateTime.Now
+                        googleTaskId = await _tasksService.CreateTaskAsync(
+                            accessToken, refreshToken, task.AssignedTo?.ToString() ?? "", task.TaskID.ToString(), task.Title ?? "", task.Description ?? "", task.DueDate
                         );
+
+                        if (task.Type?.Equals("QC", StringComparison.OrdinalIgnoreCase) == true || task.Type?.Equals("Site Visit", StringComparison.OrdinalIgnoreCase) == true)
+                        {
+                            googleEventId = await _calendarService.AddTaskEventAsync(
+                                task.AssignedTo ?? 0, accessToken, refreshToken, task.TaskID.ToString(), task.Title ?? "", task.Description ?? "", task.DueDate ?? DateTime.Now
+                            );
+                        }
+
+                        // Update DB with Google info
+                        var updateCmd = new SqlCommand(@"
+                            UPDATE Tasks
+                            SET GoogleTaskId = @GoogleTaskId,
+                                GoogleEventId = @GoogleEventId,
+                                IsSyncedToGoogle = 1
+                            WHERE TaskID = @TaskID
+                        ", conn);
+
+                        updateCmd.Parameters.AddWithValue("@GoogleTaskId", (object?)googleTaskId ?? DBNull.Value);
+                        updateCmd.Parameters.AddWithValue("@GoogleEventId", (object?)googleEventId ?? DBNull.Value);
+                        updateCmd.Parameters.AddWithValue("@TaskID", task.TaskID);
+
+                        await updateCmd.ExecuteNonQueryAsync();
                     }
-
-                    // Update DB with Google info
-                    var updateCmd = new SqlCommand(@"
-                        UPDATE Tasks
-                        SET GoogleTaskId = @GoogleTaskId,
-                            GoogleEventId = @GoogleEventId,
-                            IsSyncedToGoogle = 1
-                        WHERE TaskID = @TaskID
-                    ", conn);
-
-                    updateCmd.Parameters.AddWithValue("@GoogleTaskId", (object?)googleTaskId ?? DBNull.Value);
-                    updateCmd.Parameters.AddWithValue("@GoogleEventId", (object?)googleEventId ?? DBNull.Value);
-                    updateCmd.Parameters.AddWithValue("@TaskID", task.TaskID);
-
-                    await updateCmd.ExecuteNonQueryAsync();
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Google Sync failed for TaskID={TaskId}", task.TaskID);
+                        // Return nulls — task was already saved to DB; user can manually sync via 'Sync Now'
+                        googleTaskId = null;
+                        googleEventId = null;
+                    }
                 }
             }
 
@@ -2355,15 +2433,17 @@ namespace SalesMetrics.Controllers
             {
                 if (await reader.ReadAsync())
                 {
+                    var dueDateOrd = reader.GetOrdinal("DueDate");
+                    var assignedToOrd = reader.GetOrdinal("AssignedTo");
                     task = new SalesTask
                     {
                         TaskID = reader.GetInt32(reader.GetOrdinal("TaskID")),
-                        Title = reader.GetString(reader.GetOrdinal("Title")),
+                        Title = reader.IsDBNull(reader.GetOrdinal("Title")) ? "" : reader.GetString(reader.GetOrdinal("Title")),
                         Description = reader["Description"]?.ToString(),
-                        DueDate = reader.GetDateTime(reader.GetOrdinal("DueDate")),
+                        DueDate = reader.IsDBNull(dueDateOrd) ? (DateTime?)null : reader.GetDateTime(dueDateOrd),
                         Type = reader["Type"]?.ToString(),
-                        AssignedTo = reader.GetInt32(reader.GetOrdinal("AssignedTo")),
-                        // add IsSyncedToGoogle bit from SQL
+                        AssignedTo = reader.IsDBNull(assignedToOrd) ? (int?)null : reader.GetInt32(assignedToOrd),
+                        GoogleEventId = reader["GoogleEventId"]?.ToString(),
                         IsSyncedToGoogle = reader.IsDBNull(reader.GetOrdinal("IsSyncedToGoogle")) ? false : reader.GetBoolean(reader.GetOrdinal("IsSyncedToGoogle"))
                     };
                 }
@@ -2395,37 +2475,39 @@ namespace SalesMetrics.Controllers
             }
 
             // Perform Google sync
-            var tasksService = new GoogleTasksService(_configuration);
-            var calendarService = new GoogleCalendarService(_configuration);
-
-            var googleTaskId = await tasksService.CreateTaskAsync(accessToken, refreshToken, task.AssignedTo.ToString(), task.TaskID.ToString(), task.Title, task.Description, task.DueDate);
-            string? googleEventId = null;
-
-            if (task.Type?.Equals("QC", StringComparison.OrdinalIgnoreCase) == true || task.Type?.Equals("Site Visit", StringComparison.OrdinalIgnoreCase) == true)
+            try
             {
-                googleEventId = await calendarService.AddTaskEventAsync(task.AssignedTo.Value, accessToken, refreshToken, task.TaskID.ToString(), task.Title, task.Description, task.DueDate.Value);
+                var googleTaskId = await _tasksService.CreateTaskAsync(accessToken, refreshToken, task.AssignedTo?.ToString() ?? "", task.TaskID.ToString(), task.Title ?? "", task.Description ?? "", task.DueDate);
+                string? googleEventId = null;
+
+                if (task.DueDate.HasValue &&
+                    (task.Type?.Equals("QC", StringComparison.OrdinalIgnoreCase) == true || task.Type?.Equals("Site Visit", StringComparison.OrdinalIgnoreCase) == true))
+                {
+                    googleEventId = await _calendarService.AddTaskEventAsync(task.AssignedTo ?? 0, accessToken, refreshToken, task.TaskID.ToString(), task.Title ?? "", task.Description ?? "", task.DueDate.Value);
+                }
+
+                var updateCmd = new SqlCommand(@"
+                    UPDATE Tasks SET
+                        GoogleTaskId = @GoogleTaskId,
+                        GoogleEventId = @GoogleEventId,
+                        IsSyncedToGoogle = 1
+                    WHERE TaskID = @TaskID
+                ", conn);
+
+                updateCmd.Parameters.AddWithValue("@GoogleTaskId", (object?)googleTaskId ?? DBNull.Value);
+                updateCmd.Parameters.AddWithValue("@GoogleEventId", (object?)googleEventId ?? DBNull.Value);
+                updateCmd.Parameters.AddWithValue("@TaskID", taskId);
+
+                await updateCmd.ExecuteNonQueryAsync();
+
+                TempData["Success"] = "Task synced with Google.";
             }
-            else
+            catch (Exception ex)
             {
-                TempData["Error"] = "Missing AssignedTo or DueDate — cannot sync with Google Calendar.";
-                return RedirectToAction("Task");
+                TempData["Error"] = "Google sync failed. Please reconnect your Google account from your profile and try again.";
+                _logger.LogError(ex, "ManualGoogleSync failed for TaskID={TaskId}", taskId);
             }
 
-            var updateCmd = new SqlCommand(@"
-                UPDATE Tasks SET
-                    GoogleTaskId = @GoogleTaskId,
-                    GoogleEventId = @GoogleEventId,
-                    IsSyncedToGoogle = 1
-                WHERE TaskID = @TaskID
-            ", conn);
-
-            updateCmd.Parameters.AddWithValue("@GoogleTaskId", (object?)googleTaskId ?? DBNull.Value);
-            updateCmd.Parameters.AddWithValue("@GoogleEventId", (object?)googleEventId ?? DBNull.Value);
-            updateCmd.Parameters.AddWithValue("@TaskID", taskId);
-
-            await updateCmd.ExecuteNonQueryAsync();
-
-            TempData["Success"] = "Task synced with Google.";
             return RedirectToAction("Task");
         }
 
@@ -2498,7 +2580,7 @@ namespace SalesMetrics.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error in GetMyTasksData: {ex.Message}");
+                _logger.LogError(ex, "Error in GetMyTasksData");
                 return Json(new { draw = 1, recordsTotal = 0, recordsFiltered = 0, data = new List<object>(), error = ex.Message });
             }
         }
@@ -2511,7 +2593,7 @@ namespace SalesMetrics.Controllers
         {
             string cacheKey = $"Users_Location_{locationId}_Role_{roleId}";
 
-            if (!_cache.TryGetValue(cacheKey, out List<User> users))
+            if (!_cache.TryGetValue(cacheKey, out List<User>? users))
             {
                 users = GetAllUsersForTaskDisplay(locationId, roleId);
 
@@ -2559,10 +2641,10 @@ namespace SalesMetrics.Controllers
         public int RoleId { get; set; }
         public int SalesmanId { get; set; }
         public int LocationId { get; set; }
-        public string Username { get; set; }
-        public string FName { get; set; }
-        public string LName { get; set; }
-        public string Email { get; set; }
-        public string FullName { get; set; }
+        public string Username { get; set; } = "";
+        public string FName { get; set; } = "";
+        public string LName { get; set; } = "";
+        public string Email { get; set; } = "";
+        public string FullName { get; set; } = "";
     }
 }

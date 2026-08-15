@@ -63,7 +63,7 @@ namespace SalesMetrics.Models
         public string Username { get; set; }
         public string? Password { get; set; }
         public int Users_Id { get; set; }
-        public int UserId { get; set; }
+        public int? UserId { get; set; }
         public int RoleId { get; set; }
         public int LocationId { get; set; }
         public int? SalesmanId { get; set; }
@@ -84,6 +84,59 @@ namespace SalesMetrics.Models
         public string? Category { get; set; }
         public int DisplayOrder { get; set; }
     }
+
+    public class BulkPermissionViewModel
+    {
+        public int SelectedFeatureId { get; set; }
+        public int? SelectedRoleId { get; set; }
+        public int? SelectedLocationId { get; set; }
+        public string? FeatureName { get; set; }
+        public List<SelectListItem> AllFeatures { get; set; } = new();
+        public List<SelectListItem> AllRoles { get; set; } = new();
+        public List<BulkUserPermissionRow> Users { get; set; } = new();
+    }
+
+    public class BulkUserPermissionRow
+    {
+        public int Users_ID { get; set; }
+        public string FullName { get; set; } = "";
+        public string RoleName { get; set; } = "";
+        public int RoleId { get; set; }
+        public string Location { get; set; } = "";
+        public int LocationId { get; set; }
+        public bool HasAccess { get; set; }
+    }
+
+    // ── Bulk Location Assignment ──────────────────────────────────────────────
+
+    public class BulkLocationAssignmentViewModel
+    {
+        /// <summary>The location being assigned / managed in this bulk operation.</summary>
+        public int SelectedLocationId { get; set; }
+        /// <summary>Optional role filter applied to the user list.</summary>
+        public int? FilterRoleId { get; set; }
+        /// <summary>Optional primary-location filter applied to the user list.</summary>
+        public int? FilterPrimaryLocationId { get; set; }
+        public string? LocationName { get; set; }
+        public List<SelectListItem> AllLocations { get; set; } = new();
+        public List<SelectListItem> AllRoles { get; set; } = new();
+        public List<BulkUserLocationRow> Users { get; set; } = new();
+    }
+
+    public class BulkUserLocationRow
+    {
+        public int Users_ID { get; set; }
+        public string FullName { get; set; } = "";
+        public string RoleName { get; set; } = "";
+        public int RoleId { get; set; }
+        /// <summary>Display name of the user's primary location.</summary>
+        public string PrimaryLocation { get; set; } = "";
+        public int PrimaryLocationId { get; set; }
+        /// <summary>True if the user already has the target location assigned.</summary>
+        public bool IsAssigned { get; set; }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
 
     public class FlaggedUserViewModel
     {

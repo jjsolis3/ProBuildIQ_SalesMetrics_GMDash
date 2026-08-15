@@ -1,22 +1,11 @@
 ﻿@model SalesMetrics.Models.ErrorLog
 @{
     ViewData["Title"] = "Error Details";
+    ViewBag.PTitle = "Error Log";
+    ViewBag.PLink = "/ErrorLog";
 }
 
 <div class="container-fluid">
-    <div class="row">
-        <div class="col-12">
-            <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                <h4 class="mb-sm-0">Error Details</h4>
-                <div class="page-title-right">
-                    <a href="@Url.Action("Index")" class="btn btn-secondary">
-                        <i class="fas fa-arrow-left"></i> Back to List
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <div class="row">
         <div class="col-lg-8">
             <!-- Error Information -->

@@ -59,14 +59,31 @@ namespace SalesMetrics.Controllers
             var currentLocation = HttpContext.Session.GetString("OfficeLocation") ?? "LAX";
             var roleId = HttpContext.Session.GetString("RoleId") ?? "0";
 
+            var isAdmin = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_ADMIN");
+
             // Get all reports the user can access
-            var reports = await _context.ReportDefinitions
+            var allReports = await _context.ReportDefinitions
                 .Where(r => r.IsActive)
                 .OrderByDescending(r => r.ModifiedDate ?? r.CreatedDate)
                 .ToListAsync();
 
-            // TODO: Filter reports based on user's role and location
-            // For now, show all active reports
+            // For restricted reports, non-admins only see reports they have explicit access to
+            List<SalesMetrics.Data.Entities.QueryBuilder.ReportDefinitionEntity> reports;
+            if (isAdmin)
+            {
+                reports = allReports;
+            }
+            else
+            {
+                var accessibleKeys = await _context.ReportAccess
+                    .Where(a => a.Users_ID == userId && a.ReportKey.StartsWith("builder:"))
+                    .Select(a => a.ReportKey)
+                    .ToListAsync();
+
+                reports = allReports
+                    .Where(r => !r.IsAccessRestricted || accessibleKeys.Contains($"builder:{r.ReportDefinitionId}"))
+                    .ToList();
+            }
 
             var viewModel = new ReportBuilderIndexViewModel
             {
@@ -76,15 +93,16 @@ namespace SalesMetrics.Controllers
                     Name = r.Name ?? "Untitled Report",
                     Description = r.Description ?? "",
                     DataSourceType = r.DataSourceType ?? "SQL",
-                    CreatedBy = "User " + r.CreatedByUserId, // TODO: Join with Users table to get name
+                    CreatedBy = "User " + r.CreatedByUserId,
                     CreatedDate = r.CreatedDate,
                     LastModifiedDate = r.ModifiedDate ?? r.CreatedDate,
-                    IsShared = !string.IsNullOrEmpty(r.AllowedRoles) || !string.IsNullOrEmpty(r.AllowedLocations)
+                    IsShared = !string.IsNullOrEmpty(r.AllowedRoles) || !string.IsNullOrEmpty(r.AllowedLocations),
+                    IsAccessRestricted = r.IsAccessRestricted
                 }).ToList(),
                 CanCreateReports = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_CREATE"),
                 CanEditReports = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_EDIT"),
                 CanDeleteReports = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_DELETE"),
-                IsAdmin = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_ADMIN")
+                IsAdmin = isAdmin
             };
 
             return View(viewModel);
@@ -746,7 +764,7 @@ namespace SalesMetrics.Controllers
 
                 // Execute query with limit
                 var connStr = _configuration.GetConnectionString("SalesMetrics");
-                using var conn = new System.Data.SqlClient.SqlConnection(connStr);
+                using var conn = new Microsoft.Data.SqlClient.SqlConnection(connStr);
                 await conn.OpenAsync();
 
                 // For SQL mode, switch to the user's CompUFloor database so unqualified
@@ -761,7 +779,7 @@ namespace SalesMetrics.Controllers
 
                 // Resolve {BRANCH_DB} placeholder and any hardcoded branch DB names
                 var sqlToExecute = ResolveBranchDatabase(sql, compuFloorDb);
-                var cmd = new System.Data.SqlClient.SqlCommand();
+                var cmd = new Microsoft.Data.SqlClient.SqlCommand();
                 cmd.Connection = conn;
                 cmd.CommandTimeout = 30; // 30 seconds timeout
 
@@ -1141,6 +1159,235 @@ namespace SalesMetrics.Controllers
             return Json(new { success = true, message = "Report deleted successfully" });
         }
 
+        // ======================================================================
+        // Per-Report Access Management (Query Builder reports)
+        // ======================================================================
+
+        /// <summary>
+        /// Returns the current access list and all active users for a builder report.
+        /// Requires REPORT_BUILDER_ADMIN permission.
+        /// </summary>
+        [HttpGet]
+        public async Task<IActionResult> GetBuilderReportAccess(int reportId)
+        {
+            var userId = GetCurrentUserId();
+            var isAdmin = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_ADMIN");
+            if (!isAdmin) return AccessDeniedJson();
+
+            var report = await _context.ReportDefinitions
+                .FirstOrDefaultAsync(r => r.ReportDefinitionId == reportId && r.IsActive);
+            if (report == null)
+                return Json(new { success = false, message = "Report not found." });
+
+            var reportKey = $"builder:{reportId}";
+
+            var grantedUsers = await _context.ReportAccess
+                .Where(a => a.ReportKey == reportKey)
+                .Include(a => a.User)
+                .Select(a => new
+                {
+                    accessId    = a.AccessId,
+                    usersId     = a.Users_ID,
+                    fullName    = a.User != null ? a.User.FirstName + " " + a.User.LastName : "Unknown",
+                    grantedDate = a.GrantedDate.ToString("MM/dd/yyyy")
+                })
+                .ToListAsync();
+
+            var allUsers = await _context.Users
+                .Where(u => u.IsActive)
+                .OrderBy(u => u.FirstName).ThenBy(u => u.LastName)
+                .Select(u => new { usersId = u.Users_ID, fullName = u.FirstName + " " + u.LastName, roleId = u.RoleId })
+                .ToListAsync();
+
+            return Json(new
+            {
+                success = true,
+                grantedUsers,
+                allUsers,
+                isRestricted = report.IsAccessRestricted
+            });
+        }
+
+        /// <summary>
+        /// Toggles the IsAccessRestricted flag on a builder report.
+        /// </summary>
+        [HttpPost]
+        public async Task<IActionResult> SetBuilderReportRestricted([FromBody] SetRestrictedRequest request)
+        {
+            var userId = GetCurrentUserId();
+            var isAdmin = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_ADMIN");
+            if (!isAdmin) return AccessDeniedJson();
+
+            if (request == null || request.ReportId <= 0)
+                return Json(new { success = false, message = "No report was specified." });
+
+            try
+            {
+                var report = await _context.ReportDefinitions
+                    .FirstOrDefaultAsync(r => r.ReportDefinitionId == request.ReportId && r.IsActive);
+                if (report == null)
+                    return Json(new { success = false, message = "Report not found." });
+
+                report.IsAccessRestricted = request.IsRestricted;
+                report.ModifiedDate = DateTime.UtcNow;
+                report.ModifiedByUserId = userId;
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation(
+                    "User {UserId} set restriction={IsRestricted} on builder report {ReportId}",
+                    userId, request.IsRestricted, request.ReportId);
+
+                return Json(new { success = true, isRestricted = report.IsAccessRestricted });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to set restriction on builder report {ReportId}", request.ReportId);
+                return Json(new { success = false, message = "Could not update the restriction. Please try again." });
+            }
+        }
+
+        /// <summary>
+        /// Grants a user access to run a specific builder report.
+        ///
+        /// Granting the first user also switches the report's restriction on. Adding
+        /// someone to the list is an unambiguous statement that the report should be
+        /// limited to that list, and leaving the flag off meant the grant silently
+        /// changed nothing — which is exactly how this looked broken from the UI.
+        /// </summary>
+        [HttpPost]
+        public async Task<IActionResult> GrantBuilderReportAccess([FromBody] BuilderAccessRequest request)
+        {
+            var userId = GetCurrentUserId();
+            var isAdmin = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_ADMIN");
+            if (!isAdmin) return AccessDeniedJson();
+
+            if (request == null || request.ReportId <= 0 || request.UsersId <= 0)
+                return Json(new { success = false, message = "Select a user before granting access." });
+
+            var reportKey = $"builder:{request.ReportId}";
+
+            try
+            {
+                var report = await _context.ReportDefinitions
+                    .FirstOrDefaultAsync(r => r.ReportDefinitionId == request.ReportId && r.IsActive);
+                if (report == null)
+                    return Json(new { success = false, message = "Report not found." });
+
+                var existing = await _context.ReportAccess
+                    .FirstOrDefaultAsync(a => a.ReportKey == reportKey && a.Users_ID == request.UsersId);
+
+                if (existing == null)
+                {
+                    _context.ReportAccess.Add(new SalesMetrics.Data.Entities.ReportAccessEntity
+                    {
+                        ReportKey         = reportKey,
+                        Users_ID          = request.UsersId,
+                        GrantedDate       = DateTime.Now,
+                        GrantedByUsers_ID = userId > 0 ? userId : null
+                    });
+                }
+
+                // Turn the restriction on so the new grant actually takes effect.
+                if (!report.IsAccessRestricted)
+                {
+                    report.IsAccessRestricted = true;
+                    report.ModifiedDate = DateTime.UtcNow;
+                    report.ModifiedByUserId = userId;
+                }
+
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation(
+                    "User {UserId} granted user {GranteeId} access to builder report {ReportId}",
+                    userId, request.UsersId, request.ReportId);
+
+                return Json(new
+                {
+                    success = true,
+                    isRestricted = report.IsAccessRestricted,
+                    message = existing != null ? "User already has access." : null
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "Failed to grant user {GranteeId} access to builder report {ReportId}",
+                    request.UsersId, request.ReportId);
+                return Json(new { success = false, message = "Could not save the grant. Please try again." });
+            }
+        }
+
+        /// <summary>
+        /// Revokes a user's access to a builder report. Removing the last grantee also
+        /// lifts the restriction, so the report returns to its normal role-based access
+        /// instead of becoming reachable by admins only.
+        /// </summary>
+        [HttpPost]
+        public async Task<IActionResult> RevokeBuilderReportAccess([FromBody] BuilderAccessRevokeRequest request)
+        {
+            var userId = GetCurrentUserId();
+            var isAdmin = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_ADMIN");
+            if (!isAdmin) return AccessDeniedJson();
+
+            if (request == null || request.AccessId <= 0)
+                return Json(new { success = false, message = "No access record was specified." });
+
+            try
+            {
+                var entry = await _context.ReportAccess.FindAsync(request.AccessId);
+                if (entry == null) return Json(new { success = false, message = "Record not found." });
+
+                var reportKey = entry.ReportKey;
+                _context.ReportAccess.Remove(entry);
+                await _context.SaveChangesAsync();
+
+                var isRestricted = true;
+                var stillGranted = await _context.ReportAccess.AnyAsync(a => a.ReportKey == reportKey);
+                if (!stillGranted
+                    && reportKey.StartsWith("builder:", StringComparison.OrdinalIgnoreCase)
+                    && int.TryParse(reportKey.AsSpan("builder:".Length), out var reportId))
+                {
+                    var report = await _context.ReportDefinitions
+                        .FirstOrDefaultAsync(r => r.ReportDefinitionId == reportId);
+                    if (report is { IsAccessRestricted: true })
+                    {
+                        report.IsAccessRestricted = false;
+                        report.ModifiedDate = DateTime.UtcNow;
+                        report.ModifiedByUserId = userId;
+                        await _context.SaveChangesAsync();
+                    }
+                    isRestricted = false;
+                }
+
+                _logger.LogInformation(
+                    "User {UserId} revoked builder report access record {AccessId}",
+                    userId, request.AccessId);
+
+                return Json(new { success = true, isRestricted });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to revoke builder report access record {AccessId}", request.AccessId);
+                return Json(new { success = false, message = "Could not remove the grant. Please try again." });
+            }
+        }
+
+        /// <summary>
+        /// Returns a 403 carrying a JSON body. Plain <c>Forbid()</c> is handled by the
+        /// cookie handler, which answers an AJAX call with a 302 to the access-denied
+        /// page — the browser follows it and the caller receives an HTML document
+        /// instead of an error, so the failure never surfaced in the UI.
+        /// </summary>
+        private IActionResult AccessDeniedJson()
+        {
+            Response.StatusCode = StatusCodes.Status403Forbidden;
+            return Json(new { success = false, message = "You do not have permission to manage report access." });
+        }
+
+        public class SetRestrictedRequest  { public int ReportId { get; set; } public bool IsRestricted { get; set; } }
+        public class BuilderAccessRequest  { public int ReportId { get; set; } public int UsersId { get; set; } }
+        public class BuilderAccessRevokeRequest { public int AccessId { get; set; } }
+
         /// <summary>
         /// Detects parameters in SQL query (looks for @ParameterName patterns)
         /// </summary>
@@ -1332,6 +1579,20 @@ namespace SalesMetrics.Controllers
                     return NotFound();
                 }
 
+                // Per-report access check: if restricted, user must be in ReportAccess
+                var isAdmin = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_ADMIN");
+                if (!isAdmin && report.IsAccessRestricted)
+                {
+                    var reportKey = $"builder:{id}";
+                    var hasReportAccess = await _context.ReportAccess
+                        .AnyAsync(a => a.ReportKey == reportKey && a.Users_ID == userId);
+                    if (!hasReportAccess)
+                    {
+                        _logger.LogWarning("User {UserId} attempted to run restricted report {ReportId} without access", userId, id);
+                        return View("AccessDenied");
+                    }
+                }
+
                 _logger.LogInformation("User {UserId} loading report {ReportId}: {ReportName}", userId, id, report.Name);
 
                 // Check if report has parameters
@@ -1359,34 +1620,30 @@ namespace SalesMetrics.Controllers
                     }
                 }
 
-                // If report has parameters, show parameter entry form
-                // Resolve branch DB placeholder for display (show user their actual DB name)
+                // Always show the run form first so users can select the branch/location
+                // before executing. This is required for admin users who need to query
+                // a different branch than their current session location.
                 var currentLocation = HttpContext.Session.GetString("OfficeLocation") ?? "LAX";
                 var currentBranchDb = GetCompUFloorDatabaseName(currentLocation);
 
-                if (parameters.Any())
+                var viewModel = new ReportExecutionViewModel
                 {
-                    var viewModel = new ReportExecutionViewModel
-                    {
-                        ReportId = report.ReportDefinitionId,
-                        ReportName = report.Name ?? "Untitled Report",
-                        ReportDescription = report.Description ?? "",
-                        Category = report.Category ?? "Custom Reports",
-                        GeneratedSql = ResolveBranchDatabase(report.GeneratedSql ?? "", currentBranchDb),
-                        Parameters = parameters,
-                        QueryDefinitionJson = report.QueryDefinitionJson,
-                        ColumnNames = new List<string>(),
-                        ResultData = new List<Dictionary<string, object>>(),
-                        RowCount = 0,
-                        ExecutionTimeMs = 0,
-                        ExecutedDate = DateTime.Now
-                    };
+                    ReportId = report.ReportDefinitionId,
+                    ReportName = report.Name ?? "Untitled Report",
+                    ReportDescription = report.Description ?? "",
+                    Category = report.Category ?? "Custom Reports",
+                    GeneratedSql = ResolveBranchDatabase(report.GeneratedSql ?? "", currentBranchDb),
+                    Parameters = parameters,
+                    QueryDefinitionJson = report.QueryDefinitionJson,
+                    ColumnNames = new List<string>(),
+                    ResultData = new List<Dictionary<string, object>>(),
+                    RowCount = 0,
+                    ExecutionTimeMs = 0,
+                    ExecutedDate = DateTime.Now,
+                    ExecutedAgainstDatabase = null // null = not yet run
+                };
 
-                    return View(viewModel);
-                }
-
-                // No parameters - execute directly
-                return await ExecuteReportWithParameters(report, null);
+                return View(viewModel);
             }
             catch (Exception ex)
             {
@@ -1422,6 +1679,16 @@ namespace SalesMetrics.Controllers
                 {
                     _logger.LogWarning("Report {ReportId} not found or inactive", id);
                     return NotFound();
+                }
+
+                // Per-report access check
+                var isAdminPost = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_ADMIN");
+                if (!isAdminPost && report.IsAccessRestricted)
+                {
+                    var reportKey = $"builder:{id}";
+                    var hasReportAccess = await _context.ReportAccess
+                        .AnyAsync(a => a.ReportKey == reportKey && a.Users_ID == userId);
+                    if (!hasReportAccess) return View("AccessDenied");
                 }
 
                 _logger.LogInformation("User {UserId} executing report {ReportId}: {ReportName} with parameters", userId, id, report.Name);
@@ -1464,7 +1731,7 @@ namespace SalesMetrics.Controllers
 
                 // Open connection
                 var connStr = _configuration.GetConnectionString("SalesMetrics");
-                using var conn = new System.Data.SqlClient.SqlConnection(connStr);
+                using var conn = new Microsoft.Data.SqlClient.SqlConnection(connStr);
                 await conn.OpenAsync();
 
                 // Switch database for SQL mode
@@ -1476,7 +1743,7 @@ namespace SalesMetrics.Controllers
                 }
 
                 // Build command with parameters
-                var cmd = new System.Data.SqlClient.SqlCommand();
+                var cmd = new Microsoft.Data.SqlClient.SqlCommand();
                 cmd.Connection = conn;
                 cmd.CommandTimeout = 120; // 2 min for full export (no row limit)
 
@@ -1566,17 +1833,169 @@ namespace SalesMetrics.Controllers
         }
 
         /// <summary>
+        /// Exports a report for ALL branches into a single Excel workbook, one tab per branch.
+        /// Branches that return no data get an empty sheet with a note.
+        /// </summary>
+        [HttpPost]
+        public async Task<IActionResult> ExportAllBranchesToExcel(int id,
+            [FromForm] Dictionary<string, string>? parameterValues,
+            [FromForm(Name = "branches")] List<string>? selectedBranches)
+        {
+            try
+            {
+                var userId = GetCurrentUserId();
+                var hasAccess = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_ACCESS");
+                if (!hasAccess) return Forbid();
+
+                var report = await _context.ReportDefinitions
+                    .FirstOrDefaultAsync(r => r.ReportDefinitionId == id && r.IsActive);
+                if (report == null) return NotFound();
+
+                _logger.LogInformation("User {UserId} exporting report {ReportId} to multi-branch Excel", userId, id);
+
+                var connStr = _configuration.GetConnectionString("SalesMetrics");
+
+                // All available branches; filter to only those selected by the user (default = all).
+                var allBranches = new (string Code, string Label)[]
+                {
+                    ("LAX", "Los Angeles"),
+                    ("LSV", "Las Vegas"),
+                    ("CHN", "Chino"),
+                    ("PHX", "Phoenix"),
+                    ("SND", "San Diego")
+                };
+
+                var branchMap = (selectedBranches != null && selectedBranches.Count > 0)
+                    ? allBranches.Where(b => selectedBranches.Contains(b.Code, StringComparer.OrdinalIgnoreCase)).ToArray()
+                    : allBranches;
+
+                if (branchMap.Length == 0)
+                {
+                    TempData["ErrorMessage"] = "Please select at least one branch to export.";
+                    return RedirectToAction("Execute", new { id });
+                }
+
+                var isSqlMode = report.QueryDefinitionJson?.Contains("\"queryMode\":\"sql\"", StringComparison.OrdinalIgnoreCase) == true
+                             || report.QueryDefinitionJson?.Contains("\"queryMode\": \"sql\"", StringComparison.OrdinalIgnoreCase) == true;
+
+                var sheetList = new List<(string SheetName, System.Data.DataTable Data)>();
+
+                foreach (var (code, label) in branchMap)
+                {
+                    var compuFloorDb = GetCompUFloorDatabaseName(code);
+                    var sqlToExecute = ResolveBranchDatabase(report.GeneratedSql ?? "", compuFloorDb);
+
+                    try
+                    {
+                        using var conn = new Microsoft.Data.SqlClient.SqlConnection(connStr);
+                        await conn.OpenAsync();
+
+                        if (isSqlMode)
+                            await conn.ChangeDatabaseAsync(compuFloorDb);
+
+                        var cmd = new Microsoft.Data.SqlClient.SqlCommand
+                        {
+                            Connection = conn,
+                            CommandTimeout = 120
+                        };
+
+                        if (parameterValues != null && parameterValues.Any())
+                        {
+                            foreach (var param in parameterValues)
+                            {
+                                if (string.IsNullOrEmpty(param.Key)) continue;
+                                var paramName = param.Key.StartsWith("@") ? param.Key : "@" + param.Key;
+                                var paramValue = param.Value;
+                                var inPattern = $@"IN\s*\(\s*{System.Text.RegularExpressions.Regex.Escape(paramName)}\s*\)";
+                                if (!string.IsNullOrEmpty(paramValue) && paramValue.Contains(',')
+                                    && System.Text.RegularExpressions.Regex.IsMatch(sqlToExecute, inPattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                                {
+                                    var values = paramValue.Split(',').Select(v => v.Trim()).Where(v => v.Length > 0).ToArray();
+                                    var expandedParams = new List<string>();
+                                    for (int i = 0; i < values.Length; i++)
+                                    {
+                                        var expandedName = $"{paramName}_{i}";
+                                        expandedParams.Add(expandedName);
+                                        cmd.Parameters.AddWithValue(expandedName, values[i]);
+                                    }
+                                    sqlToExecute = System.Text.RegularExpressions.Regex.Replace(
+                                        sqlToExecute, inPattern,
+                                        $"IN ({string.Join(", ", expandedParams)})",
+                                        System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                                }
+                                else
+                                {
+                                    cmd.Parameters.AddWithValue(paramName, string.IsNullOrEmpty(paramValue) ? DBNull.Value : (object)paramValue);
+                                }
+                            }
+                        }
+
+                        cmd.CommandText = sqlToExecute;
+                        var dt = new System.Data.DataTable();
+                        using (var reader = await cmd.ExecuteReaderAsync())
+                            dt.Load(reader);
+
+                        sheetList.Add((label, dt));
+                        _logger.LogInformation("Branch {Branch}: {Rows} rows", label, dt.Rows.Count);
+                    }
+                    catch (Exception branchEx)
+                    {
+                        _logger.LogWarning(branchEx, "Branch {Branch} failed during multi-branch export", label);
+                        // Add an empty DataTable with an error note so the tab still appears
+                        var emptyDt = new System.Data.DataTable();
+                        emptyDt.Columns.Add("Note");
+                        emptyDt.Rows.Add($"No data available: {branchEx.Message}");
+                        sheetList.Add((label, emptyDt));
+                    }
+                }
+
+                var options = new SalesMetrics.Services.Reports.ExcelExportOptions
+                {
+                    ReportName = report.Name ?? "Untitled Report",
+                    ReportDescription = report.Description,
+                    CompanyName = _branding.CompanyName,
+                    CompanyWebsite = _branding.Website,
+                    CompanyPhone = _branding.Phone
+                };
+
+                var bytes = _exportService.ExportToExcelMultiSheet(sheetList, options, out var contentType);
+
+                var safeName = (report.Name ?? "Report").Replace(" ", "_");
+                safeName = System.Text.RegularExpressions.Regex.Replace(safeName, @"[^\w\-]", "");
+                var fileName = $"{safeName}_AllBranches_{DateTime.Now:yyyyMMdd_HHmm}.xlsx";
+
+                return File(bytes, contentType, fileName);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error exporting report {ReportId} to multi-branch Excel", id);
+                TempData["ErrorMessage"] = $"Error exporting report: {ex.Message}";
+                return RedirectToAction("Execute", new { id });
+            }
+        }
+
+        /// <summary>
         /// Helper method to execute report with optional parameter values
         /// </summary>
         private async Task<IActionResult> ExecuteReportWithParameters(Data.Entities.QueryBuilder.ReportDefinitionEntity report, Dictionary<string, string>? parameterValues)
         {
+            // Extract the _location override submitted by the branch selector on the Execute form.
+            // This allows admin users to query any branch database without changing their session.
+            string? locationOverride = null;
+            if (parameterValues != null && parameterValues.TryGetValue("_location", out var locVal) && !string.IsNullOrWhiteSpace(locVal))
+            {
+                locationOverride = locVal;
+                parameterValues = new Dictionary<string, string>(parameterValues); // copy so we don't mutate
+                parameterValues.Remove("_location");
+            }
+
             var connStr = _configuration.GetConnectionString("SalesMetrics");
-            using var conn = new System.Data.SqlClient.SqlConnection(connStr);
+            using var conn = new Microsoft.Data.SqlClient.SqlConnection(connStr);
             await conn.OpenAsync();
 
-            // Resolve branch database for the current user — works for BOTH wizard and SQL modes.
-            // Wizard-mode SQL has {BRANCH_DB} placeholder; SQL-mode may have hardcoded DB names.
-            var userLocation = HttpContext.Session.GetString("OfficeLocation") ?? "LAX";
+            // Resolve branch database: location override (from branch selector) takes priority,
+            // then the user's current session location, then default to LAX.
+            var userLocation = locationOverride ?? HttpContext.Session.GetString("OfficeLocation") ?? "LAX";
             var compuFloorDb = GetCompUFloorDatabaseName(userLocation);
             _logger.LogInformation("Executing report for location {Location}, database {Database}", userLocation, compuFloorDb);
 
@@ -1593,7 +2012,7 @@ namespace SalesMetrics.Controllers
 
             // Resolve {BRANCH_DB} placeholder and any hardcoded branch DB names
             var sqlToExecute = ResolveBranchDatabase(report.GeneratedSql, compuFloorDb);
-            var cmd = new System.Data.SqlClient.SqlCommand();
+            var cmd = new Microsoft.Data.SqlClient.SqlCommand();
             cmd.Connection = conn;
             cmd.CommandTimeout = 60; // 60 seconds timeout for report execution
 
@@ -1640,8 +2059,27 @@ namespace SalesMetrics.Controllers
                     }
                     else
                     {
-                        // Standard single-value parameter
-                        cmd.Parameters.AddWithValue(paramName, string.IsNullOrEmpty(paramValue) ? DBNull.Value : paramValue);
+                        if (string.IsNullOrEmpty(paramValue))
+                        {
+                            cmd.Parameters.AddWithValue(paramName, DBNull.Value);
+                        }
+                        else if (DateTime.TryParse(paramValue, out var parsedDate) &&
+                                 (paramName.Contains("date", StringComparison.OrdinalIgnoreCase) ||
+                                  paramName.Contains("start", StringComparison.OrdinalIgnoreCase) ||
+                                  paramName.Contains("end", StringComparison.OrdinalIgnoreCase) ||
+                                  paramName.Contains("from", StringComparison.OrdinalIgnoreCase) ||
+                                  paramName.Contains("to", StringComparison.OrdinalIgnoreCase)))
+                        {
+                            // Explicitly type date parameters as SqlDbType.Date to avoid NVARCHAR
+                            // implicit-conversion mismatches that can silently return 0 rows.
+                            var sqlParam = new Microsoft.Data.SqlClient.SqlParameter(paramName, System.Data.SqlDbType.Date);
+                            sqlParam.Value = parsedDate.Date;
+                            cmd.Parameters.Add(sqlParam);
+                        }
+                        else
+                        {
+                            cmd.Parameters.AddWithValue(paramName, paramValue);
+                        }
                     }
                 }
             }
@@ -1692,7 +2130,9 @@ namespace SalesMetrics.Controllers
                 ExecutedDate = DateTime.Now,
                 QueryDefinitionJson = report.QueryDefinitionJson,
                 Parameters = new List<ReportParameter>(),
-                SubmittedParameterValues = parameterValues
+                SubmittedParameterValues = parameterValues,
+                SelectedLocation = locationOverride,
+                ExecutedAgainstDatabase = compuFloorDb
             };
 
             return View(viewModel);

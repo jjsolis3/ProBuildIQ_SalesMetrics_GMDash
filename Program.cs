@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Authentication.Cookies;
+﻿using Microsoft.Data.SqlClient;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.Extensions.DependencyInjection;
 using SalesMetrics.Data;
@@ -9,11 +10,30 @@ using SalesMetrics.Services.Erp.Clients;
 using SalesMetrics.Services;
 using SalesMetrics.Services.Reports;
 using SalesMetrics.Services.Mvc;
+using SalesMetrics.Services.Settings;
 using SalesMetrics.Services.Signing;
 using SalesMetrics.Services.Notifications;
 using SalesMetrics.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Resolve ${VAR} placeholders in appsettings.json with actual environment variable values.
+// ASP.NET Core does not natively substitute shell-style ${VAR} syntax in JSON config files,
+// so any key whose value contains ${...} is re-evaluated here before services are registered.
+{
+    var interpolated = builder.Configuration
+        .AsEnumerable()
+        .Where(kv => kv.Value != null && kv.Value.Contains("${"))
+        .ToDictionary(
+            kv => kv.Key,
+            kv => System.Text.RegularExpressions.Regex.Replace(
+                kv.Value!, @"\$\{([^}]+)\}",
+                m => Environment.GetEnvironmentVariable(m.Groups[1].Value) ?? m.Value));
+
+    if (interpolated.Count > 0)
+        builder.Configuration.AddInMemoryCollection(interpolated!);
+}
+
 var connectionString = builder.Configuration.GetConnectionString("SalesMetrics");
 
 // Add services to the container
@@ -118,6 +138,9 @@ builder.Services.AddScoped<IRazorViewToStringRenderer, RazorViewToStringRenderer
 builder.Services.AddScoped<IErpMergeService, ErpMergeService>();
 builder.Services.AddScoped<IPdfService, PdfService>();
 builder.Services.AddScoped<SalesMetrics.Services.Signing.INotificationService, SalesMetrics.Services.Signing.NotificationService>(); // Email notification service
+builder.Services.AddScoped<SalesMetrics.Services.Signing.IBrandingSettingsProvider, SalesMetrics.Services.Signing.BrandingSettingsProvider>(); // DB-first branding settings
+builder.Services.AddScoped<SalesMetrics.Services.Settings.IAppCredentialsProvider, SalesMetrics.Services.Settings.AppCredentialsProvider>(); // Encrypted credential store
+builder.Services.AddScoped<SalesMetrics.Services.Signing.ISmtpSettingsProvider, SalesMetrics.Services.Signing.SmtpSettingsProvider>(); // DB-first SMTP settings
 builder.Services.AddScoped<IEmailTemplateService, EmailTemplateService>(); // Branded email template wrapper
 builder.Services.AddScoped<SalesMetrics.Services.Notifications.INotificationService, SalesMetrics.Services.Notifications.NotificationService>(); // In-app notification service
 builder.Services.AddScoped<IEnvelopeService, EnvelopeService>();
@@ -126,20 +149,65 @@ builder.Services.AddScoped<IEnvelopeService, EnvelopeService>();
 builder.Services.AddScoped<SalesMetrics.Services.Announcements.IAnnouncementService, SalesMetrics.Services.Announcements.AnnouncementService>();
 builder.Services.AddScoped<SalesMetrics.Services.Settings.ISettingsService, SalesMetrics.Services.Settings.SettingsService>();
 
+// Shared Sales Rep metrics service (used by SalespersonController and AccountsController)
+builder.Services.AddScoped<SalesMetrics.Services.SalesRepMetricsService>();
+
 // Feature Permissions Service
 builder.Services.AddScoped<SalesMetrics.Services.Permissions.IPermissionService, SalesMetrics.Services.Permissions.PermissionService>();
+builder.Services.AddScoped<GoogleCalendarService>();
+builder.Services.AddScoped<SalesMetrics.Services.GoogleTasksService>();
+
+// ── Google OAuth: bootstrap credentials from DB (or fall back to appsettings on first run) ──
+// AddGoogle() must be called before builder.Build(), so the DI container is not yet available.
+// We use raw ADO.NET to read the encrypted credentials from AppCredentials at startup.
+static string BootstrapCredential(string connStr, string encKey, string credKey, string fallback)
+{
+    try
+    {
+        using var conn = new SqlConnection(connStr);
+        conn.Open();
+        using var cmd = new SqlCommand(
+            "SELECT EncryptedValue FROM AppCredentials WHERE CredentialKey = @k", conn);
+        cmd.Parameters.AddWithValue("@k", credKey);
+        var val = cmd.ExecuteScalar()?.ToString();
+        if (!string.IsNullOrWhiteSpace(val))
+            return AesEncryption.Decrypt(val, encKey);
+    }
+    catch
+    {
+        // Table may not exist yet on first boot — fall back to appsettings value.
+    }
+    return fallback;
+}
+
+var encKey         = builder.Configuration["Encryption:Key"] ?? "";
+var smConnStr      = builder.Configuration.GetConnectionString("SalesMetrics") ?? "";
+var googleClientId = BootstrapCredential(smConnStr, encKey, "Google_ClientId",
+    builder.Configuration["Authentication:Google:ClientId"] ?? "");
+var googleClientSecret = BootstrapCredential(smConnStr, encKey, "Google_ClientSecret",
+    builder.Configuration["Authentication:Google:ClientSecret"] ?? "");
 
 // Google OAuth + Cookie Auth
+// DefaultChallengeScheme = Cookie so that [Authorize] redirects to the local
+// email/password login page, NOT to Google.  Google OAuth is only initiated
+// explicitly via the ConnectGoogle action (for Calendar/Tasks integration).
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = "Google";
+    options.DefaultChallengeScheme = CookieAuthenticationDefaults.AuthenticationScheme;
 })
 .AddGoogle("Google", options =>
 {
-    options.ClientId = builder.Configuration["Authentication:Google:ClientId"];
-    options.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"];
-    
+    // If credentials haven't been saved in the DB yet, use non-empty placeholders so
+    // the app starts cleanly. Google OAuth will fail its redirect until real credentials
+    // are entered via Settings → App Credentials (which requires an app pool restart).
+    options.ClientId     = string.IsNullOrWhiteSpace(googleClientId)     ? "PENDING_CONFIGURATION" : googleClientId;
+    options.ClientSecret = string.IsNullOrWhiteSpace(googleClientSecret) ? "PENDING_CONFIGURATION" : googleClientSecret;
+
+    // IMPORTANT: This path must be registered in Google Cloud Console as an
+    // Authorized Redirect URI: https://salesmetrics.seamlessflooring.com/signin-google
+    options.CallbackPath = "/signin-google";
+
     options.Scope.Add("openid");
     options.Scope.Add("profile");
     options.Scope.Add("email");
@@ -160,16 +228,117 @@ builder.Services.AddAuthentication(options =>
 builder.Services.AddAuthorization();
 builder.Services.AddHttpContextAccessor();
 
+// Prevent "Cannot determine the https port from IServerAddressesFeature, multiple values were found"
+// which occurs when IIS + Kestrel both bind HTTPS and the middleware can't pick one automatically.
+builder.Services.AddHttpsRedirection(options =>
+{
+    options.HttpsPort = 443;
+});
+
 builder.Services.ConfigureApplicationCookie(options =>
 {
     options.Cookie.HttpOnly = true;
     options.ExpireTimeSpan = TimeSpan.FromMinutes(90); // 15-min expiration
     options.SlidingExpiration = true; // Refresh Activity
     options.LoginPath = "/Auth/Login";
-    options.AccessDeniedPath = "/Auth/Login";
+    options.AccessDeniedPath = "/Auth/AccessDenied";
 });
 
 var app = builder.Build();
+
+// ── SQL Migration Runner ──────────────────────────────────────────────────────
+// Runs *.sql files in the Migrations folder exactly once, tracking applied
+// files in a lightweight [_MigrationsApplied] table. Skips already-applied
+// files so broken/legacy scripts never run again after their first attempt.
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<SalesMetrics.Data.SalesMetricsDbContext>();
+    var migrationsPath = Path.Combine(app.Environment.ContentRootPath, "Migrations");
+
+    if (Directory.Exists(migrationsPath))
+    {
+        try
+        {
+            // Ensure the tracking table exists (bootstrapped separately, not via a migration file)
+            db.Database.ExecuteSqlRaw(@"
+                IF NOT EXISTS (
+                    SELECT 1 FROM sys.tables
+                    WHERE name = '_MigrationsApplied' AND schema_id = SCHEMA_ID('dbo')
+                )
+                BEGIN
+                    CREATE TABLE [dbo].[_MigrationsApplied] (
+                        [MigrationFile] NVARCHAR(260) NOT NULL,
+                        [AppliedAtUtc]  DATETIME       NOT NULL DEFAULT GETUTCDATE(),
+                        [Succeeded]     BIT            NOT NULL DEFAULT 1,
+                        CONSTRAINT [PK__MigrationsApplied] PRIMARY KEY ([MigrationFile])
+                    );
+                END");
+
+            // Load the set of already-applied file names
+            var applied = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            using (var cmd = db.Database.GetDbConnection().CreateCommand())
+            {
+                if (cmd.Connection!.State != System.Data.ConnectionState.Open)
+                    cmd.Connection.Open();
+                cmd.CommandText = "SELECT [MigrationFile] FROM [dbo].[_MigrationsApplied]";
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read()) applied.Add(reader.GetString(0));
+            }
+
+            var goSplitter = new System.Text.RegularExpressions.Regex(
+                @"^\s*GO\s*$",
+                System.Text.RegularExpressions.RegexOptions.Multiline |
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+            foreach (var file in Directory.GetFiles(migrationsPath, "*.sql").OrderBy(Path.GetFileName))
+            {
+                var fileName = Path.GetFileName(file);
+                if (applied.Contains(fileName))
+                    continue; // already ran — skip
+
+                bool succeeded = true;
+                try
+                {
+                    var sql = File.ReadAllText(file);
+                    foreach (var batch in goSplitter.Split(sql))
+                    {
+                        var trimmed = batch.Trim();
+                        if (!string.IsNullOrWhiteSpace(trimmed))
+                            db.Database.ExecuteSqlRaw(trimmed);
+                    }
+                    Console.WriteLine($"[Migration] Applied: {fileName}");
+                }
+                catch (Exception ex)
+                {
+                    succeeded = false;
+                    // Log but don't crash startup
+                    Console.WriteLine($"[Migration] Failed: {fileName} — {ex.Message}");
+                }
+
+                // Record the attempt (succeeded or not) so it won't run again
+                try
+                {
+                    db.Database.ExecuteSqlRaw(
+                        "INSERT INTO [dbo].[_MigrationsApplied] ([MigrationFile],[Succeeded]) VALUES ({0},{1})",
+                        fileName, succeeded);
+                }
+                catch
+                {
+                    // Ignore tracking insert errors
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // DB unreachable at startup (e.g. wrong DB_HOST, firewall, or SQL Server Browser
+            // not accessible for named-instance resolution). Log and continue — the app will
+            // surface connection errors when controllers actually query the database.
+            Console.WriteLine($"[Migration] Skipped — cannot connect to database: {ex.Message}");
+            Console.WriteLine("[Migration] Check DB_HOST in launchSettings.json (use IP or IP,port — not IP\\InstanceName for remote servers).");
+        }
+    }
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 // Read config (if needed elsewhere)
 var configuration = new ConfigurationBuilder()
@@ -180,6 +349,9 @@ var configuration = new ConfigurationBuilder()
 // Configure the HTTP request pipeline
 // Use custom error handling middleware that logs to database
 app.UseMiddleware<SalesMetrics.Middleware.GlobalErrorHandlingMiddleware>();
+
+// Add security response headers (CSP, X-Frame-Options, etc.)
+app.UseMiddleware<SalesMetrics.Middleware.SecurityHeadersMiddleware>();
 
 if (!app.Environment.IsDevelopment())
 {

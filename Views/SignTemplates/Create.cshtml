@@ -2,6 +2,8 @@
 @{
 
     ViewData["Title"] = "New Template";
+    ViewBag.PTitle = "Sign Templates";
+    ViewBag.PLink = "/SignTemplates";
 
     var viewPaths = (List<string>)ViewBag.ViewPaths;
 
@@ -461,6 +463,39 @@
                     <textarea asp-for="DefaultMessage" class="form-control" rows="3" placeholder="Please review and sign the attached document..."></textarea>
                 </div>
 
+                <div class="mb-3 p-3 border rounded bg-light">
+                    <div class="form-check form-switch">
+                        <input asp-for="RequiresTenantSection" class="form-check-input" type="checkbox" role="switch" id="requiresTenantSection" checked />
+                        <label class="form-check-label fw-semibold" for="requiresTenantSection">
+                            Allow Manager to add or skip Tenant information when signing
+                        </label>
+                    </div>
+                    <small class="text-muted d-block mt-1">
+                        When enabled, the signing page shows a section where the Manager can enter Tenant details to send a separate signing invitation,
+                        or skip tenant signature entirely. Disable this for templates that never involve a tenant (e.g. staff-only consent forms).
+                    </small>
+                </div>
+
+                <div class="mb-3 p-3 border rounded bg-light">
+                    <label class="form-label fw-semibold mb-2">Branch Visibility</label>
+                    <div class="d-flex flex-wrap gap-3">
+                        @foreach (var loc in (Dictionary<int, (string Code, string Name)>)ViewBag.Locations)
+                        {
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox"
+                                       name="selectedLocationCodes" value="@loc.Value.Code"
+                                       id="loc_@loc.Value.Code" />
+                                <label class="form-check-label" for="loc_@loc.Value.Code">
+                                    @loc.Value.Code – @loc.Value.Name
+                                </label>
+                            </div>
+                        }
+                    </div>
+                    <small class="text-muted d-block mt-1">
+                        Leave all unchecked to show this template at every branch. Check specific branches to restrict it (e.g. check LSV only for Las Vegas templates).
+                    </small>
+                </div>
+
                 <div class="validation-error" id="step1Error">Please fill in all required fields (Display Name and Category)</div>
             </div>
 
@@ -468,6 +503,30 @@
             <div class="wizard-step-content" data-step="2">
                 <h5 class="mb-3">Select Document Template</h5>
                 <p class="text-muted">Choose the template type that best fits your needs</p>
+
+                <div class="mb-4 p-3 border rounded bg-light">
+                    <label class="form-label fw-semibold mb-2">Template Type <span class="text-danger">*</span></label>
+                    <div class="d-flex gap-3 flex-wrap">
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" asp-for="TemplateType"
+                                   id="typeConsent" value="Consent" checked />
+                            <label class="form-check-label fw-semibold" for="typeConsent">
+                                ✍️ Consent <span class="fw-normal text-muted">(signature required)</span>
+                            </label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" asp-for="TemplateType"
+                                   id="typeComm" value="Communication" />
+                            <label class="form-check-label fw-semibold" for="typeComm">
+                                📧 Communication <span class="fw-normal text-muted">(tracked delivery, no signature)</span>
+                            </label>
+                        </div>
+                    </div>
+                    <small class="text-muted d-block mt-1">
+                        This controls which envelope type dropdown this template appears in when creating a new envelope.
+                        Consent templates require a recipient to sign; Communication templates are used for tracked notifications.
+                    </small>
+                </div>
 
                 <div class="template-cards">
                     @{
@@ -530,7 +589,54 @@
                 </div>
 
                 <input type="hidden" asp-for="RazorViewPath" id="razorViewPath" />
-                <div class="validation-error" id="step2Error">Please select a document template</div>
+
+                <!-- ── OR: Author custom HTML ──────────────────────────────── -->
+                <div class="my-4 d-flex align-items-center gap-3">
+                    <hr class="flex-grow-1" />
+                    <span class="text-muted fw-semibold px-2">OR</span>
+                    <hr class="flex-grow-1" />
+                </div>
+
+                <div class="mb-1">
+                    <h6 class="fw-semibold">
+                        <i class="bi bi-code-slash"></i> Author Custom HTML Content
+                        <span class="badge bg-success ms-2">Overrides Razor View</span>
+                    </h6>
+                    <p class="text-muted small mb-3">
+                        Write the signing page HTML directly. Dynamic values are inserted
+                        using <code>{{TokenName}}</code> placeholders — no code deployment needed.
+                        If you provide HTML here, the Razor View selection above is ignored.
+                    </p>
+
+                    <div class="d-flex justify-content-end mb-2">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="toggleTokenPanelCreate">
+                            <i class="bi bi-code-square"></i> Insert Token
+                        </button>
+                    </div>
+
+                    <!-- Token panel -->
+                    <div id="tokenPanelCreate" class="mb-3 border rounded p-3 bg-light" style="display:none;">
+                        <p class="mb-2 small fw-semibold">Click a token to insert it at the cursor:</p>
+                        <div class="d-flex flex-wrap gap-2">
+                            @foreach (var (token, desc) in SalesMetrics.Services.Signing.ErpMergeService.AvailableTokens)
+                            {
+                                <button type="button" class="btn btn-sm btn-outline-primary token-insert-btn-create"
+                                        data-token="@token" title="@desc">
+                                    @token
+                                </button>
+                            }
+                        </div>
+                        <small class="text-muted mt-2 d-block">Tokens are replaced with live data when a signer opens the document.</small>
+                    </div>
+
+                    <textarea asp-for="HtmlBodyContent" id="htmlBodyContent" class="form-control"
+                              rows="18" style="font-family:monospace;font-size:0.85rem;"
+                              placeholder="Leave blank to use the Razor View selected above. Enter full HTML here to create a custom consent form body."></textarea>
+                    <small class="text-muted">Tip: include standard HTML structure — headings, paragraphs, tables, signature blocks.</small>
+                </div>
+                <!-- ─────────────────────────────────────────────────────────── -->
+
+                <div class="validation-error" id="step2Error">Please select a Razor View template above OR enter custom HTML content below</div>
             </div>
 
             <!-- Step 3: Field Selection & PDF Upload -->
@@ -857,6 +963,10 @@
                         <div class="review-item-label">Razor View:</div>
                         <div class="review-item-value"><code id="reviewRazorView"></code></div>
                     </div>
+                    <div class="review-item">
+                        <div class="review-item-label">HTML Body:</div>
+                        <div class="review-item-value" id="reviewHtmlBody"></div>
+                    </div>
                 </div>
 
                 <!-- Fields Review -->
@@ -900,6 +1010,85 @@
 </div>
 
 @section Scripts {
+    <!-- TinyMCE -->
+    <script src="https://cdn.jsdelivr.net/npm/tinymce@6/tinymce.min.js" referrerpolicy="origin"></script>
+    <script>
+        // Initialize TinyMCE for the custom HTML body (lazy — init when Step 2 becomes visible)
+        var tinymceInitialized = false;
+        function ensureTinyMCEInit() {
+            if (tinymceInitialized) return;
+            tinymceInitialized = true;
+            tinymce.init({
+                selector: '#htmlBodyContent',
+                height: 500,
+                menubar: 'file edit view insert format tools',
+                plugins: [
+                    'advlist', 'autolink', 'lists', 'link', 'image', 'charmap',
+                    'preview', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
+                    'insertdatetime', 'table', 'wordcount', 'help'
+                ],
+                toolbar:
+                    'undo redo | styles | bold italic underline | ' +
+                    'alignleft aligncenter alignright alignjustify | ' +
+                    'bullist numlist outdent indent | link image table | ' +
+                    'removeformat code fullscreen | help',
+                content_style: 'body { font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; }',
+                setup: function (editor) {
+                    editor.on('change', function () { editor.save(); });
+                }
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            // Observe step 2 becoming active to lazily init TinyMCE
+            var step2Content = document.querySelector('.wizard-step-content[data-step="2"]');
+            if (step2Content) {
+                var observer = new MutationObserver(function (mutations) {
+                    mutations.forEach(function (m) {
+                        if (m.target.classList.contains('active')) {
+                            ensureTinyMCEInit();
+                        }
+                    });
+                });
+                observer.observe(step2Content, { attributes: true, attributeFilter: ['class'] });
+
+                // Also init immediately if step2 is already active on load (unlikely but safe)
+                if (step2Content.classList.contains('active')) {
+                    ensureTinyMCEInit();
+                }
+            }
+
+            // Token panel toggle
+            document.getElementById('toggleTokenPanelCreate').addEventListener('click', function () {
+                var panel = document.getElementById('tokenPanelCreate');
+                panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+            });
+
+            // Insert token into TinyMCE at cursor
+            document.querySelectorAll('.token-insert-btn-create').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var token = this.dataset.token;
+                    var ed = tinymce.get('htmlBodyContent');
+                    if (ed) {
+                        ed.insertContent(token);
+                        ed.focus();
+                    } else {
+                        var ta = document.getElementById('htmlBodyContent');
+                        var pos = ta.selectionStart;
+                        ta.value = ta.value.substring(0, pos) + token + ta.value.substring(ta.selectionEnd);
+                        ta.selectionStart = ta.selectionEnd = pos + token.length;
+                        ta.focus();
+                    }
+                });
+            });
+
+            // Save TinyMCE before form submit
+            document.getElementById('templateForm').addEventListener('submit', function () {
+                if (typeof tinymce !== 'undefined') tinymce.triggerSave();
+            });
+        });
+    </script>
+
     <!-- PDF.js Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script>

@@ -34,7 +34,7 @@
     var isQueryBuilderAdmin = usersId > 0 ? await PermissionService.HasFeatureAccessAsync(usersId, "REPORT_BUILDER_ADMIN") : false;
 
     // Keep role-based flag for conditional display within sections
-    // Management roles: Admin(1), Sales Admin(3), GM(4), President/Owner(7), Regional Manager(8)
+    // Leadership roles: Admin(1), Sales Admin(3), Leadership/GM(4), President/Owner(7), Regional Manager(8)
     var isGMOrAdmin = roleId == "1" || roleId == "4" || roleId == "7" || roleId == "8";
     var isSalesManagerOrAbove = roleId == "1" || roleId == "3" || roleId == "4" || roleId == "7" || roleId == "8";
 }
@@ -94,14 +94,14 @@
             <ul class="left-menu list-unstyled" id="side-menu">
                 @if(hasGMDashboardAccess || hasGMRecapAccess)
                 {
-                    <!-- GM DASHBOARD and RECAP ENTRY/LIST-->
-                    <li class="menu-title">GENERAL MGR</li>
+                    <!-- LEADERSHIP DASHBOARD and RECAP ENTRY/LIST-->
+                    <li class="menu-title">LEADERSHIP</li>
                     @if (hasGMDashboardAccess)
                     {
                         <li class="ms-3">
                             <a href="/GMDash/Index">
                                 <i class="fas fa-chart-bar"></i>
-                                <span>GM Dashboard</span>
+                                <span>Leadership Dashboard</span>
                             </a>
                         </li>
                     }
@@ -283,23 +283,24 @@
                 {
                     <!-- Reporting & Analytics -->
                     <li class="menu-title">REPORTS</li>
-
-                    @if (hasReportsAccess)
-                    {
-                        <li class="ms-3">
-                            <a href="/Reports">
-                                <i class="fa fa-chart-line"></i>
-                                <span>Reports</span>
-                            </a>
-                        </li>
-                    }
+                                    
 
                     @if (hasQueryBuilderAccess)
                     {
                         <li class="ms-3">
                             <a href="/ReportBuilder">
                                 <i class="fa fa-table"></i>
-                                <span>Query Builder</span>
+                                <span>Reports</span>
+                            </a>
+                        </li>
+                    }
+
+                    @if (hasReportsAccess)
+                    {
+                        <li class="ms-3">
+                            <a href="/Reports">
+                                <i class="fa fa-chart-line"></i>
+                                <span>Custom Reports</span>
                             </a>
                         </li>
                     }
@@ -309,74 +310,20 @@
                         <li class="ms-3">
                             <a href="/ReportBuilder/Create">
                                 <i class="fa fa-plus-circle"></i>
-                                <span>Create Report</span>
+                                <span>Report Builder</span>
                             </a>
                         </li>
                     }
                 }
 
-                @if (hasAnnouncementsAccess)
+                @if (hasAnnouncementsAccess || hasSettingsAccess || hasUsersAccess || hasYardiUploadAccess || hasErrorLogsAccess)
                 {
-                    <!-- Communication -->
-                    <li class="menu-title">COMMUNICATION</li>
+                    <!-- Settings Hub -->
+                    <li class="menu-title">SETTINGS</li>
                     <li class="ms-3">
-                        <a href="/Announcements/Index">
-                            <i class="fas fa-bullhorn"></i>
-                            <span>Announcements</span>
-                        </a>
-                    </li>
-                }
-
-                @if (hasUsersAccess || hasSettingsAccess)
-                {
-                    <!-- Admin / Settings -->
-                    <li class="menu-title">ADMIN / SETTINGS</li>
-
-                    @if (hasSettingsAccess)
-                    {
-                        <li class="ms-3">
-                            <a href="/Settings/Index">
-                                <i class="fas fa-cog"></i>
-                                <span>System Settings</span>
-                            </a>
-                        </li>
-                    }
-
-                    @if (hasUsersAccess)
-                    {
-                        <li class="ms-3">
-                            <a href="/Accounts/Index">
-                                <i class="fa fa-user-cog"></i>
-                                <span>Access Controls</span>
-                            </a>
-                        </li>
-                    }
-                }
-
-                @if (hasYardiUploadAccess)
-                {
-                    <li class="ms-3">
-                        <a href="/Yardi/Upload">
-                            <i class="fa fa-upload"></i>
-                            <span>Yardi Upload</span>
-                        </a>
-                    </li>
-                }
-
-                @if (hasErrorLogsAccess)
-                {
-                    <!-- Web App Errors -->
-                    <li class="menu-title">WEB APP ERRORS</li>
-                    <li class="ms-3">
-                        <a href="/ErrorLog/Dashboard">
-                            <i class="fa fa-exclamation-triangle"></i>
-                            <span>Error Dashboard</span>
-                        </a>
-                    </li>
-                    <li class="ms-3">
-                        <a href="/ErrorLog/Index">
-                            <i class="fa fa-list"></i>
-                            <span>Error Logs</span>
+                        <a href="/Settings/Hub">
+                            <i class="fas fa-th"></i>
+                            <span>Settings Hub</span>
                         </a>
                     </li>
                 }

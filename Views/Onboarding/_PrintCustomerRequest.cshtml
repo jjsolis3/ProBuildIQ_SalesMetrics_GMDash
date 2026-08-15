@@ -70,10 +70,6 @@
                 border-bottom: 1px solid #ccc;
             }
 
-    .logo {
-        height: 120px;
-        margin-bottom: 1px;
-    }
 
     * {
         box-sizing: border-box;
@@ -119,9 +115,26 @@
 </style>
 
 <div>
-    <div class="text-center">
-        <img src="@Url.Content("~/assets/images/seamless-logo.png")" alt="Seamless Logo" class="logo" />
-        <h4>New Customer Set Up Form</h4>
+    <div style="display:table; width:100%; margin-bottom:14px;">
+        <div style="display:table-cell; vertical-align:middle; text-align:left; width:33%;">
+            @if (!string.IsNullOrEmpty(ViewBag.SeamlessLogoSrc as string))
+            {
+                <img src="@ViewBag.SeamlessLogoSrc" alt="Seamless Flooring" style="height:80px;" />
+            }
+        </div>
+        <div style="display:table-cell; vertical-align:middle; text-align:center; width:34%;">
+            <h4 style="margin:0; font-size:18px;">New Customer Set Up Form</h4>
+            @if (!string.IsNullOrEmpty(Model.LocationCode))
+            {
+                <div style="font-size:11px; color:#555; margin-top:4px;">@Model.LocationCode Branch</div>
+            }
+        </div>
+        <div style="display:table-cell; vertical-align:middle; text-align:right; width:33%;">
+            @if (!string.IsNullOrEmpty(ViewBag.SMLogoSrc as string))
+            {
+                <img src="@ViewBag.SMLogoSrc" alt="SalesMetrics" style="height:40px;" />
+            }
+        </div>
     </div>
 
     <div class="form-section-title">Property Information</div>

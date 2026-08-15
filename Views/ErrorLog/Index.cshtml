@@ -15,18 +15,13 @@
 }
 
 <div class="container-fluid">
-    <div class="row">
-        <div class="col-12">
-            <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                <h4 class="mb-sm-0">Error Log</h4>
-                <div class="page-title-right">
-                    <a href="@Url.Action("Dashboard")" class="btn btn-primary">
-                        <i class="fas fa-chart-bar"></i> Dashboard
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="/Settings/Hub"><i class="fas fa-th me-1"></i>Settings Hub</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Error Logs</li>
+        </ol>
+    </nav>
 
     <!-- Filter Controls -->
     <div class="row mb-3">

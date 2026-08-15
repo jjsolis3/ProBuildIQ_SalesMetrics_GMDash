@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
 using SalesMetrics.Models;
 using SalesMetrics.Services;
 
@@ -7,14 +8,18 @@ using SalesMetrics.Services;
 
 namespace SalesMetrics.Controllers
 {
-    [Authorize] // Adjust role as needed
+    [Authorize]
     public class ErrorLogController : Controller
     {
         private readonly IErrorLoggingService _errorLoggingService;
+        private readonly IConfiguration _configuration;
+        private readonly ILogger<ErrorLogController> _logger;
 
-        public ErrorLogController(IErrorLoggingService errorLoggingService)
+        public ErrorLogController(IErrorLoggingService errorLoggingService, IConfiguration configuration, ILogger<ErrorLogController> logger)
         {
             _errorLoggingService = errorLoggingService;
+            _configuration = configuration;
+            _logger = logger;
         }
 
         public async Task<IActionResult> Index(int page = 1, int pageSize = 50, string level = "All")
@@ -100,7 +105,7 @@ namespace SalesMetrics.Controllers
             catch (Exception ex)
             {
                 // Log the error but don't create a recursive loop
-                Console.WriteLine($"Error in QuickClose: {ex.Message}");
+                _logger.LogError(ex, "Error in QuickClose");
 
                 if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
                 {
@@ -144,7 +149,7 @@ namespace SalesMetrics.Controllers
                     catch (Exception ex)
                     {
                         // Log individual failure but continue
-                        Console.WriteLine($"Failed to resolve error {id}: {ex.Message}");
+                        _logger.LogError(ex, "Failed to resolve error {ErrorId}", id);
                         continue;
                     }
                 }
@@ -157,7 +162,7 @@ namespace SalesMetrics.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error in BulkQuickClose: {ex.Message}");
+                _logger.LogError(ex, "Error in BulkQuickClose");
                 return Json(new { success = false, message = "Bulk operation failed" });
             }
         }
@@ -196,10 +201,88 @@ namespace SalesMetrics.Controllers
                         Controller = e.Controller ?? string.Empty,
                         IsResolved = e.IsResolved,
                     })
-                    .ToList()
+                    .ToList(),
+                LoginSecurity = await GetLoginSecurityStatsAsync()
             };
 
             return View(dashboard);
+        }
+
+        private async Task<LoginSecurityStats> GetLoginSecurityStatsAsync()
+        {
+            var stats = new LoginSecurityStats();
+
+            try
+            {
+                var connStr = _configuration.GetConnectionString("SalesMetrics");
+                using var conn = new SqlConnection(connStr);
+                await conn.OpenAsync();
+
+                // Failed logins in last 24 h
+                using (var cmd = new SqlCommand(@"
+                    SELECT COUNT(*) FROM LoginHistory
+                    WHERE Success = 'Failed' AND LoginTime >= DATEADD(HOUR, -24, GETDATE())", conn))
+                {
+                    stats.FailedLoginsLast24h = (int)await cmd.ExecuteScalarAsync();
+                }
+
+                // Failed logins in last 7 days
+                using (var cmd = new SqlCommand(@"
+                    SELECT COUNT(*) FROM LoginHistory
+                    WHERE Success = 'Failed' AND LoginTime >= DATEADD(DAY, -7, GETDATE())", conn))
+                {
+                    stats.FailedLoginsLast7d = (int)await cmd.ExecuteScalarAsync();
+                }
+
+                // 20 most recent failures
+                using (var cmd = new SqlCommand(@"
+                    SELECT TOP 20 LoginTime, UserName, IPAddress, office, ErrorLog
+                    FROM LoginHistory
+                    WHERE Success = 'Failed'
+                    ORDER BY LoginTime DESC", conn))
+                using (var reader = await cmd.ExecuteReaderAsync())
+                {
+                    while (await reader.ReadAsync())
+                    {
+                        stats.RecentFailures.Add(new LoginFailureEntry
+                        {
+                            LoginTime = reader.GetDateTime(reader.GetOrdinal("LoginTime")),
+                            UserName = reader.IsDBNull(reader.GetOrdinal("UserName")) ? "" : reader.GetString(reader.GetOrdinal("UserName")),
+                            IpAddress = reader.IsDBNull(reader.GetOrdinal("IPAddress")) ? null : reader.GetString(reader.GetOrdinal("IPAddress")),
+                            Office = reader.IsDBNull(reader.GetOrdinal("office")) ? null : reader.GetString(reader.GetOrdinal("office")),
+                            ErrorMessage = reader.IsDBNull(reader.GetOrdinal("ErrorLog")) ? null : reader.GetString(reader.GetOrdinal("ErrorLog"))
+                        });
+                    }
+                }
+
+                // Top IPs by failure count (last 7 days)
+                using (var cmd = new SqlCommand(@"
+                    SELECT TOP 10 IPAddress, COUNT(*) AS FailureCount
+                    FROM LoginHistory
+                    WHERE Success = 'Failed'
+                      AND LoginTime >= DATEADD(DAY, -7, GETDATE())
+                      AND IPAddress IS NOT NULL
+                    GROUP BY IPAddress
+                    ORDER BY FailureCount DESC", conn))
+                using (var reader = await cmd.ExecuteReaderAsync())
+                {
+                    while (await reader.ReadAsync())
+                    {
+                        stats.TopFailedIps.Add(new TopFailedIpEntry
+                        {
+                            IpAddress = reader.GetString(reader.GetOrdinal("IPAddress")),
+                            FailureCount = reader.GetInt32(reader.GetOrdinal("FailureCount"))
+                        });
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log but don't crash the dashboard if LoginHistory is unavailable
+                _logger.LogError(ex, "Failed to load login security stats");
+            }
+
+            return stats;
         }
     }
 }

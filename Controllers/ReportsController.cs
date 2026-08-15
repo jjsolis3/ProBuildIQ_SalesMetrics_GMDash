@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Data;
 using System.Linq;
 using SalesMetrics.Data;
+using SalesMetrics.Data.Entities;
 using SalesMetrics.Models;
 using SalesMetrics.Models.Reports;
 using SalesMetrics.Services.Helpers;
@@ -44,7 +45,7 @@ namespace SalesMetrics.Controllers
         }
 
         [HttpGet]
-        public IActionResult Index()
+        public async Task<IActionResult> Index()
         {
             var userContext = BuildUserContext();
             if (userContext == null)
@@ -52,20 +53,27 @@ namespace SalesMetrics.Controllers
                 return RedirectToAction("Login", "Auth");
             }
 
-            var reports = _catalog.GetAll()
-                .Where(r => _authorizationService.IsUserAuthorized(r, userContext))
+            var all = _catalog.GetAll().ToList();
+
+            // Resolve every report's access decision in one pass so a single
+            // round-trip covers the whole catalog instead of one query per card.
+            var accessMap = await BuildCatalogAccessMapAsync(all.Select(r => r.Id));
+
+            var reports = all
+                .Where(r => IsCatalogReportAllowed(r, userContext, accessMap))
                 .ToList();
 
             var viewModel = new ReportCatalogViewModel
             {
-                AvailableReports = reports
+                AvailableReports = reports,
+                IsAdmin = IsAdminUser(userContext)
             };
 
             return View(viewModel);
         }
 
         [HttpGet]
-        public IActionResult Run(string id)
+        public async Task<IActionResult> Run(string id)
         {
             // The envelope activity report has its own dedicated view and action.
             if (string.Equals(id, "envelope-activity", StringComparison.OrdinalIgnoreCase))
@@ -78,7 +86,7 @@ namespace SalesMetrics.Controllers
                 return RedirectToAction("Index");
             }
 
-            if (!_authorizationService.IsUserAuthorized(definition, userContext))
+            if (!await CanUserRunCatalogReportAsync(definition, userContext))
             {
                 return Forbid();
             }
@@ -118,7 +126,7 @@ namespace SalesMetrics.Controllers
                 return RedirectToAction("Index");
             }
 
-            if (!_authorizationService.IsUserAuthorized(definition, userContext))
+            if (!await CanUserRunCatalogReportAsync(definition, userContext))
             {
                 return Forbid();
             }
@@ -164,7 +172,7 @@ namespace SalesMetrics.Controllers
                 return RedirectToAction("Index");
             }
 
-            if (!_authorizationService.IsUserAuthorized(definition, userContext))
+            if (!await CanUserRunCatalogReportAsync(definition, userContext))
             {
                 return Forbid();
             }
@@ -271,11 +279,11 @@ namespace SalesMetrics.Controllers
 
                 var viewModel = new WorkOrderDetailViewModel();
 
-                using (var conn = new System.Data.SqlClient.SqlConnection(connectionString))
+                using (var conn = new Microsoft.Data.SqlClient.SqlConnection(connectionString))
                 {
                     conn.Open();
 
-                    var cmd = new System.Data.SqlClient.SqlCommand(@"
+                    var cmd = new Microsoft.Data.SqlClient.SqlCommand(@"
                         -- ===============================
                         -- 1. ORDER LINE ITEMS (Product + Stewardship)
                         -- ===============================
@@ -460,7 +468,10 @@ namespace SalesMetrics.Controllers
         // Envelope Activity Report
         // ======================================================================
 
-        private static readonly int[] EnvelopeReportAllowedRoles = { 1, 4, 5, 6, 7, 8 };
+        public class ReportAccessRequest  { public string ReportId { get; set; } = ""; public int UsersId { get; set; } }
+    public class ReportAccessRevokeRequest { public int AccessId { get; set; } }
+
+    private static readonly int[] EnvelopeReportAllowedRoles = { 1, 4, 5, 6, 7, 8 };
 
         private EnvelopeReportViewModel BuildEnvelopeReportBase(ReportUserContext userContext)
         {
@@ -560,12 +571,12 @@ namespace SalesMetrics.Controllers
         }
 
         [HttpGet]
-        public IActionResult EnvelopeReport()
+        public async Task<IActionResult> EnvelopeReport()
         {
             var definition  = _catalog.GetById("envelope-activity");
             var userContext = BuildUserContext();
             if (definition == null || userContext == null) return RedirectToAction("Index");
-            if (!_authorizationService.IsUserAuthorized(definition, userContext)) return Forbid();
+            if (!await CanUserRunCatalogReportAsync(definition, userContext)) return Forbid();
 
             var vm = BuildEnvelopeReportBase(userContext);
             vm.FromDate = DateTime.Today.AddDays(-30);
@@ -580,7 +591,7 @@ namespace SalesMetrics.Controllers
             var definition  = _catalog.GetById("envelope-activity");
             var userContext = BuildUserContext();
             if (definition == null || userContext == null) return RedirectToAction("Index");
-            if (!_authorizationService.IsUserAuthorized(definition, userContext)) return Forbid();
+            if (!await CanUserRunCatalogReportAsync(definition, userContext)) return Forbid();
 
             var vm = BuildEnvelopeReportBase(userContext);
             vm.FromDate     = input.FromDate;
@@ -622,6 +633,269 @@ namespace SalesMetrics.Controllers
             return View("RunEnvelope", vm);
         }
 
+        // ======================================================================
+        // Per-Report Access Management (Reports Center catalog reports)
+        // ======================================================================
+
+        /// <summary>
+        /// Returns the list of users that have been granted explicit access to a catalog report.
+        /// Also returns all active users so the admin can add new grantees.
+        /// Admin-only endpoint (RoleId 1).
+        /// </summary>
+        [HttpGet]
+        public async Task<IActionResult> GetReportAccess(string reportId)
+        {
+            if (!IsAdminUser()) return AccessDeniedJson();
+
+            if (string.IsNullOrWhiteSpace(reportId))
+                return Json(new { success = false, message = "No report was specified." });
+
+            var reportKey = $"catalog:{reportId}";
+
+            var grantedUsers = await _db.ReportAccess
+                .Where(a => a.ReportKey == reportKey)
+                .Include(a => a.User)
+                .Select(a => new
+                {
+                    accessId = a.AccessId,
+                    usersId  = a.Users_ID,
+                    fullName = a.User != null ? a.User.FirstName + " " + a.User.LastName : "Unknown",
+                    grantedDate = a.GrantedDate.ToString("MM/dd/yyyy")
+                })
+                .ToListAsync();
+
+            var allUsers = await _db.Users
+                .Where(u => u.IsActive)
+                .OrderBy(u => u.FirstName).ThenBy(u => u.LastName)
+                .Select(u => new { usersId = u.Users_ID, fullName = u.FirstName + " " + u.LastName, roleId = u.RoleId })
+                .ToListAsync();
+
+            return Json(new { success = true, grantedUsers, allUsers });
+        }
+
+        /// <summary>
+        /// Grants a user access to a catalog report.
+        /// </summary>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> GrantReportAccess([FromBody] ReportAccessRequest request)
+        {
+            if (!IsAdminUser()) return AccessDeniedJson();
+
+            if (request == null || string.IsNullOrWhiteSpace(request.ReportId) || request.UsersId <= 0)
+                return Json(new { success = false, message = "Select a user before granting access." });
+
+            var grantorUsersId = GetCurrentUsersId();
+            var reportKey = $"catalog:{request.ReportId}";
+
+            try
+            {
+                var existing = await _db.ReportAccess
+                    .FirstOrDefaultAsync(a => a.ReportKey == reportKey && a.Users_ID == request.UsersId);
+
+                if (existing != null)
+                    return Json(new { success = true, message = "User already has access." });
+
+                _db.ReportAccess.Add(new ReportAccessEntity
+                {
+                    ReportKey         = reportKey,
+                    Users_ID          = request.UsersId,
+                    GrantedDate       = DateTime.Now,
+                    GrantedByUsers_ID = grantorUsersId > 0 ? grantorUsersId : null
+                });
+
+                await _db.SaveChangesAsync();
+
+                _logger.LogInformation(
+                    "User {GrantorId} granted user {UsersId} access to catalog report {ReportKey}",
+                    grantorUsersId, request.UsersId, reportKey);
+
+                return Json(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "Failed to grant user {UsersId} access to catalog report {ReportKey}",
+                    request.UsersId, reportKey);
+                return Json(new { success = false, message = "Could not save the grant. Please try again." });
+            }
+        }
+
+        /// <summary>
+        /// Revokes a user's access to a catalog report.
+        /// </summary>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> RevokeReportAccess([FromBody] ReportAccessRevokeRequest request)
+        {
+            if (!IsAdminUser()) return AccessDeniedJson();
+
+            if (request == null || request.AccessId <= 0)
+                return Json(new { success = false, message = "No access record was specified." });
+
+            try
+            {
+                var entry = await _db.ReportAccess.FindAsync(request.AccessId);
+                if (entry == null) return Json(new { success = false, message = "Record not found." });
+
+                _db.ReportAccess.Remove(entry);
+                await _db.SaveChangesAsync();
+
+                _logger.LogInformation(
+                    "User {GrantorId} revoked catalog report access record {AccessId}",
+                    GetCurrentUsersId(), request.AccessId);
+
+                return Json(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to revoke catalog report access record {AccessId}", request.AccessId);
+                return Json(new { success = false, message = "Could not remove the grant. Please try again." });
+            }
+        }
+
+        // ======================================================================
+        // Helpers
+        // ======================================================================
+
+        /// <summary>
+        /// Checks whether the current user may run the given catalog report.
+        ///
+        /// Precedence (matches what the Manage Access modal tells the admin):
+        ///   1. Admins always pass.
+        ///   2. An explicit grant in [ReportAccess] wins outright — it *overrides*
+        ///      the report's role/location rules. This is the whole point of the
+        ///      feature: it lets an admin hand a single person a report their role
+        ///      would not otherwise reach.
+        ///   3. If the report has any grants at all it is "restricted", so anyone
+        ///      not on the list is denied even when their role/location would allow it.
+        ///   4. Otherwise fall back to the normal role + location rules.
+        /// </summary>
+        private async Task<bool> CanUserRunCatalogReportAsync(IReportDefinition definition, ReportUserContext userContext)
+        {
+            if (definition == null || userContext == null) return false;
+
+            var accessMap = await BuildCatalogAccessMapAsync(new[] { definition.Id });
+            return IsCatalogReportAllowed(definition, userContext, accessMap);
+        }
+
+        /// <summary>
+        /// Access state for one catalog report: whether anyone at all is granted
+        /// (making the report restricted) and whether the current user is one of them.
+        /// </summary>
+        private readonly record struct CatalogAccessState(bool IsRestricted, bool UserIsGranted);
+
+        /// <summary>
+        /// Loads the grant state for a set of catalog reports in a single query.
+        /// Reports with no rows in [ReportAccess] are simply absent from the map,
+        /// which callers read as "not restricted".
+        /// </summary>
+        private async Task<Dictionary<string, CatalogAccessState>> BuildCatalogAccessMapAsync(IEnumerable<string> reportIds)
+        {
+            var keys = reportIds
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .Select(id => $"catalog:{id}")
+                .Distinct()
+                .ToList();
+
+            var map = new Dictionary<string, CatalogAccessState>(StringComparer.OrdinalIgnoreCase);
+            if (keys.Count == 0) return map;
+
+            var currentUsersId = GetCurrentUsersId();
+
+            try
+            {
+                var rows = await _db.ReportAccess
+                    .Where(a => keys.Contains(a.ReportKey))
+                    .Select(a => new { a.ReportKey, a.Users_ID })
+                    .ToListAsync();
+
+                foreach (var group in rows.GroupBy(r => r.ReportKey, StringComparer.OrdinalIgnoreCase))
+                {
+                    map[group.Key] = new CatalogAccessState(
+                        IsRestricted: true,
+                        UserIsGranted: currentUsersId > 0 && group.Any(r => r.Users_ID == currentUsersId));
+                }
+            }
+            catch (Exception ex)
+            {
+                // A per-report grant list is an enhancement layered on top of the
+                // role/location rules. If it cannot be read we log and fall back to
+                // those rules rather than locking every user out of every report.
+                _logger.LogError(ex, "Could not load per-report access grants; falling back to role/location rules");
+            }
+
+            return map;
+        }
+
+        /// <summary>
+        /// Applies the access precedence rules described on
+        /// <see cref="CanUserRunCatalogReportAsync"/> using a pre-loaded access map.
+        /// </summary>
+        private bool IsCatalogReportAllowed(
+            IReportDefinition definition,
+            ReportUserContext userContext,
+            IReadOnlyDictionary<string, CatalogAccessState> accessMap)
+        {
+            if (definition == null || userContext == null) return false;
+
+            // 1. Admins always pass.
+            if (IsAdminUser(userContext)) return true;
+
+            if (accessMap.TryGetValue($"catalog:{definition.Id}", out var state) && state.IsRestricted)
+            {
+                // 2 & 3. The grant list is authoritative once it has any entries.
+                return state.UserIsGranted;
+            }
+
+            // 4. No grants recorded — normal role + location rules apply.
+            return _authorizationService.IsUserAuthorized(definition, userContext);
+        }
+
+        /// <summary>
+        /// True when the caller is an application administrator (RoleId 1).
+        /// Reads the session first and falls back to the auth cookie claim so the
+        /// check still holds if the session has been recycled but the user is
+        /// still signed in.
+        /// </summary>
+        private bool IsAdminUser(ReportUserContext? userContext = null)
+        {
+            if (userContext != null && userContext.RoleId == "1") return true;
+
+            var sessionRoleId = HttpContext.Session.GetString("RoleId");
+            if (sessionRoleId == "1") return true;
+
+            return User.FindFirst("RoleId")?.Value == "1";
+        }
+
+        /// <summary>
+        /// Resolves the signed-in user's Users_ID primary key, preferring the auth
+        /// cookie claim and falling back to the session. Returns 0 when unknown —
+        /// never throws, unlike the int.Parse this replaced.
+        /// </summary>
+        private int GetCurrentUsersId()
+        {
+            if (int.TryParse(User.FindFirst("Users_ID")?.Value, out var fromClaim) && fromClaim > 0)
+                return fromClaim;
+
+            if (int.TryParse(HttpContext.Session.GetString("Users_ID"), out var fromSession) && fromSession > 0)
+                return fromSession;
+
+            return 0;
+        }
+
+        /// <summary>
+        /// Returns a 403 carrying a JSON body. Plain <c>Forbid()</c> is handled by the
+        /// cookie handler, which answers an AJAX call with a 302 to the access-denied
+        /// page — the browser follows it and the caller sees an HTML document instead
+        /// of an error, which is why failures used to be invisible in the UI.
+        /// </summary>
+        private IActionResult AccessDeniedJson()
+        {
+            Response.StatusCode = StatusCodes.Status403Forbidden;
+            return Json(new { success = false, message = "You do not have permission to manage report access." });
+        }
+
         /// <summary>
         /// Opens a standalone, print-ready view (Layout=null) for the Envelope Activity Report.
         /// Accepts the same filters as the interactive report via query-string so the Print button
@@ -634,7 +908,7 @@ namespace SalesMetrics.Controllers
             var definition  = _catalog.GetById("envelope-activity");
             var userContext = BuildUserContext();
             if (definition == null || userContext == null) return RedirectToAction("Index");
-            if (!_authorizationService.IsUserAuthorized(definition, userContext)) return Forbid();
+            if (!await CanUserRunCatalogReportAsync(definition, userContext)) return Forbid();
 
             var vm = BuildEnvelopeReportBase(userContext);
             vm.FromDate     = DateTime.TryParse(fromDate, out var f) ? f : DateTime.Today.AddDays(-30);

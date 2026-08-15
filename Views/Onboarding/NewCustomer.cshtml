@@ -2,6 +2,8 @@
 
 @{
     ViewBag.Title = "New Customer Request Form";
+    ViewBag.PTitle = "Forms Center";
+    ViewBag.PLink = "/Onboarding";
     Layout = "~/Views/Shared/_Layout.cshtml";
 }
 
@@ -26,6 +28,28 @@
 }
 
 <form asp-action="Submit" asp-controller="Onboarding" method="post">
+    <div class="row mb-3">
+        <div class="col-md-9">
+            <div class="card p-3 d-flex flex-row align-items-center gap-3">
+                <label class="form-label fw-semibold mb-0 text-nowrap">Branch / Location:</label>
+                <select name="LocationCode" id="locationCodeSelect" class="form-select" style="max-width:280px;" required>
+                    <option value="">— Select branch —</option>
+                    @foreach (var loc in (Dictionary<int, (string Code, string Name)>)ViewBag.Locations)
+                    {
+                        @if (ViewBag.CurrentLocationCode == loc.Value.Code)
+                        {
+                            <option value="@loc.Value.Code" selected="selected">@loc.Value.Code - @loc.Value.Name</option>
+                        }
+                        else
+                        {
+                            <option value="@loc.Value.Code">@loc.Value.Code - @loc.Value.Name</option>
+                        }
+                    }
+                </select>
+                <small class="text-muted">Select the branch this request is being submitted for.</small>
+            </div>
+        </div>
+    </div>
     <div class="row">
         <div class="col-md-9">
             <div class="card">
@@ -62,22 +86,22 @@
                     <!-- Tab Content -->
                     <div class="tab-content p-3 border border-top-0">
                         <div class="tab-pane fade show active" id="tab-property" role="tabpanel">
-                            @Html.Partial("_TabProperty", Model)
+                            <partial name="_TabProperty" model="Model" />
                         </div>
                         <div class="tab-pane fade" id="tab-management" role="tabpanel">
-                            @Html.Partial("_TabManagement", Model)
+                            <partial name="_TabManagement" model="Model" />
                         </div>
                         <div class="tab-pane fade" id="tab-billing" role="tabpanel">
-                            @Html.Partial("_TabBilling", Model)
+                            <partial name="_TabBilling" model="Model" />
                         </div>
                         <div class="tab-pane fade" id="tab-income" role="tabpanel">
-                            @Html.Partial("_TabIncome", Model)
+                            <partial name="_TabIncome" model="Model" />
                         </div>
                         <div class="tab-pane fade" id="tab-products" role="tabpanel">
-                            @Html.Partial("_TabProducts", Model)
+                            <partial name="_TabProducts" model="Model" />
                         </div>
                         <div class="tab-pane fade" id="tab-notes" role="tabpanel">
-                            @Html.Partial("_TabNotes", Model)
+                            <partial name="_TabNotes" model="Model" />
                         </div>
                     </div>   
                 </div>
@@ -140,28 +164,25 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function () {
-        @* SweetAlert success message if available *@
-        @if (TempData["SuccessMessage"] != null)
-        {
-            <text>
+            var successMsg = '@Html.Raw(TempData["SuccessMessage"] ?? "")';
+            if (successMsg) {
                 Swal.fire({
                     icon: 'success',
                     title: 'Success!',
-                    text: '@TempData["SuccessMessage"]',
+                    text: successMsg,
                     showCancelButton: true,
-                    confirmButtonText: '🆕 Add Another',
-                    cancelButtonText: '📋 View Submissions',
+                    confirmButtonText: 'Add Another',
+                    cancelButtonText: 'View Submissions',
                     confirmButtonColor: '#198754',
                     cancelButtonColor: '#0d6efd'
-                }).then((result) => {
+                }).then(function (result) {
                     if (result.isConfirmed) {
                         window.location.href = '/Onboarding/NewCustomer';
                     } else {
-                        window.location.href = '/Onboarding/Submissions'; // change to your submissions route
+                        window.location.href = '/Onboarding/Submissions';
                     }
                 });
-            </text>
-        }
+            }
         });
     </script>
     <script>

@@ -190,7 +190,10 @@ namespace SalesMetrics.Migrations
 
                     b.HasIndex("RecipientId", "OccurredAtUtc");
 
-                    b.ToTable("SignEvent", (string)null);
+                    b.ToTable("SignEvent", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_SignEvent_Type", "EventType IN ('Sent','Opened','Consented','Signed','Edited','Completed','Voided','Declined','Expired','Downloaded','Reminded')");
+                        });
                 });
 
             modelBuilder.Entity("SalesMetrics.Domain.Signing.SignField", b =>

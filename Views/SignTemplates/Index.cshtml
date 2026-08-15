@@ -27,6 +27,7 @@
                 <th>Name</th>
                 <th>Key</th>
                 <th>Active</th>
+                <th>Branches</th>
                 <th>View</th>
                 <th></th>
             </tr>
@@ -38,6 +39,19 @@
                     <td>@t.DisplayName</td>
                     <td><code>@t.TemplateKey</code></td>
                     <td>@(t.IsActive ? "Yes" : "No")</td>
+                    <td>
+                        @if (string.IsNullOrEmpty(t.LocationCodes))
+                        {
+                            <span class="badge bg-secondary">All</span>
+                        }
+                        else
+                        {
+                            foreach (var code in t.LocationCodes.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                            {
+                                <span class="badge bg-info me-1">@code</span>
+                            }
+                        }
+                    </td>
                     <td>@t.RazorViewPath</td>
                     <td class="text-end">
                         <div class="btn-group">

@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using SalesMetrics.Domain.Signing;
 using SalesMetrics.Infrastructure.EF.Configurations.Signing;
 using SalesMetrics.Models.EFCore;
+using SalesMetrics.Data.Entities;
 using SalesMetrics.Data.Entities.QueryBuilder;
 
 namespace SalesMetrics.Data;
@@ -44,6 +45,7 @@ public partial class SalesMetricsDbContext : DbContext
     public DbSet<NotificationSettingsEntity> NotificationSettings { get; set; } = default!;
     public DbSet<SecuritySettingsEntity> SecuritySettings { get; set; } = default!;
     public DbSet<EnvelopeNotificationSettingsEntity> EnvelopeNotificationSettings { get; set; } = default!;
+    public DbSet<FormNotificationSettingsEntity> FormNotificationSettings { get; set; } = default!;
     public DbSet<FeatureEntity> Features { get; set; } = default!;
     public DbSet<UserFeaturePermissionEntity> UserFeaturePermissions { get; set; } = default!;
 
@@ -61,6 +63,9 @@ public partial class SalesMetricsDbContext : DbContext
     public DbSet<UserFavoriteReportEntity> UserFavoriteReports { get; set; } = default!;
     public DbSet<DataSourceConfigurationEntity> DataSourceConfigurations { get; set; } = default!;
 
+    // Per-report user access
+    public DbSet<ReportAccessEntity> ReportAccess { get; set; } = default!;
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
         if (!optionsBuilder.IsConfigured)
@@ -68,14 +73,24 @@ public partial class SalesMetricsDbContext : DbContext
             var config = new ConfigurationBuilder()
                 .SetBasePath(AppContext.BaseDirectory)
                 .AddJsonFile("appsettings.json")
+                .AddEnvironmentVariables()
                 .Build();
 
             var connectionString = config.GetConnectionString("SalesMetrics");
-            optionsBuilder
-                .UseSqlServer(connectionString)
-                .EnableSensitiveDataLogging()
-                .EnableDetailedErrors()
-                .LogTo(Console.WriteLine, LogLevel.Information);
+            var isDevelopment = string.Equals(
+                config["ASPNETCORE_ENVIRONMENT"], "Development",
+                StringComparison.OrdinalIgnoreCase);
+
+            optionsBuilder.UseSqlServer(connectionString);
+
+            // EnableSensitiveDataLogging logs SQL parameter values — development only.
+            if (isDevelopment)
+            {
+                optionsBuilder
+                    .EnableSensitiveDataLogging()
+                    .EnableDetailedErrors()
+                    .LogTo(Console.WriteLine, LogLevel.Information);
+            }
         }
     }
 
@@ -110,7 +125,7 @@ public partial class SalesMetricsDbContext : DbContext
 
             entity.Property(e => e.LoginHistoryId).HasColumnName("LoginHistoryID");
             entity.Property(e => e.Ipaddress)
-                .HasMaxLength(20)
+                .HasMaxLength(45)
                 .HasColumnName("IPAddress");
             entity.Property(e => e.LoginDate).HasDefaultValueSql("(CONVERT([date],getdate()))");
             entity.Property(e => e.LoginTime)
@@ -127,6 +142,9 @@ public partial class SalesMetricsDbContext : DbContext
             entity.Property(e => e.UserName)
                 .HasMaxLength(50)
                 .IsUnicode(false);
+            entity.Property(e => e.DeviceInfo).HasMaxLength(500);
+            entity.Property(e => e.UserAgentRaw).HasMaxLength(2000);
+            entity.Property(e => e.ErrorLog);
         });
 
         modelBuilder.Entity<RoleEntity>(entity =>
@@ -337,6 +355,18 @@ public partial class SalesMetricsDbContext : DbContext
             entity.Property(e => e.LastModifiedByUserId).HasColumnName("LastModifiedByUserId");
         });
 
+        // Form Notification Settings Configuration
+        modelBuilder.Entity<FormNotificationSettingsEntity>(entity =>
+        {
+            entity.HasKey(e => e.FormNotificationSettingsId);
+            entity.ToTable("FormNotificationSettings");
+            entity.Property(e => e.LocationCode).HasMaxLength(10);
+            entity.Property(e => e.LocationName).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.NotificationEmail).HasMaxLength(255);
+            entity.Property(e => e.IsEnabled).HasDefaultValue(true);
+            entity.Property(e => e.LastModifiedDate).HasColumnType("datetime").HasDefaultValueSql("(getdate())");
+        });
+
         // Feature Permissions Configuration
         modelBuilder.Entity<FeatureEntity>(entity =>
         {
@@ -379,6 +409,21 @@ public partial class SalesMetricsDbContext : DbContext
                 .HasForeignKey(d => d.FeatureId)
                 .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("FK_UserFeaturePermissions_Features");
+        });
+
+        modelBuilder.Entity<ReportAccessEntity>(entity =>
+        {
+            entity.HasKey(e => e.AccessId);
+            entity.Property(e => e.ReportKey).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.GrantedDate).HasColumnType("datetime").HasDefaultValueSql("(getdate())");
+            entity.HasIndex(e => new { e.ReportKey, e.Users_ID }).IsUnique();
+            entity.HasIndex(e => e.ReportKey);
+            entity.HasIndex(e => e.Users_ID);
+            entity.HasOne(d => d.User)
+                .WithMany()
+                .HasForeignKey(d => d.Users_ID)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_ReportAccess_Users");
         });
 
         OnModelCreatingPartial(modelBuilder);

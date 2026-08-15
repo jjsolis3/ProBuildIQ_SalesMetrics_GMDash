@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using ExcelDataReader;
 using System.Data;
 using System.Data.SqlTypes;
@@ -10,18 +11,20 @@ using SalesMetrics.Services.Helpers;
 
 namespace SalesMetrics.Controllers
 {
+    [Authorize]
     public class YardiController : Controller
     {
         private readonly SalesMetricsDbContext _context;
         private readonly IWebHostEnvironment _env;
         private readonly IMemoryCache _cache;
+        private readonly ILogger<YardiController> _logger;
 
-        // Injected constructor for DB context, environment, and caching
-        public YardiController(SalesMetricsDbContext context, IWebHostEnvironment env, IMemoryCache cache)
+        public YardiController(SalesMetricsDbContext context, IWebHostEnvironment env, IMemoryCache cache, ILogger<YardiController> logger)
         {
             _context = context;
             _env = env;
             _cache = cache;
+            _logger = logger;
         }
 
         [HttpGet]
@@ -158,16 +161,13 @@ namespace SalesMetrics.Controllers
                 }
 
                 var allKeys = HttpContext.Session.Keys.ToList();
-                foreach (var key in allKeys)
-                {
-                    Console.WriteLine($"{key} = {HttpContext.Session.GetString(key)}");
-                }
+                _logger.LogDebug("YardiProperties session keys: {Keys}", string.Join(", ", allKeys));
 
                 return View(properties);
             }
             catch (SqlNullValueException ex)
             {
-                Console.WriteLine("[YardiProperties] SQL Null Error: " + ex.Message);
+                _logger.LogError(ex, "YardiProperties SQL null error");
                 throw;
             }
         }

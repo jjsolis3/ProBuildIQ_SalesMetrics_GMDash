@@ -14,15 +14,21 @@ using System.Text;
 
 namespace SalesMetrics.Controllers
 {
+    [Authorize]
     public class AccountsController : Controller
     {
         private readonly IConfiguration _configuration;
         private readonly IPermissionService _permissionService;
+        private readonly SalesRepMetricsService _metricsService;
+        private readonly GoogleTasksService _googleTasksService;
 
-        public AccountsController(IConfiguration configuration, IPermissionService permissionService)
+        public AccountsController(IConfiguration configuration, IPermissionService permissionService,
+            SalesRepMetricsService metricsService, GoogleTasksService googleTasksService)
         {
             _configuration = configuration;
             _permissionService = permissionService;
+            _metricsService = metricsService;
+            _googleTasksService = googleTasksService;
         }
 
         // ACCOUNTS PAGE
@@ -43,14 +49,6 @@ namespace SalesMetrics.Controllers
                         u.RoleID, r.RoleName,
                         u.SalesmanID, u.SalesmanNumber,
                         u.Location,
-                        CASE u.Location
-                            WHEN 1 THEN 'LAX'
-                            WHEN 2 THEN 'LSV'
-                            WHEN 3 THEN 'CHN'
-                            WHEN 4 THEN 'PHX'
-                            WHEN 5 THEN 'SND'
-                            ELSE 'Unknown'
-                        END as LocationName,
                         u.CreatedDate, u.IsActive, u.LastLoginDate
                     FROM Users u
                     LEFT JOIN Roles r ON u.RoleID = r.RoleID
@@ -73,7 +71,7 @@ namespace SalesMetrics.Controllers
                         SalesmanId = reader["SalesmanID"] != DBNull.Value ? Convert.ToInt32(reader["SalesmanID"]) : 0,
                         SalesmanNumber = reader["SalesmanNumber"]?.ToString() ?? "",
                         Location = Convert.ToInt32(reader["Location"]),
-                        LocationName = reader["LocationName"]?.ToString() ?? "",
+                        LocationName = LocationHelper.GetLocationCode(Convert.ToInt32(reader["Location"])) ?? "Unknown",
                         CreatedDate = Convert.ToDateTime(reader["CreatedDate"]),
                         IsActive = reader["IsActive"] != DBNull.Value && Convert.ToBoolean(reader["IsActive"]),
                         LastLoginDate = reader["LastLoginDate"] != DBNull.Value ? Convert.ToDateTime(reader["LastLoginDate"]) : null
@@ -82,36 +80,25 @@ namespace SalesMetrics.Controllers
                 }
                 reader.Close();
 
-                // Fetch assigned locations for each user
-                foreach (var user in usersWithAssignments)
+                // Load all active location assignments in one query, then map in memory
+                var allAssignments = new Dictionary<int, List<string>>();
+                var assignCmd = new SqlCommand(@"
+                    SELECT UserID, LocationID
+                    FROM UserLocationAssignments
+                    WHERE IsActive = 'YES'
+                    ORDER BY UserID, LocationID
+                ", conn);
+                using var assignReader = assignCmd.ExecuteReader();
+                while (assignReader.Read())
                 {
-                    var assignedLocations = new List<string>();
-                    var locCmd = new SqlCommand(@"
-                        SELECT LocationID
-                        FROM UserLocationAssignments
-                        WHERE UserID = @UserId AND IsActive = 'YES'
-                        ORDER BY LocationID
-                    ", conn);
-                    locCmd.Parameters.AddWithValue("@UserId", user.UserId);
-
-                    using var locReader = locCmd.ExecuteReader();
-                    while (locReader.Read())
-                    {
-                        int locId = Convert.ToInt32(locReader["LocationID"]);
-                        string locName = locId switch
-                        {
-                            1 => "LAX",
-                            2 => "LSV",
-                            3 => "CHN",
-                            4 => "PHX",
-                            5 => "SND",
-                            _ => "?"
-                        };
-                        assignedLocations.Add(locName);
-                    }
-
-                    user.AssignedLocations = assignedLocations;
+                    int uid = Convert.ToInt32(assignReader["UserID"]);
+                    int locId = Convert.ToInt32(assignReader["LocationID"]);
+                    string locName = LocationHelper.GetLocationCode(locId) ?? "?";
+                    if (!allAssignments.ContainsKey(uid)) allAssignments[uid] = new List<string>();
+                    allAssignments[uid].Add(locName);
                 }
+                foreach (var user in usersWithAssignments)
+                    user.AssignedLocations = allAssignments.TryGetValue(user.Users_ID, out var locs) ? locs : new List<string>();
             }
 
             ViewBag.FlaggedUsers = GetFlaggedUsers();
@@ -123,22 +110,21 @@ namespace SalesMetrics.Controllers
         {
             var userId = HttpContext.Session.GetString("UserId");
             var locationId = Convert.ToInt32(HttpContext.Session.GetString("LocationId"));
-            var salesmanName = User.FindFirst("FullName")?.Value ?? "";
-            
-            var userProfile = new UserProfileViewModel();
-            var metrics = new SalesRepMetricsViewModel
-            {
-                PropertyDetails = new List<SalesRepNewAccountSummaryViewModel>()
-            };
 
+            var parsedStartDate = startDate ?? new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1).AddMonths(-1);
+            var parsedEndDate = endDate ?? DateTime.UtcNow;
+
+            var userProfile = new UserProfileViewModel();
+
+            // -- Fetch User Profile Info --
             using var conn = new SqlConnection(_configuration.GetConnectionString("SalesMetrics"));
             conn.Open();
 
-            // -- Fetch User Profile Info --
             var cmd = new SqlCommand(@"
-                SELECT FirstName, LastName, Email, RoleID, GoogleEmail, GoogleAccessToken, GoogleRefreshToken, SalesmanID, SalesmanNumber 
-                FROM Users 
-                WHERE UserID = @UserID and Location = @LocationId
+                SELECT FirstName, LastName, Email, RoleID, GoogleEmail, GoogleAccessToken, GoogleRefreshToken,
+                       SalesmanID, SalesmanNumber, Location
+                FROM Users
+                WHERE UserID = @UserID AND Location = @LocationId
             ", conn);
             cmd.Parameters.AddWithValue("@UserID", userId);
             cmd.Parameters.AddWithValue("@LocationId", locationId);
@@ -157,99 +143,33 @@ namespace SalesMetrics.Controllers
                     userProfile.GoogleRefreshToken = reader["GoogleRefreshToken"]?.ToString();
                     userProfile.SalesmanID = reader["SalesmanID"] != DBNull.Value ? Convert.ToInt32(reader["SalesmanID"]) : 0;
                     userProfile.SalesmanNumber = reader["SalesmanNumber"]?.ToString();
+                    userProfile.LocationId = reader["Location"] != DBNull.Value ? Convert.ToInt32(reader["Location"]) : 0;
                 }
             }
 
-            // -- Fetch Sales Rep Metrics Query --
-            var parsedStartDate = startDate ?? DateTime.UtcNow.AddDays(-30); // Default to last 30 days
-            var parsedEndDate = endDate ?? DateTime.UtcNow; // Default to today
-
-            //int locationId = LocationHelper.GetCurrentLocationId(HttpContext);
-            string officeLocation = LocationHelper.GetCurrentOfficeCode(HttpContext);
-            var connectionString = _configuration.GetConnectionString(officeLocation);
-
-            using var CUFconn = new SqlConnection(connectionString);
-            CUFconn.Open();
-
-            var metricsCmd = new SqlCommand(@"
-                -- Main report
-                WITH NewAccounts AS (
-                    SELECT
-                        C.CUM_CUSTOMER_NAME AS Property,
-                        PC.IPC_DESCRIPTION AS [Mgmt Co],
-                        SM.SMN_SALESMAN_NAME AS Salesperson,
-                        SH.SOH_NUMBER AS [Order#],
-                        IH.IHF_INVOICE_NUMBER AS [Invoice#],
-                        CAST(C.CUM_ESTABLISHED_DATE AS DATE) AS [Date Created],
-                        CAST(SH.SOH_DELIVERY_DATE AS DATE) AS [Date Installed],
-                        ISNULL(SOH_TOTAL_AMOUNT, 0) AS OrderAmount,
-                        ISNULL(IHF_TOTAL_AMOUNT, 0) AS InvoiceAmount
-                    FROM CUSTOMER_MASTER C
-                    LEFT JOIN SALESMAN_MASTER SM ON C.CUM_SMNMAS_ID = SM.SMN_SMNMAS_ID
-                    LEFT JOIN PRICE_CODES PC ON C.CUM_PRICE_CODE = PC.IPC_PRICE_CODE
-                    LEFT JOIN SALES_HEADER SH ON C.CUM_CUSTOMER_NUMBER = SH.SOH_CUSTOMER_NUMBER
-                    LEFT JOIN INVOICE_HEADER IH ON SH.SOH_NUMBER = IH.IHF_ORDER_NUMBER
-                    WHERE
-                        C.CUM_ESTABLISHED_DATE >= @startDate
-                        AND C.CUM_ESTABLISHED_DATE < @endDate
-                        AND SH.SOH_CANCELED_DATE IS NULL
-                        AND SH.SOH_WHSMAS_ID = 1
-                        AND SM.SMN_SALESMAN_NAME = @salesperson
-                )
-
-                SELECT
-                    Property,
-                    [Mgmt Co] AS ManagementCompany,
-                    MAX([Date Created]) as Established,
-                    COUNT(DISTINCT [Order#]) AS Orders,
-                    SUM(OrderAmount) AS TotalSalesAmount,
-                    COUNT(DISTINCT [Invoice#]) AS Invoices,
-                    SUM(InvoiceAmount) AS TotalInvoiceAmount
-                FROM NewAccounts
-                GROUP BY Property, [Mgmt Co]
-                ORDER BY Property
-            ", CUFconn);
-
-            metricsCmd.Parameters.AddWithValue("@startDate", parsedStartDate);
-            metricsCmd.Parameters.AddWithValue("@endDate", parsedEndDate);
-            metricsCmd.Parameters.AddWithValue("@salesperson", salesmanName);
-
-            using (var metricsReader = metricsCmd.ExecuteReader())
+            // -- Fetch Sales Rep Metrics (only for Sales Rep role 2, and only when SalesmanID is available) --
+            SalesRepMetricsViewModel metrics;
+            if (userProfile.RoleId == 2 && userProfile.SalesmanID > 0)
             {
-                while (metricsReader.Read())
-                {
-                    var item = new SalesRepNewAccountSummaryViewModel
-                    {
-                        Property = metricsReader["Property"].ToString() ?? "",
-                        ManagementCompany = metricsReader["ManagementCompany"].ToString() ?? "",
-                        EstablishedDate = Convert.ToDateTime(metricsReader["Established"]),
-                        Orders = Convert.ToInt32(metricsReader["Orders"]),
-                        TotalSalesAmount = Convert.ToDecimal(metricsReader["TotalSalesAmount"]),
-                        Invoices = Convert.ToInt32(metricsReader["Invoices"]),
-                        TotalInvoiceAmount = Convert.ToDecimal(metricsReader["TotalInvoiceAmount"])
-                    };
-                    metrics.PropertyDetails.Add(item);
-                }
+                metrics = _metricsService.GetSalesMetrics(
+                    userProfile.SalesmanID, locationId, parsedStartDate, parsedEndDate);
             }
-
-            // -- Fetch Sales Rep Metrics Summary --
-            metrics.NewAccounts = metrics.PropertyDetails.Count;
-            metrics.OrdersCount = metrics.PropertyDetails.Sum(x => x.Orders);
-            metrics.InvoicesCount = metrics.PropertyDetails.Sum(x => x.Invoices);
-            metrics.TotalSalesAmount = metrics.PropertyDetails.Sum(x => x.TotalSalesAmount);
-            metrics.TotalInvoiceAmount = metrics.PropertyDetails.Sum(x => x.TotalInvoiceAmount);
-            metrics.WithoutOrders = metrics.PropertyDetails.Count(x => x.Orders == 0);
+            else
+            {
+                metrics = new SalesRepMetricsViewModel
+                {
+                    PropertyDetails = new List<SalesRepNewAccountSummaryViewModel>()
+                };
+            }
 
             // -- Return Composite Model --
-            var pageModel = new SalesRepProfilePageViewModel
+            return View(new SalesRepProfilePageViewModel
             {
                 UserProfile = userProfile,
                 Metrics = metrics,
                 StartDate = parsedStartDate,
                 EndDate = parsedEndDate,
-            };
-
-            return View(pageModel);
+            });
         }
 
         // KANBAN PAGE
@@ -286,10 +206,9 @@ namespace SalesMetrics.Controllers
                 return RedirectToAction("User");
             }
 
-            // 👇 Call the service
-            var taskService = new GoogleTasksService(_configuration);
-            //var result = await taskService.CreateTaskAsync(accessToken, "SalesMetrics Test Task", "This is a test task created from SalesMetrics", "Notes", DateTime.UtcNow.AddHours(1));
-            var result = await taskService.CreateTaskAsync(accessToken, refreshToken, users_Id.ToString(),"**TestTaskID**", "SalesMetrics Test Task", "This is a test task created from SalesMetrics", DateTime.UtcNow.AddHours(1));
+            // Resolved from DI — GoogleTasksService also needs a logger and the error
+            // logging service, which only the container can supply.
+            var result = await _googleTasksService.CreateTaskAsync(accessToken, refreshToken, users_Id.ToString(), "**TestTaskID**", "SalesMetrics Test Task", "This is a test task created from SalesMetrics", DateTime.UtcNow.AddHours(1));
 
             if (!string.IsNullOrEmpty(result))
                 TempData["Success"] = $"Google Task created successfully! Task ID: {result}";
@@ -399,7 +318,7 @@ namespace SalesMetrics.Controllers
                     FROM UserLocationAssignments
                     WHERE UserID = @UserId AND IsActive = 'YES'
                 ", conn);
-                locationCmd.Parameters.AddWithValue("@UserId", user.UserId);
+                locationCmd.Parameters.AddWithValue("@UserId", user.Users_Id);
                 using (var locReader = locationCmd.ExecuteReader())
                 {
                     while (locReader.Read())
@@ -499,8 +418,15 @@ namespace SalesMetrics.Controllers
                     }
                     if (!string.IsNullOrWhiteSpace(model.Password))
                     {
-                        updates.Add("Password = @Password");
-                        cmd.Parameters.AddWithValue("@Password", model.Password ?? "");
+                        // Hash the new password with a fresh salt; never store plaintext.
+                        string newSalt = PasswordSecurity.GenerateSalt();
+                        string newHash = PasswordSecurity.HashPassword(model.Password, newSalt);
+
+                        updates.Add("PasswordHash = @PasswordHash");
+                        updates.Add("Salt = @Salt");
+                        updates.Add("PasswordChangedDate = GETDATE()");
+                        cmd.Parameters.AddWithValue("@PasswordHash", newHash);
+                        cmd.Parameters.AddWithValue("@Salt", newSalt);
                     }
                     if (!string.IsNullOrWhiteSpace(model.UserId.ToString()))
                     {
@@ -539,9 +465,9 @@ namespace SalesMetrics.Controllers
 
                     cmd.ExecuteNonQuery();
 
-                    // Remove all previous location assignments
+                    // Remove all previous location assignments (use Users_Id primary key — same ID used by SwitchLocation)
                     var deleteCmd = new SqlCommand("DELETE FROM UserLocationAssignments WHERE UserID = @UserId", conn);
-                    deleteCmd.Parameters.AddWithValue("@UserId", model.UserId);
+                    deleteCmd.Parameters.AddWithValue("@UserId", model.Users_Id);
                     deleteCmd.ExecuteNonQuery();
 
                     // Reinsert selected locations
@@ -553,7 +479,7 @@ namespace SalesMetrics.Controllers
                             INSERT INTO UserLocationAssignments (UserID, LocationID, IsActive, DateAssigned)
                             VALUES (@UserId, @LocationId, 'YES', GETDATE())
                         ", conn);
-                            insertCmd.Parameters.AddWithValue("@UserId", model.UserId);
+                            insertCmd.Parameters.AddWithValue("@UserId", model.Users_Id);
                             insertCmd.Parameters.AddWithValue("@LocationId", locId);
                             insertCmd.ExecuteNonQuery();
                         }
@@ -656,11 +582,13 @@ namespace SalesMetrics.Controllers
             using var conn = new SqlConnection(connStr);
             conn.Open();
 
+            // Use SELECT SCOPE_IDENTITY() to capture the new Users_ID so location assignments use the primary key
             var cmd = new SqlCommand(@"
-                INSERT INTO Users 
+                INSERT INTO Users
                     (Username, Password, FirstName, LastName, Email, UserID, RoleID, Location, SalesmanID, SalesmanNumber, CreatedDate, IsActive, PasswordHash, Salt)
-                VALUES 
-                    (@Username, @Password, @FirstName, @LastName, @Email, @UserId, @RoleId, @LocationId, @SalesmanId, @SalesmanNumber, GETDATE(), 1, @PasswordHash, @Salt)
+                VALUES
+                    (@Username, @Password, @FirstName, @LastName, @Email, @UserId, @RoleId, @LocationId, @SalesmanId, @SalesmanNumber, GETDATE(), 1, @PasswordHash, @Salt);
+                SELECT CAST(SCOPE_IDENTITY() AS INT);
             ", conn);
 
             cmd.Parameters.AddWithValue("@Username", model.Username);
@@ -668,16 +596,18 @@ namespace SalesMetrics.Controllers
             cmd.Parameters.AddWithValue("@FirstName", model.FirstName);
             cmd.Parameters.AddWithValue("@LastName", model.LastName);
             cmd.Parameters.AddWithValue("@Email", model.Email);
-            cmd.Parameters.AddWithValue("@UserId", model.UserId);
+            cmd.Parameters.AddWithValue("@UserId", (object?)(model.UserId > 0 ? model.UserId : null) ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@RoleId", model.RoleId);
             cmd.Parameters.AddWithValue("@LocationId", model.LocationId);
             cmd.Parameters.AddWithValue("@SalesmanId", (object?)model.SalesmanId ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@SalesmanNumber", (object?)model.SalesmanNumber ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@PasswordHash", hash);
             cmd.Parameters.AddWithValue("@Salt", salt);
-            cmd.ExecuteNonQuery();
 
-            // 🔻 assigned multiple locations for user
+            // Capture the new Users_ID (primary key) so location assignments are keyed correctly
+            var newUsersId = Convert.ToInt32(cmd.ExecuteScalar());
+
+            // Insert location assignments using the primary key (same column SwitchLocation queries)
             if (model.AssignedLocationIds != null && model.AssignedLocationIds.Any())
             {
                 foreach (var locId in model.AssignedLocationIds)
@@ -686,7 +616,7 @@ namespace SalesMetrics.Controllers
                         INSERT INTO UserLocationAssignments (UserID, LocationID, IsActive, DateAssigned)
                         VALUES (@UserId, @LocationId, 'YES', GETDATE())
                     ", conn);
-                    insertCmd.Parameters.AddWithValue("@UserId", model.UserId);
+                    insertCmd.Parameters.AddWithValue("@UserId", newUsersId);
                     insertCmd.Parameters.AddWithValue("@LocationId", locId);
                     insertCmd.ExecuteNonQuery();
                 }
@@ -818,6 +748,61 @@ namespace SalesMetrics.Controllers
         }
 
         [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult FixAllFlaggedPasswords()
+        {
+            int roleId = int.Parse(HttpContext.User.FindFirst("RoleId")?.Value ?? "0");
+            if (roleId != 1)
+                return RedirectToAction("Error404", "Pages");
+
+            string connStr = _configuration.GetConnectionString("SalesMetrics");
+            DateTime cutoff = new DateTime(2025, 6, 3, 10, 0, 0, DateTimeKind.Utc);
+
+            var usersToFix = new List<(int Users_ID, string Password)>();
+
+            using (var conn = new SqlConnection(connStr))
+            {
+                conn.Open();
+                var cmd = new SqlCommand(@"
+                    SELECT Users_ID, Password
+                    FROM Users
+                    WHERE IsActive = 1
+                      AND Password IS NOT NULL
+                      AND (PasswordChangedDate IS NULL OR PasswordChangedDate < @Cutoff)
+                ", conn);
+                cmd.Parameters.AddWithValue("@Cutoff", cutoff);
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                    usersToFix.Add((Convert.ToInt32(reader["Users_ID"]), reader["Password"].ToString()!));
+            }
+
+            int fixed_ = 0;
+            using (var conn = new SqlConnection(connStr))
+            {
+                conn.Open();
+                foreach (var (id, plainPassword) in usersToFix)
+                {
+                    string newSalt = PasswordSecurity.GenerateSalt();
+                    string newHash = PasswordSecurity.HashPassword(plainPassword, newSalt);
+                    var updateCmd = new SqlCommand(@"
+                        UPDATE Users
+                        SET PasswordHash = @Hash,
+                            Salt = @Salt,
+                            PasswordChangedDate = GETDATE()
+                        WHERE Users_ID = @UserId
+                    ", conn);
+                    updateCmd.Parameters.AddWithValue("@Hash", newHash);
+                    updateCmd.Parameters.AddWithValue("@Salt", newSalt);
+                    updateCmd.Parameters.AddWithValue("@UserId", id);
+                    fixed_ += updateCmd.ExecuteNonQuery();
+                }
+            }
+
+            TempData["Success"] = $"Fixed {fixed_} flagged user password(s).";
+            return RedirectToAction("Index");
+        }
+
+        [HttpPost]
         public IActionResult SwitchLocation(string selectedLocation)
         {
             selectedLocation = selectedLocation ?? "LAX"; // or your default
@@ -867,6 +852,284 @@ namespace SalesMetrics.Controllers
 
             var referrer = Request.Headers["Referer"].ToString();
             return Redirect(!string.IsNullOrEmpty(referrer) ? referrer : "/");
+        }
+
+        // ======================================================================
+        // BULK PERMISSIONS MANAGER
+        // ======================================================================
+
+        [HttpGet]
+        public async Task<IActionResult> BulkPermissions(int? featureId, int? roleId, int? locationId)
+        {
+            var features = await _permissionService.GetAllFeaturesAsync();
+
+            var vm = new BulkPermissionViewModel
+            {
+                SelectedFeatureId = featureId ?? 0,
+                SelectedRoleId    = roleId,
+                SelectedLocationId = locationId,
+                AllFeatures = features
+                    .Select(f => new SelectListItem
+                    {
+                        Value    = f.FeatureId.ToString(),
+                        Text     = string.IsNullOrWhiteSpace(f.Category) ? f.FeatureName : $"{f.Category} › {f.FeatureName}",
+                        Selected = f.FeatureId == featureId
+                    }).ToList(),
+                AllRoles = GetRolesSelectList(roleId),
+            };
+            vm.AllFeatures.Insert(0, new SelectListItem { Value = "", Text = "— Select a Feature —" });
+
+            if (featureId.HasValue && featureId.Value > 0)
+            {
+                vm.FeatureName = features.FirstOrDefault(f => f.FeatureId == featureId.Value)?.FeatureName;
+                var usersWithAccess = await _permissionService.GetUsersWithFeatureAccessAsync(featureId.Value);
+                vm.Users = LoadUsersForBulkPermissions(roleId, locationId, usersWithAccess);
+            }
+
+            return View(vm);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> BulkUpdatePermissions(int featureId, int? roleId, int? locationId, List<int>? grantedUserIds)
+        {
+            var grantedByUserId = int.TryParse(User.FindFirst("Users_ID")?.Value, out var uid) ? uid : 0;
+            var grantedSet = grantedUserIds ?? new List<int>();
+
+            // Load the exact set of user IDs that were visible under the active filters.
+            // This ensures Grant All / Revoke All only affects the filtered scope and
+            // never touches permissions for users outside the current filter.
+            var scopedUserIds = LoadUserIdsForBulkPermissions(roleId, locationId);
+
+            var success = await _permissionService.BulkUpdateFeatureAccessForScopedUsersAsync(
+                featureId, scopedUserIds, grantedSet, grantedByUserId);
+
+            if (success)
+                TempData["SuccessMessage"] = $"Permissions updated for {grantedSet.Count} user(s).";
+            else
+                TempData["ErrorMessage"] = "An error occurred while updating permissions. Please try again.";
+
+            return RedirectToAction(nameof(BulkPermissions), new { featureId, roleId, locationId });
+        }
+
+        private List<BulkUserPermissionRow> LoadUsersForBulkPermissions(int? roleId, int? locationId, List<int> usersWithAccess)
+        {
+            var users = new List<BulkUserPermissionRow>();
+            string connStr = _configuration.GetConnectionString("SalesMetrics");
+
+            using var conn = new SqlConnection(connStr);
+            conn.Open();
+
+            var where = new List<string> { "u.IsActive = 1" };
+            var cmd = new SqlCommand();
+            cmd.Connection = conn;
+
+            if (roleId.HasValue)
+            {
+                where.Add("u.RoleID = @RoleId");
+                cmd.Parameters.AddWithValue("@RoleId", roleId.Value);
+            }
+            if (locationId.HasValue)
+            {
+                where.Add("u.Location = @LocationId");
+                cmd.Parameters.AddWithValue("@LocationId", locationId.Value);
+            }
+
+            cmd.CommandText = $@"
+                SELECT u.Users_ID, u.FirstName, u.LastName, u.RoleID,
+                       ISNULL(r.RoleName, 'Unknown') AS RoleName,
+                       u.Location
+                FROM Users u
+                LEFT JOIN Roles r ON u.RoleID = r.RoleID
+                WHERE {string.Join(" AND ", where)}
+                ORDER BY u.FirstName, u.LastName";
+
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                var usersId = reader.GetInt32(reader.GetOrdinal("Users_ID"));
+                var locId = reader.GetInt32(reader.GetOrdinal("Location"));
+                users.Add(new BulkUserPermissionRow
+                {
+                    Users_ID  = usersId,
+                    FullName  = $"{reader["FirstName"]} {reader["LastName"]}".Trim(),
+                    RoleName  = reader["RoleName"].ToString() ?? "",
+                    RoleId    = reader.GetInt32(reader.GetOrdinal("RoleID")),
+                    Location  = LocationHelper.GetLocationCode(locId) ?? "N/A",
+                    LocationId = locId,
+                    HasAccess = usersWithAccess.Contains(usersId)
+                });
+            }
+
+            return users;
+        }
+
+        private List<int> LoadUserIdsForBulkPermissions(int? roleId, int? locationId)
+        {
+            var userIds = new List<int>();
+            string connStr = _configuration.GetConnectionString("SalesMetrics");
+
+            using var conn = new SqlConnection(connStr);
+            conn.Open();
+
+            var where = new List<string> { "IsActive = 1" };
+            var cmd = new SqlCommand();
+            cmd.Connection = conn;
+
+            if (roleId.HasValue)
+            {
+                where.Add("RoleID = @RoleId");
+                cmd.Parameters.AddWithValue("@RoleId", roleId.Value);
+            }
+            if (locationId.HasValue)
+            {
+                where.Add("Location = @LocationId");
+                cmd.Parameters.AddWithValue("@LocationId", locationId.Value);
+            }
+
+            cmd.CommandText = $"SELECT Users_ID FROM Users WHERE {string.Join(" AND ", where)}";
+
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+                userIds.Add(reader.GetInt32(0));
+
+            return userIds;
+        }
+
+        // ======================================================================
+        // BULK LOCATION ASSIGNMENT
+        // ======================================================================
+
+        [HttpGet]
+        public async Task<IActionResult> BulkLocationAssignment(int? locationId, int? roleId, int? primaryLocationId)
+        {
+            var vm = new BulkLocationAssignmentViewModel
+            {
+                SelectedLocationId     = locationId ?? 0,
+                FilterRoleId           = roleId,
+                FilterPrimaryLocationId = primaryLocationId,
+                AllLocations = new List<SelectListItem>
+                {
+                    new SelectListItem { Value = "", Text = "— Select a Location —" },
+                    new SelectListItem { Value = "1", Text = "LAX — Los Angeles",  Selected = locationId == 1 },
+                    new SelectListItem { Value = "2", Text = "LSV — Las Vegas",    Selected = locationId == 2 },
+                    new SelectListItem { Value = "3", Text = "CHN — Chino",        Selected = locationId == 3 },
+                    new SelectListItem { Value = "4", Text = "PHX — Phoenix",      Selected = locationId == 4 },
+                    new SelectListItem { Value = "5", Text = "SND — San Diego",    Selected = locationId == 5 },
+                },
+                AllRoles = GetRolesSelectList(roleId),
+            };
+
+            if (locationId.HasValue && locationId.Value > 0)
+            {
+                vm.LocationName = vm.AllLocations
+                    .FirstOrDefault(l => l.Value == locationId.Value.ToString())?.Text;
+
+                var usersWithAssignment = await _permissionService.GetUsersWithLocationAssignmentAsync(locationId.Value);
+                vm.Users = LoadUsersForBulkLocationAssignment(roleId, primaryLocationId, usersWithAssignment);
+            }
+
+            return View(vm);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> BulkUpdateLocationAssignment(
+            int locationId, int? roleId, int? primaryLocationId, List<int>? assignedUserIds)
+        {
+            var adminUserId = Convert.ToInt32(
+                HttpContext.Session.GetString("Users_ID") ?? HttpContext.Session.GetString("UserId") ?? "0");
+            var assignSet = assignedUserIds ?? new List<int>();
+
+            // Reconstruct the exact filtered scope so we only touch visible users
+            var scopedUserIds = LoadUserIdsForBulkPermissions(roleId, primaryLocationId);
+
+            var success = await _permissionService.BulkUpdateLocationAssignmentsAsync(
+                locationId, scopedUserIds, assignSet, adminUserId);
+
+            if (success)
+                TempData["SuccessMessage"] = $"Location assignments updated for {assignSet.Count} user(s).";
+            else
+                TempData["ErrorMessage"] = "An error occurred while updating location assignments. Please try again.";
+
+            return RedirectToAction(nameof(BulkLocationAssignment), new { locationId, roleId, primaryLocationId });
+        }
+
+        private List<BulkUserLocationRow> LoadUsersForBulkLocationAssignment(
+            int? roleId, int? primaryLocationId, List<int> usersWithAssignment)
+        {
+            var users = new List<BulkUserLocationRow>();
+            string connStr = _configuration.GetConnectionString("SalesMetrics");
+
+            using var conn = new SqlConnection(connStr);
+            conn.Open();
+
+            var where = new List<string> { "u.IsActive = 1" };
+            var cmd = new SqlCommand();
+            cmd.Connection = conn;
+
+            if (roleId.HasValue)
+            {
+                where.Add("u.RoleID = @RoleId");
+                cmd.Parameters.AddWithValue("@RoleId", roleId.Value);
+            }
+            if (primaryLocationId.HasValue)
+            {
+                where.Add("u.Location = @PrimaryLocationId");
+                cmd.Parameters.AddWithValue("@PrimaryLocationId", primaryLocationId.Value);
+            }
+
+            cmd.CommandText = $@"
+                SELECT u.Users_ID, u.FirstName, u.LastName, u.RoleID,
+                       ISNULL(r.RoleName, 'Unknown') AS RoleName,
+                       u.Location
+                FROM Users u
+                LEFT JOIN Roles r ON u.RoleID = r.RoleID
+                WHERE {string.Join(" AND ", where)}
+                ORDER BY u.FirstName, u.LastName";
+
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                var usersId = reader.GetInt32(reader.GetOrdinal("Users_ID"));
+                var locId = reader.GetInt32(reader.GetOrdinal("Location"));
+                users.Add(new BulkUserLocationRow
+                {
+                    Users_ID          = usersId,
+                    FullName          = $"{reader["FirstName"]} {reader["LastName"]}".Trim(),
+                    RoleName          = reader["RoleName"].ToString() ?? "",
+                    RoleId            = reader.GetInt32(reader.GetOrdinal("RoleID")),
+                    PrimaryLocation   = LocationHelper.GetLocationCode(locId) ?? "N/A",
+                    PrimaryLocationId = locId,
+                    IsAssigned        = usersWithAssignment.Contains(usersId)
+                });
+            }
+
+            return users;
+        }
+
+        private List<SelectListItem> GetRolesSelectList(int? selectedRoleId)
+        {
+            var roles = new List<SelectListItem>
+            {
+                new SelectListItem { Value = "", Text = "— All Roles —", Selected = !selectedRoleId.HasValue }
+            };
+            string connStr = _configuration.GetConnectionString("SalesMetrics");
+            using var conn = new SqlConnection(connStr);
+            conn.Open();
+            var cmd = new SqlCommand("SELECT RoleID, RoleName FROM Roles ORDER BY RoleName", conn);
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                var id = reader.GetInt32(reader.GetOrdinal("RoleID"));
+                roles.Add(new SelectListItem
+                {
+                    Value    = id.ToString(),
+                    Text     = reader["RoleName"].ToString() ?? "",
+                    Selected = selectedRoleId.HasValue && selectedRoleId.Value == id
+                });
+            }
+            return roles;
         }
     }
 }

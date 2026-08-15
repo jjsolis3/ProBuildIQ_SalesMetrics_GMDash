@@ -190,6 +190,9 @@ namespace SalesMetrics.Models
         public List<NotificationSettingsViewModel> NotificationSettings { get; set; } = new();
         public List<SecuritySettingViewModel> SecuritySettings { get; set; } = new();
         public List<EnvelopeNotificationSettingViewModel> EnvelopeNotificationSettings { get; set; } = new();
+        public List<FormNotificationSettingViewModel> FormNotificationSettings { get; set; } = new();
+        public List<BrandingSettingViewModel> BrandingSettings { get; set; } = new();
+        public List<SecuritySettingViewModel> GeneralSettings { get; set; } = new();
         public string ActiveTab { get; set; } = "notifications";
     }
 
@@ -242,5 +245,45 @@ namespace SalesMetrics.Models
         public int EnvelopeNotificationSettingsId { get; set; }
         public string? NotificationEmail { get; set; }
         public bool IsEnabled { get; set; }
+    }
+
+    // ======================================================================
+    // Form Notification Settings View Models
+    // ======================================================================
+
+    public class FormNotificationSettingViewModel
+    {
+        public int FormNotificationSettingsId { get; set; }
+        public string? LocationCode { get; set; }
+        public string LocationName { get; set; } = null!;
+        public string? NotificationEmail { get; set; }
+        public bool IsEnabled { get; set; }
+    }
+
+    public class SaveFormNotificationSettingRequest
+    {
+        public int FormNotificationSettingsId { get; set; }
+        public string? NotificationEmail { get; set; }
+        public bool IsEnabled { get; set; }
+    }
+
+    // ======================================================================
+    // Branding Settings View Models
+    // ======================================================================
+
+    public class BrandingSettingViewModel
+    {
+        public string SettingKey { get; set; } = null!;
+        public string DisplayName { get; set; } = null!;
+        public string? Description { get; set; }
+        public string? SettingValue { get; set; }
+        /// <summary>text, url, or textarea</summary>
+        public string InputType { get; set; } = "text";
+    }
+
+    public class SaveBrandingSettingRequest
+    {
+        public string SettingKey { get; set; } = null!;
+        public string? SettingValue { get; set; }
     }
 }

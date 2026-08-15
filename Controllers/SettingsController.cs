@@ -1,19 +1,28 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SalesMetrics.Data;
 using SalesMetrics.Models;
+using SalesMetrics.Services.Permissions;
 using SalesMetrics.Services.Settings;
+using SalesMetrics.Models.Settings;
 
 namespace SalesMetrics.Controllers
 {
+    [Authorize]
     public class SettingsController : Controller
     {
         private readonly ISettingsService _settingsService;
         private readonly SalesMetricsDbContext _context;
+        private readonly IPermissionService _permissionService;
+        private readonly IAppCredentialsProvider _appCredentials;
 
-        public SettingsController(ISettingsService settingsService, SalesMetricsDbContext context)
+        public SettingsController(ISettingsService settingsService, SalesMetricsDbContext context,
+            IPermissionService permissionService, IAppCredentialsProvider appCredentials)
         {
             _settingsService = settingsService;
-            _context = context;
+            _context         = context;
+            _permissionService = permissionService;
+            _appCredentials  = appCredentials;
         }
 
         private int GetCurrentUserId()
@@ -32,6 +41,34 @@ namespace SalesMetrics.Controllers
         {
             var roleId = GetCurrentRoleId();
             return roleId == 1; // Admin only
+        }
+
+        // ======================================================================
+        // Settings Hub
+        // ======================================================================
+
+        // GET: /Settings/Hub
+        [HttpGet]
+        public async Task<IActionResult> Hub()
+        {
+            var userId = GetCurrentUserId();
+
+            var vm = new SettingsHubViewModel
+            {
+                CanAccessAnnouncements  = userId > 0 && await _permissionService.HasFeatureAccessAsync(userId, "Announcements"),
+                CanAccessSystemSettings = userId > 0 && await _permissionService.HasFeatureAccessAsync(userId, "Settings"),
+                CanAccessAccessControl  = userId > 0 && await _permissionService.HasFeatureAccessAsync(userId, "Users"),
+                CanAccessYardiUpload    = userId > 0 && await _permissionService.HasFeatureAccessAsync(userId, "YardiUpload"),
+                CanAccessErrorLogs        = userId > 0 && await _permissionService.HasFeatureAccessAsync(userId, "ErrorLogs"),
+                CanAccessBulkPermissions          = userId > 0 && await _permissionService.HasFeatureAccessAsync(userId, "Users"),
+                CanAccessBulkLocationAssignment   = userId > 0 && await _permissionService.HasFeatureAccessAsync(userId, "Users"),
+            };
+
+            if (!vm.CanAccessAnnouncements && !vm.CanAccessSystemSettings &&
+                !vm.CanAccessAccessControl  && !vm.CanAccessYardiUpload  && !vm.CanAccessErrorLogs)
+                return Forbid();
+
+            return View(vm);
         }
 
         // ======================================================================
@@ -170,6 +207,9 @@ namespace SalesMetrics.Controllers
                 await _settingsService.InitializeDefaultNotificationSettingsAsync();
                 await _settingsService.InitializeDefaultSecuritySettingsAsync();
                 await _settingsService.InitializeDefaultEnvelopeNotificationSettingsAsync();
+                await _settingsService.InitializeDefaultFormNotificationSettingsAsync();
+                await _settingsService.InitializeDefaultBrandingSettingsAsync();
+                await _settingsService.InitializeDefaultGeneralSettingsAsync();
 
                 TempData["SuccessMessage"] = "Default settings initialized successfully!";
             }
@@ -214,6 +254,278 @@ namespace SalesMetrics.Controllers
             {
                 return Json(new { success = false, message = $"Error: {ex.Message}" });
             }
+        }
+
+        // ======================================================================
+        // Form Notification Settings API
+        // ======================================================================
+
+        // GET: /Settings/GetFormNotificationSettings
+        [HttpGet]
+        public async Task<IActionResult> GetFormNotificationSettings()
+        {
+            if (!IsAdmin()) return Forbid();
+            var settings = await _settingsService.GetFormNotificationSettingsAsync();
+            return Json(settings);
+        }
+
+        // POST: /Settings/SaveFormNotificationSetting
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SaveFormNotificationSetting([FromBody] SaveFormNotificationSettingRequest request)
+        {
+            if (!IsAdmin()) return Forbid();
+
+            try
+            {
+                var userId = GetCurrentUserId();
+                await _settingsService.SaveFormNotificationSettingAsync(request, userId);
+                return Json(new { success = true, message = "Form notification setting saved." });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = $"Error: {ex.Message}" });
+            }
+        }
+
+        // ======================================================================
+        // Branding Settings API
+        // ======================================================================
+
+        // POST: /Settings/SaveBrandingSetting
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SaveBrandingSetting([FromBody] SaveBrandingSettingRequest request)
+        {
+            if (!IsAdmin())
+                return Forbid();
+
+            try
+            {
+                var userId = GetCurrentUserId();
+                await _settingsService.SaveBrandingSettingAsync(request, userId);
+                return Json(new { success = true, message = "Branding setting saved successfully" });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = $"Error: {ex.Message}" });
+            }
+        }
+
+        // POST: /Settings/SaveAllBrandingSettings  (saves the whole Branding form at once)
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SaveAllBrandingSettings(IFormCollection form)
+        {
+            if (!IsAdmin())
+                return Forbid();
+
+            try
+            {
+                var userId = GetCurrentUserId();
+                var keys = new[] { "CompanyName", "LogoUrl", "EnvelopeLogoUrl", "Website", "Phone" };
+                foreach (var key in keys)
+                {
+                    if (form.TryGetValue($"Branding_{key}", out var val))
+                    {
+                        await _settingsService.SaveBrandingSettingAsync(
+                            new SaveBrandingSettingRequest { SettingKey = key, SettingValue = val.ToString() },
+                            userId);
+                    }
+                }
+                TempData["SuccessMessage"] = "Branding settings saved successfully!";
+            }
+            catch (Exception ex)
+            {
+                TempData["ErrorMessage"] = $"Error saving branding settings: {ex.Message}";
+            }
+
+            return RedirectToAction(nameof(Index), new { tab = "branding" });
+        }
+
+        // ======================================================================
+        // App Credentials (encrypted Google OAuth + SMTP credentials)
+        // ======================================================================
+
+        // GET: /Settings/Credentials
+        [HttpGet]
+        public async Task<IActionResult> Credentials()
+        {
+            if (!await _permissionService.HasFeatureAccessAsync(GetCurrentUserId(), "Settings"))
+                return Forbid();
+
+            var google = await _appCredentials.GetAllByCategoryAsync("Google");
+            var smtp   = await _appCredentials.GetAllByCategoryAsync("Smtp");
+
+            // Merge any keys that are not yet in the DB so the UI always shows all rows
+            var googleKeys = new[]
+            {
+                new CredentialViewModel { CredentialKey = "Google_ClientId",     Category = "Google", Description = "Google OAuth Client ID" },
+                new CredentialViewModel { CredentialKey = "Google_ClientSecret", Category = "Google", Description = "Google OAuth Client Secret" },
+            };
+            var smtpKeys = new[]
+            {
+                new CredentialViewModel { CredentialKey = "Smtp_Host",      Category = "Smtp", Description = "SMTP server hostname" },
+                new CredentialViewModel { CredentialKey = "Smtp_Port",      Category = "Smtp", Description = "SMTP port (e.g. 587)" },
+                new CredentialViewModel { CredentialKey = "Smtp_User",      Category = "Smtp", Description = "SMTP username / email address" },
+                new CredentialViewModel { CredentialKey = "Smtp_Pass",      Category = "Smtp", Description = "SMTP password or app password" },
+                new CredentialViewModel { CredentialKey = "Smtp_FromEmail", Category = "Smtp", Description = "From address shown to recipients" },
+                new CredentialViewModel { CredentialKey = "Smtp_FromName",  Category = "Smtp", Description = "From display name shown to recipients" },
+            };
+
+            // Overlay DB HasValue flags onto the canonical key list
+            static List<CredentialViewModel> Merge(CredentialViewModel[] canonical, List<CredentialViewModel> db)
+            {
+                return canonical.Select(c =>
+                {
+                    var dbRow = db.FirstOrDefault(d => d.CredentialKey == c.CredentialKey);
+                    return new CredentialViewModel
+                    {
+                        CredentialKey = c.CredentialKey,
+                        Category      = c.Category,
+                        Description   = c.Description,
+                        HasValue      = dbRow?.HasValue ?? false,
+                    };
+                }).ToList();
+            }
+
+            var vm = new CredentialsViewModel
+            {
+                GoogleCredentials = Merge(googleKeys, google),
+                SmtpCredentials   = Merge(smtpKeys,   smtp),
+            };
+
+            return View(vm);
+        }
+
+        // POST: /Settings/SaveCredential  (single-row fallback, kept for compatibility)
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SaveCredential(string credentialKey, string plainValue, string category)
+        {
+            if (!await _permissionService.HasFeatureAccessAsync(GetCurrentUserId(), "Settings"))
+                return Forbid();
+
+            if (string.IsNullOrWhiteSpace(credentialKey) || string.IsNullOrWhiteSpace(plainValue))
+            {
+                TempData["ErrorMessage"] = "Credential key and value are required.";
+                return RedirectToAction(nameof(Credentials));
+            }
+
+            if (category != "Google" && category != "Smtp")
+            {
+                TempData["ErrorMessage"] = "Unknown credential category.";
+                return RedirectToAction(nameof(Credentials));
+            }
+
+            try
+            {
+                var userId = GetCurrentUserId();
+                await _appCredentials.UpsertAsync(credentialKey, plainValue, category,
+                    description: "", modifiedByUserId: userId);
+                TempData["SuccessMessage"] = $"{credentialKey} saved successfully.";
+            }
+            catch (Exception ex)
+            {
+                TempData["ErrorMessage"] = $"Error saving credential: {ex.Message}";
+            }
+
+            return RedirectToAction(nameof(Credentials));
+        }
+
+        // POST: /Settings/TestGoogleCredentials
+        // Probes the Google token endpoint with the stored client credentials.
+        // If Google returns "invalid_client" the credentials are wrong;
+        // any other error (invalid_grant, redirect_uri_mismatch) means the
+        // Client ID + Secret are recognized — only the dummy auth code was rejected.
+        [HttpPost]
+        public async Task<IActionResult> TestGoogleCredentials()
+        {
+            if (!await _permissionService.HasFeatureAccessAsync(GetCurrentUserId(), "Settings"))
+                return Forbid();
+
+            var clientId     = await _appCredentials.GetDecryptedAsync("Google_ClientId");
+            var clientSecret = await _appCredentials.GetDecryptedAsync("Google_ClientSecret");
+
+            if (string.IsNullOrWhiteSpace(clientId) || string.IsNullOrWhiteSpace(clientSecret))
+                return Json(new { success = false, message = "Google credentials are not configured. Enter a Client ID and Secret first." });
+
+            try
+            {
+                using var http = new System.Net.Http.HttpClient();
+                http.Timeout = TimeSpan.FromSeconds(10);
+
+                var payload = new System.Net.Http.FormUrlEncodedContent(new Dictionary<string, string>
+                {
+                    ["client_id"]     = clientId,
+                    ["client_secret"] = clientSecret,
+                    ["grant_type"]    = "authorization_code",
+                    ["code"]          = "CREDENTIAL_VALIDATION_PROBE",
+                    ["redirect_uri"]  = "https://example.com/not-real"
+                });
+
+                var response = await http.PostAsync("https://oauth2.googleapis.com/token", payload);
+                var body     = await response.Content.ReadAsStringAsync();
+
+                using var doc  = System.Text.Json.JsonDocument.Parse(body);
+                var errorCode  = doc.RootElement.TryGetProperty("error", out var e) ? e.GetString() : null;
+
+                if (errorCode == "invalid_client")
+                    return Json(new { success = false, message = "Google did not recognize these credentials. The Client ID or Secret may be incorrect, deleted, or belong to a different project. Verify them in Google Cloud Console." });
+
+                return Json(new { success = true, message = "Credentials are valid — Google recognized the Client ID and Secret." });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = $"Test could not complete: {ex.Message}" });
+            }
+        }
+
+        // POST: /Settings/SaveAllCredentials
+        // Saves every non-blank field in a section in one round-trip.
+        // Blank values are skipped so existing DB entries are preserved.
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SaveAllCredentials(string category,
+            List<string> keys, List<string> values)
+        {
+            if (!await _permissionService.HasFeatureAccessAsync(GetCurrentUserId(), "Settings"))
+                return Forbid();
+
+            if (category != "Google" && category != "Smtp")
+            {
+                TempData["ErrorMessage"] = "Unknown credential category.";
+                return RedirectToAction(nameof(Credentials));
+            }
+
+            if (keys == null || values == null || keys.Count != values.Count)
+            {
+                TempData["ErrorMessage"] = "Invalid form submission.";
+                return RedirectToAction(nameof(Credentials));
+            }
+
+            try
+            {
+                var userId = GetCurrentUserId();
+                var saved = 0;
+                for (int i = 0; i < keys.Count; i++)
+                {
+                    if (string.IsNullOrWhiteSpace(values[i])) continue; // blank = keep existing
+                    await _appCredentials.UpsertAsync(keys[i], values[i], category,
+                        description: "", modifiedByUserId: userId);
+                    saved++;
+                }
+
+                TempData["SuccessMessage"] = saved > 0
+                    ? $"{saved} {category} credential{(saved == 1 ? "" : "s")} saved successfully."
+                    : "No changes — all fields were left blank.";
+            }
+            catch (Exception ex)
+            {
+                TempData["ErrorMessage"] = $"Error saving credentials: {ex.Message}";
+            }
+
+            return RedirectToAction(nameof(Credentials));
         }
     }
 }

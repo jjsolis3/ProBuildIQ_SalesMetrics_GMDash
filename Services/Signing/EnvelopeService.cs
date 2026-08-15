@@ -10,34 +10,46 @@ using Microsoft.Extensions.Options;
 using SalesMetrics.Services.Signing; // for AppSettings
 using System.Text.Json;
 
+// Alias to disambiguate from the email INotificationService in this namespace
+using IAppNotificationService = SalesMetrics.Services.Notifications.INotificationService;
+
 namespace SalesMetrics.Services.Signing;
 
 public sealed class EnvelopeService : IEnvelopeService
 {
     private readonly SalesMetricsDbContext _db;
-    private readonly INotificationService _notify;
+    private readonly INotificationService _notify;          // email (SMTP) notification service
+    private readonly IAppNotificationService _appNotify;    // in-app + SignalR notification service
     private readonly IErpMergeService _merge;
     private readonly IPdfService _pdf;
     private readonly AppSettings _appSettings;
     private readonly IEmailTemplateService _emailTemplate;
     private readonly ILogger<EnvelopeService> _logger;
 
-    public EnvelopeService(SalesMetricsDbContext db, INotificationService notify, IErpMergeService merge, IPdfService pdf, IOptions<AppSettings> appSettings, IEmailTemplateService emailTemplate, ILogger<EnvelopeService> logger)
+    public EnvelopeService(SalesMetricsDbContext db, INotificationService notify, IAppNotificationService appNotify, IErpMergeService merge, IPdfService pdf, IOptions<AppSettings> appSettings, IEmailTemplateService emailTemplate, ILogger<EnvelopeService> logger)
     {
-        _db = db; _notify = notify; _merge = merge; _pdf = pdf; _appSettings = appSettings.Value; _emailTemplate = emailTemplate; _logger = logger;
+        _db = db; _notify = notify; _appNotify = appNotify; _merge = merge; _pdf = pdf; _appSettings = appSettings.Value; _emailTemplate = emailTemplate; _logger = logger;
     }
 
     public async Task<long> CreateAsync(int createdByUsersId, CreateEnvelopeVm vm)
     {
-        // Load the template to access MergeSpec and PDF path
-        var template = await _db.SignTemplates
-            .AsNoTracking()
-            .FirstOrDefaultAsync(t => t.TemplateKey == vm.TemplateKey);
+        // Communication envelopes may omit a template (free-form body only)
+        SignTemplate? template = null;
+        if (!string.IsNullOrWhiteSpace(vm.TemplateKey))
+        {
+            template = await _db.SignTemplates
+                .AsNoTracking()
+                .FirstOrDefaultAsync(t => t.TemplateKey == vm.TemplateKey);
 
-        if (template == null)
-            throw new InvalidOperationException($"Template '{vm.TemplateKey}' not found");
+            if (template == null)
+                throw new InvalidOperationException($"Template '{vm.TemplateKey}' not found");
+        }
+        else if (vm.EnvelopeType != "Communication")
+        {
+            throw new InvalidOperationException("A template is required for Consent envelopes.");
+        }
 
-        // Fetch OrderNumber from ERP if OrderId is provided
+        // Fetch OrderNumber from ERP if OrderId is provided; fall back to manually-entered value
         string? orderNumber = null;
         if (vm.OrderId.HasValue)
         {
@@ -45,13 +57,19 @@ public sealed class EnvelopeService : IEnvelopeService
             var matchingOrder = orders.FirstOrDefault(o => o.OrderID == vm.OrderId.Value.ToString());
             orderNumber = matchingOrder?.OrderID; // OrderID contains the display number like "90805.4"
         }
+        else if (!string.IsNullOrWhiteSpace(vm.CustomOrderNumber))
+        {
+            orderNumber = vm.CustomOrderNumber.Trim();
+        }
 
         var env = new SignEnvelope
         {
             TemplateKey = vm.TemplateKey,
+            EnvelopeType = vm.EnvelopeType ?? "Consent",
             Subject = vm.Subject,
             MessageBody = vm.MessageBody,
             PropertyID = vm.PropertyID,
+            PropertyName = !vm.PropertyID.HasValue ? vm.CustomPropertyName : null, // only store free-text when no ERP match
             OrderId = vm.OrderId,
             OrderNumber = orderNumber,
             CustomerNumber = vm.CustomerNumber,
@@ -79,8 +97,8 @@ public sealed class EnvelopeService : IEnvelopeService
         _db.SignEnvelopes.Add(env);
         await _db.SaveChangesAsync(); // Save to get EnvelopeId
 
-        // Create SignAttachment record for template PDF
-        if (!string.IsNullOrWhiteSpace(template.PdfFilePath))
+        // Create SignAttachment record for template PDF (only when a template is used)
+        if (template != null && !string.IsNullOrWhiteSpace(template.PdfFilePath))
         {
             env.Attachments = new List<SignAttachment>
             {
@@ -96,8 +114,19 @@ public sealed class EnvelopeService : IEnvelopeService
             };
         }
 
-        // Create SignField records from template MergeSpec
-        await CreateFieldsFromMergeSpecAsync(env, template, vm);
+        // Create SignField records from template MergeSpec (only when a template is used)
+        if (template != null)
+            await CreateFieldsFromMergeSpecAsync(env, template, vm);
+
+        // When no ERP order was selected, store a manually-entered unit number as a SignField
+        if (!vm.OrderId.HasValue && !string.IsNullOrWhiteSpace(vm.CustomUnitNumber))
+        {
+            var existingUnitField = env.Fields?.FirstOrDefault(f => f.FieldKey == "UnitNumber");
+            if (existingUnitField != null)
+                existingUnitField.FieldValue = vm.CustomUnitNumber.Trim();
+            else
+                _db.SignFields.Add(new SignField { EnvelopeId = env.EnvelopeId, FieldKey = "UnitNumber", FieldValue = vm.CustomUnitNumber.Trim() });
+        }
 
         await _db.SaveChangesAsync();
         return env.EnvelopeId;
@@ -193,18 +222,30 @@ public sealed class EnvelopeService : IEnvelopeService
         try
         {
             // Property fields
-            var propertyName = await _merge.GetPropertyNameAsync(env.PropertyID) ?? "";
-            var propertyAddress = await _merge.GetPropertyAddressAsync(env.PropertyID) ?? "";
-            var propertyPhone = await _merge.GetCustomerPhoneAsync(env.PropertyID) ?? "";
-            var customerEmail = await _merge.GetCustomerEmailAsync(env.PropertyID) ?? "";
-            var customerName = await _merge.GetCustomerNameAsync(env.PropertyID) ?? propertyName;
+            // When no ERP property is linked (PropertyID is null), fall back to the free-text
+            // property name stored on the envelope (entered manually during envelope creation).
+            var propertyName = (env.PropertyID.HasValue
+                ? await _merge.GetPropertyNameAsync(env.PropertyID)
+                : null) ?? env.PropertyName ?? "";
+            var propertyAddress = (env.PropertyID.HasValue
+                ? await _merge.GetPropertyAddressAsync(env.PropertyID)
+                : null) ?? "";
+            var propertyPhone = (env.PropertyID.HasValue
+                ? await _merge.GetCustomerPhoneAsync(env.PropertyID)
+                : null) ?? "";
+            var customerEmail = (env.PropertyID.HasValue
+                ? await _merge.GetCustomerEmailAsync(env.PropertyID)
+                : null) ?? "";
+            var customerName = (env.PropertyID.HasValue
+                ? await _merge.GetCustomerNameAsync(env.PropertyID)
+                : null) ?? propertyName;
 
             data["PropertyName"] = propertyName;
             data["PropertyAddress"] = propertyAddress;
             data["PropertyPhone"] = propertyPhone;
-            data["PropertyCity"] = await _merge.GetPropertyCityAsync(env.PropertyID) ?? "";
-            data["PropertyState"] = await _merge.GetPropertyStateAsync(env.PropertyID) ?? "";
-            data["PropertyZip"] = await _merge.GetPropertyZipAsync(env.PropertyID) ?? "";
+            data["PropertyCity"] = (env.PropertyID.HasValue ? await _merge.GetPropertyCityAsync(env.PropertyID) : null) ?? "";
+            data["PropertyState"] = (env.PropertyID.HasValue ? await _merge.GetPropertyStateAsync(env.PropertyID) : null) ?? "";
+            data["PropertyZip"] = (env.PropertyID.HasValue ? await _merge.GetPropertyZipAsync(env.PropertyID) : null) ?? "";
 
             data["CustomerName"] = customerName;
             data["CustomerEmail"] = customerEmail;
@@ -292,20 +333,59 @@ public sealed class EnvelopeService : IEnvelopeService
         env.SentAtUtc = env.SentAtUtc ?? DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
+        // Fetch property context once before the recipient loop
+        string? sendPropertyName = null;
+        string? sendPropertyAddress = null;
+        if (env.PropertyID.HasValue)
+        {
+            try
+            {
+                sendPropertyName    = await _merge.GetPropertyNameAsync(env.PropertyID.Value, env.LocationCode);
+                sendPropertyAddress = await _merge.GetPropertyAddressAsync(env.PropertyID.Value, env.LocationCode);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not fetch property for invitation email (envelope {EnvelopeId})", envelopeId);
+            }
+        }
+        sendPropertyName ??= env.PropertyName; // fall back to stored free-text name
+
+        // Build property/order context block (shown in email, not part of MessageBody)
+        var contextRows = "";
+        if (!string.IsNullOrWhiteSpace(sendPropertyName))
+            contextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Property</td><td style=\"padding:4px 0;font-size:13px;\">{System.Net.WebUtility.HtmlEncode(sendPropertyName)}</td></tr>";
+        if (!string.IsNullOrWhiteSpace(sendPropertyAddress))
+            contextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Address</td><td style=\"padding:4px 0;font-size:13px;\">{System.Net.WebUtility.HtmlEncode(sendPropertyAddress)}</td></tr>";
+        if (!string.IsNullOrWhiteSpace(env.OrderNumber))
+            contextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Order #</td><td style=\"padding:4px 0;font-size:13px;\">{System.Net.WebUtility.HtmlEncode(env.OrderNumber)}</td></tr>";
+        if (!string.IsNullOrWhiteSpace(env.LocationCode))
+            contextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Branch</td><td style=\"padding:4px 0;font-size:13px;\">{System.Net.WebUtility.HtmlEncode(env.LocationCode)}</td></tr>";
+
+        var contextHtml = string.IsNullOrEmpty(contextRows) ? "" : $@"
+            <table cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:12px 0 16px 0;border-left:3px solid #f59e0b;padding-left:12px;"">
+                {contextRows}
+            </table>";
+
+        // Resolve Reply-To once — branch-specific email takes priority; falls back to company-wide.
+        // This lets customers who print and reply by email reach the correct branch inbox
+        // rather than the generic sending account.
+        var replyToEmail = await GetReplyToEmailAsync(env.LocationCode);
+
         foreach (var r in env.Recipients.OrderBy(x => x.SignerOrder))
         {
             var baseUrl = _appSettings.BaseUrl.TrimEnd('/');
             var link = $"{baseUrl}/sign/{r.AccessToken}";
 
-            // Build email body with optional custom message
+            // Optional staff message
             var messageHtml = !string.IsNullOrWhiteSpace(env.MessageBody)
                 ? $"<p style=\"margin:12px 0;font-size:14px;color:#374151;\">{env.MessageBody}</p>"
                 : "";
 
             var innerHtml = $@"
-                <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Document Signing Request</h2>
+                <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Envelope Signing Request</h2>
                 <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Hello {r.FullName},</p>
-                <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Please review and sign the document: <strong>{env.Subject}</strong>.</p>
+                <p style=""margin:0 0 8px 0;font-size:15px;color:#374151;"">Please review and sign the envelope: <strong>{env.Subject}</strong>.</p>
+                {contextHtml}
                 {messageHtml}
                 <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:24px 0;"">
                   <tr>
@@ -317,11 +397,223 @@ public sealed class EnvelopeService : IEnvelopeService
                 <p style=""margin:0;font-size:12px;color:#9ca3af;"">If the button above doesn't work, copy and paste this link into your browser:</p>
                 <p style=""margin:4px 0 0 0;font-size:12px;color:#3b82f6;word-break:break-all;""><a href=""{link}"" style=""color:#3b82f6;"">{link}</a></p>";
 
-            var html = _emailTemplate.WrapInBrandedTemplate(innerHtml);
-            await _notify.SendEnvelopeEmailAsync(r.Email, r.FullName, env.Subject, html);
+            var html = await _emailTemplate.WrapInBrandedTemplateAsync(innerHtml);
+            await _notify.SendEnvelopeEmailAsync(r.Email, r.FullName, env.Subject, html, replyToEmail);
 
             _db.SignEvents.Add(new SignEvent { EnvelopeId = env.EnvelopeId, RecipientId = r.RecipientId, EventType = "Sent", OccurredAtUtc = DateTime.UtcNow });
         }
+        await _db.SaveChangesAsync();
+    }
+
+    public async Task EditEnvelopeAsync(EditEnvelopeVm vm, int modifiedByUserId)
+    {
+        var env = await _db.SignEnvelopes
+            .Include(e => e.Recipients)
+            .Include(e => e.Fields)
+            .FirstOrDefaultAsync(e => e.EnvelopeId == vm.EnvelopeId)
+            ?? throw new InvalidOperationException($"Envelope {vm.EnvelopeId} not found");
+
+        if (env.Status == "Completed")
+            throw new InvalidOperationException("Completed envelopes cannot be edited.");
+        if (env.Status == "Voided")
+            throw new InvalidOperationException("Voided envelopes cannot be edited.");
+
+        var changes = new List<string>();
+
+        // ── Expiry extension (also reactivates Expired envelopes) ───────────
+        if (vm.ExpiresAtUtc.HasValue && vm.ExpiresAtUtc != env.ExpiresAtUtc)
+        {
+            var newExpiry = vm.ExpiresAtUtc.Value.Kind == DateTimeKind.Utc
+                ? vm.ExpiresAtUtc.Value
+                : vm.ExpiresAtUtc.Value.ToUniversalTime();
+
+            env.ExpiresAtUtc = newExpiry;
+
+            // Extend unsigned recipients' token expiry so existing links become valid again
+            foreach (var r in env.Recipients.Where(r => r.SignedAtUtc == null))
+                r.AccessTokenExpiresAt = newExpiry;
+
+            // Reactivate: Expired → Sent so staff can resend invitations
+            if (env.Status == "Expired")
+                env.Status = "Sent";
+
+            changes.Add("ExpiresAtUtc");
+        }
+
+        // ── Envelope header fields ──────────────────────────────────────────
+        if (env.Subject != vm.Subject)
+        {
+            env.Subject = vm.Subject;
+            changes.Add("Subject");
+        }
+        if (env.MessageBody != vm.MessageBody)
+        {
+            env.MessageBody = vm.MessageBody;
+            changes.Add("MessageBody");
+        }
+
+        // ── Context fields (correctable after send) ─────────────────────────
+        var newPropertyName = string.IsNullOrWhiteSpace(vm.PropertyName) ? null : vm.PropertyName.Trim();
+        if (env.PropertyName != newPropertyName)
+        {
+            env.PropertyName = newPropertyName;
+            changes.Add("PropertyName");
+        }
+
+        var newOrderNumber = string.IsNullOrWhiteSpace(vm.OrderNumber) ? null : vm.OrderNumber.Trim();
+        if (env.OrderNumber != newOrderNumber)
+        {
+            env.OrderNumber = newOrderNumber;
+            changes.Add("OrderNumber");
+        }
+
+        // UnitNumber lives in SignFields; upsert the row
+        var newUnitNumber = string.IsNullOrWhiteSpace(vm.UnitNumber) ? null : vm.UnitNumber.Trim();
+        var unitField = env.Fields?.FirstOrDefault(f => f.FieldKey == "UnitNumber");
+        if (unitField != null)
+        {
+            if (unitField.FieldValue != newUnitNumber)
+            {
+                unitField.FieldValue = newUnitNumber ?? "";
+                changes.Add("UnitNumber");
+            }
+        }
+        else if (!string.IsNullOrEmpty(newUnitNumber))
+        {
+            _db.SignFields.Add(new SignField
+            {
+                EnvelopeId  = env.EnvelopeId,
+                FieldKey    = "UnitNumber",
+                FieldValue  = newUnitNumber
+            });
+            changes.Add("UnitNumber");
+        }
+
+        env.ModifiedByUsers_ID = modifiedByUserId;
+        env.ModifiedDateUtc    = DateTime.UtcNow;
+
+        // ── Unsigned recipients ─────────────────────────────────────────────
+        var recipientsToResend = new List<SignRecipient>();
+
+        foreach (var editR in vm.Recipients)
+        {
+            var existing = env.Recipients.FirstOrDefault(r => r.RecipientId == editR.RecipientId);
+            // Never modify a recipient who has already signed
+            if (existing == null || existing.SignedAtUtc.HasValue)
+                continue;
+
+            bool emailChanged = !string.Equals(existing.Email, editR.Email, StringComparison.OrdinalIgnoreCase);
+            bool nameChanged  = existing.FullName != editR.FullName;
+            bool phoneChanged = existing.Phone    != editR.Phone;
+
+            if (emailChanged || nameChanged || phoneChanged)
+            {
+                existing.FullName = editR.FullName;
+                existing.Phone    = editR.Phone;
+                changes.Add($"Recipient:{existing.Role}");
+
+                if (emailChanged)
+                {
+                    existing.Email = editR.Email;
+                    // Invalidate old link — generate a fresh secure token
+                    existing.AccessToken     = Utilities.Security.TokenHelper.CreateSecureToken(32);
+                    // Clear view tracking so the new recipient starts fresh
+                    existing.ViewedAtUtc     = null;
+                    existing.IPAddressViewed = null;
+                    existing.UserAgentViewed = null;
+                    // An email change always triggers a resend
+                    editR.ResendInvite = true;
+                }
+
+                if (editR.ResendInvite)
+                    recipientsToResend.Add(existing);
+            }
+        }
+
+        if (changes.Count > 0)
+        {
+            _db.SignEvents.Add(new SignEvent
+            {
+                EnvelopeId    = env.EnvelopeId,
+                EventType     = "Edited",
+                OccurredAtUtc = DateTime.UtcNow,
+                MetaJson      = JsonSerializer.Serialize(new { modifiedByUserId, changes })
+            });
+        }
+
+        await _db.SaveChangesAsync();
+
+        // ── Re-send invitations to affected unsigned recipients ─────────────
+        // Build property context block once for all recipients
+        string? editResendPropertyName = null;
+        string? editResendPropertyAddress = null;
+        if (env.PropertyID.HasValue)
+        {
+            try { editResendPropertyName = await _merge.GetPropertyNameAsync(env.PropertyID.Value, env.LocationCode); editResendPropertyAddress = await _merge.GetPropertyAddressAsync(env.PropertyID.Value, env.LocationCode); }
+            catch { /* non-fatal */ }
+        }
+        editResendPropertyName ??= env.PropertyName;
+
+        var editContextRows = "";
+        if (!string.IsNullOrWhiteSpace(editResendPropertyName))
+            editContextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Property</td><td style=\"padding:4px 0;font-size:13px;\">{System.Net.WebUtility.HtmlEncode(editResendPropertyName)}</td></tr>";
+        if (!string.IsNullOrWhiteSpace(editResendPropertyAddress))
+            editContextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Address</td><td style=\"padding:4px 0;font-size:13px;\">{System.Net.WebUtility.HtmlEncode(editResendPropertyAddress)}</td></tr>";
+        if (!string.IsNullOrWhiteSpace(env.OrderNumber))
+            editContextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Order #</td><td style=\"padding:4px 0;font-size:13px;\">{System.Net.WebUtility.HtmlEncode(env.OrderNumber)}</td></tr>";
+        if (!string.IsNullOrWhiteSpace(env.LocationCode))
+            editContextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Branch</td><td style=\"padding:4px 0;font-size:13px;\">{System.Net.WebUtility.HtmlEncode(env.LocationCode)}</td></tr>";
+        var editContextHtml = string.IsNullOrEmpty(editContextRows) ? "" : $@"<table cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:12px 0 16px 0;border-left:3px solid #f59e0b;padding-left:12px;"">{editContextRows}</table>";
+
+        var editReplyToEmail = await GetReplyToEmailAsync(env.LocationCode);
+
+        foreach (var recipient in recipientsToResend)
+        {
+            try
+            {
+                var baseUrl = _appSettings.BaseUrl.TrimEnd('/');
+                var link    = $"{baseUrl}/sign/{recipient.AccessToken}";
+
+                var messageHtml = !string.IsNullOrWhiteSpace(env.MessageBody)
+                    ? $"<p style=\"margin:12px 0;font-size:14px;color:#374151;\">{env.MessageBody}</p>"
+                    : "";
+
+                var innerHtml = $@"
+                    <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Updated Envelope Signing Request</h2>
+                    <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Hello {recipient.FullName},</p>
+                    <p style=""margin:0 0 8px 0;font-size:15px;color:#374151;"">
+                        Your envelope signing invitation for <strong>{env.Subject}</strong> has been updated.
+                        Please use the new link below to review and sign.
+                    </p>
+                    {editContextHtml}
+                    {messageHtml}
+                    <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:24px 0;"">
+                      <tr>
+                        <td align=""center"" style=""background-color:#3b82f6;border-radius:6px;"">
+                          <a href=""{link}"" style=""display:inline-block;padding:12px 32px;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px;"">Open &amp; Sign</a>
+                        </td>
+                      </tr>
+                    </table>
+                    <p style=""margin:0;font-size:12px;color:#9ca3af;"">If the button above doesn't work, copy and paste this link into your browser:</p>
+                    <p style=""margin:4px 0 0 0;font-size:12px;color:#3b82f6;word-break:break-all;""><a href=""{link}"" style=""color:#3b82f6;"">{link}</a></p>";
+
+                var html = await _emailTemplate.WrapInBrandedTemplateAsync(innerHtml);
+                await _notify.SendEnvelopeEmailAsync(recipient.Email, recipient.FullName, env.Subject, html, editReplyToEmail);
+
+                _db.SignEvents.Add(new SignEvent
+                {
+                    EnvelopeId    = env.EnvelopeId,
+                    RecipientId   = recipient.RecipientId,
+                    EventType     = "Sent",
+                    OccurredAtUtc = DateTime.UtcNow
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to re-send invite to recipient {RecipientId} after edit", recipient.RecipientId);
+            }
+        }
+
         await _db.SaveChangesAsync();
     }
 
@@ -370,12 +662,12 @@ public sealed class EnvelopeService : IEnvelopeService
                         ? $"<p style=\"margin:12px 0;font-size:14px;color:#374151;\"><strong>Reason:</strong> {reason}</p>"
                         : "";
                     var innerHtml = $@"
-                        <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Signing Request Cancelled</h2>
+                        <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Envelope Signing Request Cancelled</h2>
                         <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Hello {recipient.FullName},</p>
                         <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">The signature request for <strong>{env.Subject}</strong> has been cancelled.</p>
                         {reasonHtml}
                         <p style=""margin:12px 0 0 0;font-size:15px;color:#374151;"">No further action is required.</p>";
-                    var html = _emailTemplate.WrapInBrandedTemplate(innerHtml);
+                    var html = await _emailTemplate.WrapInBrandedTemplateAsync(innerHtml);
                     await _notify.SendEnvelopeEmailAsync(recipient.Email, recipient.FullName, $"Cancelled: {env.Subject}", html);
                 }
                 catch
@@ -396,12 +688,13 @@ public sealed class EnvelopeService : IEnvelopeService
             .FirstOrDefaultAsync(x => x.EnvelopeId == envelopeId);
         if (e is null) return null;
 
-        // Fetch property name if PropertyID is set
+        // Fetch property name from ERP; fall back to stored free-text name
         string? propertyName = null;
         if (e.PropertyID.HasValue)
         {
             propertyName = await _merge.GetPropertyNameAsync(e.PropertyID.Value);
         }
+        propertyName ??= e.PropertyName;
 
         // Get UnitNumber from fields
         var unitNumber = e.Fields?.FirstOrDefault(f => f.FieldKey == "UnitNumber")?.FieldValue;
@@ -413,6 +706,7 @@ public sealed class EnvelopeService : IEnvelopeService
             Subject = e.Subject,
             MessageBody = e.MessageBody,
             Status = e.Status,
+            EnvelopeType = e.EnvelopeType ?? "Consent",
             LocationCode = e.LocationCode,
             SentAtUtc = e.SentAtUtc,
             CompletedAtUtc = e.CompletedAtUtc,
@@ -422,15 +716,19 @@ public sealed class EnvelopeService : IEnvelopeService
             PropertyName = propertyName,
             OrderNumber = e.OrderNumber,
             UnitNumber = unitNumber,
+            TenantSkipped = e.TenantSkipped,
+            TenantSkippedByName = e.TenantSkippedByName,
+            TenantSkippedAtUtc = e.TenantSkippedAtUtc,
             Recipients = e.Recipients.OrderBy(r => r.SignerOrder).Select(r => new EnvelopeDetailsVm.RecipientVm
             {
-                RecipientId = r.RecipientId,
-                Role = r.Role,
-                SignerOrder = r.SignerOrder,
-                FullName = r.FullName,
-                Email = r.Email,
-                ViewedAtUtc = r.ViewedAtUtc,
-                SignedAtUtc = r.SignedAtUtc,
+                RecipientId   = r.RecipientId,
+                Role          = r.Role,
+                SignerOrder   = r.SignerOrder,
+                FullName      = r.FullName,
+                Email         = r.Email,
+                Phone         = r.Phone,
+                ViewedAtUtc   = r.ViewedAtUtc,
+                SignedAtUtc   = r.SignedAtUtc,
                 DeclinedAtUtc = r.DeclinedAtUtc
             }).ToList(),
             Events = e.Events.OrderByDescending(ev => ev.OccurredAtUtc).Select(ev => new EnvelopeDetailsVm.EventVm
@@ -439,7 +737,24 @@ public sealed class EnvelopeService : IEnvelopeService
                 OccurredAtUtc = ev.OccurredAtUtc,
                 Recipient = e.Recipients.FirstOrDefault(r => r.RecipientId == ev.RecipientId)?.FullName,
                 Meta = ev.MetaJson
-            }).ToList()
+            }).ToList(),
+            FieldValues = (e.Fields ?? new List<SignField>())
+                .Where(f => f.FieldType != "signature" && f.FieldType != "initials"
+                         && !string.Equals(f.FieldKey, "PropertyStaffSignature", StringComparison.OrdinalIgnoreCase)
+                         && !string.Equals(f.FieldKey, "ResidentSignature", StringComparison.OrdinalIgnoreCase)
+                         && !string.Equals(f.FieldKey, "PropertyStaffDate", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(f => f.FieldKey)
+                .Select(f => new EnvelopeDetailsVm.FieldValueVm
+                {
+                    FieldId       = f.FieldId,
+                    FieldKey      = f.FieldKey,
+                    FieldType     = f.FieldType,
+                    FieldValue    = f.FieldValue,
+                    RecipientId   = f.RecipientId,
+                    RecipientRole = f.RecipientId.HasValue
+                        ? e.Recipients.FirstOrDefault(r => r.RecipientId == f.RecipientId)?.Role
+                        : null
+                }).ToList()
         };
     }
 
@@ -479,18 +794,20 @@ public sealed class EnvelopeService : IEnvelopeService
                 e.Subject,
                 e.TemplateKey,
                 e.Status,
+                e.EnvelopeType,
                 e.LocationCode,
                 e.SentAtUtc,
                 e.CompletedAtUtc,
                 e.ExpiresAtUtc,
                 e.PropertyID,
+                e.PropertyName,
                 e.OrderNumber,
                 RecipientCount = e.Recipients.Count,
                 SignedCount = e.Recipients.Count(r => r.SignedAtUtc != null),
             })
             .ToListAsync();
 
-        // Populate PropertyName from ERP for each envelope (cached to avoid N+1 calls)
+        // Populate PropertyName from ERP (cached to avoid N+1 calls); fall back to stored free-text
         var propertyNameCache = new Dictionary<int, string?>();
         var rows = new List<EnvelopeListItemVm>();
         foreach (var e in envelopes)
@@ -504,6 +821,7 @@ public sealed class EnvelopeService : IEnvelopeService
                     propertyNameCache[e.PropertyID.Value] = propertyName;
                 }
             }
+            propertyName ??= e.PropertyName;
 
             rows.Add(new EnvelopeListItemVm
             {
@@ -511,6 +829,7 @@ public sealed class EnvelopeService : IEnvelopeService
                 Subject = e.Subject,
                 TemplateKey = e.TemplateKey,
                 Status = e.Status,
+                EnvelopeType = e.EnvelopeType ?? "Consent",
                 LocationCode = e.LocationCode,
                 SentAtUtc = e.SentAtUtc,
                 CompletedAtUtc = e.CompletedAtUtc,
@@ -536,27 +855,65 @@ public sealed class EnvelopeService : IEnvelopeService
         if (r is null || (r.AccessTokenExpiresAt is not null && r.AccessTokenExpiresAt < DateTime.UtcNow))
             return null;
 
-        // record "Opened"
+        // Record "Opened" only the first time (every page load calls this, so guard with null check)
+        bool firstOpen = r.ViewedAtUtc is null;
         r.ViewedAtUtc ??= DateTime.UtcNow;
         r.IPAddressViewed ??= ip;
         r.UserAgentViewed ??= userAgent;
 
-        _db.SignEvents.Add(new SignEvent
+        if (firstOpen)
         {
-            EnvelopeId = r.EnvelopeId,
-            RecipientId = r.RecipientId,
-            EventType = "Opened",
-            OccurredAtUtc = DateTime.UtcNow
-        });
+            _db.SignEvents.Add(new SignEvent
+            {
+                EnvelopeId = r.EnvelopeId,
+                RecipientId = r.RecipientId,
+                EventType = "Opened",
+                OccurredAtUtc = DateTime.UtcNow
+            });
+        }
         await _db.SaveChangesAsync();
 
         // find if a tenant recipient exists
         var hasTenant = await _db.SignRecipients
             .AnyAsync(x => x.EnvelopeId == r.EnvelopeId && x.Role == "Tenant");
 
-        // (optional) property summary; return null if you don't have this yet
+        // Load template for RequiresTenantSection + EnvelopeType
+        var template = await _db.SignTemplates.AsNoTracking()
+            .FirstOrDefaultAsync(t => t.TemplateKey == r.Envelope.TemplateKey);
+
+        // Phase 2: load signer-fillable fields for this recipient (empty/null values only)
+        // Excludes auto-captured signature/date fields
+        var skipFieldKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "PropertyStaffSignature", "ResidentSignature", "PropertyStaffDate"
+        };
+        var recipientFields = await _db.SignFields
+            .Where(f => f.EnvelopeId == r.EnvelopeId
+                     && f.RecipientId == r.RecipientId
+                     && (f.FieldValue == null || f.FieldValue == "")
+                     && !skipFieldKeys.Contains(f.FieldKey))
+            .ToListAsync();
+
+        // Populate property summary for the review page
         PropertyVm? prop = null;
-        // prop = await _merge.GetPropertySummaryAsync(r.Envelope.PropertyID); // if you implement it
+        if (r.Envelope.PropertyID.HasValue)
+        {
+            try
+            {
+                var pName    = await _merge.GetPropertyNameAsync(r.Envelope.PropertyID.Value);
+                var pAddress = await _merge.GetPropertyAddressAsync(r.Envelope.PropertyID.Value);
+                if (!string.IsNullOrEmpty(pName))
+                    prop = new PropertyVm { PropertyId = r.Envelope.PropertyID.Value, Name = pName, Address = pAddress ?? "" };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not fetch property for review page (envelope {EnvelopeId})", r.EnvelopeId);
+            }
+        }
+        // Fall back to stored free-text property name when no ERP match
+        prop ??= string.IsNullOrWhiteSpace(r.Envelope.PropertyName)
+            ? null
+            : new PropertyVm { Name = r.Envelope.PropertyName };
 
         return new ReviewVm
         {
@@ -564,7 +921,10 @@ public sealed class EnvelopeService : IEnvelopeService
             Envelope = r.Envelope,
             Recipient = r,
             HasTenantRecipient = hasTenant,
-            Property = prop
+            Property = prop,
+            RequiresTenantSection = template?.RequiresTenantSection ?? true,
+            RecipientFields = recipientFields,
+            EnvelopeType = r.Envelope.EnvelopeType ?? "Consent"
         };
     }
 
@@ -617,12 +977,12 @@ public sealed class EnvelopeService : IEnvelopeService
                     ? $"<p style=\"margin:12px 0;font-size:14px;color:#374151;\"><strong>Reason:</strong> {reason}</p>"
                     : "";
                 var innerHtml = $@"
-                    <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Signing Request Declined</h2>
+                    <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Envelope Signing Request Declined</h2>
                     <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Hello {otherRecipient.FullName},</p>
                     <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">The signature request for <strong>{envelope.Subject}</strong> has been declined by {recipient.FullName}.</p>
                     {reasonHtml}
                     <p style=""margin:12px 0 0 0;font-size:15px;color:#374151;"">No further action is required.</p>";
-                var html = _emailTemplate.WrapInBrandedTemplate(innerHtml);
+                var html = await _emailTemplate.WrapInBrandedTemplateAsync(innerHtml);
                 await _notify.SendEnvelopeEmailAsync(otherRecipient.Email, otherRecipient.FullName, $"Declined: {envelope.Subject}", html);
             }
         }
@@ -667,6 +1027,30 @@ public sealed class EnvelopeService : IEnvelopeService
             existing.Phone = phone;  // NEW: Update phone if provided
             await _db.SaveChangesAsync();
         }
+
+        // Keep ResidentName / ResidentPhone / ResidentEmail SignField records in sync with
+        // the tenant recipient so the Details page shows accurate values (not empty strings
+        // from envelope-creation time when no tenant existed yet).
+        var residentFieldMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["ResidentName"]  = fullName,
+            ["ResidentEmail"] = email,
+            ["ResidentPhone"] = phone ?? "",
+        };
+
+        var fields = await _db.SignFields
+            .Where(f => f.EnvelopeId == envelopeId
+                     && (f.FieldKey == "ResidentName" || f.FieldKey == "ResidentEmail" || f.FieldKey == "ResidentPhone"))
+            .ToListAsync();
+
+        foreach (var field in fields)
+        {
+            if (residentFieldMap.TryGetValue(field.FieldKey, out var val))
+                field.FieldValue = val;
+        }
+
+        if (fields.Any())
+            await _db.SaveChangesAsync();
     }
 
     public async Task MarkTenantSkippedAsync(long envelopeId, string skippedByName)
@@ -678,17 +1062,86 @@ public sealed class EnvelopeService : IEnvelopeService
         env.TenantSkippedByName = skippedByName;
         env.TenantSkippedAtUtc = DateTime.UtcNow;
 
-        // Remove any existing unsigned Tenant recipients so they don't block envelope finalization
+        // Remove any existing unsigned Tenant recipients so they don't block envelope finalization.
+        // SignEvent rows reference RecipientId via FK — null them out first to avoid a FK violation.
         var unsignedTenants = env.Recipients.Where(r => r.Role == "Tenant" && r.SignedAtUtc == null).ToList();
+        var skippedNames = unsignedTenants.Select(t => t.FullName).ToList();
+
         foreach (var t in unsignedTenants)
+        {
+            // Detach the FK on any sign-events that reference this recipient
+            var relatedEvents = await _db.SignEvents
+                .Where(e => e.RecipientId == t.RecipientId)
+                .ToListAsync();
+            foreach (var ev in relatedEvents)
+                ev.RecipientId = null;
+
             _db.SignRecipients.Remove(t);
+        }
+
+        // Record a timeline event so the skip is visible in the envelope Details view
+        _db.SignEvents.Add(new SignEvent
+        {
+            EnvelopeId    = envelopeId,
+            EventType     = "TenantSkipped",
+            OccurredAtUtc = DateTime.UtcNow,
+            MetaJson      = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                skippedBy    = skippedByName,
+                skippedNames = skippedNames
+            })
+        });
+
+        await _db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Phase 2: Save values for signer-filled custom fields.
+    /// Only updates fields with an empty/null current value to prevent overwriting ERP data.
+    /// </summary>
+    public async Task SaveCustomFieldsAsync(long envelopeId, long recipientId, Dictionary<string, string> fields)
+    {
+        if (fields == null || fields.Count == 0) return;
+
+        var dbFields = await _db.SignFields
+            .Where(f => f.EnvelopeId == envelopeId && f.RecipientId == recipientId)
+            .ToListAsync();
+
+        foreach (var (key, value) in fields)
+        {
+            if (string.IsNullOrWhiteSpace(value)) continue;
+            var field = dbFields.FirstOrDefault(f => f.FieldKey.Equals(key, StringComparison.OrdinalIgnoreCase));
+            if (field != null && string.IsNullOrEmpty(field.FieldValue))
+                field.FieldValue = value.Trim();
+        }
+
+        await _db.SaveChangesAsync();
+    }
+
+    public async Task UpdateFieldsAsync(long envelopeId, Dictionary<string, string> fields)
+    {
+        if (fields == null || fields.Count == 0) return;
+
+        var dbFields = await _db.SignFields
+            .Where(f => f.EnvelopeId == envelopeId)
+            .ToListAsync();
+
+        foreach (var (key, value) in fields)
+        {
+            if (string.IsNullOrWhiteSpace(value)) continue;
+            var field = dbFields.FirstOrDefault(f => f.FieldKey.Equals(key, StringComparison.OrdinalIgnoreCase));
+            if (field != null)
+                field.FieldValue = value.Trim();
+        }
 
         await _db.SaveChangesAsync();
     }
 
     public async Task CaptureSignatureAsync(long envelopeId, long recipientId, string typedFullName, string sigDataBase64)
     {
-        var rec = await _db.SignRecipients.FirstOrDefaultAsync(r => r.RecipientId == recipientId && r.EnvelopeId == envelopeId)
+        var rec = await _db.SignRecipients
+            .Include(r => r.Envelope)
+            .FirstOrDefaultAsync(r => r.RecipientId == recipientId && r.EnvelopeId == envelopeId)
             ?? throw new InvalidOperationException($"Recipient {recipientId} not found for envelope {envelopeId}");
 
         if (rec.SignedAtUtc != null)
@@ -697,8 +1150,16 @@ public sealed class EnvelopeService : IEnvelopeService
         if (rec.AccessTokenExpiresAt != null && rec.AccessTokenExpiresAt < DateTime.UtcNow)
             throw new InvalidOperationException("Signing token has expired");
 
-        // save typed name
+        // save typed name (may be empty for Communication envelopes)
         rec.TypedFullName = typedFullName;
+
+        // Communication envelopes: acknowledge without a drawn signature
+        if (rec.Envelope?.EnvelopeType == "Communication" || string.IsNullOrWhiteSpace(sigDataBase64))
+        {
+            rec.SignedAtUtc = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+            return;
+        }
 
         // save drawn signature image
         var dir = Path.Combine("wwwroot", "Files", "Sign", DateTime.UtcNow.ToString("yyyy"), DateTime.UtcNow.ToString("MM"));
@@ -729,64 +1190,182 @@ public sealed class EnvelopeService : IEnvelopeService
             return (false, null);
         }
 
-        // All signed! Now load the envelope for updating (use a fresh query)
+        // All signed/acknowledged! Now load the envelope for updating (use a fresh query)
         var env = await _db.SignEnvelopes
             .Include(e => e.Recipients)
             .FirstOrDefaultAsync(e => e.EnvelopeId == envelopeId)
             ?? throw new InvalidOperationException($"Envelope {envelopeId} not found");
 
-        // Generate PDF and finalize
-        var pdf = await _pdf.RenderAndSealAsync(env.EnvelopeId);
-        env.PdfStoragePath = pdf.storagePath.Replace("\\", "/");
-        env.PdfSha256 = pdf.sha256;
         env.Status = "Completed";
         env.CompletedAtUtc = DateTime.UtcNow;
+
+        // Communication envelopes skip PDF generation — no signature to embed
+        if (env.EnvelopeType != "Communication")
+        {
+            var pdf = await _pdf.RenderAndSealAsync(env.EnvelopeId);
+            env.PdfStoragePath = pdf.storagePath.Replace("\\", "/");
+            env.PdfSha256 = pdf.sha256;
+        }
 
         _db.SignEvents.Add(new SignEvent
         {
             EnvelopeId = env.EnvelopeId,
             EventType = "Completed",
             OccurredAtUtc = DateTime.UtcNow,
-            MetaJson = "{\"auto\":\"finalized\",\"allSigned\":true}"
+            MetaJson = env.EnvelopeType == "Communication"
+                ? "{\"auto\":\"finalized\",\"type\":\"Communication\",\"allAcknowledged\":true}"
+                : "{\"auto\":\"finalized\",\"allSigned\":true}"
         });
 
         await _db.SaveChangesAsync();
 
-        // Send completion emails to all recipients
-        var downloadUrl = env.PdfStoragePath;
-        foreach (var recipient in env.Recipients)
+        // ── In-app notification to the envelope creator ──────────────────────
+        // Fires via SignalR so the bell icon lights up immediately (red dot)
+        // and appears in the creator's Notification Center.
+        try
         {
-            // Build download button if a PDF path is available
-            var downloadBtnHtml = "";
-            if (!string.IsNullOrWhiteSpace(downloadUrl))
+            await _appNotify.SendNotificationToUserAsync(
+                userId:            env.CreatedByUsers_ID,
+                type:              "DocumentSigning",
+                title:             "Envelope Completed",
+                message:           $"\"{env.Subject}\" has been signed by all parties and is ready to download.",
+                actionUrl:         $"/SignAdmin/Details/{env.EnvelopeId}",
+                relatedTaskId:     null,
+                relatedEnvelopeId: (int?)env.EnvelopeId
+            );
+        }
+        catch (Exception ex)
+        {
+            // Non-fatal — log and continue so the PDF/email flow is not interrupted
+            _logger.LogWarning(ex, "Failed to send in-app completion notification for envelope {EnvelopeId}", envelopeId);
+        }
+
+        // ---------------------------------------------------------------
+        // Fetch property name + address (shared by recipient, creator, and internal emails)
+        // ---------------------------------------------------------------
+        string? notifPropertyName    = null;
+        string? notifPropertyAddress = null;
+        if (env.PropertyID.HasValue)
+        {
+            try
             {
-                var absoluteDownload = downloadUrl.StartsWith("/")
-                    ? $"{_appSettings.BaseUrl.TrimEnd('/')}{downloadUrl}"
-                    : downloadUrl;
-                downloadBtnHtml = $@"
-                <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:24px 0;"">
+                // Pass env.LocationCode so the correct branch ERP database is queried.
+                // Without this, GetErpContext() would read from the HTTP session which is
+                // absent (or wrong) during anonymous signing — causing cross-branch data leakage.
+                notifPropertyName    = await _merge.GetPropertyNameAsync(env.PropertyID.Value, env.LocationCode);
+                notifPropertyAddress = await _merge.GetPropertyAddressAsync(env.PropertyID.Value, env.LocationCode);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not fetch property info for completion notification email (envelope {EnvelopeId})", envelopeId);
+            }
+        }
+        notifPropertyName ??= env.PropertyName; // fall back to stored free-text name
+
+        // Build shared property/order context block for completion emails
+        var completionContextRows = "";
+        if (!string.IsNullOrWhiteSpace(notifPropertyName))
+            completionContextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Property</td><td style=\"padding:4px 0;font-size:13px;\">{System.Net.WebUtility.HtmlEncode(notifPropertyName)}</td></tr>";
+        if (!string.IsNullOrWhiteSpace(notifPropertyAddress))
+            completionContextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Address</td><td style=\"padding:4px 0;font-size:13px;\">{System.Net.WebUtility.HtmlEncode(notifPropertyAddress)}</td></tr>";
+        if (!string.IsNullOrWhiteSpace(env.OrderNumber))
+            completionContextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Order #</td><td style=\"padding:4px 0;font-size:13px;\">{System.Net.WebUtility.HtmlEncode(env.OrderNumber)}</td></tr>";
+        if (!string.IsNullOrWhiteSpace(env.LocationCode))
+            completionContextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Branch</td><td style=\"padding:4px 0;font-size:13px;\">{System.Net.WebUtility.HtmlEncode(env.LocationCode)}</td></tr>";
+        var completionContextHtml = string.IsNullOrEmpty(completionContextRows) ? "" : $@"
+            <table cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:12px 0 16px 0;border-left:3px solid #f59e0b;padding-left:12px;"">
+                {completionContextRows}
+            </table>";
+
+        // Build signers summary block (for recipient + creator emails)
+        var signersRows = string.Join("", env.Recipients.OrderBy(r => r.SignerOrder).Select(r =>
+            $"<tr><td style=\"padding:4px 12px 4px 0;font-size:13px;color:#374151;\">{System.Net.WebUtility.HtmlEncode(r.FullName)}</td>" +
+            $"<td style=\"padding:4px 12px 4px 0;font-size:13px;color:#6b7280;\">{System.Net.WebUtility.HtmlEncode(r.Role)}</td>" +
+            $"<td style=\"padding:4px 0;font-size:13px;color:#16a34a;\">&#10003; Signed</td></tr>"));
+        var signersHtml = string.IsNullOrEmpty(signersRows) ? "" : $@"
+            <p style=""margin:16px 0 6px 0;font-size:13px;font-weight:600;color:#374151;"">Signing Summary</p>
+            <table cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:0 0 16px 0;"">
+                {signersRows}
+            </table>";
+
+        // Build absolute download URL (shared across all completion emails)
+        var downloadUrl = env.PdfStoragePath;
+        var absoluteCompletionDownload = !string.IsNullOrWhiteSpace(downloadUrl)
+            ? (downloadUrl.StartsWith("/") ? $"{_appSettings.BaseUrl.TrimEnd('/')}{downloadUrl}" : downloadUrl)
+            : null;
+        var sharedDownloadBtnHtml = absoluteCompletionDownload != null
+            ? $@"<table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:24px 0;"">
                   <tr>
                     <td align=""center"" style=""background-color:#16a34a;border-radius:6px;"">
-                      <a href=""{absoluteDownload}"" style=""display:inline-block;padding:12px 32px;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px;"">Download Completed PDF</a>
+                      <a href=""{absoluteCompletionDownload}"" style=""display:inline-block;padding:12px 32px;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px;"">Download Completed PDF</a>
                     </td>
                   </tr>
-                </table>";
-            }
+                </table>"
+            : "";
 
+        // Send completion emails to all recipients (with property context + signers list)
+        foreach (var recipient in env.Recipients)
+        {
             var completionInner = $@"
                 <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Document Completed</h2>
-                <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Hello {recipient.FullName},</p>
-                <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Thank you for signing. The document <strong>{env.Subject}</strong> has been completed by all parties.</p>
-                {downloadBtnHtml}";
+                <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Hello {System.Net.WebUtility.HtmlEncode(recipient.FullName)},</p>
+                <p style=""margin:0 0 8px 0;font-size:15px;color:#374151;"">Thank you for signing. The document <strong>{System.Net.WebUtility.HtmlEncode(env.Subject)}</strong> has been completed by all parties.</p>
+                {completionContextHtml}
+                {signersHtml}
+                {sharedDownloadBtnHtml}";
 
-            var completionHtml = _emailTemplate.WrapInBrandedTemplate(completionInner);
-            // Pass null for downloadUrl since it's already included in the branded template
+            var completionHtml = await _emailTemplate.WrapInBrandedTemplateAsync(completionInner);
             await _notify.SendCompletedReceiptAsync(
                 recipient.Email,
                 recipient.FullName,
                 $"Completed: {env.Subject}",
                 completionHtml,
                 null);
+        }
+
+        // ---------------------------------------------------------------
+        // Send completion email to the envelope creator
+        // ---------------------------------------------------------------
+        try
+        {
+            var creator = await _db.Users.AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Users_ID == env.CreatedByUsers_ID);
+
+            if (creator != null && !string.IsNullOrWhiteSpace(creator.Email))
+            {
+                var creatorName = $"{creator.FirstName} {creator.LastName}".Trim();
+                var detailsUrl  = $"{_appSettings.BaseUrl.TrimEnd('/')}/SignAdmin/Details/{env.EnvelopeId}";
+
+                var creatorDetailsBtn = $@"<table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:8px 0 0 0;"">
+                      <tr>
+                        <td align=""center"" style=""background-color:#3b82f6;border-radius:6px;"">
+                          <a href=""{detailsUrl}"" style=""display:inline-block;padding:10px 24px;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px;"">View Envelope Details</a>
+                        </td>
+                      </tr>
+                    </table>";
+
+                var creatorInner = $@"
+                    <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Envelope Completed</h2>
+                    <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Hello {System.Net.WebUtility.HtmlEncode(creatorName)},</p>
+                    <p style=""margin:0 0 8px 0;font-size:15px;color:#374151;"">
+                        Great news! The envelope <strong>{System.Net.WebUtility.HtmlEncode(env.Subject)}</strong> has been signed by all parties and is now complete.
+                    </p>
+                    {completionContextHtml}
+                    {signersHtml}
+                    {sharedDownloadBtnHtml}
+                    {creatorDetailsBtn}";
+
+                var creatorHtml = await _emailTemplate.WrapInBrandedTemplateAsync(creatorInner);
+                await _notify.SendEnvelopeEmailAsync(
+                    creator.Email,
+                    creatorName,
+                    $"Envelope Completed: {env.Subject}",
+                    creatorHtml);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send creator completion email for envelope {EnvelopeId}", envelopeId);
         }
 
         // ---------------------------------------------------------------
@@ -833,15 +1412,37 @@ public sealed class EnvelopeService : IEnvelopeService
                 var completedAt = env.CompletedAtUtc.HasValue
                     ? env.CompletedAtUtc.Value.ToString("f") + " UTC"
                     : DateTime.UtcNow.ToString("f") + " UTC";
-                //TODO:  need to add Property Name, which is currenly not being saved to the SignEnvelope Table Details. 
-                // a new column needs to be added to the table as PropertyName, which will allow for the Property Name
-                // to be saved and be included future emails about the completion of an email.  
+
+                // Build optional property rows
+                var propertyRows = "";
+                if (!string.IsNullOrWhiteSpace(notifPropertyName))
+                {
+                    propertyRows += $@"
+                        <tr style=""border-bottom:1px solid #e5e7eb;"">
+                            <td style=""padding:8px 12px 8px 0;font-weight:600;white-space:nowrap;"">Property</td>
+                            <td style=""padding:8px 0;"">{System.Net.WebUtility.HtmlEncode(notifPropertyName)}</td>
+                        </tr>";
+                }
+                if (!string.IsNullOrWhiteSpace(notifPropertyAddress))
+                {
+                    propertyRows += $@"
+                        <tr style=""border-bottom:1px solid #e5e7eb;"">
+                            <td style=""padding:8px 12px 8px 0;font-weight:600;white-space:nowrap;"">Address</td>
+                            <td style=""padding:8px 0;"">{System.Net.WebUtility.HtmlEncode(notifPropertyAddress)}</td>
+                        </tr>";
+                }
+
                 var innerHtml = $@"
                     <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Envelope Completed</h2>
                     <p style=""margin:0 0 16px 0;font-size:15px;color:#374151;"">
                         An envelope has been completed by all signers. Please find the details below.
                     </p>
                     <table style=""width:100%;border-collapse:collapse;font-size:14px;color:#374151;margin-bottom:16px;"">
+                        <tr style=""border-bottom:1px solid #e5e7eb;"">
+                            <td style=""padding:8px 12px 8px 0;font-weight:600;white-space:nowrap;"">Envelope #</td>
+                            <td style=""padding:8px 0;"">{env.EnvelopeId}</td>
+                        </tr>
+                        {propertyRows}
                         <tr style=""border-bottom:1px solid #e5e7eb;"">
                             <td style=""padding:8px 12px 8px 0;font-weight:600;white-space:nowrap;"">Subject</td>
                             <td style=""padding:8px 0;"">{System.Net.WebUtility.HtmlEncode(env.Subject)}</td>
@@ -862,7 +1463,7 @@ public sealed class EnvelopeService : IEnvelopeService
                     </table>
                     {internalDownloadBtnHtml}";
 
-                var notifHtml = _emailTemplate.WrapInBrandedTemplate(innerHtml);
+                var notifHtml = await _emailTemplate.WrapInBrandedTemplateAsync(innerHtml);
 
                 try
                 {
@@ -881,6 +1482,293 @@ public sealed class EnvelopeService : IEnvelopeService
         }
 
         return (true, downloadUrl);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Offline / Manual Completion
+    // ─────────────────────────────────────────────────────────────────────────
+
+    public async Task MarkOfflineCompleteAsync(
+        long envelopeId,
+        Microsoft.AspNetCore.Http.IFormFile signedPdf,
+        string? staffNote,
+        int staffUserId,
+        string staffName)
+    {
+        var env = await _db.SignEnvelopes
+            .Include(e => e.Recipients)
+            .FirstOrDefaultAsync(e => e.EnvelopeId == envelopeId)
+            ?? throw new InvalidOperationException($"Envelope {envelopeId} not found.");
+
+        if (env.Status is "Completed" or "Voided" or "Declined")
+            throw new InvalidOperationException($"Envelope is already {env.Status} and cannot be marked offline complete.");
+
+        // ── Mark any unsigned recipients as offline-signed ───────────────────
+        var offlineMetaJson = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            method    = "offline",
+            markedBy  = staffName,
+            note      = staffNote ?? ""
+        });
+
+        foreach (var r in env.Recipients.Where(r => r.SignedAtUtc == null))
+        {
+            r.SignedAtUtc         = DateTime.UtcNow;
+            r.TypedFullName       = r.FullName;           // physical signature attested by name
+            r.SignatureMetaJson   = offlineMetaJson;
+
+            _db.SignEvents.Add(new SignEvent
+            {
+                EnvelopeId  = envelopeId,
+                RecipientId = r.RecipientId,
+                EventType   = "Signed",
+                OccurredAtUtc = DateTime.UtcNow,
+                MetaJson    = offlineMetaJson
+            });
+        }
+
+        // ── Store the uploaded PDF ───────────────────────────────────────────
+        var dir = Path.Combine("wwwroot", "Files", "Sign",
+            DateTime.UtcNow.ToString("yyyy"), DateTime.UtcNow.ToString("MM"));
+        Directory.CreateDirectory(dir);
+        var fsPath = Path.Combine(dir, $"envelope-{envelopeId}.pdf");
+
+        byte[] pdfBytes;
+        await using (var ms = new System.IO.MemoryStream())
+        {
+            await signedPdf.CopyToAsync(ms);
+            pdfBytes = ms.ToArray();
+        }
+        await File.WriteAllBytesAsync(fsPath, pdfBytes);
+
+        var webPath    = $"/Files/Sign/{DateTime.UtcNow:yyyy}/{DateTime.UtcNow:MM}/envelope-{envelopeId}.pdf";
+        var sha256Hash = System.Security.Cryptography.SHA256.HashData(pdfBytes);
+
+        // ── Finalise the envelope ────────────────────────────────────────────
+        env.PdfStoragePath  = webPath;
+        env.PdfSha256       = sha256Hash;
+        env.Status          = "Completed";
+        env.CompletedAtUtc  = DateTime.UtcNow;
+
+        var completionMetaJson = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            method     = "offline",
+            uploadedBy = staffName,
+            note       = staffNote ?? ""
+        });
+
+        _db.SignEvents.Add(new SignEvent
+        {
+            EnvelopeId    = envelopeId,
+            EventType     = "Completed",
+            OccurredAtUtc = DateTime.UtcNow,
+            MetaJson      = completionMetaJson
+        });
+
+        await _db.SaveChangesAsync();
+
+        // ── In-app notification to creator ───────────────────────────────────
+        try
+        {
+            await _appNotify.SendNotificationToUserAsync(
+                userId:            env.CreatedByUsers_ID,
+                type:              "DocumentSigning",
+                title:             "Envelope Completed (Offline)",
+                message:           $"\"{env.Subject}\" was marked as offline-signed by {staffName} and is ready to download.",
+                actionUrl:         $"/SignAdmin/Details/{env.EnvelopeId}",
+                relatedTaskId:     null,
+                relatedEnvelopeId: (int?)env.EnvelopeId
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send in-app offline completion notification for envelope {EnvelopeId}", envelopeId);
+        }
+
+        // ── Fetch property context for offline completion emails ──────────────
+        string? offlinePropertyName    = null;
+        string? offlinePropertyAddress = null;
+        if (env.PropertyID.HasValue)
+        {
+            try
+            {
+                offlinePropertyName    = await _merge.GetPropertyNameAsync(env.PropertyID.Value, env.LocationCode);
+                offlinePropertyAddress = await _merge.GetPropertyAddressAsync(env.PropertyID.Value, env.LocationCode);
+            }
+            catch { /* non-fatal */ }
+        }
+        offlinePropertyName ??= env.PropertyName;
+
+        // Build property/order context block (shared across recipient, creator, internal emails)
+        var offlineContextRows = "";
+        if (!string.IsNullOrWhiteSpace(offlinePropertyName))
+            offlineContextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Property</td><td style=\"padding:4px 0;font-size:13px;\">{System.Net.WebUtility.HtmlEncode(offlinePropertyName)}</td></tr>";
+        if (!string.IsNullOrWhiteSpace(offlinePropertyAddress))
+            offlineContextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Address</td><td style=\"padding:4px 0;font-size:13px;\">{System.Net.WebUtility.HtmlEncode(offlinePropertyAddress)}</td></tr>";
+        if (!string.IsNullOrWhiteSpace(env.OrderNumber))
+            offlineContextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Order #</td><td style=\"padding:4px 0;font-size:13px;\">{System.Net.WebUtility.HtmlEncode(env.OrderNumber)}</td></tr>";
+        if (!string.IsNullOrWhiteSpace(env.LocationCode))
+            offlineContextRows += $"<tr><td style=\"padding:4px 16px 4px 0;color:#6b7280;font-size:13px;white-space:nowrap;\">Branch</td><td style=\"padding:4px 0;font-size:13px;\">{System.Net.WebUtility.HtmlEncode(env.LocationCode)}</td></tr>";
+        var offlineContextHtml = string.IsNullOrEmpty(offlineContextRows) ? "" : $@"
+            <table cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:12px 0 16px 0;border-left:3px solid #f59e0b;padding-left:12px;"">
+                {offlineContextRows}
+            </table>";
+
+        // Build signers summary (all recipients marked as signed)
+        var offlineSignersRows = string.Join("", env.Recipients.OrderBy(r => r.SignerOrder).Select(r =>
+            $"<tr><td style=\"padding:4px 12px 4px 0;font-size:13px;color:#374151;\">{System.Net.WebUtility.HtmlEncode(r.FullName)}</td>" +
+            $"<td style=\"padding:4px 12px 4px 0;font-size:13px;color:#6b7280;\">{System.Net.WebUtility.HtmlEncode(r.Role)}</td>" +
+            $"<td style=\"padding:4px 0;font-size:13px;color:#16a34a;\">&#10003; Signed</td></tr>"));
+        var offlineSignersHtml = string.IsNullOrEmpty(offlineSignersRows) ? "" : $@"
+            <p style=""margin:16px 0 6px 0;font-size:13px;font-weight:600;color:#374151;"">Signing Summary</p>
+            <table cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:0 0 16px 0;"">
+                {offlineSignersRows}
+            </table>";
+
+        // ── Completion emails to all recipients ──────────────────────────────
+        var absoluteDownload = webPath.StartsWith("/")
+            ? $"{_appSettings.BaseUrl.TrimEnd('/')}{webPath}"
+            : webPath;
+
+        var downloadBtnHtml = $@"
+            <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:24px 0;"">
+              <tr>
+                <td align=""center"" style=""background-color:#16a34a;border-radius:6px;"">
+                  <a href=""{absoluteDownload}"" style=""display:inline-block;padding:12px 32px;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px;"">Download Completed PDF</a>
+                </td>
+              </tr>
+            </table>";
+
+        foreach (var recipient in env.Recipients)
+        {
+            var inner = $@"
+                <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Document Completed</h2>
+                <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Hello {System.Net.WebUtility.HtmlEncode(recipient.FullName)},</p>
+                <p style=""margin:0 0 8px 0;font-size:15px;color:#374151;"">The document <strong>{System.Net.WebUtility.HtmlEncode(env.Subject)}</strong> has been completed and is available to download.</p>
+                {offlineContextHtml}
+                {offlineSignersHtml}
+                {downloadBtnHtml}";
+            var html = await _emailTemplate.WrapInBrandedTemplateAsync(inner);
+            await _notify.SendCompletedReceiptAsync(recipient.Email, recipient.FullName,
+                $"Completed: {env.Subject}", html, null);
+        }
+
+        // ── Completion email to the envelope creator ──────────────────────────
+        try
+        {
+            var offlineCreator = await _db.Users.AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Users_ID == env.CreatedByUsers_ID);
+
+            if (offlineCreator != null && !string.IsNullOrWhiteSpace(offlineCreator.Email))
+            {
+                var offlineCreatorName = $"{offlineCreator.FirstName} {offlineCreator.LastName}".Trim();
+                var offlineDetailsUrl  = $"{_appSettings.BaseUrl.TrimEnd('/')}/SignAdmin/Details/{env.EnvelopeId}";
+
+                var offlineCreatorDetailsBtn = $@"<table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:8px 0 0 0;"">
+                      <tr>
+                        <td align=""center"" style=""background-color:#3b82f6;border-radius:6px;"">
+                          <a href=""{offlineDetailsUrl}"" style=""display:inline-block;padding:10px 24px;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px;"">View Envelope Details</a>
+                        </td>
+                      </tr>
+                    </table>";
+
+                var offlineCreatorInner = $@"
+                    <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Envelope Completed (Offline)</h2>
+                    <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Hello {System.Net.WebUtility.HtmlEncode(offlineCreatorName)},</p>
+                    <p style=""margin:0 0 8px 0;font-size:15px;color:#374151;"">
+                        The envelope <strong>{System.Net.WebUtility.HtmlEncode(env.Subject)}</strong> has been marked as completed via offline/manual signing by <strong>{System.Net.WebUtility.HtmlEncode(staffName)}</strong>.
+                    </p>
+                    {offlineContextHtml}
+                    {offlineSignersHtml}
+                    {downloadBtnHtml}
+                    {offlineCreatorDetailsBtn}";
+
+                var offlineCreatorHtml = await _emailTemplate.WrapInBrandedTemplateAsync(offlineCreatorInner);
+                await _notify.SendEnvelopeEmailAsync(
+                    offlineCreator.Email,
+                    offlineCreatorName,
+                    $"Envelope Completed (Offline): {env.Subject}",
+                    offlineCreatorHtml);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send creator offline completion email for envelope {EnvelopeId}", envelopeId);
+        }
+
+        // ── Internal branch / company notification emails ────────────────────
+        var internalSettings = await _db.EnvelopeNotificationSettings
+            .Where(s => s.IsEnabled && s.NotificationEmail != null && s.NotificationEmail != "")
+            .ToListAsync();
+
+        if (internalSettings.Count > 0)
+        {
+            string? notifPropertyName    = offlinePropertyName;
+            string? notifPropertyAddress = offlinePropertyAddress;
+
+            var propertyRows = "";
+            if (!string.IsNullOrWhiteSpace(notifPropertyName))
+                propertyRows += $@"<tr style=""border-bottom:1px solid #e5e7eb;""><td style=""padding:8px 12px 8px 0;font-weight:600;white-space:nowrap;"">Property</td><td style=""padding:8px 0;"">{System.Net.WebUtility.HtmlEncode(notifPropertyName)}</td></tr>";
+            if (!string.IsNullOrWhiteSpace(notifPropertyAddress))
+                propertyRows += $@"<tr style=""border-bottom:1px solid #e5e7eb;""><td style=""padding:8px 12px 8px 0;font-weight:600;white-space:nowrap;"">Address</td><td style=""padding:8px 0;"">{System.Net.WebUtility.HtmlEncode(notifPropertyAddress)}</td></tr>";
+
+            foreach (var notif in internalSettings)
+            {
+                bool shouldSend = notif.LocationCode == null
+                    || string.Equals(notif.LocationCode, env.LocationCode, StringComparison.OrdinalIgnoreCase);
+                if (!shouldSend) continue;
+
+                var branchLabel = notif.LocationCode == null
+                    ? "All Branches" : $"{notif.LocationName} ({notif.LocationCode})";
+                var completedAt = env.CompletedAtUtc?.ToString("f") + " UTC";
+
+                var innerHtml = $@"
+                    <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Envelope Completed (Offline)</h2>
+                    <p style=""margin:0 0 16px 0;font-size:15px;color:#374151;"">
+                        An envelope was marked as completed via offline/manual signing by <strong>{System.Net.WebUtility.HtmlEncode(staffName)}</strong>.
+                    </p>
+                    <table style=""width:100%;border-collapse:collapse;font-size:14px;color:#374151;margin-bottom:16px;"">
+                        <tr style=""border-bottom:1px solid #e5e7eb;"">
+                            <td style=""padding:8px 12px 8px 0;font-weight:600;white-space:nowrap;"">Envelope #</td>
+                            <td style=""padding:8px 0;"">{env.EnvelopeId}</td>
+                        </tr>
+                        {propertyRows}
+                        <tr style=""border-bottom:1px solid #e5e7eb;"">
+                            <td style=""padding:8px 12px 8px 0;font-weight:600;white-space:nowrap;"">Subject</td>
+                            <td style=""padding:8px 0;"">{System.Net.WebUtility.HtmlEncode(env.Subject)}</td>
+                        </tr>
+                        <tr style=""border-bottom:1px solid #e5e7eb;"">
+                            <td style=""padding:8px 12px 8px 0;font-weight:600;white-space:nowrap;"">Order</td>
+                            <td style=""padding:8px 0;"">{System.Net.WebUtility.HtmlEncode(env.OrderNumber ?? "N/A")}</td>
+                        </tr>
+                        <tr style=""border-bottom:1px solid #e5e7eb;"">
+                            <td style=""padding:8px 12px 8px 0;font-weight:600;white-space:nowrap;"">Branch</td>
+                            <td style=""padding:8px 0;"">{System.Net.WebUtility.HtmlEncode(branchLabel)}</td>
+                        </tr>
+                        <tr style=""border-bottom:1px solid #e5e7eb;"">
+                            <td style=""padding:8px 12px 8px 0;font-weight:600;white-space:nowrap;"">Completed By</td>
+                            <td style=""padding:8px 0;"">{System.Net.WebUtility.HtmlEncode(staffName)} (offline)</td>
+                        </tr>
+                        <tr>
+                            <td style=""padding:8px 12px 8px 0;font-weight:600;white-space:nowrap;"">Completed</td>
+                            <td style=""padding:8px 0;"">{completedAt}</td>
+                        </tr>
+                    </table>
+                    {downloadBtnHtml}";
+
+                try
+                {
+                    await _notify.SendEnvelopeEmailAsync(notif.NotificationEmail!, notif.LocationName,
+                        $"Envelope Completed (Offline): {env.Subject}",
+                        await _emailTemplate.WrapInBrandedTemplateAsync(innerHtml));
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to send offline completion notification to {Email} for envelope {EnvelopeId}",
+                        notif.NotificationEmail, envelopeId);
+                }
+            }
+        }
     }
 
     public async Task ProgressToNextAsync(long envelopeId)
@@ -904,7 +1792,7 @@ public sealed class EnvelopeService : IEnvelopeService
         var baseUrl = _appSettings.BaseUrl.TrimEnd('/');
         var link = $"{baseUrl}/sign/{next.AccessToken}";
         var innerHtml = $@"
-            <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Document Signing Request</h2>
+            <h2 style=""margin:0 0 16px 0;font-size:20px;color:#1e293b;font-weight:600;"">Envelope Document Signing Request</h2>
             <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Hello {next.FullName},</p>
             <p style=""margin:0 0 12px 0;font-size:15px;color:#374151;"">Please review and sign the document: <strong>{env.Subject}</strong>.</p>
             <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:24px 0;"">
@@ -916,8 +1804,9 @@ public sealed class EnvelopeService : IEnvelopeService
             </table>
             <p style=""margin:0;font-size:12px;color:#9ca3af;"">If the button above doesn't work, copy and paste this link into your browser:</p>
             <p style=""margin:4px 0 0 0;font-size:12px;color:#3b82f6;word-break:break-all;""><a href=""{link}"" style=""color:#3b82f6;"">{link}</a></p>";
-        var html = _emailTemplate.WrapInBrandedTemplate(innerHtml);
-        await _notify.SendEnvelopeEmailAsync(next.Email, next.FullName, env.Subject, html);
+        var html = await _emailTemplate.WrapInBrandedTemplateAsync(innerHtml);
+        var progressReplyTo = await GetReplyToEmailAsync(env.LocationCode);
+        await _notify.SendEnvelopeEmailAsync(next.Email, next.FullName, env.Subject, html, progressReplyTo);
 
         _db.SignEvents.Add(new SignEvent
         {
@@ -935,6 +1824,25 @@ public sealed class EnvelopeService : IEnvelopeService
         return await _db.SignTemplates
             .AsNoTracking()
             .FirstOrDefaultAsync(t => t.TemplateKey == templateKey);
+    }
+
+    /// <summary>
+    /// Returns the Reply-To email address for outbound signer emails.
+    /// Prefers the branch-specific setting (matching locationCode); falls back to the
+    /// company-wide row (LocationCode == null) when no branch email is configured.
+    /// Returns null when neither is set, which means no Reply-To header is added.
+    /// </summary>
+    private async Task<string?> GetReplyToEmailAsync(string? locationCode)
+    {
+        var setting = await _db.EnvelopeNotificationSettings
+            .Where(s => s.IsEnabled
+                     && s.NotificationEmail != null
+                     && s.NotificationEmail != ""
+                     && (s.LocationCode == locationCode || s.LocationCode == null))
+            .OrderByDescending(s => s.LocationCode != null) // branch-specific beats company-wide
+            .FirstOrDefaultAsync();
+
+        return setting?.NotificationEmail;
     }
 
     /// <summary>

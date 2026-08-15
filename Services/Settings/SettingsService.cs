@@ -19,12 +19,19 @@ namespace SalesMetrics.Services.Settings
             var notificationSettings = await GetNotificationSettingsAsync();
             var securitySettings = await GetSecuritySettingsAsync();
             var envelopeNotificationSettings = await GetEnvelopeNotificationSettingsAsync();
+            var brandingSettings = await GetBrandingSettingsAsync();
+            var generalSettings = await GetGeneralSettingsAsync();
+
+            var formNotificationSettings = await GetFormNotificationSettingsAsync();
 
             return new SettingsDashboardViewModel
             {
                 NotificationSettings = notificationSettings,
                 SecuritySettings = securitySettings,
                 EnvelopeNotificationSettings = envelopeNotificationSettings,
+                FormNotificationSettings = formNotificationSettings,
+                BrandingSettings = brandingSettings,
+                GeneralSettings = generalSettings,
                 ActiveTab = "notifications"
             };
         }
@@ -157,6 +164,7 @@ namespace SalesMetrics.Services.Settings
         public async Task<List<SecuritySettingViewModel>> GetSecuritySettingsAsync()
         {
             var settings = await _context.SecuritySettings
+                .Where(ss => ss.Category != "Branding" && ss.Category != "General")
                 .OrderBy(ss => ss.Category)
                 .ThenBy(ss => ss.SettingKey)
                 .ToListAsync();
@@ -341,6 +349,178 @@ namespace SalesMetrics.Services.Settings
         }
 
         // ======================================================================
+        // Branding Settings
+        // ======================================================================
+
+        // Canonical list of branding keys exposed in the UI, in display order.
+        private static readonly (string Key, string DisplayName, string? Description, string InputType)[] BrandingKeys =
+        {
+            ("CompanyName",     "Company Name",        "Your company's display name used in emails and footers.",           "text"),
+            ("LogoUrl",         "Company Logo URL",    "Absolute URL to the company logo shown in email headers.",          "url"),
+            ("EnvelopeLogoUrl", "Envelope Logo URL",   "Absolute URL for the E-Sign logo shown inside envelope emails. Leave blank to hide.", "url"),
+            ("Website",         "Website",             "Company website URL shown in the email footer.",                    "url"),
+            ("Phone",           "Phone",               "Company phone number shown in the email footer.",                   "text"),
+        };
+
+        public async Task<List<BrandingSettingViewModel>> GetBrandingSettingsAsync()
+        {
+            var dbRows = await _context.SecuritySettings
+                .Where(s => s.Category == "Branding")
+                .ToListAsync();
+
+            var result = new List<BrandingSettingViewModel>();
+            foreach (var (key, displayName, description, inputType) in BrandingKeys)
+            {
+                var row = dbRows.FirstOrDefault(r => r.SettingKey == key);
+                result.Add(new BrandingSettingViewModel
+                {
+                    SettingKey   = key,
+                    DisplayName  = displayName,
+                    Description  = description,
+                    SettingValue = row?.SettingValue,
+                    InputType    = inputType
+                });
+            }
+            return result;
+        }
+
+        public async Task SaveBrandingSettingAsync(SaveBrandingSettingRequest request, int modifiedByUserId)
+        {
+            var existing = await _context.SecuritySettings
+                .FirstOrDefaultAsync(s => s.Category == "Branding" && s.SettingKey == request.SettingKey);
+
+            if (existing != null)
+            {
+                existing.SettingValue        = request.SettingValue?.Trim() ?? "";
+                existing.LastModifiedDate    = DateTime.Now;
+                existing.LastModifiedByUserId = modifiedByUserId;
+            }
+            else
+            {
+                var def = BrandingKeys.FirstOrDefault(b => b.Key == request.SettingKey);
+                _context.SecuritySettings.Add(new SecuritySettingsEntity
+                {
+                    SettingKey            = request.SettingKey,
+                    SettingValue          = request.SettingValue?.Trim() ?? "",
+                    Description           = def.Description,
+                    Category              = "Branding",
+                    LastModifiedDate      = DateTime.Now,
+                    LastModifiedByUserId  = modifiedByUserId
+                });
+            }
+
+            await _context.SaveChangesAsync();
+        }
+
+        // ======================================================================
+        // Form Notification Settings
+        // ======================================================================
+
+        public async Task<List<FormNotificationSettingViewModel>> GetFormNotificationSettingsAsync()
+        {
+            var settings = await _context.FormNotificationSettings
+                .OrderBy(f => f.FormNotificationSettingsId)
+                .ToListAsync();
+
+            return settings.Select(s => new FormNotificationSettingViewModel
+            {
+                FormNotificationSettingsId = s.FormNotificationSettingsId,
+                LocationCode = s.LocationCode,
+                LocationName = s.LocationName,
+                NotificationEmail = s.NotificationEmail,
+                IsEnabled = s.IsEnabled
+            }).ToList();
+        }
+
+        public async Task<string?> GetFormNotificationEmailAsync(string? locationCode)
+        {
+            // Prefer branch-specific row; fall back to company-wide (null LocationCode)
+            var branchRow = string.IsNullOrEmpty(locationCode) ? null :
+                await _context.FormNotificationSettings
+                    .FirstOrDefaultAsync(f => f.LocationCode == locationCode && f.IsEnabled
+                                           && !string.IsNullOrEmpty(f.NotificationEmail));
+
+            if (branchRow != null) return branchRow.NotificationEmail;
+
+            var companyRow = await _context.FormNotificationSettings
+                .FirstOrDefaultAsync(f => f.LocationCode == null && f.IsEnabled
+                                       && !string.IsNullOrEmpty(f.NotificationEmail));
+
+            return companyRow?.NotificationEmail;
+        }
+
+        public async Task SaveFormNotificationSettingAsync(SaveFormNotificationSettingRequest request, int modifiedByUserId)
+        {
+            var setting = await _context.FormNotificationSettings.FindAsync(request.FormNotificationSettingsId);
+            if (setting == null) throw new Exception("Form notification setting not found");
+
+            setting.NotificationEmail = string.IsNullOrWhiteSpace(request.NotificationEmail)
+                ? null : request.NotificationEmail.Trim();
+            setting.IsEnabled = request.IsEnabled;
+            setting.LastModifiedDate = DateTime.Now;
+            setting.LastModifiedByUserId = modifiedByUserId;
+
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task InitializeDefaultFormNotificationSettingsAsync()
+        {
+            var defaultRows = new[]
+            {
+                new { LocationCode = (string?)null, LocationName = "Company (All Branches)" },
+                new { LocationCode = (string?)"LAX", LocationName = "Los Angeles" },
+                new { LocationCode = (string?)"LSV", LocationName = "Las Vegas" },
+                new { LocationCode = (string?)"CHN", LocationName = "Chino" },
+                new { LocationCode = (string?)"PHX", LocationName = "Phoenix" },
+                new { LocationCode = (string?)"SND", LocationName = "San Diego" }
+            };
+
+            foreach (var row in defaultRows)
+            {
+                bool exists = row.LocationCode == null
+                    ? await _context.FormNotificationSettings.AnyAsync(f => f.LocationCode == null)
+                    : await _context.FormNotificationSettings.AnyAsync(f => f.LocationCode == row.LocationCode);
+
+                if (!exists)
+                {
+                    _context.FormNotificationSettings.Add(new FormNotificationSettingsEntity
+                    {
+                        LocationCode = row.LocationCode,
+                        LocationName = row.LocationName,
+                        NotificationEmail = null,
+                        IsEnabled = true,
+                        LastModifiedDate = DateTime.Now,
+                        LastModifiedByUserId = 1
+                    });
+                }
+            }
+
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task InitializeDefaultBrandingSettingsAsync()
+        {
+            foreach (var (key, _, description, _) in BrandingKeys)
+            {
+                bool exists = await _context.SecuritySettings
+                    .AnyAsync(s => s.Category == "Branding" && s.SettingKey == key);
+                if (!exists)
+                {
+                    _context.SecuritySettings.Add(new SecuritySettingsEntity
+                    {
+                        SettingKey           = key,
+                        SettingValue         = "",
+                        Description          = description,
+                        Category             = "Branding",
+                        LastModifiedDate     = DateTime.Now,
+                        LastModifiedByUserId = 1
+                    });
+                }
+            }
+            await _context.SaveChangesAsync();
+        }
+
+        // ======================================================================
         // Private helper methods
         // ======================================================================
 
@@ -391,6 +571,71 @@ namespace SalesMetrics.Services.Settings
             }
 
             return viewModel;
+        }
+
+        // ======================================================================
+        // General Settings
+        // ======================================================================
+
+        // Key → (DisplayName, Description, DefaultValue, InputType, Options[])
+        private static readonly (string Key, string Display, string Desc, string Default, string InputType, string[] Options)[] GeneralKeys =
+        {
+            ("AppTheme",          "App Theme",            "Visual theme applied across the application.",                             "light",             "select",  new[] { "light", "dark", "system" }),
+            ("DefaultTimezone",   "Default Timezone",     "Timezone used when displaying dates and times across the app.",           "America/New_York",  "select",  new[] {
+                "America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles",
+                "America/Phoenix",  "America/Anchorage", "Pacific/Honolulu", "UTC"
+            }),
+            ("DateFormat",        "Date Format",          "How dates are displayed throughout the app.",                             "MM/dd/yyyy",        "select",  new[] { "MM/dd/yyyy", "dd/MM/yyyy", "yyyy-MM-dd", "MMMM d, yyyy" }),
+            ("TimeFormat",        "Time Format",          "12-hour (AM/PM) or 24-hour clock display.",                              "12h",               "select",  new[] { "12h", "24h" }),
+            ("DefaultLandingPage","Default Landing Page", "Page users land on after signing in (if they have access).",             "Home",              "select",  new[] { "Home", "GMDash", "Dashboard", "Tasks" }),
+            ("ItemsPerPage",      "Items Per Page",       "Default number of rows shown in paginated lists.",                       "25",                "select",  new[] { "10", "25", "50", "100" }),
+            ("MaintenanceMode",   "Maintenance Mode",     "When enabled, only Admins can log in. All other users see a hold page.", "false",             "boolean", Array.Empty<string>()),
+        };
+
+        public async Task<List<SecuritySettingViewModel>> GetGeneralSettingsAsync()
+        {
+            var dbRows = await _context.SecuritySettings
+                .Where(s => s.Category == "General")
+                .ToListAsync();
+
+            var result = new List<SecuritySettingViewModel>();
+            foreach (var (key, display, desc, defaultVal, inputType, options) in GeneralKeys)
+            {
+                var row = dbRows.FirstOrDefault(r => r.SettingKey == key);
+                result.Add(new SecuritySettingViewModel
+                {
+                    SecuritySettingsId = row?.SecuritySettingsId ?? 0,
+                    SettingKey         = key,
+                    SettingValue       = row?.SettingValue ?? defaultVal,
+                    Description        = desc,
+                    Category           = "General",
+                    InputType          = inputType,
+                    AvailableOptions   = options.Length > 0 ? options.ToList() : null,
+                });
+            }
+            return result;
+        }
+
+        public async Task InitializeDefaultGeneralSettingsAsync()
+        {
+            foreach (var (key, _, desc, defaultVal, _, _) in GeneralKeys)
+            {
+                bool exists = await _context.SecuritySettings
+                    .AnyAsync(s => s.Category == "General" && s.SettingKey == key);
+                if (!exists)
+                {
+                    _context.SecuritySettings.Add(new SecuritySettingsEntity
+                    {
+                        SettingKey           = key,
+                        SettingValue         = defaultVal,
+                        Description          = desc,
+                        Category             = "General",
+                        LastModifiedDate     = DateTime.Now,
+                        LastModifiedByUserId = 1
+                    });
+                }
+            }
+            await _context.SaveChangesAsync();
         }
 
         private string GetCategoryDisplayName(string categoryName)

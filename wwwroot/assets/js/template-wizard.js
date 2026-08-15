@@ -212,12 +212,20 @@ var TemplateWizard = (function () {
     }
 
     /**
-     * Validate Step 2: Template Selection
+     * Validate Step 2: Template Selection or Custom HTML
+     * Either a Razor view OR a custom HTML body must be provided.
      */
     function validateStep2() {
         const razorViewPath = document.getElementById('razorViewPath')?.value;
 
-        if (!razorViewPath) {
+        // Also check TinyMCE editor content if available
+        let htmlBody = document.getElementById('htmlBodyContent')?.value || '';
+        if (typeof tinymce !== 'undefined') {
+            const ed = tinymce.get('htmlBodyContent');
+            if (ed) htmlBody = ed.getContent();
+        }
+
+        if (!razorViewPath && !htmlBody.trim()) {
             showValidationError('step2Error');
             return false;
         }
@@ -557,7 +565,21 @@ var TemplateWizard = (function () {
 
         // Document Template
         const razorView = document.getElementById('razorViewPath')?.value || '';
-        document.getElementById('reviewRazorView').textContent = razorView;
+        document.getElementById('reviewRazorView').textContent = razorView || '(none — using custom HTML)';
+
+        // Custom HTML body
+        let htmlBody = document.getElementById('htmlBodyContent')?.value || '';
+        if (typeof tinymce !== 'undefined') {
+            const ed = tinymce.get('htmlBodyContent');
+            if (ed) htmlBody = ed.getContent();
+        }
+        const reviewHtmlEl = document.getElementById('reviewHtmlBody');
+        if (reviewHtmlEl) {
+            const wordCount = htmlBody.trim() ? htmlBody.replace(/<[^>]*>/g, '').trim().split(/\s+/).length : 0;
+            reviewHtmlEl.textContent = htmlBody.trim()
+                ? `Custom HTML content (approx. ${wordCount} words)`
+                : '(none — using Razor View)';
+        }
 
         // Selected Fields
         const selectedFields = document.querySelectorAll('.field-checkbox:checked');

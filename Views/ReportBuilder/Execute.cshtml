@@ -1,6 +1,8 @@
 @model SalesMetrics.Models.QueryBuilder.ReportExecutionViewModel
 @{
     ViewData["Title"] = Model.ReportName;
+    ViewBag.PTitle = "Query Builder";
+    ViewBag.PLink = "/ReportBuilder";
 }
 
 <style>
@@ -219,76 +221,109 @@
 </div>
 
 @* Show parameter entry form if report has parameters and no results yet *@
-@if (Model.HasParameters && Model.RowCount == 0)
+@* Show run form when no results yet — always shown so user can pick branch *@
+@if (Model.RowCount == 0 && string.IsNullOrEmpty(Model.ExecutedAgainstDatabase))
 {
     <div class="parameters-container">
-        <h5><i class="fa fa-sliders-h"></i> Report Parameters</h5>
-        <p class="text-muted mb-3">Enter parameter values to run this report</p>
 
         <form method="post" action="@Url.Action("Execute", new { id = Model.ReportId })" id="parameterForm">
-            <div class="row g-3">
-                @foreach (var param in Model.Parameters)
-                {
-                    <div class="col-md-6">
-                        <div class="parameter-field">
-                            <label class="form-label">
-                                @param.DisplayName
-                                @if (param.IsRequired)
-                                {
-                                    <span class="text-danger">*</span>
-                                }
-                            </label>
 
-                            @if (!string.IsNullOrEmpty(param.PromptText))
-                            {
-                                <small class="form-text text-muted d-block mb-1">@param.PromptText</small>
-                            }
-
-                            @if (param.DataType == "date")
-                            {
-                                <input type="date"
-                                       class="form-control"
-                                       name="@param.Name"
-                                       value="@param.DefaultValue"
-                                       required="@param.IsRequired" />
-                            }
-                            else if (param.DataType == "number")
-                            {
-                                <input type="number"
-                                       class="form-control"
-                                       name="@param.Name"
-                                       value="@param.DefaultValue"
-                                       required="@param.IsRequired" />
-                            }
-                            else if (param.DataType == "dropdown" && param.Options != null && param.Options.Any())
-                            {
-                                <select class="form-control" name="@param.Name" required="@param.IsRequired">
-                                    <option value="">-- Select --</option>
-                                    @foreach (var option in param.Options)
-                                    {
-                                        <option value="@option.Value" selected="@(option.Value == param.DefaultValue)">@option.Text</option>
-                                    }
-                                </select>
-                            }
-                            else
-                            {
-                                <input type="text"
-                                       class="form-control"
-                                       name="@param.Name"
-                                       value="@param.DefaultValue"
-                                       required="@param.IsRequired"
-                                       placeholder="Enter @param.DisplayName" />
-                            }
-                        </div>
+            @* ── Branch / Location selector (always shown) ─────────────── *@
+            <div class="mb-4 p-3" style="background:#f0f8ff;border:1px solid #b8daff;border-radius:10px;">
+                <h6 class="mb-2" style="color:#004085;font-weight:600;">
+                    <i class="fa fa-database me-1"></i> Branch / Location
+                    <span style="font-size:.8rem;font-weight:400;"> — which ERP database to query</span>
+                </h6>
+                <div class="row g-2 align-items-center">
+                    <div class="col-md-4">
+                        <select name="_location" class="form-select" id="locationSelect">
+                            <!option value="">-- Current session (@(Context.Session.GetString("OfficeLocation") ?? "LAX")) --</!option>
+                            <!option value="LAX" @(Model.SelectedLocation == "LAX" ? "selected" : "")>LAX &ndash; Los Angeles (CompUFloorLA)</!option>
+                            <!option value="LSV" @(Model.SelectedLocation == "LSV" ? "selected" : "")>LSV &ndash; Las Vegas (CompUFloorLV)</!option>
+                            <!option value="CHN" @(Model.SelectedLocation == "CHN" ? "selected" : "")>CHN &ndash; Chino (CompUFloorChino)</!option>
+                            <!option value="PHX" @(Model.SelectedLocation == "PHX" ? "selected" : "")>PHX &ndash; Phoenix (CompUFloorPHX)</!option>
+                            <!option value="SND" @(Model.SelectedLocation == "SND" ? "selected" : "")>SND &ndash; San Diego (CompUFloorSD)</!option>
+                        </select>
                     </div>
-                }
+                    <div class="col-md-8">
+                        <small class="text-muted">
+                            Select the branch whose ERP database to query. Admin users can pick any branch
+                            without changing their session location.
+                        </small>
+                    </div>
+                </div>
             </div>
+
+            @* ── Report-specific parameters (only if any exist) ─────────── *@
+            @if (Model.HasParameters)
+            {
+                <h5 class="mb-1"><i class="fa fa-sliders-h"></i> Report Parameters</h5>
+                <p class="text-muted mb-3">Enter parameter values to run this report</p>
+
+                <div class="row g-3">
+                    @foreach (var param in Model.Parameters)
+                    {
+                        <div class="col-md-6">
+                            <div class="parameter-field">
+                                <label class="form-label">
+                                    @param.DisplayName
+                                    @if (param.IsRequired)
+                                    {
+                                        <span class="text-danger">*</span>
+                                    }
+                                </label>
+
+                                @if (!string.IsNullOrEmpty(param.PromptText))
+                                {
+                                    <small class="form-text text-muted d-block mb-1">@param.PromptText</small>
+                                }
+
+                                @if (param.DataType == "date")
+                                {
+                                    <input type="date"
+                                           class="form-control"
+                                           name="@param.Name"
+                                           value="@param.DefaultValue"
+                                           required="@param.IsRequired" />
+                                }
+                                else if (param.DataType == "number")
+                                {
+                                    <input type="number"
+                                           class="form-control"
+                                           name="@param.Name"
+                                           value="@param.DefaultValue"
+                                           required="@param.IsRequired" />
+                                }
+                                else if (param.DataType == "dropdown" && param.Options != null && param.Options.Any())
+                                {
+                                    <select class="form-control" name="@param.Name" required="@param.IsRequired">
+                                        <option value="">-- Select --</option>
+                                        @foreach (var option in param.Options)
+                                        {
+                                            <option value="@option.Value" selected="@(option.Value == param.DefaultValue)">@option.Text</option>
+                                        }
+                                    </select>
+                                }
+                                else
+                                {
+                                    <input type="text"
+                                           class="form-control"
+                                           name="@param.Name"
+                                           value="@param.DefaultValue"
+                                           required="@param.IsRequired"
+                                           placeholder="Enter @param.DisplayName" />
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
 
             <div class="mt-4">
                 <button type="submit" class="btn btn-success btn-lg">
                     <i class="fa fa-play"></i> Run Report
                 </button>
-                <a href="@Url.Action("Index")" class="btn btn-secondary btn-lg">
+                <a href="@Url.Action("Index")" class="btn btn-secondary btn-lg ms-2">
                     <i class="fa fa-arrow-left"></i> Back to Reports
                 </a>
             </div>
@@ -307,21 +342,36 @@
 }
 else
 {
-    @* Show results if no parameters or parameters already submitted *@
+    @* Show results *@
+
+@if (!string.IsNullOrEmpty(Model.ExecutedAgainstDatabase))
+{
+    <div class="mb-3 px-1" style="font-size:.85rem;color:#555;">
+        <i class="fa fa-database me-1" style="color:#28a745;"></i>
+        Queried: <strong>@Model.ExecutedAgainstDatabase</strong>
+        @if (!string.IsNullOrEmpty(Model.SelectedLocation))
+        {
+            <span class="ms-2 badge" style="background:#e8f5e9;color:#1b5e20;border:1px solid #a5d6a7;">@Model.SelectedLocation</span>
+        }
+    </div>
+}
 
 <div class="action-bar">
-    <a href="@Url.Action("Index")" class="btn btn-secondary">
+    <a href="@Url.Action("Execute", new { id = Model.ReportId })" class="btn btn-secondary">
         <i class="fa fa-arrow-left"></i> Back to Reports
     </a>
-    <button type="button" class="btn btn-success" onclick="location.reload()">
+    <button type="button" class="btn btn-success" onclick="location.href='@Url.Action("Execute", new { id = Model.ReportId })'">
         <i class="fa fa-sync"></i> Refresh
     </button>
     <button type="button" class="btn btn-export" onclick="exportToExcel()" id="btnExportExcel">
         <i class="fa fa-file-excel"></i> Export to Excel
     </button>
+    <button type="button" class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#branchExportModal" id="btnExportAllBranches" title="Export this report for selected branches into one Excel file with a tab per branch">
+        <i class="fa fa-layer-group"></i> Export by Branch
+    </button>
 </div>
 
-@* Hidden form for Excel export — posts reportId + any parameter values to the ExportToExcel action *@
+@* Hidden form for single-branch Excel export *@
 <form id="exportForm" method="post" action="@Url.Action("ExportToExcel", "ReportBuilder", new { id = Model.ReportId })" style="display:none;">
     @if (Model.SubmittedParameterValues != null)
     {
@@ -331,6 +381,66 @@ else
         }
     }
 </form>
+
+@* Branch-selection modal *@
+<div class="modal fade" id="branchExportModal" tabindex="-1" aria-labelledby="branchExportModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header" style="background:linear-gradient(135deg,#28a745 0%,#20c997 100%);color:#fff;">
+                <h5 class="modal-title" id="branchExportModalLabel">
+                    <i class="fa fa-layer-group me-2"></i> Export by Branch
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="exportAllBranchesForm" method="post" action="@Url.Action("ExportAllBranchesToExcel", "ReportBuilder", new { id = Model.ReportId })">
+                @* Carry report parameters through *@
+                @if (Model.SubmittedParameterValues != null)
+                {
+                    @foreach (var param in Model.SubmittedParameterValues)
+                    {
+                        <input type="hidden" name="@param.Key" value="@param.Value" />
+                    }
+                }
+                <div class="modal-body">
+                    <p class="text-muted mb-3" style="font-size:.9rem;">
+                        Select which branches to include. Each selected branch will appear as a separate tab in the exported Excel file.
+                    </p>
+                    <div class="d-flex justify-content-end mb-2">
+                        <button type="button" class="btn btn-link btn-sm p-0 me-3" onclick="setBranchAll(true)">Select all</button>
+                        <button type="button" class="btn btn-link btn-sm p-0" onclick="setBranchAll(false)">Clear all</button>
+                    </div>
+                    <div class="list-group" id="branchCheckboxList">
+                        @{
+                            var branchOptions = new[] {
+                                ("LAX", "Los Angeles", "CompUFloorLA"),
+                                ("LSV", "Las Vegas",   "CompUFloorLV"),
+                                ("CHN", "Chino",       "CompUFloorChino"),
+                                ("PHX", "Phoenix",     "CompUFloorPHX"),
+                                ("SND", "San Diego",   "CompUFloorSD")
+                            };
+                        }
+                        @foreach (var (code, city, db) in branchOptions)
+                        {
+                            <label class="list-group-item list-group-item-action d-flex align-items-center gap-2" style="cursor:pointer;">
+                                <input class="form-check-input branch-checkbox" type="checkbox" name="branches" value="@code" checked />
+                                <span>
+                                    <strong>@code</strong> &ndash; @city
+                                    <small class="text-muted ms-1">(@db)</small>
+                                </span>
+                            </label>
+                        }
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success" id="btnConfirmBranchExport" onclick="return validateBranchSelection()">
+                        <i class="fa fa-file-excel me-1"></i> Export Selected
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
 <div class="row g-3 mb-4">
     <div class="col-md-4">
@@ -436,6 +546,22 @@ else
                 btn.innerHTML = originalHtml;
                 btn.disabled = false;
             }, 3000);
+        }
+
+        function setBranchAll(checked) {
+            document.querySelectorAll('.branch-checkbox').forEach(function(cb) { cb.checked = checked; });
+        }
+
+        function validateBranchSelection() {
+            var checked = document.querySelectorAll('.branch-checkbox:checked');
+            if (checked.length === 0) {
+                Swal.fire({ toast: true, position: 'top-end', icon: 'warning', title: 'Select at least one branch', showConfirmButton: false, timer: 2500 });
+                return false;
+            }
+            var btn = document.getElementById('btnConfirmBranchExport');
+            btn.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i> Exporting...';
+            btn.disabled = true;
+            return true;
         }
     </script>
 }

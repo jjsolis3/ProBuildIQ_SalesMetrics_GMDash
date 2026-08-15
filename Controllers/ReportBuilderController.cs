@@ -1172,11 +1172,12 @@ namespace SalesMetrics.Controllers
         {
             var userId = GetCurrentUserId();
             var isAdmin = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_ADMIN");
-            if (!isAdmin) return Forbid();
+            if (!isAdmin) return AccessDeniedJson();
 
             var report = await _context.ReportDefinitions
                 .FirstOrDefaultAsync(r => r.ReportDefinitionId == reportId && r.IsActive);
-            if (report == null) return NotFound();
+            if (report == null)
+                return Json(new { success = false, message = "Report not found." });
 
             var reportKey = $"builder:{reportId}";
 
@@ -1200,6 +1201,7 @@ namespace SalesMetrics.Controllers
 
             return Json(new
             {
+                success = true,
                 grantedUsers,
                 allUsers,
                 isRestricted = report.IsAccessRestricted
@@ -1214,65 +1216,172 @@ namespace SalesMetrics.Controllers
         {
             var userId = GetCurrentUserId();
             var isAdmin = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_ADMIN");
-            if (!isAdmin) return Forbid();
+            if (!isAdmin) return AccessDeniedJson();
 
-            var report = await _context.ReportDefinitions
-                .FirstOrDefaultAsync(r => r.ReportDefinitionId == request.ReportId && r.IsActive);
-            if (report == null) return NotFound();
+            if (request == null || request.ReportId <= 0)
+                return Json(new { success = false, message = "No report was specified." });
 
-            report.IsAccessRestricted = request.IsRestricted;
-            report.ModifiedDate = DateTime.UtcNow;
-            report.ModifiedByUserId = userId;
-            await _context.SaveChangesAsync();
+            try
+            {
+                var report = await _context.ReportDefinitions
+                    .FirstOrDefaultAsync(r => r.ReportDefinitionId == request.ReportId && r.IsActive);
+                if (report == null)
+                    return Json(new { success = false, message = "Report not found." });
 
-            return Json(new { success = true });
+                report.IsAccessRestricted = request.IsRestricted;
+                report.ModifiedDate = DateTime.UtcNow;
+                report.ModifiedByUserId = userId;
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation(
+                    "User {UserId} set restriction={IsRestricted} on builder report {ReportId}",
+                    userId, request.IsRestricted, request.ReportId);
+
+                return Json(new { success = true, isRestricted = report.IsAccessRestricted });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to set restriction on builder report {ReportId}", request.ReportId);
+                return Json(new { success = false, message = "Could not update the restriction. Please try again." });
+            }
         }
 
         /// <summary>
         /// Grants a user access to run a specific builder report.
+        ///
+        /// Granting the first user also switches the report's restriction on. Adding
+        /// someone to the list is an unambiguous statement that the report should be
+        /// limited to that list, and leaving the flag off meant the grant silently
+        /// changed nothing — which is exactly how this looked broken from the UI.
         /// </summary>
         [HttpPost]
         public async Task<IActionResult> GrantBuilderReportAccess([FromBody] BuilderAccessRequest request)
         {
             var userId = GetCurrentUserId();
             var isAdmin = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_ADMIN");
-            if (!isAdmin) return Forbid();
+            if (!isAdmin) return AccessDeniedJson();
+
+            if (request == null || request.ReportId <= 0 || request.UsersId <= 0)
+                return Json(new { success = false, message = "Select a user before granting access." });
 
             var reportKey = $"builder:{request.ReportId}";
 
-            var existing = await _context.ReportAccess
-                .FirstOrDefaultAsync(a => a.ReportKey == reportKey && a.Users_ID == request.UsersId);
-            if (existing != null)
-                return Json(new { success = true, message = "User already has access." });
-
-            _context.ReportAccess.Add(new SalesMetrics.Data.Entities.ReportAccessEntity
+            try
             {
-                ReportKey         = reportKey,
-                Users_ID          = request.UsersId,
-                GrantedDate       = DateTime.Now,
-                GrantedByUsers_ID = userId > 0 ? userId : null
-            });
+                var report = await _context.ReportDefinitions
+                    .FirstOrDefaultAsync(r => r.ReportDefinitionId == request.ReportId && r.IsActive);
+                if (report == null)
+                    return Json(new { success = false, message = "Report not found." });
 
-            await _context.SaveChangesAsync();
-            return Json(new { success = true });
+                var existing = await _context.ReportAccess
+                    .FirstOrDefaultAsync(a => a.ReportKey == reportKey && a.Users_ID == request.UsersId);
+
+                if (existing == null)
+                {
+                    _context.ReportAccess.Add(new SalesMetrics.Data.Entities.ReportAccessEntity
+                    {
+                        ReportKey         = reportKey,
+                        Users_ID          = request.UsersId,
+                        GrantedDate       = DateTime.Now,
+                        GrantedByUsers_ID = userId > 0 ? userId : null
+                    });
+                }
+
+                // Turn the restriction on so the new grant actually takes effect.
+                if (!report.IsAccessRestricted)
+                {
+                    report.IsAccessRestricted = true;
+                    report.ModifiedDate = DateTime.UtcNow;
+                    report.ModifiedByUserId = userId;
+                }
+
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation(
+                    "User {UserId} granted user {GranteeId} access to builder report {ReportId}",
+                    userId, request.UsersId, request.ReportId);
+
+                return Json(new
+                {
+                    success = true,
+                    isRestricted = report.IsAccessRestricted,
+                    message = existing != null ? "User already has access." : null
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "Failed to grant user {GranteeId} access to builder report {ReportId}",
+                    request.UsersId, request.ReportId);
+                return Json(new { success = false, message = "Could not save the grant. Please try again." });
+            }
         }
 
         /// <summary>
-        /// Revokes a user's access to a builder report.
+        /// Revokes a user's access to a builder report. Removing the last grantee also
+        /// lifts the restriction, so the report returns to its normal role-based access
+        /// instead of becoming reachable by admins only.
         /// </summary>
         [HttpPost]
         public async Task<IActionResult> RevokeBuilderReportAccess([FromBody] BuilderAccessRevokeRequest request)
         {
             var userId = GetCurrentUserId();
             var isAdmin = await _permissionService.HasFeatureAccessAsync(userId, "REPORT_BUILDER_ADMIN");
-            if (!isAdmin) return Forbid();
+            if (!isAdmin) return AccessDeniedJson();
 
-            var entry = await _context.ReportAccess.FindAsync(request.AccessId);
-            if (entry == null) return Json(new { success = false, message = "Record not found." });
+            if (request == null || request.AccessId <= 0)
+                return Json(new { success = false, message = "No access record was specified." });
 
-            _context.ReportAccess.Remove(entry);
-            await _context.SaveChangesAsync();
-            return Json(new { success = true });
+            try
+            {
+                var entry = await _context.ReportAccess.FindAsync(request.AccessId);
+                if (entry == null) return Json(new { success = false, message = "Record not found." });
+
+                var reportKey = entry.ReportKey;
+                _context.ReportAccess.Remove(entry);
+                await _context.SaveChangesAsync();
+
+                var isRestricted = true;
+                var stillGranted = await _context.ReportAccess.AnyAsync(a => a.ReportKey == reportKey);
+                if (!stillGranted
+                    && reportKey.StartsWith("builder:", StringComparison.OrdinalIgnoreCase)
+                    && int.TryParse(reportKey.AsSpan("builder:".Length), out var reportId))
+                {
+                    var report = await _context.ReportDefinitions
+                        .FirstOrDefaultAsync(r => r.ReportDefinitionId == reportId);
+                    if (report is { IsAccessRestricted: true })
+                    {
+                        report.IsAccessRestricted = false;
+                        report.ModifiedDate = DateTime.UtcNow;
+                        report.ModifiedByUserId = userId;
+                        await _context.SaveChangesAsync();
+                    }
+                    isRestricted = false;
+                }
+
+                _logger.LogInformation(
+                    "User {UserId} revoked builder report access record {AccessId}",
+                    userId, request.AccessId);
+
+                return Json(new { success = true, isRestricted });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to revoke builder report access record {AccessId}", request.AccessId);
+                return Json(new { success = false, message = "Could not remove the grant. Please try again." });
+            }
+        }
+
+        /// <summary>
+        /// Returns a 403 carrying a JSON body. Plain <c>Forbid()</c> is handled by the
+        /// cookie handler, which answers an AJAX call with a 302 to the access-denied
+        /// page — the browser follows it and the caller receives an HTML document
+        /// instead of an error, so the failure never surfaced in the UI.
+        /// </summary>
+        private IActionResult AccessDeniedJson()
+        {
+            Response.StatusCode = StatusCodes.Status403Forbidden;
+            return Json(new { success = false, message = "You do not have permission to manage report access." });
         }
 
         public class SetRestrictedRequest  { public int ReportId { get; set; } public bool IsRestricted { get; set; } }

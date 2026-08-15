@@ -386,6 +386,43 @@ else
             <text>
         var _currentCatalogReportId = null;
 
+        // Reads the antiforgery token fresh on every call. Grabbing it once at load
+        // time goes stale if the page sits open past a session refresh, and a stale
+        // token means the POST is rejected with a 400.
+        function catalogAntiForgeryToken() {
+            return $('input[name="__RequestVerificationToken"]').first().val() || '';
+        }
+
+        // Surfaces a failure instead of swallowing it. Every call below used to omit
+        // an error handler entirely, so a 400/403/500 looked identical to nothing
+        // happening at all — which is precisely how this bug presented.
+        function reportAccessError(jqXHR, fallback) {
+            var message = fallback;
+            if (jqXHR && jqXHR.responseJSON && jqXHR.responseJSON.message) {
+                message = jqXHR.responseJSON.message;
+            } else if (jqXHR && jqXHR.status === 400) {
+                message = 'Your session has expired. Reload the page and try again.';
+            } else if (jqXHR && jqXHR.status === 403) {
+                message = 'You do not have permission to manage report access.';
+            } else if (jqXHR && jqXHR.status) {
+                message = fallback + ' (HTTP ' + jqXHR.status + ')';
+            }
+
+            if (window.Swal) {
+                Swal.fire({ icon: 'error', title: 'Access change failed', text: message });
+            } else {
+                alert(message);
+            }
+        }
+
+        function reportAccessToast(title) {
+            if (!window.Swal) return;
+            Swal.fire({
+                toast: true, position: 'top-end', icon: 'success', title: title,
+                showConfirmButton: false, timer: 2500, timerProgressBar: true
+            });
+        }
+
         $(document).on('click', '.btn-manage-access', function() {
             _currentCatalogReportId = $(this).data('report-id');
             var reportName = $(this).data('report-name');
@@ -396,13 +433,23 @@ else
         });
 
         function loadCatalogAccessList(reportId) {
-            $.get('@Url.Action("GetReportAccess", "Reports")', { reportId: reportId }, function(data) {
+            $.ajax({
+                url: '@Url.Action("GetReportAccess", "Reports")',
+                type: 'GET',
+                dataType: 'json',
+                data: { reportId: reportId }
+            }).done(function(data) {
+                if (!data || !data.grantedUsers) {
+                    $('#accessGranteesList').html('<tr><td colspan="3" class="text-center text-danger py-3">Could not load the access list.</td></tr>');
+                    return;
+                }
+
                 // Populate user dropdown (exclude already-granted users)
                 var grantedIds = data.grantedUsers.map(function(u) { return u.usersId; });
                 var $sel = $('#accessUserSelect').empty().append('<option value="">— Select a user to grant access —</option>');
                 data.allUsers.forEach(function(u) {
                     if (grantedIds.indexOf(u.usersId) === -1) {
-                        $sel.append('<option value="' + u.usersId + '">' + u.fullName + '</option>');
+                        $sel.append($('<option></option>').attr('value', u.usersId).text(u.fullName));
                     }
                 });
 
@@ -412,31 +459,49 @@ else
                     $tbody.append('<tr><td colspan="3" class="text-center text-muted py-3"><i class="fas fa-unlock me-1"></i>No restrictions — all role-authorised users can run this report.</td></tr>');
                 } else {
                     data.grantedUsers.forEach(function(u) {
-                        $tbody.append(
-                            '<tr data-access-id="' + u.accessId + '">' +
-                            '<td>' + u.fullName + '</td>' +
-                            '<td class="text-muted">' + u.grantedDate + '</td>' +
-                            '<td><button type="button" class="btn btn-danger btn-sm btn-revoke-catalog" data-access-id="' + u.accessId + '">' +
-                            '<i class="fas fa-trash-alt"></i></button></td></tr>'
-                        );
+                        var $row = $('<tr></tr>').attr('data-access-id', u.accessId);
+                        $row.append($('<td></td>').text(u.fullName));
+                        $row.append($('<td class="text-muted"></td>').text(u.grantedDate));
+                        $row.append(
+                            $('<td></td>').append(
+                                $('<button type="button" class="btn btn-danger btn-sm btn-revoke-catalog"><i class="fas fa-trash-alt"></i></button>')
+                                    .attr('data-access-id', u.accessId)));
+                        $tbody.append($row);
                     });
                 }
+            }).fail(function(jqXHR) {
+                $('#accessGranteesList').html('<tr><td colspan="3" class="text-center text-danger py-3">Could not load the access list.</td></tr>');
+                reportAccessError(jqXHR, 'Could not load the access list.');
             });
         }
 
-        $('#btnGrantCatalogAccess').on('click', function() {
-            var usersId = parseInt($('#accessUserSelect').val());
-            if (!usersId) return;
+        // Delegated so the handler works no matter when the modal markup is parsed.
+        $(document).on('click', '#btnGrantCatalogAccess', function() {
+            var usersId = parseInt($('#accessUserSelect').val(), 10);
+            if (!usersId) {
+                reportAccessError(null, 'Select a user first.');
+                return;
+            }
+
+            var $btn = $(this).prop('disabled', true);
             $.ajax({
                 url: '@Url.Action("GrantReportAccess", "Reports")',
                 type: 'POST',
                 contentType: 'application/json',
-                headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() },
-                data: JSON.stringify({ reportId: _currentCatalogReportId, usersId: usersId }),
-                success: function(res) {
-                    if (res.success) loadCatalogAccessList(_currentCatalogReportId);
-                    else alert(res.message);
+                dataType: 'json',
+                headers: { 'RequestVerificationToken': catalogAntiForgeryToken() },
+                data: JSON.stringify({ reportId: _currentCatalogReportId, usersId: usersId })
+            }).done(function(res) {
+                if (res && res.success) {
+                    reportAccessToast(res.message || 'Access granted');
+                    loadCatalogAccessList(_currentCatalogReportId);
+                } else {
+                    reportAccessError(null, (res && res.message) || 'The grant was not saved.');
                 }
+            }).fail(function(jqXHR) {
+                reportAccessError(jqXHR, 'The grant was not saved.');
+            }).always(function() {
+                $btn.prop('disabled', false);
             });
         });
 
@@ -447,11 +512,18 @@ else
                 url: '@Url.Action("RevokeReportAccess", "Reports")',
                 type: 'POST',
                 contentType: 'application/json',
-                headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() },
-                data: JSON.stringify({ accessId: accessId }),
-                success: function(res) {
-                    if (res.success) loadCatalogAccessList(_currentCatalogReportId);
+                dataType: 'json',
+                headers: { 'RequestVerificationToken': catalogAntiForgeryToken() },
+                data: JSON.stringify({ accessId: accessId })
+            }).done(function(res) {
+                if (res && res.success) {
+                    reportAccessToast('Access removed');
+                    loadCatalogAccessList(_currentCatalogReportId);
+                } else {
+                    reportAccessError(null, (res && res.message) || 'The grant was not removed.');
                 }
+            }).fail(function(jqXHR) {
+                reportAccessError(jqXHR, 'The grant was not removed.');
             });
         });
             </text>

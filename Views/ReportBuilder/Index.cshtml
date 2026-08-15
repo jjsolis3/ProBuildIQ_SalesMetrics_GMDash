@@ -332,7 +332,7 @@ else
 
                         @if (report.IsAccessRestricted)
                         {
-                            <div class="mb-2">
+                            <div class="mb-2 builder-restricted-badge">
                                 <span class="report-badge" style="background:#fde8e8;color:#c62828;font-size:0.72rem;">
                                     <i class="fa fa-lock me-1"></i>Restricted Access
                                 </span>
@@ -425,7 +425,9 @@ else
                 <div id="builderAccessUserSection">
                     <div class="alert alert-info mb-3" style="font-size:0.875rem;">
                         <i class="fa fa-info-circle me-1"></i>
-                        Add users below. Only they (and Admins) will be able to run this report when restriction is on.
+                        Adding the first user turns the restriction on automatically. From then on only
+                        the users listed below (plus Admins) can run this report. Remove everyone to
+                        return the report to its normal role-based access.
                     </div>
 
                     <div class="d-flex gap-2 mb-3">
@@ -502,6 +504,66 @@ else
                 <text>
             var _currentBuilderReportId = null;
 
+            // Read the antiforgery token fresh on every call — a value captured once
+            // at load time goes stale if the page sits open past a session refresh,
+            // and a stale token means the POST is rejected with a 400.
+            function builderAntiForgeryToken() {
+                return $('input[name="__RequestVerificationToken"]').first().val() || '';
+            }
+
+            // Surfaces a failure instead of swallowing it. Every call below used to
+            // omit an error handler entirely, so a 400/403/500 looked identical to
+            // nothing happening at all — which is precisely how this bug presented.
+            function builderAccessError(jqXHR, fallback) {
+                var message = fallback;
+                if (jqXHR && jqXHR.responseJSON && jqXHR.responseJSON.message) {
+                    message = jqXHR.responseJSON.message;
+                } else if (jqXHR && jqXHR.status === 400) {
+                    message = 'Your session has expired. Reload the page and try again.';
+                } else if (jqXHR && jqXHR.status === 403) {
+                    message = 'You do not have permission to manage report access.';
+                } else if (jqXHR && jqXHR.status) {
+                    message = fallback + ' (HTTP ' + jqXHR.status + ')';
+                }
+
+                if (window.Swal) {
+                    Swal.fire({ icon: 'error', title: 'Access change failed', text: message });
+                } else {
+                    alert(message);
+                }
+            }
+
+            function builderAccessToast(title) {
+                if (!window.Swal) return;
+                Swal.fire({
+                    toast: true, position: 'top-end', icon: 'success', title: title,
+                    showConfirmButton: false, timer: 2500, timerProgressBar: true
+                });
+            }
+
+            // Keeps the "Restricted Access" badge on the report card in step with
+            // the current restriction state.
+            function syncBuilderRestrictedBadge(isRestricted) {
+                $('#builderRestrictToggle').prop('checked', !!isRestricted);
+
+                var $btn = $('.btn-manage-builder-access[data-report-id="' + _currentBuilderReportId + '"]');
+                if ($btn.length === 0) return;
+
+                $btn.attr('data-is-restricted', isRestricted ? 'true' : 'false');
+                $btn.data('is-restricted', !!isRestricted);
+
+                var $body = $btn.closest('.report-card-body');
+                var $badge = $body.find('.builder-restricted-badge');
+                if (isRestricted) {
+                    if ($badge.length === 0) {
+                        $body.find('.report-meta-badges').after(
+                            '<div class="mb-2 builder-restricted-badge"><span class="report-badge" style="background:#fde8e8;color:#c62828;font-size:0.72rem;"><i class="fa fa-lock me-1"></i>Restricted Access</span></div>');
+                    }
+                } else {
+                    $badge.remove();
+                }
+            }
+
             $(document).on('click', '.btn-manage-builder-access', function() {
                 _currentBuilderReportId = $(this).data('report-id');
                 var reportName = $(this).data('report-name');
@@ -513,42 +575,49 @@ else
                 $('#builderAccessModal').modal('show');
             });
 
-            $('#builderRestrictToggle').on('change', function() {
+            $(document).on('change', '#builderRestrictToggle', function() {
                 var isRestricted = $(this).is(':checked');
                 $.ajax({
                     url: '@Url.Action("SetBuilderReportRestricted", "ReportBuilder")',
                     type: 'POST',
                     contentType: 'application/json',
-                    headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() },
-                    data: JSON.stringify({ reportId: _currentBuilderReportId, isRestricted: isRestricted }),
-                    success: function(res) {
-                        if (res.success) {
-                            // Update the card badge without full reload
-                            var $btn = $('[data-report-id="' + _currentBuilderReportId + '"].btn-manage-builder-access');
-                            $btn.data('is-restricted', isRestricted);
-                            var $badge = $btn.closest('.report-card-body').find('.report-badge[style*="lock"]');
-                            if (isRestricted) {
-                                if ($badge.length === 0) {
-                                    $btn.closest('.report-card-body').find('.report-meta-badges')
-                                        .before('<div class="mb-2"><span class="report-badge" style="background:#fde8e8;color:#c62828;font-size:0.72rem;"><i class="fa fa-lock me-1"></i>Restricted Access</span></div>');
-                                }
-                            } else {
-                                $badge.closest('div').remove();
-                            }
-                        }
+                    dataType: 'json',
+                    headers: { 'RequestVerificationToken': builderAntiForgeryToken() },
+                    data: JSON.stringify({ reportId: _currentBuilderReportId, isRestricted: isRestricted })
+                }).done(function(res) {
+                    if (res && res.success) {
+                        syncBuilderRestrictedBadge(res.isRestricted);
+                    } else {
+                        // Put the switch back so it never shows a state the server rejected.
+                        $('#builderRestrictToggle').prop('checked', !isRestricted);
+                        builderAccessError(null, (res && res.message) || 'The restriction was not saved.');
                     }
+                }).fail(function(jqXHR) {
+                    $('#builderRestrictToggle').prop('checked', !isRestricted);
+                    builderAccessError(jqXHR, 'The restriction was not saved.');
                 });
             });
 
             function loadBuilderAccessList(reportId) {
-                $.get('@Url.Action("GetBuilderReportAccess", "ReportBuilder")', { reportId: reportId }, function(data) {
-                    $('#builderRestrictToggle').prop('checked', data.isRestricted);
+                $.ajax({
+                    url: '@Url.Action("GetBuilderReportAccess", "ReportBuilder")',
+                    type: 'GET',
+                    dataType: 'json',
+                    data: { reportId: reportId }
+                }).done(function(data) {
+                    if (!data || !data.grantedUsers) {
+                        $('#builderGranteesList').html('<tr><td colspan="3" class="text-center text-danger py-3">Could not load the access list.</td></tr>');
+                        builderAccessError(null, (data && data.message) || 'Could not load the access list.');
+                        return;
+                    }
+
+                    $('#builderRestrictToggle').prop('checked', !!data.isRestricted);
 
                     var grantedIds = data.grantedUsers.map(function(u) { return u.usersId; });
                     var $sel = $('#builderUserSelect').empty().append('<option value="">— Select a user to grant access —</option>');
                     data.allUsers.forEach(function(u) {
                         if (grantedIds.indexOf(u.usersId) === -1) {
-                            $sel.append('<option value="' + u.usersId + '">' + u.fullName + '</option>');
+                            $sel.append($('<option></option>').attr('value', u.usersId).text(u.fullName));
                         }
                     });
 
@@ -557,29 +626,50 @@ else
                         $tbody.append('<tr><td colspan="3" class="text-center text-muted py-3"><i class="fa fa-unlock me-1"></i>No users added yet.</td></tr>');
                     } else {
                         data.grantedUsers.forEach(function(u) {
-                            $tbody.append(
-                                '<tr><td>' + u.fullName + '</td><td class="text-muted">' + u.grantedDate + '</td>' +
-                                '<td><button type="button" class="btn btn-danger btn-sm btn-revoke-builder" data-access-id="' + u.accessId + '">' +
-                                '<i class="fa fa-trash-alt"></i></button></td></tr>'
-                            );
+                            var $row = $('<tr></tr>');
+                            $row.append($('<td></td>').text(u.fullName));
+                            $row.append($('<td class="text-muted"></td>').text(u.grantedDate));
+                            $row.append(
+                                $('<td></td>').append(
+                                    $('<button type="button" class="btn btn-danger btn-sm btn-revoke-builder"><i class="fa fa-trash-alt"></i></button>')
+                                        .attr('data-access-id', u.accessId)));
+                            $tbody.append($row);
                         });
                     }
+                }).fail(function(jqXHR) {
+                    $('#builderGranteesList').html('<tr><td colspan="3" class="text-center text-danger py-3">Could not load the access list.</td></tr>');
+                    builderAccessError(jqXHR, 'Could not load the access list.');
                 });
             }
 
-            $('#btnGrantBuilderAccess').on('click', function() {
-                var usersId = parseInt($('#builderUserSelect').val());
-                if (!usersId) return;
+            // Delegated so the handler works no matter when the modal markup is parsed.
+            $(document).on('click', '#btnGrantBuilderAccess', function() {
+                var usersId = parseInt($('#builderUserSelect').val(), 10);
+                if (!usersId) {
+                    builderAccessError(null, 'Select a user first.');
+                    return;
+                }
+
+                var $btn = $(this).prop('disabled', true);
                 $.ajax({
                     url: '@Url.Action("GrantBuilderReportAccess", "ReportBuilder")',
                     type: 'POST',
                     contentType: 'application/json',
-                    headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() },
-                    data: JSON.stringify({ reportId: _currentBuilderReportId, usersId: usersId }),
-                    success: function(res) {
-                        if (res.success) loadBuilderAccessList(_currentBuilderReportId);
-                        else alert(res.message);
+                    dataType: 'json',
+                    headers: { 'RequestVerificationToken': builderAntiForgeryToken() },
+                    data: JSON.stringify({ reportId: _currentBuilderReportId, usersId: usersId })
+                }).done(function(res) {
+                    if (res && res.success) {
+                        builderAccessToast(res.message || 'Access granted');
+                        syncBuilderRestrictedBadge(res.isRestricted);
+                        loadBuilderAccessList(_currentBuilderReportId);
+                    } else {
+                        builderAccessError(null, (res && res.message) || 'The grant was not saved.');
                     }
+                }).fail(function(jqXHR) {
+                    builderAccessError(jqXHR, 'The grant was not saved.');
+                }).always(function() {
+                    $btn.prop('disabled', false);
                 });
             });
 
@@ -590,11 +680,19 @@ else
                     url: '@Url.Action("RevokeBuilderReportAccess", "ReportBuilder")',
                     type: 'POST',
                     contentType: 'application/json',
-                    headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() },
-                    data: JSON.stringify({ accessId: accessId }),
-                    success: function(res) {
-                        if (res.success) loadBuilderAccessList(_currentBuilderReportId);
+                    dataType: 'json',
+                    headers: { 'RequestVerificationToken': builderAntiForgeryToken() },
+                    data: JSON.stringify({ accessId: accessId })
+                }).done(function(res) {
+                    if (res && res.success) {
+                        builderAccessToast('Access removed');
+                        syncBuilderRestrictedBadge(res.isRestricted);
+                        loadBuilderAccessList(_currentBuilderReportId);
+                    } else {
+                        builderAccessError(null, (res && res.message) || 'The grant was not removed.');
                     }
+                }).fail(function(jqXHR) {
+                    builderAccessError(jqXHR, 'The grant was not removed.');
                 });
             });
                 </text>
